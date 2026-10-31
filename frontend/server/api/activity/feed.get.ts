@@ -11,7 +11,9 @@ import {
   readPublicProfiles,
   type ContributorIdentity,
 } from "~~/server/utils/contributors";
+import { DECLARATION_ACTOR } from "~~/shared/declarations";
 import {
+  AUTOMATION_ACTOR_KEY,
   defaultFeedRange,
   feedRanges,
   restrictedFeedKinds,
@@ -124,7 +126,9 @@ function present(
 
     const publicName = publicNameOf(memo, uid);
     let actor: FeedActor;
-    if (identified) {
+    if (uid === DECLARATION_ACTOR) {
+      actor = { ...AUTOMATION_ACTOR };
+    } else if (identified) {
       actor = identifiedActor(uid, memo, callerUid);
     } else if (uid === callerUid) {
       // Your own name is not a disclosure to you, whatever the setting says.
@@ -208,6 +212,19 @@ function present(
     truncated: [...memo.raw.truncated],
   };
 }
+
+/** The declarations' automation, on the lines of the pages it published on
+ * its own: the same name for everybody, since it is nobody's privacy. */
+const AUTOMATION_ACTOR: FeedActor = {
+  key: AUTOMATION_ACTOR_KEY,
+  uid: null,
+  name: "Automat",
+  named: true,
+  isSelf: false,
+  photoURL: null,
+  newAdmin: false,
+  automated: true,
+};
 
 /** The name everybody but an established administrator is shown for this
  * person, if any: one they agreed to show, and one there is - a blank display
@@ -300,7 +317,10 @@ const cachedFeed = defineCachedFunction(
       newAdminUids,
     });
 
-    const actorUids = [...new Set(raw.batches.map((batch) => batch.uid))];
+    // The automation has no account to look up and no profile to read.
+    const actorUids = [
+      ...new Set(raw.batches.map((batch) => batch.uid)),
+    ].filter((uid) => uid !== DECLARATION_ACTOR);
     const [identities, publicProfiles] = await Promise.all([
       identify([...new Set([...actorUids, ...newAdminUids])]),
       readPublicProfiles(db, actorUids),

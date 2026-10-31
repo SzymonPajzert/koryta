@@ -256,6 +256,48 @@ describe("ActivityFeedTimeline", () => {
     expect(established.text()).not.toContain("okres próbny");
   });
 
+  it("names the automation by what it went by, and lets it be picked", async () => {
+    const automation = actor({
+      key: "automat",
+      uid: null,
+      name: "Automat",
+      named: true,
+      automated: true,
+    });
+    const wrapper = await mountItem({
+      actor: automation,
+      batch: batch({
+        id: "automat:autoPublish:2026-09-22T12:20:00.000Z",
+        kind: "autoPublish",
+        actorKey: "automat",
+        count: 21,
+        objects: { person: 21 },
+      }),
+    });
+
+    expect(wrapper.text()).toContain("Automat");
+    expect(
+      wrapper.get('[data-testid="feed-item-automation"]').text(),
+    ).toContain("oświadczenia majątkowe");
+    expect(wrapper.text()).toContain("opublikował 21 osób");
+    // Not a person, so the tooltip says what it does rather than who sees
+    // its name.
+    expect(
+      wrapper
+        .findAllComponents({ name: "VTooltip" })
+        .map((tooltip) => tooltip.props("text"))
+        .some((text) => String(text).startsWith("Serwis publikuje stronę sam")),
+    ).toBe(true);
+    await wrapper.get('[data-testid="feed-item-actor"]').trigger("click");
+    expect(wrapper.emitted("select-actor")?.[0]).toEqual([automation]);
+
+    // Nobody else's line carries the tag.
+    const person = await mountItem();
+    expect(person.find('[data-testid="feed-item-automation"]').exists()).toBe(
+      false,
+    );
+  });
+
   it("draws names as text, never as markup", async () => {
     const wrapper = await mountItem({
       actor: actor({ name: '<img src="x" onerror="alert(1)">' }),

@@ -93,7 +93,7 @@
 
     <StatsActivityTimeline
       class="mb-6"
-      :daily="activity?.daily ?? []"
+      :daily="timelineDaily"
       :loading="activityPending"
     />
 
@@ -279,7 +279,8 @@ import type { DatabaseStats } from "~~/server/api/stats/database.get";
 import type { ActivityStats } from "~~/server/api/stats/activity.get";
 import { publicProfileEnabled } from "~~/shared/profile";
 import { authRequest, useAuthState } from "~/composables/auth";
-import { polishCounting } from "~/composables/polish";
+import { polishCounting, polishNumber } from "~/composables/polish";
+import { foldAutomaticPublications } from "~/utils/activityAutomatic";
 import {
   activityColors,
   categorical,
@@ -465,19 +466,40 @@ const queueTiles = computed(() => {
   ];
 });
 
+const AUTOMATIC_TOOLTIP =
+  "Wliczamy też strony, które serwis opublikował sam: czytelnicy odczytali z oświadczenia majątkowego tę samą datę urodzenia, która jest na stronie osoby. Nie są niczyją zmianą, więc nie liczą się do rankingu.";
+
+/** The tiles and the timeline count the automation's publications in
+ * „Opublikowane osoby”; the ranking, which reads the response's own
+ * contributors, never does. */
+const folded = computed(() =>
+  activity.value ? foldAutomaticPublications(activity.value) : null,
+);
+
 /** One tile per interaction kind — the direct answer to "jakie zmiany", in the
- * same colours the timeline stacks them in. */
+ * same colours the timeline stacks them in. Under „Opublikowane osoby”, how
+ * many of them the automation published, where it published any. */
 const activityTiles = computed(() => {
-  const stats = activity.value;
+  const stats = folded.value;
+  const automatic = activity.value?.automatic ?? 0;
   if (!stats) return [];
-  return activityKinds.map((kind) => ({
-    label: activityKindLabels[kind],
-    value: stats.totals[kind],
-    hint: formatPercent(stats.totals[kind], stats.total),
-    tooltip: activityKindDescriptions[kind],
-    color: activityColors[kind],
-  }));
+  return activityKinds.map((kind) => {
+    const byAutomation = kind === "publication" && automatic > 0;
+    return {
+      label: activityKindLabels[kind],
+      value: stats.totals[kind],
+      hint: byAutomation
+        ? `w tym ${polishNumber(automatic)} automatycznie`
+        : formatPercent(stats.totals[kind], stats.total),
+      tooltip: byAutomation
+        ? `${activityKindDescriptions[kind]} ${AUTOMATIC_TOOLTIP}`
+        : activityKindDescriptions[kind],
+      color: activityColors[kind],
+    };
+  });
 });
+
+const timelineDaily = computed(() => folded.value?.daily ?? []);
 
 const truncatedMessage = computed(() => {
   const kinds = activity.value?.truncated ?? [];

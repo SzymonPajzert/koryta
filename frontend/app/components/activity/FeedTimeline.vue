@@ -72,6 +72,18 @@
                   okres próbny
                 </span>
               </template>
+              <!-- What the automation went by, where a trial administrator's
+                   status goes: next to the name, on the first line. -->
+              <template v-if="row.actor.automated">
+                {{ " " }}
+                <span
+                  class="ft-tag bg-surface-muted text-ink-neutral"
+                  data-testid="feed-item-automation"
+                >
+                  <v-icon :icon="mdiFileDocumentOutline" size="12" />
+                  oświadczenia majątkowe
+                </span>
+              </template>
               <!-- Interpolated, never v-html: the name beside it and every
                    page name below are text somebody typed. The spaces are
                    real ones, so the line copies and reads aloud as a
@@ -194,6 +206,7 @@ import {
   mdiAlertOutline,
   mdiChevronDown,
   mdiFileCompare,
+  mdiFileDocumentOutline,
   mdiLightbulbOutline,
   mdiLinkVariant,
 } from "@mdi/js";

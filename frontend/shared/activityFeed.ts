@@ -40,6 +40,11 @@ export const feedKinds = [
   "split",
   "splitMark",
   "import",
+  // What the declarations' automation published on its own, once readers
+  // agreed on a declaration's birth date. Nobody decided it, so it is a kind
+  // of its own: its own verb and chip, never among the administrators'
+  // decisions.
+  "autoPublish",
 ] as const;
 
 export type FeedKind = (typeof feedKinds)[number];
@@ -61,6 +66,7 @@ export const feedKindGroups = {
     "splitMark",
     "import",
   ],
+  automat: ["autoPublish"],
 } as const satisfies Record<string, readonly FeedKind[]>;
 
 export type FeedKindGroup = keyof typeof feedKindGroups;
@@ -70,6 +76,9 @@ export const feedKindGroupLabels: Record<FeedKindGroup, string> = {
   propozycje: "Propozycje",
   notatki: "Notatki",
   decyzje: "Decyzje administratorów",
+  // The actor's name on its lines, and short enough not to take a row of
+  // its own on a phone.
+  automat: "Automat",
 };
 
 /** Kinds only an established administrator sees, besides the person who did
@@ -141,6 +150,8 @@ export const feedVerbs: Record<FeedKind, string> = {
   split: "rozdzielił/a",
   splitMark: "oznaczył/a",
   import: "wgrał/a automatycznie",
+  // The actor is „Automat”, and a machine has one form.
+  autoPublish: "opublikował",
 };
 
 /** Kinds whose object is not the pages themselves but a count of something
@@ -293,7 +304,14 @@ export type FeedActor = {
   /** Established administrators only: this person is an administrator on
    * trial (`newAdmin` claim). */
   newAdmin: boolean;
+  /** The declarations' automation rather than a person: named the same for
+   * everybody, since it is nobody's privacy, and with no uid. */
+  automated?: boolean;
 };
+
+/** The actor every `autoPublish` line names. One key for everybody: it is
+ * not a person, so there is no pseudonym to withhold. */
+export const AUTOMATION_ACTOR_KEY = "automat";
 
 export type ActivityFeed = {
   window: { since: string; until: string; days: FeedRange };

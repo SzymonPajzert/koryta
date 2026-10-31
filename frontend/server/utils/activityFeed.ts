@@ -10,6 +10,7 @@ import {
   type RawFeedTarget,
 } from "~~/shared/activityFeed";
 import { auditActions, type AuditAction } from "~~/shared/audit";
+import { DECLARATION_ACTOR } from "~~/shared/declarations";
 import { revisionCollection } from "~~/shared/model";
 import { normalizeUpdateTime } from "~~/shared/revisions";
 import { isAutomatedUid } from "~~/shared/stats";
@@ -558,6 +559,18 @@ function person(value: unknown): string | null {
     : null;
 }
 
+/** The declarations' automation, on the row of a page it put up on its own:
+ * the one thing a robot files that the feed lists (`autoPublish`). Its
+ * approvals and the relations it puts up with the page are the same
+ * publication, and stay out like every other robot's rows. */
+function automaticPublisher(get: Getter): string | null {
+  return get("user") === DECLARATION_ACTOR &&
+    get("action") === "publish" &&
+    get("collection") === "nodes"
+    ? DECLARATION_ACTOR
+    : null;
+}
+
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -656,8 +669,10 @@ export function readFeedAuditRow(
   window: FeedWindow,
 ): FeedAuditRow | null {
   // A page the declarations' automation put up at an administrator's press
-  // of „Opublikuj z kolejki” is that administrator's publication.
-  const uid = person(get("pressed_by")) ?? person(get("user"));
+  // of „Opublikuj z kolejki” is that administrator's publication, and one it
+  // put up on its own is the automation's.
+  const uid =
+    person(get("pressed_by")) ?? person(get("user")) ?? automaticPublisher(get);
   const at = feedInstant(get("at"), window);
   const action = get("action");
   const targetId = get("target_id");
@@ -960,7 +975,7 @@ export function auditFeedEvents(
         return [
           {
             ...base,
-            kind: "publish",
+            kind: row.uid === DECLARATION_ACTOR ? "autoPublish" : "publish",
             unit,
             target,
             ...revisionId,

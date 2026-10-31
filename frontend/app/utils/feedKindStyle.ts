@@ -6,6 +6,7 @@ import {
   mdiDeleteOutline,
   mdiEarth,
   mdiEyeOffOutline,
+  mdiFileDocumentCheckOutline,
   mdiFlagOutline,
   mdiNoteTextOutline,
   mdiPencilOutline,
@@ -54,6 +55,13 @@ export const feedKindStyle: Record<
     label: "Do rozdzielenia",
   },
   import: { icon: mdiTrayArrowUp, tone: "warning", label: "Import" },
+  // Green like a publication, since a page went up all the same; the glyph
+  // says what it went up on.
+  autoPublish: {
+    icon: mdiFileDocumentCheckOutline,
+    tone: "success",
+    label: "Publikacja automatyczna",
+  },
 };
 
 /** The utility classes for a tone. Neutral has no surface of its own; it sits

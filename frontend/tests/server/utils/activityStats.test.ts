@@ -7,6 +7,7 @@ import {
   utcDay,
   type ActivityEvent,
 } from "../../../server/utils/activityStats";
+import { DECLARATION_ACTOR } from "../../../shared/declarations";
 import { isMigrationUid } from "../../../shared/stats";
 
 const WINDOW = { since: "2026-07-30", until: "2026-08-01" };
@@ -204,6 +205,29 @@ describe("aggregateActivity", () => {
 
     expect(result.totals.revision).toBe(1);
     expect(result.totals.publication).toBe(0);
+    expect(result.contributors.map((c) => c.uid)).toEqual(["u1"]);
+  });
+
+  it("counts what the declarations' automation published on its own apart, as nobody's", () => {
+    // Its pages go up because readers agreed on a declaration's date, which
+    // the pages show, but they are no person's work: in no total and no row.
+    // Anything else it files stays out like any robot's.
+    const result = aggregateActivity(
+      [
+        event(DECLARATION_ACTOR, "publication", "2026-07-31T10:00:00.000Z"),
+        event(DECLARATION_ACTOR, "publication", "2026-07-31T10:05:00.000Z"),
+        event(DECLARATION_ACTOR, "publication", "2026-08-01T09:00:00.000Z"),
+        event(DECLARATION_ACTOR, "revision", "2026-07-31T10:00:00.000Z"),
+        event("pipeline", "publication", "2026-07-31T10:00:00.000Z"),
+        event("u1", "publication", "2026-07-31T11:00:00.000Z"),
+      ],
+      WINDOW,
+    );
+
+    expect(result.automatic).toBe(3);
+    expect(result.daily.map((day) => day.automatic)).toEqual([0, 2, 1]);
+    expect(result.totals.publication).toBe(1);
+    expect(result.total).toBe(1);
     expect(result.contributors.map((c) => c.uid)).toEqual(["u1"]);
   });
 

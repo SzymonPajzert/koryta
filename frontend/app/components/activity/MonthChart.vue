@@ -11,7 +11,7 @@
       <h2 id="amc-title" class="amc__eyebrow">Ostatnie 30 dni</h2>
       <p class="amc__figure">
         <span class="amc__total">
-          {{ stats ? polishNumber(stats.total) : "—"
+          {{ stats ? polishNumber(shownTotal) : "—"
           }}<span
             v-if="stats?.truncated.length"
             title="Dolna granica: w tym okresie było więcej zmian, niż zdążyliśmy policzyć."
@@ -19,9 +19,10 @@
           >
         </span>
         <span v-if="stats" class="amc__who">
-          {{ nominativeNoun(stats.total, "zmiana", "zmiany", "zmian") }}
+          {{ nominativeNoun(shownTotal, "zmiana", "zmiany", "zmian") }}
           od
-          {{ polishCountingGenitive(stats.contributorCount, "osoby", "osób") }}
+          {{ polishCountingGenitive(stats.contributorCount, "osoby", "osób")
+          }}<template v-if="stats.automatic > 0"> i automatu</template>
         </span>
       </p>
       <NuxtLink to="/eksploruj/statystyki" class="amc__link">
@@ -69,6 +70,7 @@ import {
   polishCountingGenitive,
   polishNumber,
 } from "~/composables/polish";
+import { foldAutomaticPublications } from "~/utils/activityAutomatic";
 import { fullDayLabel, monthChartOptions } from "~/utils/activityMonthChart";
 
 /** The last 30 days of changes over the /aktywnosc feed, and the way to the
@@ -95,7 +97,14 @@ const { data, error } = useAsyncData<ActivityStats>(
 
 const stats = computed(() => data.value ?? null);
 const failed = computed(() => !!error.value && !data.value);
-const daily = computed(() => stats.value?.daily ?? []);
+
+/** With the automation's publications in, as /eksploruj/statystyki adds
+ * them, so the two pages give the month one figure. */
+const folded = computed(() =>
+  stats.value ? foldAutomaticPublications(stats.value) : null,
+);
+const shownTotal = computed(() => folded.value?.total ?? 0);
+const daily = computed(() => folded.value?.daily ?? []);
 
 /** The busiest day, or null for a month with nothing in it. */
 const busiest = computed(() =>

@@ -1412,7 +1412,7 @@ describe("buildActivityFeed", () => {
       ]);
     });
 
-    it("names the admin who pressed „Opublikuj z kolejki”, and leaves out what the automation published on its own", async () => {
+    it("names the admin who pressed „Opublikuj z kolejki”, and the automation for what it published on its own", async () => {
       const { batches } = await feed({
         audit: {
           // The import's revision, approved by the automation on the way up.
@@ -1442,10 +1442,49 @@ describe("buildActivityFeed", () => {
         },
       });
 
-      expect(lines(batches)).toEqual(["admin publish 1"]);
+      // A kind of its own, so it is never filed with the administrators'
+      // decisions; its approval of the import's revision stays out.
+      expect(lines(batches)).toEqual([
+        `${DECLARATION_ACTOR} autoPublish 1`,
+        "admin publish 1",
+      ]);
       expect(batches[0]?.targets).toEqual([
+        expect.objectContaining({ id: "p2", type: "person" }),
+      ]);
+      expect(batches[1]?.targets).toEqual([
         expect.objectContaining({ id: "p1", type: "person" }),
       ]);
+    });
+
+    it("lists none of the automation's other rows: its approvals and the relations it put up", async () => {
+      const { batches } = await feed({
+        audit: {
+          a: {
+            user: DECLARATION_ACTOR,
+            at: at("10:00:00"),
+            action: "approve",
+            collection: "edges",
+            target_id: "e1",
+            revision_id: "x1",
+          },
+          e: {
+            user: DECLARATION_ACTOR,
+            at: at("10:00:00"),
+            action: "publish",
+            collection: "edges",
+            target_id: "e1",
+          },
+          h: {
+            user: DECLARATION_ACTOR,
+            at: at("10:00:01"),
+            action: "unpublish",
+            collection: "nodes",
+            target_id: "p1",
+          },
+        },
+      });
+
+      expect(batches).toEqual([]);
     });
 
     it("does not call approving the ingest's revision approving one's own", async () => {

@@ -7,7 +7,10 @@ import type { ActivityContributor } from "~~/server/api/stats/activity.get";
 export type ContributorNameRow = Pick<
   ActivityContributor,
   "name" | "named" | "isSelf" | "photoURL" | "publicName"
->;
+> & {
+  /** The declarations' automation, which only the feed names. */
+  automated?: boolean;
+};
 
 /** Whether everybody else sees this name. For your own row that is
  * `publicName`, not `named`: your name is shown to you whatever the setting,
@@ -28,6 +31,9 @@ export function contributorNameExplanation(
   row: ContributorNameRow,
   identified = false,
 ): string {
+  if (row.automated) {
+    return "Serwis publikuje stronę sam, gdy czytelnicy odczytają z oświadczenia majątkowego tę samą datę urodzenia, która jest na stronie osoby. Robi to w ramach dziennego limitu.";
+  }
   if (row.isSelf) {
     return contributorShownToOthers(row)
       ? "To Ty. Twoja nazwa jest widoczna dla wszystkich."

@@ -4,6 +4,7 @@ import {
   type ActivityCounts,
   type ActivityKind,
 } from "~~/shared/activity";
+import { DECLARATION_ACTOR } from "~~/shared/declarations";
 import { isAutomatedUid, isPipelineUid } from "~~/shared/stats";
 
 /** One thing a human did, normalized out of whichever collection recorded it.
@@ -27,6 +28,9 @@ export type DailyActivity = {
   date: string;
   counts: ActivityCounts;
   total: number;
+  /** People the declarations' automation published on its own that day. Not
+   * in `counts` or `total`, which are what people did. */
+  automatic: number;
 };
 
 export type ContributorAggregate = {
@@ -42,6 +46,10 @@ export type ActivityAggregate = {
   daily: DailyActivity[];
   /** Sorted by total desc, then uid so equal totals keep a stable order. */
   contributors: ContributorAggregate[];
+  /** People the declarations' automation published on its own in the
+   * window (`isAutomaticPublication`): counted apart, and never a
+   * contributor. */
+  automatic: number;
 };
 
 /** Writes the site makes on a person's behalf - the scoring pipeline's, and a
@@ -53,6 +61,15 @@ export type ActivityAggregate = {
  * Defined next to the vote aggregate that has to draw the same line, and
  * re-exported here because the activity page drew it first. */
 export { isAutomatedUid, isPipelineUid };
+
+/** A page the declarations' automation put up on its own, which is not
+ * somebody's work but is what the readers' work led to, so it is shown as
+ * the automation's: beside the people's counts, never inside them. A page an
+ * administrator pressed „Opublikuj z kolejki” for is theirs (`pressed_by`),
+ * and everything else a robot files stays out. */
+export function isAutomaticPublication(event: ActivityEvent): boolean {
+  return event.uid === DECLARATION_ACTOR && event.kind === "publication";
+}
 
 /** The UTC day an instant falls on, or null if it cannot be read as one. */
 export function utcDay(at: string | null | undefined): string | null {
@@ -97,14 +114,23 @@ export function aggregateActivity(
   );
   const byUid = new Map<string, ContributorAggregate>();
   const totals = emptyActivityCounts();
+  const automaticByDay = new Map<string, number>();
+  let automatic = 0;
 
   for (const event of events) {
-    if (isAutomatedUid(event.uid)) continue;
+    const shown = isAutomaticPublication(event);
+    if (!shown && isAutomatedUid(event.uid)) continue;
     const day = utcDay(event.at);
     if (!day || !inWindow.has(day)) continue;
 
     const count = event.count ?? 1;
     if (count <= 0) continue;
+
+    if (shown) {
+      automatic += count;
+      automaticByDay.set(day, (automaticByDay.get(day) ?? 0) + count);
+      continue;
+    }
 
     totals[event.kind] += count;
     byDay.get(day)![event.kind] += count;
@@ -130,10 +156,16 @@ export function aggregateActivity(
     total: totalActivity(totals),
     daily: days.map((date) => {
       const counts = byDay.get(date)!;
-      return { date, counts, total: totalActivity(counts) };
+      return {
+        date,
+        counts,
+        total: totalActivity(counts),
+        automatic: automaticByDay.get(date) ?? 0,
+      };
     }),
     contributors: [...byUid.values()].sort(
       (a, b) => b.total - a.total || (a.uid < b.uid ? -1 : 1),
     ),
+    automatic,
   };
 }

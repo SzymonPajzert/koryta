@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ActivityStats } from "../../../server/api/stats/activity.get";
 import { activityRanges } from "../../../shared/activity";
+import { DECLARATION_ACTOR } from "../../../shared/declarations";
 import handler from "../../../server/api/stats/activity.get";
 
 const {
@@ -357,5 +358,25 @@ describe("/api/stats/activity", () => {
     });
 
     expect((await call()).truncated.sort()).toEqual(["revision", "vote"]);
+  });
+
+  it("sends what the declarations' automation published apart, in no total and no row", async () => {
+    mockGetUser.mockResolvedValue(null);
+    mockCollect.mockResolvedValue({
+      events: [
+        { uid: DECLARATION_ACTOR, kind: "publication", at: today },
+        { uid: DECLARATION_ACTOR, kind: "publication", at: today },
+        { uid: "busy", kind: "publication", at: today },
+      ],
+      truncated: [],
+    });
+
+    const result = await call();
+
+    expect(result.automatic).toBe(2);
+    expect(result.daily.at(-1)?.automatic).toBe(2);
+    expect(result.totals.publication).toBe(1);
+    expect(result.total).toBe(1);
+    expect(result.contributorCount).toBe(1);
   });
 });

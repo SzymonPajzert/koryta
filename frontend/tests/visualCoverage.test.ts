@@ -38,9 +38,6 @@ const notYetPhotographed: Record<string, string> = {
   "admin/krawedzie": "admin; the seed has edges to list",
   "admin/notatki/index": "admin; the seed has notes on Jan Kowalski",
   "admin/notatki/kategoryzacja": "admin",
-  aktywnosc:
-    "signed in; the last 30 days against today's date, so it needs the " +
-    "client-side navigation and a stubbed feed (szpitale.spec.ts)",
   "cli-login": "signed in, with a `callback` for the CLI",
   "edit/node/[[id]]": "signed in",
   "eksploruj/autograf/[type]": "charts; needs a check that they draw stably",
