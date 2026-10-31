@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { defineComponent, h, shallowRef } from "vue";
+import { defineComponent, h, nextTick, shallowRef } from "vue";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import TaskCard from "../../../app/components/oswiadczenia/TaskCard.vue";
 import type { DeclarationTask } from "../../../shared/declarations";
@@ -90,6 +90,28 @@ describe("OswiadczeniaTaskCard", () => {
     expect((input.element as HTMLInputElement).value).toBe("15.07.1979");
     expect(wrapper.get(READING).text()).toBe("15 lipca 1979");
     expect(wrapper.get(READING).classes()).toContain("ow-reading--ok");
+  });
+
+  // Keys as a keyboard sends them, one input event each.
+  it("shows the dot after the day as soon as it is typed, and Backspace takes it with the day's last digit", async () => {
+    const wrapper = await mount();
+    const input = wrapper.get(DATE).element as HTMLInputElement;
+    const key = async (value: string, inputType: string, data?: string) => {
+      input.value = value;
+      input.dispatchEvent(new InputEvent("input", { inputType, data }));
+      await nextTick();
+    };
+
+    await key("1", "insertText", "1");
+    await key("15", "insertText", "5");
+    expect(input.value).toBe("15.");
+    await key("15.0", "insertText", "0");
+    await key("15.07", "insertText", "7");
+    expect(input.value).toBe("15.07.");
+
+    // The browser's Backspace takes the dot alone; the field takes the 7.
+    await key("15.07", "deleteContentBackward");
+    expect(input.value).toBe("15.0");
   });
 
   it("takes no letter into the field", async () => {

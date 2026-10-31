@@ -76,38 +76,57 @@ function dayProblem(digits: string, outOfRange: boolean): string {
 /** What a reader may type between the parts of a date. */
 const SEPARATOR = /^[\s.,/-]$/;
 
+/** What a key did to the date field, as its input event says: the text an
+ * `insertText` typed, or a deletion, with the field's text before it. */
+export type DateKey = {
+  inserted?: string | null;
+  deleted?: { forward: boolean; before: string };
+};
+
 /**
  * The date field after a key, and where its caret goes: the digits of
  * dd.mm.rrrr with the dots put in, so a reader types „15071979” and reads
- * „15.07.1979”. A dot comes with the first digit after it, so none stands in
- * the way of a backspace. One the reader types at the end shows at once, and
- * after a lone digit it closes the day or the month: „1.” is „01.”. Nothing
- * else is taken, a letter or a ninth digit.
+ * „15.07.1979”. The dot after the day and after the month is there as soon as
+ * they are typed („15.”), so the reader sees it is not theirs to type. The
+ * dots being the field's, a key that deletes only a dot deletes the digit
+ * beside it too: Backspace after „15.” gives „1”, never a field that will not
+ * shrink. A separator the reader types after a lone digit closes the day or
+ * the month: „1.” is „01.”. Nothing else is taken, a letter or a ninth digit.
  *
- * `inserted` is what the key typed (`InputEvent.data` of an `insertText`):
- * whether the reader has just typed a separator is the one thing the text
- * does not tell. The caret stays after the digit it was after: at the end,
- * where a reader types, or wherever they went back to mend one.
+ * The caret stays after the digit it was after: at the end, where a reader
+ * types, or wherever they went back to mend one.
  */
 export function dotTyped(
   raw: string,
   caret: number,
-  inserted: string | null = null,
+  key: DateKey = {},
 ): { text: string; caret: number } {
   const atEnd = caret >= raw.length;
-  const separated = atEnd && inserted !== null && SEPARATOR.test(inserted);
   let digits = raw.replace(/\D/g, "");
-  if (separated && (digits.length === 1 || digits.length === 3)) {
+  let before = raw.slice(0, caret).replace(/\D/g, "").length;
+  const { deleted, inserted } = key;
+  if (deleted && digits.length === deleted.before.replace(/\D/g, "").length) {
+    const at = deleted.forward ? before : before - 1;
+    if (at >= 0 && at < digits.length) {
+      digits = digits.slice(0, at) + digits.slice(at + 1);
+      before = at;
+    }
+  }
+  if (
+    atEnd &&
+    inserted &&
+    SEPARATOR.test(inserted) &&
+    (digits.length === 1 || digits.length === 3)
+  ) {
     digits = `${digits.slice(0, -1)}0${digits.slice(-1)}`;
   }
   digits = digits.slice(0, DATE_DIGITS);
   let text = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)]
     .filter(Boolean)
     .join(".");
-  if (separated && (digits.length === 2 || digits.length === 4)) text += ".";
+  if (atEnd && (digits.length === 2 || digits.length === 4)) text += ".";
   if (atEnd) return { text, caret: text.length };
 
-  const before = raw.slice(0, caret).replace(/\D/g, "").length;
   let at = 0;
   for (let seen = 0; at < text.length && seen < before; at++) {
     if (/\d/.test(text[at]!)) seen++;
