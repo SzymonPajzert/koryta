@@ -344,10 +344,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     people.add_argument(
         "--poi-retry",
-        default="unreachable,error,timeout,no_seed",
+        default="unreachable,error,timeout,no_seed,throttled",
         help="not_found reasons to search again (comma-separated; 'unconfirmed' for "
         "those only unnamed files were found for); default unreachable,error,timeout,"
-        "no_seed",
+        "no_seed,throttled",
     )
     people.add_argument(
         "--poi-retry-before",

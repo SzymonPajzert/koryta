@@ -46,6 +46,14 @@ class HostTokenBucket:
             self._buckets[key] = (tokens, now)
             return False
 
+    def pause(self, key: str, seconds: float) -> None:
+        """Give `key` no token for `seconds`: a host that answered 429 is left
+        alone for a while, not asked again at the next token."""
+        if self.interval_s <= 0:
+            return
+        with self._lock:
+            self._buckets[key] = (-seconds * self.rate_per_s, self._clock())
+
     def next_available_in(self, key: str) -> float:
         """Seconds until `key` would have a token (0 when it has one now)."""
         if self.interval_s <= 0:

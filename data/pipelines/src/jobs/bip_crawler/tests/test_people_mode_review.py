@@ -51,9 +51,10 @@ def search(
     store=None,
     unreachable=lambda u: False,
     robots=None,
+    web=None,
     **options,
 ):
-    web = Web(sites)
+    web = web or Web(sites)
     store = store or MemoryBipPeopleStore()
     store.upsert_people(rows)
     seeds = {
