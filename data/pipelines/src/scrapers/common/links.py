@@ -102,7 +102,26 @@ def _links_in(node: object) -> bool:
     return isinstance(node, Tag) and (node.name == "a" or node.find("a") is not None)
 
 
-def _row_text(anchor: Tag, block: Tag) -> str:
+#: A table row's text, worked out once a page: each piece of it with the links
+#: (by id) it sits in.
+_Rows = dict[int, list[tuple[str, frozenset[int]]]]
+
+
+def _row_pieces(block: Tag, anchors: list[Tag]) -> list[tuple[str, frozenset[int]]]:
+    ids = {id(a) for a in anchors}
+    pieces = []
+    for piece in block.find_all(string=True):
+        inside = []
+        for parent in piece.parents:
+            if parent is block:
+                break
+            if id(parent) in ids:
+                inside.append(id(parent))
+        pieces.append((str(piece), frozenset(inside)))
+    return pieces
+
+
+def _row_text(anchor: Tag, block: Tag, rows: _Rows | None = None) -> str:
     """The part of ``block`` that belongs to ``anchor``.
 
     The whole block when the link is its only one. In a table row holding
@@ -110,17 +129,26 @@ def _row_text(anchor: Tag, block: Tag) -> str:
     paragraph or list item holding several ("Jan Kowalski<br>Anna Nowak"), the
     run of text from the previous link or line break to the next one.
     """
+    if block.name == "tr":
+        # Worked out once a row, links told apart by identity: bs4 compares
+        # tags by their whole content, and on a table-layout BIP's page
+        # (ugblizyn.bip.doc.pl, 1,170 links, 10-31) asking each link about
+        # every piece of its row had not finished after 4 minutes; it held the
+        # people mode's runs of 10-31 past their deadlines.
+        pieces = rows.get(id(block)) if rows is not None else None
+        if pieces is None:
+            anchors = block.find_all("a", href=True)
+            if len(anchors) <= 1:
+                return _text(block)
+            pieces = _row_pieces(block, anchors)
+            if rows is not None:
+                rows[id(block)] = pieces
+        own = {id(anchor)}
+        kept = [text for text, inside in pieces if inside <= own]
+        return " ".join(" ".join(kept).split())
     anchors = block.find_all("a", href=True)
     if len(anchors) <= 1:
         return _text(block)
-    if block.name == "tr":
-        others = [a for a in anchors if a is not anchor]
-        kept = [
-            str(piece)
-            for piece in block.find_all(string=True)
-            if not any(other in piece.parents for other in others)
-        ]
-        return " ".join(" ".join(kept).split())
     node: Tag = anchor
     while node.parent is not None and node.parent is not block:
         node = node.parent
@@ -174,6 +202,7 @@ def extract_link_contexts(
     title = " | ".join(" ".join(p.split()) for p in title_parts if p)[:300]
     links: list[LinkContext] = []
     seen: set[str] = set()
+    rows: _Rows = {}
     for anchor in soup.find_all("a", href=True):
         if not isinstance(anchor, Tag):
             continue
@@ -192,7 +221,7 @@ def extract_link_contexts(
         seen.add(absolute)
         text = _text(anchor) or str(anchor.get("title") or "").strip()
         block = anchor.find_parent(_BLOCKS)
-        row = _row_text(anchor, block)[:300] if isinstance(block, Tag) else ""
+        row = _row_text(anchor, block, rows)[:300] if isinstance(block, Tag) else ""
         previous = anchor.find_previous(_HEADINGS)
         heading = _text(previous)[:200] if isinstance(previous, Tag) else ""
         links.append(LinkContext(absolute, text, row, heading))
