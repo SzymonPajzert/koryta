@@ -46,3 +46,26 @@ def test_bip_net_pl_attachments_on_the_api_host_are_files(tmp_path):
         "https://u1-api.bip.net.pl/api/attachments/1835"
     ]
     assert "https://u1-api.bip.net.pl/api/attachments/1836" not in web.calls
+
+
+def test_robots_txt_is_asked_about_a_page_as_it_was_linked(tmp_path):
+    # AkcessNet's robots.txt disallows /admin/; normalize_url drops the slash,
+    # and the 10-31 walks asked robots.txt about /admin alone.
+    sites = {
+        "https://u1.pl": html(
+            "BIP", '<a href="/admin/">Oświadczenia majątkowe radnych</a>'
+        ),
+        "https://u1.pl/admin": html(
+            "Oświadczenia majątkowe",
+            '<a href="/f/1.pdf">Jan Nowak - oświadczenie majątkowe</a>',
+        ),
+        "https://u1.pl/f/1.pdf": (200, "application/pdf", PDF + b"n"),
+    }
+    _, store, web, _ = search(
+        tmp_path,
+        sites,
+        [row("n", "u1", "Jan", "Nowak")],
+        robots=lambda url: "/admin/" not in url,
+    )
+    assert not any("/admin" in call for call in web.calls)
+    assert store.people["n"].status == "not_found"

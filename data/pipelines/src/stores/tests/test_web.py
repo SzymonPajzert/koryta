@@ -217,3 +217,53 @@ def test_a_page_under_an_encoding_curl_does_not_know_is_read_raw() -> None:
         assert packed.ok and packed.content == body
     finally:
         server.shutdown()
+
+
+UA = "KorytaBIPCrawler/0.1 (+http://koryta.pl/crawler)"
+
+
+def allowed(robots_txt: str, path: str) -> bool:
+    return web.Robots(robots_txt.splitlines(), UA).allowed(f"https://bip.x.pl{path}")
+
+
+def test_a_wildcard_or_an_end_in_a_rule_applies() -> None:
+    # 2ClickPortal's robots.txt (10-31): its accessibility toggles are disallowed.
+    two_click = "User-agent: *\nDisallow: /szukaj/\nDisallow: /*wcag=\n"
+    assert not allowed(two_click, "/oswiadczenia-2025.html?v=2&wcag=fs")
+    assert not allowed(two_click, "/szukaj/x")
+    assert allowed(two_click, "/oswiadczenia-2025.html")
+    pdfs = "User-agent: *\nDisallow: /*.pdf$\n"
+    assert not allowed(pdfs, "/f/a.pdf") and allowed(pdfs, "/f/a.pdf?v=1")
+
+
+def test_the_longest_rule_decides_and_an_allow_wins_a_tie() -> None:
+    assert allowed("User-agent: *\nDisallow: /*\nAllow: /bip/\n", "/bip/a")
+    assert not allowed("User-agent: *\nDisallow: /*\nAllow: /bip/\n", "/inne")
+    assert allowed("User-agent: *\nDisallow: /a\nAllow: /a\n", "/a")
+    assert allowed("User-agent: *\nDisallow: /a\nAllow: /a/b\n", "/a/b")
+
+
+def test_every_star_group_counts_and_the_crawlers_own_comes_first() -> None:
+    # bip.info.pl's file (10-31): search engines may, everybody else may not.
+    info = (
+        "User-agent: *\nDisallow: /admin/\n\n"
+        "User-agent: Googlebot\nDisallow:\nCrawl-delay: 10\n\n"
+        "User-agent: *\nDisallow: /\n"
+    )
+    assert not allowed(info, "/index")
+    assert allowed(info + "\nUser-agent: KorytaBIPCrawler\nAllow: /\n", "/index")
+    assert allowed(info + "\nUser-agent: korytabipcrawler/0.1\nDisallow:\n", "/index")
+
+
+def test_a_group_must_name_the_crawler_not_a_word_of_its_user_agent() -> None:
+    assert allowed("User-agent: crawler\nDisallow: /\n", "/")
+    assert allowed("User-agent: koryta\nDisallow: /\n", "/")
+    assert not allowed("User-agent: KorytaBIPCrawler\nDisallow: /\n", "/")
+
+
+def test_paths_compare_by_their_escapes() -> None:
+    assert not allowed("User-agent: *\nDisallow: /%c5%81odz\n", "/Łodz")
+    assert not allowed("User-agent: *\nDisallow: /~jan\n", "/%7Ejan")
+    assert allowed("User-agent: *\nDisallow: /\n", "/robots.txt")
+    assert allowed("User-agent: *\nDisallow:\n", "/x")
+    assert allowed("Disallow: /\n", "/x")  # a rule outside any group
