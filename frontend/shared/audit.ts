@@ -63,6 +63,12 @@ export type AuditEntry = {
      * duplicate's poorer copy of the same fact, rather than left beside it. */
     enriched?: string[];
   };
+  /** The administrator whose press of „Opublikuj z kolejki” on
+   * /admin/oswiadczenia put the page up, on a publish row whose `user` is the
+   * automation that checked it. The press is their decision, and the activity
+   * counts it as theirs; `user` stays the automation's, which is how its next
+   * pass knows the publication for its own. */
+  pressed_by?: string;
 };
 
 /** Whether the action decides visibility rather than content, which is the cut

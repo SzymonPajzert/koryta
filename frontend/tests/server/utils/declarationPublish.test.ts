@@ -479,6 +479,20 @@ function upHere() {
   });
 }
 
+/** Every publication of her page in the audit log, in the order filed: who
+ * filed it, and whose press it went up at. */
+function pagePublications(id = "kowalska") {
+  return [...stored.entries()]
+    .filter(
+      ([path, row]) =>
+        path.startsWith("audit/") &&
+        row.action === "publish" &&
+        row.collection === "nodes" &&
+        row.target_id === id,
+    )
+    .map(([, row]) => ({ user: row.user, pressedBy: row.pressed_by }));
+}
+
 beforeEach(() => {
   stored = new Map();
   writes = 0;
@@ -1194,6 +1208,10 @@ describe("publishing a queued page", () => {
         }),
       ]),
     );
+    // Nobody pressed for her: the publication is the automation's alone.
+    expect(pagePublications()).toEqual([
+      { user: DECLARATION_ACTOR, pressedBy: undefined },
+    ]);
 
     expect(read("edges/kowalska-run")).toMatchObject({ published: true });
     expect(read("revisions/rev-kowalska-run")).toMatchObject({
@@ -2062,12 +2080,11 @@ describe("an admin's press of „Opublikuj z kolejki”", () => {
     expect(record.day).toBeUndefined();
     expect(read(`declarationPublishLimits/${DAY}`)).toBeUndefined();
     // The checks and the writes are still the automation's, which is what a
-    // later pass recognises as its own to finish or put back.
-    expect(
-      [...stored.values()].filter(
-        (row) => row.action === "publish" && row.target_id === "kowalska",
-      ),
-    ).toEqual([expect.objectContaining({ user: DECLARATION_ACTOR })]);
+    // later pass recognises as its own to finish or put back. The admin is
+    // named beside it: the activity counts the publication as theirs.
+    expect(pagePublications()).toEqual([
+      { user: DECLARATION_ACTOR, pressedBy: ADMIN },
+    ]);
   });
 
   it("goes past a limit already reached and leaves the automation's count as it was", async () => {
@@ -2198,6 +2215,9 @@ describe("an admin's press of „Opublikuj z kolejki”", () => {
       expect(read(`declarationPublishLimits/${DAY}`)).toMatchObject({
         count: 1,
       });
+      expect(pagePublications()).toEqual([
+        { user: DECLARATION_ACTOR, pressedBy: ADMIN },
+      ]);
     });
 
     it("gives no place back when it is held on the second try", async () => {
@@ -2229,6 +2249,9 @@ describe("an admin's press of „Opublikuj z kolejki”", () => {
     const record = read("declarationPublications/kowalska")!;
     expect(record).toMatchObject({ autoPublished: true, day: DAY });
     expect(record.pressedBy).toBeUndefined();
+    expect(pagePublications()).toEqual([
+      { user: DECLARATION_ACTOR, pressedBy: undefined },
+    ]);
   });
 
   it("forgets the place of the day an earlier claim left on a page queued again", async () => {
@@ -2338,12 +2361,13 @@ describe("sweepDeclarations", () => {
 });
 
 describe("a publication a stale write undid", () => {
-  /** Published by a pass, then written back whole by an import request that
-   * had read the page before it: what it learned, in a revision of its own,
-   * with the visibility and the approval the page had then. */
-  async function reverted() {
+  /** Published by a pass, or at an admin's press, then written back whole by
+   * an import request that had read the page before it: what it learned, in
+   * a revision of its own, with the visibility and the approval the page had
+   * then. */
+  async function reverted(pressed = false) {
     await queued();
-    await drain();
+    await (pressed ? press() : drain());
     expect(read("nodes/kowalska")!.published).toBe(true);
     const data = {
       type: "person",
@@ -2379,6 +2403,18 @@ describe("a publication a stale write undid", () => {
     expect(read(`declarationPublishLimits/${DAY}`)).toMatchObject({
       count: 1,
     });
+  });
+
+  it("puts a page an admin pressed for back as its own repair, so the press counts once", async () => {
+    await reverted(true);
+
+    const result = await sweepDeclarations(firestore, LATER, 3);
+
+    expect(result.reverted).toEqual({ restored: ["kowalska"], held: [] });
+    expect(pagePublications()).toEqual([
+      { user: DECLARATION_ACTOR, pressedBy: ADMIN },
+      { user: DECLARATION_ACTOR, pressedBy: undefined },
+    ]);
   });
 
   it("takes the relations down with a page it may not put back", async () => {
