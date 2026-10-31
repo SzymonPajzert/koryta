@@ -1133,6 +1133,8 @@ def run_people_mode(
         retry=retry,
         retry_before=args.poi_retry_before,
     )
+    if args.poi_units is not None:
+        todo = [r for r in todo if r.unit in args.poi_units]
     print(
         f"people of interest: {len(people):,} candidacies ({new:,} new); "
         f"{len(todo):,} to search in {len({r.unit for r in todo}):,} units",
