@@ -17,6 +17,7 @@ from analysis.payloads.person import (
 )
 from analysis.payloads.priority import (
     BOUGHT,
+    DECLARED,
     NEW_HIRE,
     NOTED,
     NOTED_MISSING,
@@ -32,7 +33,12 @@ from analysis.payloads.priority import (
 from analysis.payloads.site import UNRESOLVED_REGION, SiteSnapshot
 from entities.composite import Company, Election, Person
 from entities.person import PageNote
-from entities.priority_groups import parse_group
+from entities.priority_groups import (
+    DECLARATION_DRAFTS,
+    DECLARATION_NO_PAGE,
+    Declared,
+    parse_group,
+)
 from scrapers.koryta.download import KorytaNotes
 
 TODAY = date(2026, 10, 4)
@@ -912,3 +918,130 @@ def test_a_group_s_companies_are_its_category_s_public_ones():
 
     assert found("skarb-panstwa:10") == {PUBLIC}
     assert found("energetyka:10") == {OTHER_PUBLIC}
+
+
+# ---------------------------------------------------------------------------
+# Declaration groups
+
+
+def won(year: str) -> Election:
+    return Election(
+        election_type="samorządu", election_year=year, teryt="1465", elected=True
+    )
+
+
+def test_the_declaration_groups_are_the_crawl_s_priorities_0_and_2():
+    """Szymon, 2026-10-31: a draft that shows no birth date (the crawl's 0)
+    and somebody with no page (its 2), of the people the BIP crawl downloaded
+    a declaration for - found by their rejestr.io entry or their page. A
+    dated draft (1) and a published page (3) are in neither."""
+    site = snapshot(
+        stored_person("undated", "Ewa Lis", "https://rejestr.io/osoby/3"),
+        {
+            **stored_person("dated", "Olga Wilk", "https://rejestr.io/osoby/4"),
+            "birthDate": "1970-01-02",
+        },
+        stored_person("live", "Iga Pawlak", "https://rejestr.io/osoby/5"),
+        stored_person("unlinked", "Zofia Kruk", "https://rejestr.io/osoby/6"),
+    )
+    seat = Company(krs=PUBLIC, start="2020-01-01")
+    new = [
+        person("Anna Nowak", "https://rejestr.io/osoby/1", seat),
+        person("Marek Zając", "https://rejestr.io/osoby/7", seat),
+    ]
+    later = Company(krs=PUBLIC, start="2024-05-01")
+    on_site = [
+        person(name, f"https://rejestr.io/osoby/{n}", later)
+        for name, n in (
+            ("Ewa Lis", 3),
+            ("Olga Wilk", 4),
+            ("Iga Pawlak", 5),
+            ("Zofia Kruk", 6),
+        )
+    ]
+    # Zofia Kruk by her page alone: the crawl's list names it, not her entry.
+    found = Declared(frozenset({"1", "3", "4", "5"}), frozenset({"unlinked"}), "x")
+
+    def picks(*names: str) -> dict[str, tuple[str, ...]]:
+        found_picks = prioritised(
+            new,
+            on_site,
+            site,
+            public_krs={PUBLIC},
+            published_ids={"live"},
+            bought=set(),
+            noted={},
+            today=TODAY,
+            recent_days=30,
+            declared={name: found for name in names},
+        )
+        return {p.person.name: p.groups for p in found_picks}
+
+    assert picks(DECLARATION_DRAFTS, DECLARATION_NO_PAGE) == {
+        "Anna Nowak": (DECLARATION_NO_PAGE,),
+        "Marek Zając": (),
+        "Iga Pawlak": (),
+        "Ewa Lis": (DECLARATION_DRAFTS,),
+        "Olga Wilk": (),
+        "Zofia Kruk": (DECLARATION_DRAFTS,),
+    }
+    assert picks(DECLARATION_DRAFTS)["Anna Nowak"] == ()
+    assert set(picks().values()) == {()}
+
+
+def test_somebody_with_a_declaration_and_no_public_post_is_declared_newest_term_first():
+    """Nobody in no public post gets a page but the people whose declaration
+    was downloaded, and only when their group is asked for: a tier of their
+    own, last, newest win first - a 2024 councillor's BIP still shows the
+    declarations, a 2014 one's may not."""
+    site = snapshot()
+    ended = Company(krs=PUBLIC, start="2015-01-01", end="2019-01-01")
+    private = Company(krs=PRIVATE, start="2021-01-01")
+    new = [
+        person(
+            "Anna Nowak", "https://rejestr.io/osoby/1", ended, elections=[won("2014")]
+        ),
+        person(
+            "Beata Kos", "https://rejestr.io/osoby/2", private, elections=[won("2024")]
+        ),
+        person(
+            "Adam Kos",
+            "https://rejestr.io/osoby/3",
+            private,
+            elections=[won("2024"), won("2018")],
+        ),
+        person("Ewa Lis", "https://rejestr.io/osoby/4", private),
+        person(
+            "Jan Mazur", "https://rejestr.io/osoby/5", private, elections=[won("2024")]
+        ),
+        person(
+            "Olga Wilk", None, private, elections=[won("2024")], birthDate="1970-01-01"
+        ),
+    ]
+    found = Declared(frozenset({"1", "2", "3", "4"}), frozenset(), "x")
+
+    def picks(*names: str) -> list[tuple[str, str]]:
+        return [
+            (p.person.name, p.tier)
+            for p in prioritised(
+                new,
+                [],
+                site,
+                public_krs={PUBLIC},
+                published_ids=set(),
+                bought=set(),
+                noted={},
+                today=TODAY,
+                recent_days=30,
+                declared={name: found for name in names},
+            )
+        ]
+
+    assert picks(DECLARATION_NO_PAGE) == [
+        ("Adam Kos", DECLARED),
+        ("Beata Kos", DECLARED),
+        ("Anna Nowak", DECLARED),
+        ("Ewa Lis", DECLARED),
+    ]
+    assert picks() == []
+    assert picks(DECLARATION_DRAFTS) == []

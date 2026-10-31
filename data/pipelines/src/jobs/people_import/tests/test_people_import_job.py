@@ -21,7 +21,7 @@ from analysis.payloads.site import SiteSnapshot
 from analysis.payloads.target import NEW, Targeted
 from entities.composite import Company, Person
 from entities.person import RejestrIOKey
-from entities.priority_groups import parse_group
+from entities.priority_groups import Declared, parse_group
 from jobs.krs_common import answer_name
 from jobs.nightly import Export
 from jobs.people_import import payloads as build
@@ -1195,7 +1195,9 @@ def priority(world, monkeypatch) -> World:
     """The world, with a priority build, a memory of what was sent, and the
     people bought lately."""
 
-    def build_priority(koryta_date, policy, today, recent_days, bought, groups=()):
+    def build_priority(
+        koryta_date, policy, today, recent_days, bought, groups=(), declared=None
+    ):
         world.events.append("build")
         world.built.append(
             {
@@ -1204,6 +1206,7 @@ def priority(world, monkeypatch) -> World:
                 "recent_days": recent_days,
                 "bought": set(bought),
                 "groups": list(groups),
+                "declared": declared,
             }
         )
         return list(world.candidates)
@@ -1231,6 +1234,7 @@ def sent_part(world: World) -> list[dict]:
 HIRE, BOUGHT, PUBLISHED, ON_SITE = "new_hire", "bought", "published", "on_site"
 MISSING, NOTED, SEATED = "noted_missing", "noted", "odpis_only_current"
 LINKED = "rejestrio_current"
+DECLARED = "declared"
 
 
 def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
@@ -1256,6 +1260,7 @@ def test_a_priority_run_sends_by_tier_up_to_the_cap(priority):
         LINKED: 0,
         PUBLISHED: 1,
         ON_SITE: 1,
+        DECLARED: 0,
     }
     assert (summary["state"], summary["stopped"]) == ("partial", "limit")
     assert summary["created"] == ["Anna Nowak (p)", "Beata Kos (p)"]
@@ -1289,6 +1294,7 @@ def test_new_hires_past_max_new_make_room_for_the_pages_after_them(priority):
         LINKED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
+        DECLARED: 0,
     }
 
 
@@ -1957,7 +1963,7 @@ def test_a_night_leaves_alone_what_an_earlier_one_sent_listed_otherwise(
     shared = Shared()
     tonight: list[build.Candidate] = []
     monkeypatch.setattr(job, "Client", lambda: shared)
-    monkeypatch.setattr(job, "build_priority", lambda *args: list(tonight))
+    monkeypatch.setattr(job, "build_priority", lambda *args, **kwargs: list(tonight))
     monkeypatch.setattr(job, "bought_since", lambda client, since: set())
 
     tonight[:] = [build.Candidate(holding(POSTS), PUBLISHED, None)]
@@ -2111,6 +2117,7 @@ def test_the_people_bought_this_week_go_up_in_a_tier_of_their_own(priority, caps
         LINKED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
+        DECLARED: 0,
     }
     # Two bought, one of them with a page to change.
     assert summary["bought_people"] == 2
@@ -2123,7 +2130,7 @@ def test_the_people_bought_this_week_go_up_in_a_tier_of_their_own(priority, caps
     assert (
         "Planned by tier: {'new_hire': 1, 'bought': 1, 'noted_missing': 0, "
         "'noted': 0, 'odpis_only_current': 0, 'rejestrio_current': 0, "
-        "'published': 1, 'on_site': 0}" in out
+        "'published': 1, 'on_site': 0, 'declared': 0}" in out
     )
 
 
@@ -2154,6 +2161,7 @@ def test_the_noted_pages_go_up_after_the_bought_in_tiers_of_their_own(priority):
         LINKED: 0,
         PUBLISHED: 1,
         ON_SITE: 0,
+        DECLARED: 0,
     }
     assert [(row["name"], row["tier"]) for row in sent_part(priority)] == [
         ("Ewa Lis", BOUGHT),
@@ -2679,7 +2687,9 @@ def test_each_planned_person_says_which_companies_the_export_has_no_page_for(
     )
 
     class Payloads:
-        def prioritised(self, ctx, today, recent_days, bought, groups=()):
+        def prioritised(
+            self, ctx, today, recent_days, bought, groups=(), declared=None
+        ):
             return [Pick(hire, HIRE, "2026-09-30")]
 
         def site_snapshot(self, ctx):
@@ -3064,7 +3074,9 @@ def test_each_planned_person_names_the_priority_groups_they_belong_to(monkeypatc
     asked: list[list] = []
 
     class Payloads:
-        def prioritised(self, ctx, today, recent_days, bought, groups=()):
+        def prioritised(
+            self, ctx, today, recent_days, bought, groups=(), declared=None
+        ):
             asked.append(list(groups))
             return [Pick(seated, LINKED, "2020-01-01", groups=("skarb-panstwa",))]
 
@@ -3084,3 +3096,111 @@ def test_each_planned_person_names_the_priority_groups_they_belong_to(monkeypatc
 
     assert asked == [[group]]
     assert (found.payload["name"], found.groups) == ("Jan Mazur", ("skarb-panstwa",))
+
+
+# ---------------------------------------------------------------------------
+# Declaration groups: the people whose oświadczenie the BIP crawl downloaded
+
+DRAFTS, NO_PAGE = "oswiadczenia-szkice", "oswiadczenia-bez-strony"
+
+
+def test_somebody_in_no_public_post_goes_only_for_their_group():
+    """Szymon, 2026-10-31: pages for the people with a downloaded declaration
+    and no page, in a public post or not. Nothing else makes a page for
+    somebody in no public post, so past the group's budget they wait - for
+    the next run's group, not for a tier of the run's own."""
+    found = [
+        candidate("Anna Nowak", HIRE),
+        member("Beata Kos", ON_SITE, DRAFTS),
+        member("Jan Mazur", LINKED, NO_PAGE),
+        member("Ewa Wilk", DECLARED, NO_PAGE),
+        member("Iga Pawlak", DECLARED, NO_PAGE),
+        member("Zofia Kruk", DECLARED, NO_PAGE),
+        candidate("Marek Zając", ON_SITE),
+    ]
+
+    planned, _ = job.plan_priority(
+        found,
+        set(),
+        50,
+        max_rejestrio_current=0,
+        groups=[parse_group(f"{DRAFTS}:5"), parse_group(f"{NO_PAGE}:3:new=2")],
+    )
+
+    assert charged(planned) == [
+        ("Anna Nowak", HIRE, ""),
+        ("Beata Kos", ON_SITE, DRAFTS),
+        ("Jan Mazur", LINKED, NO_PAGE),
+        ("Ewa Wilk", DECLARED, NO_PAGE),
+        # Past new=2: Iga Pawlak and Zofia Kruk wait, though the run has room.
+        ("Marek Zając", ON_SITE, ""),
+    ]
+    planned, _ = job.plan_priority(found, set(), 50, max_rejestrio_current=5)
+    assert DECLARED not in [c.tier for c in planned]
+
+
+def test_the_declared_count_against_max_new():
+    found = [member(f"Osoba {i}", DECLARED, NO_PAGE) for i in range(1, 4)]
+
+    planned, _ = job.plan_priority(
+        found, set(), 2, groups=[parse_group(f"{NO_PAGE}:10")]
+    )
+
+    assert [c.payload["name"] for c in planned] == ["Osoba 1", "Osoba 2"]
+
+
+def test_a_run_given_a_declaration_group_reads_the_newest_list_and_names_it(
+    priority, monkeypatch, capsys
+):
+    lists: list[object] = []
+    declared = Declared(
+        frozenset({"Mazur"}), frozenset(), "gs://koryta-pl-sharedcache/x"
+    )
+
+    def newest_found(client):
+        lists.append(client)
+        return declared
+
+    monkeypatch.setattr(job, "newest_found", newest_found)
+    priority.candidates = [
+        member("Jan Mazur", DECLARED, NO_PAGE),
+        member("Ewa Wilk", DECLARED, NO_PAGE),
+    ]
+    priority.answers = [person("created", "a")]
+    argv = ["--scope", "priority", "--max-uploads", "10"]
+
+    assert job.main([*argv, "--priority-group", f"{NO_PAGE}:1"]) == 0
+
+    assert len(lists) == 1
+    assert [built["declared"] for built in priority.built] == [declared]
+    assert priority.sent() == ["Jan Mazur"]
+    report = priority.summary()["groups"][NO_PAGE]
+    assert report["source"] == "gs://koryta-pl-sharedcache/x"
+    assert report["members"] == {DECLARED: 2}
+    assert priority.summary()["tiers"][DECLARED] == 1
+    out = capsys.readouterr().out
+    assert (
+        "People with a downloaded declaration in no public post: 1 of 2 planned, "
+        "all for their group" in out
+    )
+
+
+def test_a_run_reads_no_list_without_a_declaration_group_and_goes_on_without_one(
+    priority, monkeypatch, capsys
+):
+    lists: list[object] = []
+    monkeypatch.setattr(job, "newest_found", lists.append)
+    priority.candidates = [candidate("Ewa Lis", ON_SITE)]
+    priority.answers = [person("updated"), person("updated")]
+    argv = ["--scope", "priority", "--max-uploads", "10"]
+
+    assert job.main([*argv, "--priority-group", "skarb-panstwa:5"]) == 0
+    assert (lists, priority.built[-1]["declared"]) == ([], None)
+
+    assert job.main([*argv, "--priority-group", f"{DRAFTS}:5"]) == 0
+    # No list yet: the group has nobody in it, and the night is not held.
+    assert len(lists) == 1
+    assert priority.built[-1]["declared"] == Declared()
+    assert "under gs://koryta-pl-sharedcache/jobs/bip_crawler/found/" in (
+        capsys.readouterr().out
+    )

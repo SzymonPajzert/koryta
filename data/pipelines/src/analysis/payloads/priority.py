@@ -1,7 +1,7 @@
 """Who a capped upload sends first.
 
 While the daily people import is rolled out it sends at most a hundred people
-a night, so the order decides who reaches the site at all. Eight tiers, each
+a night, so the order decides who reaches the site at all. Nine tiers, each
 sent whole before the next:
 
 1. `NEW_HIRE` - somebody the site has no page for, holding a post at a public
@@ -62,6 +62,14 @@ sent whole before the next:
    theirs.
 7. `PUBLISHED` - a published page the payload would change. What readers see.
 8. `ON_SITE` - an unpublished page the payload would change.
+9. `DECLARED` - somebody the site has no page for, with a rejestr.io entry and
+   no public post now, whose oświadczenie majątkowe the BIP crawl downloaded:
+   a councillor, a wójt, whom the register knows from a post at a private
+   company or one that ended. Nobody else in no public post gets a page, so
+   only their group sends them (`entities.priority_groups.DECLARATION_NO_PAGE`)
+   - Szymon, 2026-10-31. On that night's outputs and the crawl's list of that
+   morning, 2,344 people, against 405 with no page in a public post. Created
+   unpublished; the newest term first.
 
 Inside a tier the newest news first: a hire by the start of their newest post,
 a page by the newest dated fact the upload would add (`dated_changes`). A
@@ -79,8 +87,8 @@ says whether its page is (`Pick.published`): a change to a published page is
 what readers see, or what waits for a reviewer, whatever tier sent it, and a
 run caps those across the tiers (`--max-published` in `jobs.people_import`).
 
-The new-hire tier and the two of the people in a current seat are
-`missing_from_koryta`, and the other five `matching_one_page`, with their
+The new-hire tier, the two of the people in a current seat and the declared
+are `missing_from_koryta`, and the other five `matching_one_page`, with their
 guards: nobody here is someone a run of either scope would not have sent.
 
 Each pick also names the priority groups whose companies the person holds a
@@ -90,6 +98,11 @@ pages (`AHEAD_OF_GROUPS`), out of a budget of the group's own, and only those
 in the tiers that make pages or change drafts (`GROUPED`) - a published page
 waits for a reviewer, and somebody only an odpis names is checked by hand, so
 those keep the run's own caps (`jobs.people_import.plan_priority`).
+
+A declaration group's members are the people whose oświadczenie the crawl
+downloaded (`entities.priority_groups.Declared`), found by their rejestr.io
+entry or their page, as tonight's export has the page: with no page, or an
+unpublished one that shows no birth date (`declaration_groups`).
 """
 
 import typing
@@ -97,8 +110,14 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 
-from analysis.payloads.site import INFORMATIONAL_REASONS, SiteSnapshot, day_of
+from analysis.payloads.site import (
+    INFORMATIONAL_REASONS,
+    SiteSnapshot,
+    day_of,
+    field,
+)
 from entities.composite import Person
+from entities.priority_groups import DECLARATION_DRAFTS, DECLARATION_NO_PAGE, Declared
 
 NEW_HIRE = "new_hire"
 BOUGHT = "bought"
@@ -108,6 +127,7 @@ ODPIS_ONLY_CURRENT = "odpis_only_current"
 REJESTRIO_CURRENT = "rejestrio_current"
 PUBLISHED = "published"
 ON_SITE = "on_site"
+DECLARED = "declared"
 TIERS = (
     NEW_HIRE,
     BOUGHT,
@@ -117,14 +137,16 @@ TIERS = (
     REJESTRIO_CURRENT,
     PUBLISHED,
     ON_SITE,
+    DECLARED,
 )
 
 #: The tiers sent ahead of every priority group: news, and what somebody asked
 #: for. Szymon, 2026-10-28: the groups go after the noted.
 AHEAD_OF_GROUPS = (NEW_HIRE, BOUGHT, NOTED_MISSING, NOTED)
 #: The tiers a group sends its members from: pages made for people in a public
-#: post, and drafts the payload would change.
-GROUPED = (REJESTRIO_CURRENT, ON_SITE)
+#: post, drafts the payload would change, and the declared, whom nothing else
+#: sends.
+GROUPED = (REJESTRIO_CURRENT, ON_SITE, DECLARED)
 
 #: The kind of note entry that says data is missing ("Brakuje danych").
 MISSING = "missing"
@@ -143,8 +165,9 @@ class Pick:
     #: (`published_ids`), whatever the tier; False for somebody the site has
     #: no page for.
     published: bool = False
-    #: The priority groups whose companies the person holds a post at now
-    #: (`group_names`), in the order the groups were given.
+    #: The priority groups the person belongs to: the categories at whose
+    #: companies they hold a post now (`group_names`), then the declaration
+    #: groups (`declaration_groups`), each in the order the groups were given.
     groups: tuple[str, ...] = ()
 
 
@@ -193,6 +216,53 @@ def group_names(
         name
         for name, companies in groups.items()
         if any(krs in companies for krs in current)
+    )
+
+
+def declaration_groups(
+    person: Person,
+    stored: typing.Mapping[str, typing.Any] | None,
+    live: bool,
+    declared: typing.Mapping[str, Declared],
+) -> tuple[str, ...]:
+    """The declaration groups, of `declared` (name -> who the crawl found), the
+    person belongs to: somebody whose oświadczenie it downloaded - found by
+    their rejestr.io entry, or by the page `stored` - with no page
+    (`DECLARATION_NO_PAGE`), or with an unpublished one that shows no birth date
+    (`DECLARATION_DRAFTS`). The crawl's priorities 2 and 0, as tonight's export
+    has the page rather than as the crawl's list had it."""
+    page = None if stored is None else str(stored.get("id"))
+    if stored is None:
+        wanted = DECLARATION_NO_PAGE
+    elif not live and day_of(field(stored, "birthDate")) is None:
+        wanted = DECLARATION_DRAFTS
+    else:
+        return ()
+    return tuple(
+        name
+        for name, found in declared.items()
+        if name == wanted and found.covers(register_id(person), page)
+    )
+
+
+def by_newest_term(picks: list[Pick]) -> list[Pick]:
+    """The declared by the newest election each won, newest first - the term
+    whose declarations a BIP still shows - and those PKW gives no win for
+    last; by name inside a year, so that the order does not move with the
+    order of the pipeline's rows."""
+
+    def newest_win(pick: Pick) -> str:
+        return max(
+            (
+                str(election.election_year)
+                for election in pick.person.elections
+                if election.elected and election.election_year
+            ),
+            default="",
+        )
+
+    return sorted(
+        sorted(picks, key=lambda p: p.person.name), key=newest_win, reverse=True
     )
 
 
@@ -293,6 +363,7 @@ def prioritised(
     today: date,
     recent_days: int,
     groups: typing.Mapping[str, typing.Container[str]] | None = None,
+    declared: typing.Mapping[str, Declared] | None = None,
 ) -> list[Pick]:
     """Every person a capped run may send, in the order it sends them.
 
@@ -300,16 +371,22 @@ def prioritised(
     `matching_one_page` kept, both from the same payloads and `snapshot`.
     `published_ids` are the node ids of the published person pages, `bought`
     the rejestr.io ids of the people whose feed was bought lately, `noted` the
-    kinds of the note entries still open, by the page they are on, and
-    `groups` the KRS numbers of each priority group's companies, by its name.
+    kinds of the note entries still open, by the page they are on, `groups`
+    the KRS numbers of each category group's companies, by its name, and
+    `declared` who the BIP crawl found a declaration for, by the name of each
+    declaration group the run was given.
     """
     groups = groups or {}
+    declared = declared or {}
     since = (today - timedelta(days=recent_days)).isoformat()
     hires: list[Pick] = []
     seated: list[Pick] = []
     linked: list[Pick] = []
+    unseated: list[Pick] = []
     for person in new:
-        member = group_names(person, groups)
+        member = group_names(person, groups) + declaration_groups(
+            person, None, False, declared
+        )
         if (start := newest_public_start(person, public_krs, since)) is not None:
             hires.append(Pick(person, NEW_HIRE, start, groups=member))
         elif seats := current_public_seats(person, public_krs):
@@ -318,6 +395,8 @@ def prioritised(
                 seated.append(Pick(person, ODPIS_ONLY_CURRENT, newest, groups=member))
             else:
                 linked.append(Pick(person, REJESTRIO_CURRENT, newest, groups=member))
+        elif DECLARATION_NO_PAGE in member:
+            unseated.append(Pick(person, DECLARED, None, groups=member))
 
     paid_for: list[Pick] = []
     missing: list[Pick] = []
@@ -331,7 +410,9 @@ def prioritised(
             continue
         stored = snapshot.person_for(payload)
         live = stored is not None and str(stored.get("id")) in published_ids
-        member = group_names(person, groups)
+        member = group_names(person, groups) + declaration_groups(
+            person, stored, live, declared
+        )
         if register_id(person) in bought:
             paid_for.append(Pick(person, BOUGHT, newest, live, member))
         elif (tier := note_tier(person, stored, snapshot, noted)) is not None:
@@ -351,6 +432,12 @@ def prioritised(
         f"a current public seat and {len(linked)} with a rejestr.io entry, "
         f"{len(published)} published and {len(unpublished)} unpublished pages "
         f"to change"
+        + (
+            f", and {len(unseated)} people with a downloaded declaration in no "
+            "public post"
+            if DECLARATION_NO_PAGE in declared
+            else ""
+        )
     )
 
     def by_seat(picks: list[Pick]) -> list[Pick]:
@@ -367,14 +454,19 @@ def prioritised(
         + by_seat(linked)
         + newest_first(published)
         + newest_first(unpublished)
+        + by_newest_term(unseated)
     )
-    for name in groups:
+    for name in [*groups, *declared]:
         # Before any cap: the pools a run's plan cannot show, since it keeps
         # only the people under the caps.
         tiers = Counter(pick.tier for pick in picks if name in pick.groups)
+        who = (
+            "people with a post now at its companies"
+            if name in groups
+            else f"people with a declaration in {declared[name].source or 'no list'}"
+        )
         print(
-            f"Priority group {name}: {sum(tiers.values())} people with a post "
-            f"now at its companies, by tier "
+            f"Priority group {name}: {sum(tiers.values())} {who}, by tier "
             f"{ {tier: tiers[tier] for tier in TIERS if tiers[tier]} }"
         )
     return picks
