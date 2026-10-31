@@ -113,9 +113,9 @@ _LOC = re.compile(rb"<loc>\s*([^<\s]+)\s*</loc>")
 #: Turns of its host's rate a render pays at most. A drawn page asks its host
 #: for itself, its data calls and the scripts the browser has not fetched yet,
 #: ~9-20 requests; one that keeps polling asks for as many as it polls in a
-#: render's 30-60 seconds. Paid one a second, those held a walk past the run's
-#: deadline: chunk 12 of 10-31 sat 25 minutes after its last unit until the
-#: 2-hour limit killed it. A host whose render asks more is not rendered again.
+#: render's 30-60 seconds, and paid one a second those would hold a walk that
+#: long, past the run's deadline. A host whose render asks more is not
+#: rendered again.
 RENDER_TURNS = 60
 
 

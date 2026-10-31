@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tarfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
@@ -371,6 +372,31 @@ def test_link_contexts_carry_rows_and_headings():
     a, b = links
     assert a.heading == "Jan Kowalski" and "Oświadczenie za 2023" in a.row
     assert "Anna Nowak" in b.row
+
+
+def test_a_row_keeps_its_own_link_and_drops_the_others():
+    # The same link twice in a row: bs4 calls the two equal, and the first lost
+    # its own label from its row as if it were the other's.
+    html = (
+        "<table><tr><td>Jan Kowalski</td><td><a href='/a.pdf'>pobierz</a></td>"
+        "<td><a href='/a.pdf'>pobierz</a></td><td><a href='/c.pdf'>2024</a></td>"
+        "</tr></table>"
+    )
+    _, links = extract_link_contexts(html, "https://bip.x.pl/o")
+    assert [x.row for x in links] == ["Jan Kowalski pobierz", "Jan Kowalski 2024"]
+
+
+def test_a_page_in_one_table_row_is_read_in_time():
+    # ugblizyn.bip.doc.pl lays a whole page out in one row: 1,170 links.
+    cells = "".join(
+        f"<td>Uchwała {i}</td><td><a href='/u/{i}.pdf'>pobierz {i}</a></td>"
+        for i in range(600)
+    )
+    html = f"<table><tr>{cells}</tr></table>"
+    started = time.monotonic()
+    _, links = extract_link_contexts(html, "https://bip.x.pl/o")
+    assert len(links) == 600 and time.monotonic() - started < 20
+    assert "pobierz 7" in links[7].row and "pobierz 8" not in links[7].row
 
 
 def test_first_name_rule_and_stems():
