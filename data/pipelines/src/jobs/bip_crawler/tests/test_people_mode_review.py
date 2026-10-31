@@ -44,7 +44,14 @@ class Web:
 
 
 def search(
-    tmp_path: Path, sites, rows, *, store=None, unreachable=lambda u: False, **options
+    tmp_path: Path,
+    sites,
+    rows,
+    *,
+    store=None,
+    unreachable=lambda u: False,
+    robots=None,
+    **options,
 ):
     web = Web(sites)
     store = store or MemoryBipPeopleStore()
@@ -62,7 +69,7 @@ def search(
         seeds,
         PeopleOptions(workers=2, **options),
         fetch=web.fetch,
-        robots_allowed=lambda u: not unreachable(u),
+        robots_allowed=robots or (lambda u: not unreachable(u)),
         robots_unreachable=unreachable,
         limiter=HostTokenBucket(0),
         sleep=lambda s: None,

@@ -211,14 +211,18 @@ class _Frontier:
     heap: list[tuple[float, int, int, str]] = field(default_factory=list)
     seen: set[str] = field(default_factory=set)
     sequence: int = 0
+    #: A queued page as it was linked, where normalize_url changed it.
+    linked: dict[str, str] = field(default_factory=dict)
 
     def __bool__(self) -> bool:
         return bool(self.heap)
 
-    def add(self, url: str, score: float, depth: int) -> None:
+    def add(self, url: str, score: float, depth: int, linked: str = "") -> None:
         if self.has(url):
             return
         self.seen.add(_same_page(url))
+        if linked and linked != url:
+            self.linked[url] = linked
         heapq.heappush(self.heap, (-score, depth, self.sequence, url))
         self.sequence += 1
 
@@ -256,7 +260,7 @@ class _Frontier:
                 continue
             score = link_score(link, seekers, depth, prefer)
             if score > -3:
-                self.add(target, score, depth)
+                self.add(target, score, depth, link.url)
 
 
 def _under(path: str, prefix: str) -> bool:
@@ -555,14 +559,16 @@ class PeopleSearch:
                 if not frontier.in_scope(target):
                     continue
                 if _is_file(target):
-                    files.append(LinkContext(target, ""))
+                    if url == target or self.robots_allowed(url):
+                        files.append(LinkContext(target, ""))
                 elif is_document_url(target):
                     # A document by its address alone (?id=...): an attachment as
                     # often as a page, and its labelled link brings it anyway.
                     continue
                 elif not frontier.has(target):
                     link = LinkContext(target, "")
-                    frontier.add(target, 50 + link_score(link, seekers, 1, prefer), 1)
+                    score = 50 + link_score(link, seekers, 1, prefer)
+                    frontier.add(target, score, 1, url)
             found = [
                 c
                 for c in candidates(
@@ -595,7 +601,7 @@ class PeopleSearch:
             return out
         frontier = _Frontier(scopes)
         for root in roots:
-            frontier.add(normalize_url(root), 100.0, 0)
+            frontier.add(normalize_url(root), 100.0, 0, root)
         self._seed_known(out, frontier, roots, seekers, prefer)
         blocked = down = requests = 0
         budget = self._budget(max(len(seekers), self.unit_sizes.get(unit, 0)))
@@ -618,6 +624,13 @@ class PeopleSearch:
                 out.status = "budget"
                 break
             depth, url = frontier.pop()
+            # robots.txt is asked about the page as linked too: normalize_url
+            # sorts the query and drops a final slash, and AkcessNet's
+            # "Disallow: /index.php?job=rejestr" and "/admin/" passed that way.
+            linked = frontier.linked.get(url)
+            if linked and not self.robots_allowed(linked):
+                blocked += 1
+                continue
             result = self._get_page(url)
             if isinstance(result, str):
                 blocked += result == ROBOTS

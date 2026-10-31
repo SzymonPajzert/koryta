@@ -4,14 +4,17 @@
 missing/empty robots.txt as allow-all, an unreachable host or a hard error
 status (403/5xx) as deny, and caches per host (thread-safe — fetcher threads
 share it). 429 is rate limiting, not a robots verdict, so it is not cached as
-a deny. `WebImpl` keeps the old Context-facing method delegating here.
+a deny. `Robots` reads the file. `WebImpl` keeps the old Context-facing method
+delegating here.
 """
 
+import functools
 import re
 import threading
+from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlsplit
-from urllib.robotparser import RobotFileParser
+from urllib.parse import quote, urlsplit
 
 from curl_cffi import CurlHttpVersion
 from curl_cffi import requests as cffi_requests
@@ -39,6 +42,97 @@ def robots_lines(text: str) -> list[str]:
         pieces[-1] += mark + comment
         lines.extend(pieces)
     return lines
+
+
+_LINE = re.compile(r"(?i)^\s*(user-agent|allow|disallow)\s*:\s*(.*?)\s*$")
+_ESCAPE = re.compile(r"%([0-9A-Fa-f]{2})")
+#: Characters RFC 3986 leaves alone in a path and query, and "%" itself.
+_KEPT = "!#$%&'()*+,/:;=?@[]-._~"
+
+
+def _octets(path: str) -> str:
+    """A path or rule as RFC 9309 compares them: an escaped character that
+    needs none ("%7E", "%61") written out, other escapes in upper case, any
+    other character outside ASCII percent-encoded as UTF-8."""
+
+    def unescape(match: re.Match[str]) -> str:
+        char = chr(int(match.group(1), 16))
+        if char.isascii() and (char.isalnum() or char in "-._~"):
+            return char
+        return "%" + match.group(1).upper()
+
+    return quote(_ESCAPE.sub(unescape, path), safe=_KEPT)
+
+
+@functools.cache
+def _pattern(rule: str) -> re.Pattern[str]:
+    """A rule's path as a regex: "*" any run of characters, a final "$" the end."""
+    end = rule.endswith("$")
+    body = rule[:-1] if end else rule
+    return re.compile(
+        ".*".join(re.escape(part) for part in body.split("*")) + ("$" if end else "")
+    )
+
+
+@dataclass(frozen=True)
+class _Rule:
+    allow: bool
+    path: str
+
+
+class Robots:
+    """One host's robots.txt as RFC 9309 reads it for one crawler.
+
+    The groups whose user-agent is the crawler's product token (the User-Agent
+    up to its "/", in any case) together, else every "*" group together; then
+    the longest rule that matches a path decides, an Allow over a Disallow as
+    long. Python's own parser read the same file differently from one release
+    to another (10-31: bip.info.pl's two "*" groups, a "Disallow: /" in the
+    second, denied everything under 3.13.14 and almost nothing under 3.11,
+    3.12 and 3.14), took "User-agent: crawler" for this crawler, and knew
+    no "*" or "$" in a rule, so 2ClickPortal's "Disallow: /*wcag=" let its
+    accessibility toggles through.
+    """
+
+    def __init__(self, lines: Iterable[str], user_agent: str) -> None:
+        token = user_agent.split("/", 1)[0].strip().lower()
+        groups: list[tuple[set[str], list[_Rule]]] = []
+        reading_agents = False
+        for line in lines:
+            match = _LINE.match(line.split("#", 1)[0])
+            if not match:
+                continue
+            key, value = match.group(1).lower(), match.group(2)
+            if key == "user-agent":
+                if not reading_agents:
+                    groups.append((set(), []))
+                groups[-1][0].add(value.split("/", 1)[0].strip().lower())
+                reading_agents = True
+                continue
+            reading_agents = False
+            if groups and value:
+                groups[-1][1].append(_Rule(key == "allow", _octets(value)))
+        named = [rules for agents, rules in groups if token in agents]
+        if not named:
+            named = [rules for agents, rules in groups if "*" in agents]
+        self.rules = [rule for rules in named for rule in rules]
+
+    def allowed(self, url: str) -> bool:
+        parts = urlsplit(url)
+        path = _octets((parts.path or "/") + (f"?{parts.query}" if parts.query else ""))
+        if path == "/robots.txt":
+            return True
+        best: _Rule | None = None
+        for rule in self.rules:
+            if not _pattern(rule.path).match(path):
+                continue
+            if (
+                best is None
+                or len(rule.path) > len(best.path)
+                or (len(rule.path) == len(best.path) and rule.allow)
+            ):
+                best = rule
+        return best is None or best.allow
 
 
 def _get_robots(url: str, user_agent: str) -> Any:
@@ -75,15 +169,15 @@ def _host_of(url: str) -> str:
 class RobotsCache:
     def __init__(self, user_agent: str) -> None:
         self.user_agent = user_agent
-        self._parsers: dict[str, RobotFileParser | None] = {}
+        self._parsers: dict[str, Robots | None] = {}
         self._unreachable: set[str] = set()
         self._lock = threading.Lock()
 
-    def _parser(self, host: str) -> RobotFileParser | None:
+    def _parser(self, host: str) -> Robots | None:
         with self._lock:
             if host in self._parsers:
                 return self._parsers[host]
-        parser: RobotFileParser | None = None
+        parser: Robots | None = None
         reachable = False
         allow_all = False
         for scheme in ("https", "http"):
@@ -100,8 +194,7 @@ class RobotsCache:
                 allow_all = True
                 break
             if response.status_code == 200:
-                parser = RobotFileParser()
-                parser.parse(robots_lines(response.text))
+                parser = Robots(robots_lines(response.text), self.user_agent)
                 break
         with self._lock:
             # Unreachable, or an error status (403/5xx/429): deny.
@@ -124,7 +217,7 @@ class RobotsCache:
         parser = self._parser(host)
         if parser is None:
             return host not in self._unreachable
-        return parser.can_fetch(self.user_agent, url)
+        return parser.allowed(url)
 
 
 
