@@ -164,8 +164,10 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   2 people not on the site yet, 3 published pages (verified already, so last). `--poi-limit` caps the
   candidacies, `--max-minutes` the run (walks stop at it, units not started stay
   pending; exit 75), `--workers` the units searched at once (at most
-  `--max-per-host`, 1, on one start host: they share its rate), `--rate` the
-  seconds between hits on one host.
+  `--max-per-host`, 1, on one start host: they share its rate; and at most
+  `--max-per-server`, 2, on one server, the address the start hosts resolve to:
+  a hosting platform serves dozens of BIPs under their own names), `--rate` the
+  seconds between hits on one host, from the first one (no burst).
 - One crawler per `--out`: the startup repair re-wraps every `.part` bundle
   there, so a second run on the same directory refuses to start
   (`.crawl.lock`).
