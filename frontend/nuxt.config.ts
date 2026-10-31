@@ -408,6 +408,12 @@ export default defineNuxtConfig({
     // somewhere, which is what a reader arriving on "lista" is after.
     "/lista": { redirect: { to: "/", statusCode: 301 } },
 
+    // A short link to hand out, on a poster or in a post: koryta.pl/start is
+    // easier to say and to type than /oswiadczenia. 302 rather than 301,
+    // because a browser keeps a 301 for good, and /start should be free to
+    // point at whatever the first task is next.
+    "/start": { redirect: { to: "/oswiadczenia", statusCode: 302 } },
+
     // Nitro only injects a Cache-Control route rule for public assets mounted
     // under a sub-path (it zeroes maxAge for anything at the site root), so
     // these ship with no Cache-Control at all and Cloud CDN re-fetches them
