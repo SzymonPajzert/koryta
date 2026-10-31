@@ -32,7 +32,7 @@ from analysis.payloads.target import (
 from analysis.utils import as_sequence
 from analysis.utils.elections import candidacy_teryt
 from entities.composite import Company, Election, Person, Source
-from entities.priority_groups import Group
+from entities.priority_groups import Declared, Group
 from scrapers.koryta.download import KorytaNotes, KorytaPeople
 from scrapers.krs.columns import is_public
 from scrapers.pkw.elections import parties_of_committee, party_sort_key
@@ -247,6 +247,7 @@ class PeoplePayloads(Pipeline[Person]):
         recent_days: int,
         bought: typing.Container[str],
         groups: typing.Sequence[Group] = (),
+        declared: Declared | None = None,
     ) -> list[Pick]:
         """Both halves of `--all` in the order a capped upload sends them.
 
@@ -260,7 +261,9 @@ class PeoplePayloads(Pipeline[Person]):
         for what would otherwise take two runs, `--not-on-koryta` and
         `--on-koryta --only-changed`, each guarded as that run would be.
 
-        Each says which of the priority `groups` it belongs to.
+        Each says which of the priority `groups` it belongs to: a category's,
+        by its companies, or a declaration group's, by who the BIP crawl found
+        a declaration for (`declared`, none when not given).
         """
         people_df = self.registered_people(ctx)
         snapshot = self.site_snapshot(ctx)
@@ -276,7 +279,16 @@ class PeoplePayloads(Pipeline[Person]):
             noted=self.noted_pages(ctx),
             today=today,
             recent_days=recent_days,
-            groups={group.name: self.group_companies(ctx, group) for group in groups},
+            groups={
+                group.name: self.group_companies(ctx, group)
+                for group in groups
+                if not group.of_declarations
+            },
+            declared={
+                group.name: declared or Declared()
+                for group in groups
+                if group.of_declarations
+            },
         )
 
     def group_companies(self, ctx: Context, group: Group) -> frozenset[str]:

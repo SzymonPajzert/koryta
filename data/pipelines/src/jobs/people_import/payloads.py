@@ -17,7 +17,7 @@ import pandas as pd
 from analysis.payloads.person import PeoplePayloads
 from analysis.payloads.target import PageTarget, Targeted
 from conductor import setup_context
-from entities.priority_groups import Group
+from entities.priority_groups import Declared, Group
 from scrapers.stores import (
     Context,
     Pipeline,
@@ -138,11 +138,14 @@ def build_priority(
     recent_days: int,
     bought: Container[str],
     groups: Sequence[Group] = (),
+    declared: Declared | None = None,
 ) -> list[Candidate]:
     """Every payload a priority run may send, in the order it sends them.
 
     `bought` are the rejestr.io ids of the people whose feed was bought lately;
-    each payload names the priority `groups` it belongs to.
+    each payload names the priority `groups` it belongs to, those of the
+    declaration groups by who the BIP crawl found a declaration for
+    (`declared`).
 
     Built as `build_payloads` builds, flags on sys.argv included, then each
     payload made what the pipe would have carried: through a one-row frame and
@@ -157,7 +160,9 @@ def build_priority(
         ctx, dumper = setup_context(required_resources(PeoplePayloads), policy=policy)
         try:
             pipeline = Pipeline.create(PeoplePayloads)
-            picks = pipeline.prioritised(ctx, today, recent_days, bought, groups)
+            picks = pipeline.prioritised(
+                ctx, today, recent_days, bought, groups, declared
+            )
             # Read once already, by the plan: `site_snapshot` keeps it.
             snapshot = pipeline.site_snapshot(ctx)
         finally:

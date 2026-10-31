@@ -10,6 +10,9 @@
     koryta_nightly --priority-group skarb-panstwa:100:new=50
                                       # the Treasury's companies' people
                                       # first, out of 100 of their own
+    koryta_nightly --priority-group oswiadczenia-szkice:200
+                                      # drafts with no birth date whose
+                                      # oświadczenie the BIP crawl downloaded
     koryta_nightly --register-backlog 2000
                                       # the register's backlog too, not only
                                       # the day's new registrations
@@ -1796,13 +1799,15 @@ def parser() -> argparse.ArgumentParser:
         "--priority-group",
         action="append",
         type=group_text,
-        metavar="CATEGORY:BUDGET[:new=N]",
+        metavar="NAME:BUDGET[:new=N]",
         help="A category whose companies' people in a post now the people "
         "step sends right after the noted pages, out of a budget of the "
         "group's own, within --max-uploads: e.g. skarb-panstwa:100:new=50, "
         "the companies the Treasury holds a stake in, 100 people a night, at "
-        "most 50 of them new pages. Repeatable; see koryta_people_import "
-        "--help.",
+        "most 50 of them new pages. Or oswiadczenia-szkice / "
+        "oswiadczenia-bez-strony: the people the BIP crawl downloaded an "
+        "oświadczenie majątkowe for, with a draft that shows no birth date / "
+        "with no page. Repeatable; see koryta_people_import --help.",
     )
     parser.add_argument(
         "--fill-rejestrio-current",
