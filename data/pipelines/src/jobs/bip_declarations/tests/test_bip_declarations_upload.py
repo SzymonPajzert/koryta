@@ -297,6 +297,50 @@ def test_a_skip_the_site_may_not_repeat_is_tried_again(store):
     assert store.sent("extract")[f"{SHA_NOTHING}-p0"].reason == "no_site_person"
 
 
+def test_priority_keeps_its_candidacies_and_the_extracts_serving_them(store):
+    store.people[2] = replace(ANNA, priority=1)  # a draft with a birth date
+
+    candidacies, extracts = plan(store, priorities={1})
+
+    assert [r["key"] for r, _ in candidacies] == [ANNA.key]
+    assert [e.id for e in extracts] == [f"{SHA_COUNCIL}-p0"]
+
+
+def test_priority_leaves_a_councils_file_a_councils(store):
+    # The council's file names Anna and Ewa. With only Anna's candidacies kept
+    # it still holds two people's declarations, so the stranger's page and
+    # Ewa's go nowhere rather than to Anna.
+    store.people[2] = replace(ANNA, priority=1)
+    store.link_rows = [
+        replace(link, named=True)
+        if link.sha256 == SHA_COUNCIL and link.key in (ANNA.key, EWA.key)
+        else link
+        for link in store.link_rows
+    ]
+
+    _, extracts = plan(store, priorities={1})
+
+    assert [e.id for e in extracts] == [f"{SHA_COUNCIL}-p0"]
+    assert extracts[0].record["candidacies"] == [ANNA.key]
+
+
+def test_a_sample_is_that_many_crops_and_the_candidacies_they_serve(store):
+    candidacies, extracts = plan(store, sample=1)
+
+    # By id, Jan's own file comes first; a failed extract is no crop.
+    assert [e.id for e in extracts] == [f"{SHA_ONE}-p0"]
+    assert [r["key"] for r, _ in candidacies] == [JAN_2024.key, JAN_2018.key]
+
+
+def test_the_next_sample_takes_the_crops_not_sent_yet(store):
+    upload(store, FakeSite(), tag="t", run_id="r1", sample=1, log=lambda _: None)
+
+    candidacies, extracts = plan(store, sample=5)
+
+    assert [e.id for e in extracts] == [f"{SHA_COUNCIL}-p0"]
+    assert [r["key"] for r, _ in candidacies] == [ANNA.key]
+
+
 def test_batches_keep_to_the_sites_limits():
     small = [Extract(str(i), {}, "", image_bytes=1000) for i in range(30)]
     assert [len(b) for b in batches(small)] == [MAX_EXTRACTS_PER_REQUEST, 5]
