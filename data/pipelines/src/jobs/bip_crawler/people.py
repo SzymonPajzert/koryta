@@ -55,7 +55,7 @@ from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 from analysis.bip_people_of_interest import BipPeopleOfInterest
 from conductor import setup_context
@@ -213,6 +213,8 @@ _NOT_NOW = frozenset({429, 503})
 NOT_NOW_PAUSE_S = 30.0
 NOT_NOW_TRIES = 3
 NOT_NOW_IN_A_ROW = 3
+#: Redirects followed for one request, each hop asked about in robots.txt.
+MAX_HOPS = 10
 #: A refusal of the crawler dressed as a page, the same at any pace (10-31):
 #: SYSTEMDOBIP.PL's 80-byte "Zbyt dużo jednoczesnych połączeń do strony" with
 #: HTTP 200 (E-LINE, 74 BIPs), on the crawler's User-Agent only, also after an
@@ -397,7 +399,7 @@ class PeopleSearch:
         seeds: dict[str, UnitSeed],
         options: PeopleOptions,
         *,
-        fetch: Callable[[str, float, str], HttpResult] = http_get,
+        fetch: Callable[[str, float, str], HttpResult] | None = None,
         robots_allowed: Callable[[str], bool] = lambda url: True,
         robots_unreachable: Callable[[str], bool] = lambda url: False,
         limiter: HostTokenBucket | None = None,
@@ -429,7 +431,7 @@ class PeopleSearch:
         #: A host's sitemaps, read once a run: a shared platform's units share them.
         self._sitemaps: dict[str, list[str]] = {}
         self._sitemap_locks: dict[str, threading.Lock] = {}
-        self.fetch = fetch
+        self.fetch = fetch or _one_hop
         self.robots_allowed = robots_allowed
         self.robots_unreachable = robots_unreachable
         # No burst: the shared default lets a host take 60 requests at once, and
@@ -468,20 +470,27 @@ class PeopleSearch:
         REFUSED when the answer refuses the crawler (`_refused`). A "not now"
         (`_NOT_NOW`) pauses the host, the last one too, so whatever asks it next
         waits as well; ``url`` is asked ``tries`` times, not past the deadline.
+        Redirects are followed one hop at a time, `MAX_HOPS` at most.
         """
-        if not self.robots_allowed(url):
-            return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
-        host = host_of(url)
-        for _ in range(max(1, tries)):
-            self._wait_turn(host)
-            result = self.fetch(
-                url, self.options.request_timeout_s, self.options.user_agent
-            )
-            if result.status not in _NOT_NOW:
+        for _ in range(MAX_HOPS + 1):
+            if not self.robots_allowed(url):
+                return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
+            host = host_of(url)
+            for _ in range(max(1, tries)):
+                self._wait_turn(host)
+                result = self.fetch(
+                    url, self.options.request_timeout_s, self.options.user_agent
+                )
+                if result.status not in _NOT_NOW:
+                    break
+                self.limiter.pause(host, NOT_NOW_PAUSE_S)
+                if self._past_deadline():
+                    break
+            # A redirect is asked about too: AkcessNet's /admin goes to the
+            # /admin/ its robots.txt disallows.
+            if not (result.location and 300 <= result.status < 400):
                 break
-            self.limiter.pause(host, NOT_NOW_PAUSE_S)
-            if self._past_deadline():
-                break
+            url = urljoin(result.url, result.location)
         return REFUSED if _refused(result) else result
 
     def _wait_turn(self, host: str) -> None:
@@ -711,12 +720,9 @@ class PeopleSearch:
                 out.status = "budget"
                 break
             depth, url = frontier.pop()
-            # robots.txt is asked about the page as linked too: normalize_url
-            # sorts the query and drops a final slash, and AkcessNet's
-            # "Disallow: /index.php?job=rejestr" and "/admin/" passed that way.
-            linked = frontier.linked.get(url)
-            if linked and not self.robots_allowed(linked):
-                blocked += 1
+            if no := self._linked_no(frontier, url):
+                blocked += no == ROBOTS
+                down += no == UNREACHABLE
                 continue
             result = self._get_page(url)
             if isinstance(result, str):
@@ -758,6 +764,16 @@ class PeopleSearch:
         if out.pages_ok == 0 and out.status == "searched" and tried:
             only_robots = blocked and not down and requests == 0
             out.status = ROBOTS if only_robots else UNREACHABLE
+
+    def _linked_no(self, frontier: _Frontier, url: str) -> str:
+        """ROBOTS or UNREACHABLE when robots.txt says no to ``url`` as it was
+        linked, "" otherwise: normalize_url sorts the query and drops a final
+        slash, and AkcessNet's "Disallow: /index.php?job=rejestr" and "/admin/"
+        passed that way."""
+        linked = frontier.linked.get(url)
+        if not linked or self.robots_allowed(linked):
+            return ""
+        return UNREACHABLE if self.robots_unreachable(linked) else ROBOTS
 
     def _read_page(
         self,
@@ -1040,6 +1056,11 @@ class PeopleSearch:
                         self.timed_out |= outcome.endswith(":timeout")
         self.bundles.flush()
         return dict(sorted(counts.items()))
+
+
+def _one_hop(url: str, timeout: float, user_agent: str) -> HttpResult:
+    """A GET whose redirect `PeopleSearch._get` follows, robots.txt asked first."""
+    return http_get(url, timeout, user_agent, follow=False)
 
 
 def server_of(host: str) -> str:

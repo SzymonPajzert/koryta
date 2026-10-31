@@ -11,6 +11,7 @@ delegating here.
 import functools
 import re
 import threading
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -36,7 +37,7 @@ def robots_lines(text: str) -> list[str]:
     left whole: bip.srodaslaska.pl's "#User-agent: *" / "#Disallow: /" allows
     everything, and split after its "#" it would deny everything."""
     lines: list[str] = []
-    for line in text.splitlines():
+    for line in text.lstrip("\ufeff").splitlines():
         code, mark, comment = line.partition("#")
         pieces = _GLUED.sub("\n", code).split("\n")
         pieces[-1] += mark + comment
@@ -115,24 +116,34 @@ class Robots:
         named = [rules for agents, rules in groups if token in agents]
         if not named:
             named = [rules for agents, rules in groups if "*" in agents]
-        self.rules = [rule for rules in named for rule in rules]
+        # A plain rule is a prefix: looked up by length, the longest first, so
+        # bip.malopolska.pl's 22,884 rules cost a lookup each, not a regex.
+        self._plain: dict[int, dict[str, bool]] = {}
+        self._wild: list[tuple[re.Pattern[str], int, bool]] = []
+        for rule in (rule for rules in named for rule in rules):
+            if "*" in rule.path or rule.path.endswith("$"):
+                self._wild.append((_pattern(rule.path), len(rule.path), rule.allow))
+            else:
+                same = self._plain.setdefault(len(rule.path), {})
+                same[rule.path] = same.get(rule.path, False) or rule.allow
+        self._lengths = sorted(self._plain, reverse=True)
 
     def allowed(self, url: str) -> bool:
         parts = urlsplit(url)
         path = _octets((parts.path or "/") + (f"?{parts.query}" if parts.query else ""))
         if path == "/robots.txt":
             return True
-        best: _Rule | None = None
-        for rule in self.rules:
-            if not _pattern(rule.path).match(path):
-                continue
-            if (
-                best is None
-                or len(rule.path) > len(best.path)
-                or (len(rule.path) == len(best.path) and rule.allow)
-            ):
-                best = rule
-        return best is None or best.allow
+        length, allow = -1, True
+        for size in self._lengths:
+            verdict = self._plain[size].get(path[:size])
+            if verdict is not None:
+                length, allow = size, verdict
+                break
+        for rule, size, verdict in self._wild:
+            longer = size > length or (size == length and verdict and not allow)
+            if longer and rule.match(path):
+                length, allow = size, verdict
+        return length < 0 or allow
 
 
 def _get_robots(url: str, user_agent: str) -> Any:
@@ -166,20 +177,29 @@ def _host_of(url: str) -> str:
         return ""
 
 
+#: How long a host whose robots.txt answered 429 is taken to say no.
+ROBOTS_BUSY_S = 60.0
+
+
 class RobotsCache:
-    def __init__(self, user_agent: str) -> None:
+    def __init__(self, user_agent: str, clock: Any = time.monotonic) -> None:
         self.user_agent = user_agent
         self._parsers: dict[str, Robots | None] = {}
         self._unreachable: set[str] = set()
+        #: Hosts whose robots.txt said "not now" (429), until when.
+        self._busy: dict[str, float] = {}
+        self._clock = clock
         self._lock = threading.Lock()
 
     def _parser(self, host: str) -> Robots | None:
         with self._lock:
             if host in self._parsers:
                 return self._parsers[host]
+            if self._busy.get(host, 0.0) > self._clock():
+                return None
         parser: Robots | None = None
         reachable = False
-        allow_all = False
+        allow_all = busy = False
         for scheme in ("https", "http"):
             try:
                 response = _get_robots(
@@ -188,16 +208,25 @@ class RobotsCache:
             except Exception:
                 continue
             reachable = True
-            # 404 (no robots) and 429 (rate limited, not a verdict) allow;
-            # 200 parses; anything else is a hard error and denies.
-            if response.status_code in (404, 429) or not response.text.strip():
+            # 404 (no robots) and an empty 200 allow, a 200 parses, a 429 says
+            # no for now; any other status is a hard error and denies, empty or
+            # not (a 500 with no body used to allow all).
+            if response.status_code == 404 or (
+                response.status_code == 200 and not response.text.strip()
+            ):
                 allow_all = True
                 break
             if response.status_code == 200:
                 parser = Robots(robots_lines(response.text), self.user_agent)
                 break
+            if response.status_code == 429:
+                busy = True
+                break
         with self._lock:
-            # Unreachable, or an error status (403/5xx/429): deny.
+            if busy:  # asked again once the while is over
+                self._busy[host] = self._clock() + ROBOTS_BUSY_S
+                return None
+            # Unreachable, or an error status (403/5xx): deny.
             if not reachable or (parser is None and not allow_all):
                 self._unreachable.add(host)
             self._parsers[host] = parser
@@ -205,10 +234,12 @@ class RobotsCache:
 
     def unreachable(self, url: str) -> bool:
         """Whether ``allowed`` said no because the host did not answer for its
-        robots.txt (down, timing out, or an error status), not because it said no."""
+        robots.txt (down, timing out, an error status, or 429 for now), not
+        because it said no."""
         host = _host_of(url)
         with self._lock:
-            return host in self._unreachable
+            busy = self._busy.get(host, 0.0) > self._clock()
+            return host in self._unreachable or busy
 
     def allowed(self, url: str) -> bool:
         host = _host_of(url)
@@ -216,7 +247,7 @@ class RobotsCache:
             return False
         parser = self._parser(host)
         if parser is None:
-            return host not in self._unreachable
+            return not self.unreachable(url)
         return parser.allowed(url)
 
 
