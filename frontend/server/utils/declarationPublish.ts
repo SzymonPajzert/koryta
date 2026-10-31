@@ -943,7 +943,9 @@ async function publicPages(
  * (`autoPublished`): not where the claim it went up under is an admin's press
  * (`pressedBy`), whose name the record keeps. The audit row and the approvals
  * are still this automation's: it is what read and checked the page, and what
- * the next pass recognises as its own work to finish or put back.
+ * the next pass recognises as its own work to finish or put back. The publish
+ * row names the admin beside it (`pressed_by`), so that /aktywnosc and
+ * /eksploruj/statystyki count the press as the admin's publication.
  */
 export async function publishPage(
   db: Firestore,
@@ -1121,6 +1123,13 @@ export async function publishPage(
         collection: "nodes",
         target_id: pageId,
         user: DECLARATION_ACTOR,
+        // The admin, where the page goes up under the claim of their press.
+        // Not where a sweep puts a page back after a stale write
+        // (`restoreReverted`, record `published`): that is this automation
+        // repairing its own work, and nobody deciding a second time.
+        ...(publication?.status === "publishing" && publication.pressedBy
+          ? { pressed_by: publication.pressedBy }
+          : {}),
       },
       batch,
     );
