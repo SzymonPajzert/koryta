@@ -62,14 +62,15 @@ sent whole before the next:
    theirs.
 7. `PUBLISHED` - a published page the payload would change. What readers see.
 8. `ON_SITE` - an unpublished page the payload would change.
-9. `DECLARED` - somebody the site has no page for, with a rejestr.io entry and
-   no public post now, whose oświadczenie majątkowe the BIP crawl downloaded:
-   a councillor, a wójt, whom the register knows from a post at a private
-   company or one that ended. Nobody else in no public post gets a page, so
-   only their group sends them (`entities.priority_groups.DECLARATION_NO_PAGE`)
-   - Szymon, 2026-10-31. On that night's outputs and the crawl's list of that
-   morning, 2,344 people, against 405 with no page in a public post. Created
-   unpublished; the newest term first.
+9. `DECLARED` - somebody the site has no page for, with a rejestr.io entry,
+   who held a post at a public company once and holds none now, whose
+   oświadczenie majątkowe the BIP crawl downloaded: a councillor, a wójt, who
+   sat on a municipal company's board before. Nobody else whose public post
+   ended gets a page, so only their group sends them
+   (`entities.priority_groups.DECLARATION_NO_PAGE`) - Szymon, 2026-10-31: not
+   only a public post now, but one at some point in the person's history;
+   somebody the register knows from private companies alone is not sent.
+   Created unpublished; the newest term first.
 
 Inside a tier the newest news first: a hire by the start of their newest post,
 a page by the newest dated fact the upload would add (`dated_changes`). A
@@ -200,6 +201,15 @@ def current_public_seats(
         and str(company.krs) in public_krs
         and day_of(company.end) is None
     ]
+
+
+def held_public_post(person: Person, public_krs: typing.Container[str]) -> bool:
+    """Whether the person has held a post at a public company at any time,
+    ended or not - public as the register has the company now."""
+    return any(
+        company.krs is not None and str(company.krs) in public_krs
+        for company in person.companies
+    )
 
 
 def group_names(
@@ -395,7 +405,7 @@ def prioritised(
                 seated.append(Pick(person, ODPIS_ONLY_CURRENT, newest, groups=member))
             else:
                 linked.append(Pick(person, REJESTRIO_CURRENT, newest, groups=member))
-        elif DECLARATION_NO_PAGE in member:
+        elif DECLARATION_NO_PAGE in member and held_public_post(person, public_krs):
             unseated.append(Pick(person, DECLARED, None, groups=member))
 
     paid_for: list[Pick] = []
@@ -433,8 +443,8 @@ def prioritised(
         f"{len(published)} published and {len(unpublished)} unpublished pages "
         f"to change"
         + (
-            f", and {len(unseated)} people with a downloaded declaration in no "
-            "public post"
+            f", and {len(unseated)} people with a downloaded declaration whose "
+            "public post ended"
             if DECLARATION_NO_PAGE in declared
             else ""
         )

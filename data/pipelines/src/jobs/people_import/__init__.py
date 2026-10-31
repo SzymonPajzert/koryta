@@ -126,18 +126,21 @@ found` left in the shared cache (`stores.bip_found`). Szymon, 2026-10-31,
 drafts first: `oswiadczenia-szkice` sends the unpublished pages with no birth
 date - the night's payload dates them, and the readers of /oswiadczenia can
 settle a crop only against a page that shows one - and `oswiadczenia-bez-strony`
-makes pages for the people with none, in a public post or not. Somebody in no
-public post is in a tier of their own (`DECLARED`), which nothing but that
-group sends, since no other tier makes a page for anybody in no public post.
+makes pages for the people with none, in a public post now or in one that
+ended. Somebody whose public post ended is in a tier of their own
+(`DECLARED`), which nothing but that group sends, since no other tier makes a
+page for anybody in no public post now; somebody the register knows from
+private companies alone is not sent.
 Replayed on the night of 2026-10-31, on its own outputs and the crawl's list of
 that morning (8,143 candidacies found): 411 drafts with no birth date, and
-2,751 people with no page - 405 in a public post, 2,344 in none - which empties
-the drafts after 3 nights at 200 and the rest after 28 at 200:new=100, 14 at
-300:new=200, with no inflow. 908 more with no page had no rejestr.io entry on
-the list, which no id finds. The groups' sends come out of `--max-uploads` as
-any group's do: at 800 the 400 left the published pages none of their 76 and
-the run's own rejestr.io pages 84 of 200; at 1,200 every tier of the run's own
-kept what it sent that night.
+1,719 people with no page - 405 in a public post now and 1,312 in one that
+ended, against 1,032 the register knows from private companies alone - which
+empties the drafts after 3 nights at 200 and the rest after 18 at
+200:new=100, 9 at 300:new=200, with no inflow. 908 more with no page had no
+rejestr.io entry on the list, which no id finds. The groups' sends come out
+of `--max-uploads` as any group's do: at 800 the 400 left the published pages
+none of their 76 and the run's own rejestr.io pages 84 of 200; at 1,200 every
+tier of the run's own kept what it sent that night.
 
     koryta_people_import --scope priority --max-uploads 1200 \\
         --priority-group skarb-panstwa:200:new=100 \\
@@ -1402,7 +1405,7 @@ class PeopleImport:
             )
         if waiting := unsent([c for c in candidates if c.tier == DECLARED]):
             print(
-                f"People with a downloaded declaration in no public post: "
+                f"People with a downloaded declaration whose public post ended: "
                 f"{sum(c.tier == DECLARED for c in planned)} of {len(waiting)} "
                 "planned, all for their group"
             )
@@ -1980,7 +1983,8 @@ def parser() -> argparse.ArgumentParser:
         "Or the people the BIP crawl downloaded an oświadczenie majątkowe for, "
         "by its newest list (koryta_scrape_bip found): oswiadczenia-szkice "
         "their drafts with no birth date, oswiadczenia-bez-strony those with "
-        "no page, whom it makes one for in a public post or not. "
+        "no page, whom it makes one for in a public post now or in one that "
+        "ended. "
         "Repeatable: the groups go in the order given, and somebody in two "
         "is sent for the first with room (entities.priority_groups).",
     )
