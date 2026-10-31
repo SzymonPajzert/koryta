@@ -26,6 +26,7 @@ from analysis.payloads.priority import (
     PUBLISHED,
     REJESTRIO_CURRENT,
     current_public_seats,
+    held_public_post,
     newest_public_start,
     prioritised,
     register_id,
@@ -989,36 +990,49 @@ def test_the_declaration_groups_are_the_crawl_s_priorities_0_and_2():
     assert set(picks().values()) == {()}
 
 
-def test_somebody_with_a_declaration_and_no_public_post_is_declared_newest_term_first():
-    """Nobody in no public post gets a page but the people whose declaration
-    was downloaded, and only when their group is asked for: a tier of their
-    own, last, newest win first - a 2024 councillor's BIP still shows the
-    declarations, a 2014 one's may not."""
+def test_somebody_whose_public_post_ended_is_declared_newest_term_first():
+    """Nobody whose public post ended gets a page but the people whose
+    declaration was downloaded, and only when their group is asked for: a tier
+    of their own, last, newest win first. Szymon, 2026-10-31: a public post at
+    some point in the person's history, not only now - so somebody the register
+    knows from private companies alone is not sent."""
     site = snapshot()
     ended = Company(krs=PUBLIC, start="2015-01-01", end="2019-01-01")
     private = Company(krs=PRIVATE, start="2021-01-01")
+    private_ended = Company(krs=PRIVATE, start="2010-01-01", end="2012-01-01")
     new = [
         person(
             "Anna Nowak", "https://rejestr.io/osoby/1", ended, elections=[won("2014")]
         ),
         person(
-            "Beata Kos", "https://rejestr.io/osoby/2", private, elections=[won("2024")]
+            "Beata Kos",
+            "https://rejestr.io/osoby/2",
+            ended,
+            private,
+            elections=[won("2024")],
         ),
         person(
             "Adam Kos",
             "https://rejestr.io/osoby/3",
-            private,
+            ended,
             elections=[won("2024"), won("2018")],
         ),
-        person("Ewa Lis", "https://rejestr.io/osoby/4", private),
+        person("Ewa Lis", "https://rejestr.io/osoby/4", ended),
+        # Not on the crawl's list.
         person(
-            "Jan Mazur", "https://rejestr.io/osoby/5", private, elections=[won("2024")]
+            "Jan Mazur", "https://rejestr.io/osoby/5", ended, elections=[won("2024")]
         ),
+        # Only an odpis names her: no id on the list can find her.
         person(
-            "Olga Wilk", None, private, elections=[won("2024")], birthDate="1970-01-01"
+            "Olga Wilk", None, ended, elections=[won("2024")], birthDate="1970-01-01"
         ),
+        # Private companies alone, now or ended.
+        person(
+            "Piotr Sowa", "https://rejestr.io/osoby/6", private, elections=[won("2024")]
+        ),
+        person("Zofia Kruk", "https://rejestr.io/osoby/7", private_ended),
     ]
-    found = Declared(frozenset({"1", "2", "3", "4"}), frozenset(), "x")
+    found = Declared(frozenset({"1", "2", "3", "4", "6", "7"}), frozenset(), "x")
 
     def picks(*names: str) -> list[tuple[str, str]]:
         return [
@@ -1045,3 +1059,24 @@ def test_somebody_with_a_declaration_and_no_public_post_is_declared_newest_term_
     ]
     assert picks() == []
     assert picks(DECLARATION_DRAFTS) == []
+
+
+def test_a_public_post_held_once_is_any_post_at_a_public_company_ended_or_not():
+    ended = Company(krs=PUBLIC, start="2015-01-01", end="2019-01-01")
+    now = Company(krs=PUBLIC, start="2020-01-01")
+    private = Company(krs=PRIVATE, start="2021-01-01")
+
+    assert held_public_post(person("A", "https://rejestr.io/osoby/1", ended), {PUBLIC})
+    assert held_public_post(
+        person("B", "https://rejestr.io/osoby/2", private, now), {PUBLIC}
+    )
+    assert not held_public_post(
+        person("C", "https://rejestr.io/osoby/3", private), {PUBLIC}
+    )
+    assert not held_public_post(
+        person("D", "https://rejestr.io/osoby/4", Company(krs=None)), {PUBLIC}
+    )
+    # Public is the register's answer about the company, nothing in the payload.
+    assert held_public_post(
+        person("E", "https://rejestr.io/osoby/5", private), {PRIVATE}
+    )

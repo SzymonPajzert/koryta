@@ -24,7 +24,8 @@ found an oświadczenie majątkowe for (`stores.bip_found`), in the order of its
 own priorities - a draft with no birth date (`DECLARATION_DRAFTS`, its 0), whose
 page the night's payload dates, so that the readers of /oswiadczenia can settle
 its crops against it; then somebody with no page (`DECLARATION_NO_PAGE`, its 2),
-whom it makes one for even with no public post now, which nobody else gets
+in a public post now or in one that ended, whom it makes one for in either case,
+though nobody else whose public post ended gets one
 (`analysis.payloads.priority.DECLARED`). Where the page stands is tonight's
 export's, not the crawl's.
 
@@ -48,7 +49,7 @@ DECLARATION_GROUPS = {
     DECLARATION_DRAFTS: "the unpublished pages with no birth date of the people "
     "whose oświadczenie majątkowe the BIP crawl downloaded",
     DECLARATION_NO_PAGE: "the people with no page whose oświadczenie majątkowe "
-    "the BIP crawl downloaded, in a public post or not",
+    "the BIP crawl downloaded, in a public post now or in one that ended",
 }
 
 USAGE = (

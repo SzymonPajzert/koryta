@@ -3180,8 +3180,8 @@ def test_a_run_given_a_declaration_group_reads_the_newest_list_and_names_it(
     assert priority.summary()["tiers"][DECLARED] == 1
     out = capsys.readouterr().out
     assert (
-        "People with a downloaded declaration in no public post: 1 of 2 planned, "
-        "all for their group" in out
+        "People with a downloaded declaration whose public post ended: 1 of 2 "
+        "planned, all for their group" in out
     )
 
 
