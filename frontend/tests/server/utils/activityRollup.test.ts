@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { emptyActivityCounts } from "../../../shared/activity";
+import { DECLARATION_ACTOR } from "../../../shared/declarations";
 import type { ActivityEvent } from "../../../server/utils/activityStats";
 
 import {
@@ -169,6 +170,22 @@ describe("rollupForDay", () => {
 
     expect(rollup.totals.vote).toBe(0);
   });
+
+  it("keeps what the declarations' automation published apart from everybody", () => {
+    const rollup = rollupForDay(
+      "2026-08-20",
+      [
+        event(DECLARATION_ACTOR, "publication", "2026-08-20T09:00:00.000Z"),
+        event(DECLARATION_ACTOR, "publication", "2026-08-20T09:01:00.000Z"),
+        event("anna", "publication", "2026-08-20T10:00:00.000Z"),
+      ],
+      [],
+    );
+
+    expect(rollup.automatic).toBe(2);
+    expect(rollup.totals.publication).toBe(1);
+    expect(Object.keys(rollup.contributors)).toEqual(["anna"]);
+  });
 });
 
 describe("mergeRollups", () => {
@@ -218,7 +235,28 @@ describe("mergeRollups", () => {
       date: "2026-08-20",
       counts: emptyActivityCounts(),
       total: 0,
+      automatic: 0,
     });
+  });
+
+  it("adds the automation's publications up per day and for the window", () => {
+    const automatic = (date: string, count: number) =>
+      rollupForDay(
+        date,
+        Array.from({ length: count }, (_, i) =>
+          event(DECLARATION_ACTOR, "publication", `${date}T09:0${i}:00.000Z`),
+        ),
+        [],
+      );
+    const aggregate = mergeRollups(days, [
+      automatic("2026-08-19", 3),
+      automatic("2026-08-21", 2),
+    ]);
+
+    expect(aggregate.daily.map((day) => day.automatic)).toEqual([3, 0, 2]);
+    expect(aggregate.automatic).toBe(5);
+    expect(aggregate.total).toBe(0);
+    expect(aggregate.contributors).toEqual([]);
   });
 
   it("totals the window", () => {
@@ -260,7 +298,7 @@ describe("ensureDailyRollups", () => {
   it("reads a stored day instead of counting it again", async () => {
     const db = fakeDb({
       "activityDaily/2026-08-19": {
-        version: 3,
+        version: 4,
         date: "2026-08-19",
         totals: { vote: 4 },
         truncated: [],
@@ -327,7 +365,7 @@ describe("ensureDailyRollups", () => {
     // 20th for nothing.
     const db = fakeDb({
       "activityDaily/2026-08-20": {
-        version: 3,
+        version: 4,
         date: "2026-08-20",
         totals: {},
         contributors: {},
@@ -354,12 +392,41 @@ describe("ensureDailyRollups", () => {
     ]);
   });
 
+  it("stores the automation's publications only where there are any, and reads them back", async () => {
+    const db = fakeDb();
+    mockCollect.mockResolvedValue({
+      events: [
+        event(DECLARATION_ACTOR, "publication", "2026-08-19T09:00:00.000Z"),
+        event("anna", "vote", "2026-08-20T09:00:00.000Z"),
+      ],
+      truncated: [],
+    });
+
+    await ensureDailyRollups(db as never, ["2026-08-19", "2026-08-20"]);
+    expect(db.store.get("activityDaily/2026-08-19")).toMatchObject({
+      version: 4,
+      automatic: 1,
+    });
+    expect(db.store.get("activityDaily/2026-08-20")).not.toHaveProperty(
+      "automatic",
+    );
+
+    mockCollect.mockClear();
+    const read = await ensureDailyRollups(db as never, [
+      "2026-08-19",
+      "2026-08-20",
+    ]);
+    expect(mockCollect).not.toHaveBeenCalled();
+    expect(read.map((rollup) => rollup.automatic)).toEqual([1, 0]);
+  });
+
   it("recounts a day that was stored under an older counting rule", async () => {
-    // The rule has changed three times - article nodes, then the migration
-    // scripts, then the merge down to four kinds - so a day counted under an
-    // older one has to be thrown away, or the change would only ever apply to
-    // days nobody had looked at yet. The last of the three also renamed the
-    // fields, so a version-2 day would come back as one on which nobody voted.
+    // The rule has changed four times - article nodes, then the migration
+    // scripts, then the merge down to four kinds, then the automation counted
+    // apart - so a day counted under an older one has to be thrown away, or the
+    // change would only ever apply to days nobody had looked at yet. The third
+    // also renamed the fields, so a version-2 day would come back as one on
+    // which nobody voted.
     const db = fakeDb({
       "activityDaily/2026-08-19": {
         version: 1,

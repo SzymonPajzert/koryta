@@ -74,8 +74,19 @@ export type ActivityStats = {
   identified: boolean;
   totals: ActivityCounts;
   total: number;
-  /** One entry per day of the window, oldest first, gaps filled with zeros. */
-  daily: { date: string; counts: ActivityCounts; total: number }[];
+  /** One entry per day of the window, oldest first, gaps filled with zeros.
+   * `automatic` is the day's people the declarations' automation published
+   * on its own, which `counts` and `total` leave out. */
+  daily: {
+    date: string;
+    counts: ActivityCounts;
+    total: number;
+    automatic: number;
+  }[];
+  /** People the declarations' automation published on its own in the
+   * window. Not anybody's work, so in no total above and no contributor's
+   * row, but shown as the automation's. */
+  automatic: number;
   /** Distinct people who did anything in the window. */
   contributorCount: number;
   /** Ranked contributors, named as far as the caller is allowed to see. */
@@ -153,6 +164,7 @@ export default defineEventHandler(async (event): Promise<ActivityStats> => {
           }
         : null,
     truncated: windowed.truncated,
+    automatic: windowed.aggregate.automatic,
   };
 });
 

@@ -45,6 +45,9 @@ export type DailyRollup = {
   >;
   /** Kinds whose scan hit its cap on this day, so the day is a lower bound. */
   truncated: ActivityKind[];
+  /** People the declarations' automation published on its own that day,
+   * counted apart from `totals` and from every contributor. */
+  automatic: number;
 };
 
 /** Bumped whenever the rule for what counts as activity changes.
@@ -61,8 +64,10 @@ export type DailyRollup = {
  *    non-publication admin decisions dropped. A day stored under 2 holds its
  *    counts under names this version no longer reads, so it would come back as
  *    a day on which nobody voted.
+ * 4: what the declarations' automation publishes on its own is counted, apart
+ *    (`automatic`). A day stored under 3 dropped it with the other robots.
  */
-const ROLLUP_VERSION = 3;
+const ROLLUP_VERSION = 4;
 
 const COLLECTION = "activityDaily";
 
@@ -146,6 +151,7 @@ export function rollupForDay(
       ]),
     ),
     truncated: [...new Set(truncated)],
+    automatic: aggregate.automatic,
   };
 }
 
@@ -164,6 +170,7 @@ export function mergeRollups(
   for (const rollup of rollups) byDate.set(rollup.date, rollup);
 
   const totals = emptyActivityCounts();
+  let automatic = 0;
   const byUid = new Map<
     string,
     { uid: string; counts: ActivityCounts; total: number; lastActiveAt: string }
@@ -174,6 +181,7 @@ export function mergeRollups(
     const counts = rollup ? { ...rollup.totals } : emptyActivityCounts();
 
     for (const kind of activityKinds) totals[kind] += counts[kind];
+    automatic += rollup?.automatic ?? 0;
 
     for (const [uid, entry] of Object.entries(rollup?.contributors ?? {})) {
       let contributor = byUid.get(uid);
@@ -195,7 +203,12 @@ export function mergeRollups(
       }
     }
 
-    return { date, counts, total: totalActivity(counts) };
+    return {
+      date,
+      counts,
+      total: totalActivity(counts),
+      automatic: rollup?.automatic ?? 0,
+    };
   });
 
   return {
@@ -207,6 +220,7 @@ export function mergeRollups(
     contributors: [...byUid.values()].sort(
       (a, b) => b.total - a.total || (a.uid < b.uid ? -1 : 1),
     ),
+    automatic,
   };
 }
 
@@ -353,6 +367,11 @@ function decodeRollup(
           activityKinds.includes(kind as ActivityKind),
         ) as ActivityKind[])
       : [],
+    // Left out of the document at zero, as the counts are.
+    automatic:
+      typeof data.automatic === "number" && Number.isFinite(data.automatic)
+        ? data.automatic
+        : 0,
   };
 }
 
@@ -397,6 +416,7 @@ async function persist(db: Firestore, rollups: DailyRollup[]): Promise<void> {
           computedAt: new Date().toISOString(),
           totals: encodeCounts(rollup.totals),
           truncated: rollup.truncated,
+          ...(rollup.automatic > 0 ? { automatic: rollup.automatic } : {}),
           contributors: Object.fromEntries(
             Object.entries(rollup.contributors).map(([uid, entry]) => [
               uid,

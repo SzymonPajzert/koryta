@@ -18,6 +18,7 @@ function stats(overrides: Partial<ActivityStats> = {}): ActivityStats {
       date: date.toISOString().slice(0, 10),
       counts: { vote: 0, revision: busy, noteSource: 0, publication: 0 },
       total: busy,
+      automatic: 0,
     };
   });
   return {
@@ -31,6 +32,7 @@ function stats(overrides: Partial<ActivityStats> = {}): ActivityStats {
     namedCount: 0,
     self: null,
     truncated: [],
+    automatic: 0,
     ...overrides,
   };
 }
@@ -72,7 +74,22 @@ describe("ActivityMonthChart", () => {
 
     expect(wrapper.text()).toContain("1773");
     expect(wrapper.text()).toContain("od 9 osób");
+    // A month the automation published nobody does not mention it.
+    expect(wrapper.text()).not.toContain("automatu");
     expect(wrapper.find("apexchart-stub").exists()).toBe(true);
+  });
+
+  it("counts what the automation published in the month, as the statistics do", async () => {
+    const month = stats();
+    month.daily[29] = { ...month.daily[29]!, automatic: 300 };
+    mockAuthRequest.mockResolvedValue({ ...month, automatic: 300 });
+    const wrapper = await mountCard();
+
+    expect(wrapper.text()).toContain("2073");
+    expect(wrapper.text()).toContain("od 9 osób i automatu");
+    // Its columns too: a day of 300 automatic publications outruns the
+    // people's busiest, 253.
+    expect(wrapper.find(".d-sr-only").text()).toContain("300");
   });
 
   it("marks the total as a lower bound when a kind hit its cap", async () => {

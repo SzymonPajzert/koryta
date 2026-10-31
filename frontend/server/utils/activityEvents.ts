@@ -114,7 +114,8 @@ export async function collectActivityEvents(
  * A page an administrator pressed „Opublikuj z kolejki” for is filed under the
  * declarations' automation, which checked it, with the administrator in
  * `pressed_by`; it counts as theirs. What the automation published on its own
- * stays the automation's, which `aggregateActivity` leaves out.
+ * stays the automation's, which `aggregateActivity` counts apart from every
+ * person (`isAutomaticPublication`).
  */
 async function collectPublications(
   db: Firestore,

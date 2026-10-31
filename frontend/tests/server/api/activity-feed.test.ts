@@ -5,6 +5,7 @@ import type {
   RawFeedBatch,
 } from "../../../shared/activityFeed";
 import { feedRanges } from "../../../shared/activityFeed";
+import { DECLARATION_ACTOR } from "../../../shared/declarations";
 import handler from "../../../server/api/activity/feed.get";
 
 const {
@@ -704,5 +705,41 @@ describe("/api/activity/feed", () => {
     mockGetUser.mockResolvedValue(reader);
 
     expect((await call()).truncated).toEqual(["votes"]);
+  });
+
+  it("names the declarations' automation the same for everybody, and looks it up nowhere", async () => {
+    mockBuild.mockImplementation(async () => {
+      const feed = rawFeed();
+      feed.batches.unshift(batch(DECLARATION_ACTOR, "autoPublish", 0.5));
+      return feed;
+    });
+
+    for (const caller of [reader, established]) {
+      memo.clear();
+      mockGetUser.mockResolvedValue(caller);
+      const result = await call();
+
+      expect(result.actors.filter((actor) => actor.automated)).toEqual([
+        {
+          key: "automat",
+          uid: null,
+          name: "Automat",
+          named: true,
+          isSelf: false,
+          photoURL: null,
+          newAdmin: false,
+          automated: true,
+        },
+      ]);
+      expect(result.batches[0]).toMatchObject({
+        kind: "autoPublish",
+        actorKey: "automat",
+      });
+    }
+    // No account to look up: it is not a person.
+    const lookedUp = mockGetUsers.mock.calls.flatMap(([ids]) =>
+      (ids as { uid: string }[]).map(({ uid }) => uid),
+    );
+    expect(lookedUp).not.toContain(DECLARATION_ACTOR);
   });
 });
