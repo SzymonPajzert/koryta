@@ -45,6 +45,7 @@ import heapq
 import json
 import logging
 import re
+import socket
 import threading
 import time
 import zlib
@@ -156,6 +157,11 @@ class PeopleOptions:
     #: second one only halves both and keeps a worker waiting: 7 of
     #: bip.malopolska.pl's units ran at once on 10-30 and 5 hit the deadline.
     max_per_host: int = 1
+    #: Units searched at once on one server, the address a start host resolves
+    #: to (`server_of`). A hosting platform serves dozens of BIPs from one under
+    #: their own names (bip.net.pl: 105 on 188.117.133.215 on 10-31), and the
+    #: rate is a host's: twenty walks there asked it twenty times a second.
+    max_per_server: int = 2
 
 
 def person_row(person: BipPersonOfInterest) -> PersonRow:
@@ -401,6 +407,7 @@ class PeopleSearch:
         render: Callable[[str], rendering.Drawn] | None = None,
         unit_sizes: dict[str, int] | None = None,
         first_names: frozenset[str] = frozenset(),
+        resolve: Callable[[str], str] = lambda host: host,
     ) -> None:
         self.people_store = people_store
         self.bip_queue = bip_queue
@@ -417,6 +424,8 @@ class PeopleSearch:
         #: Every candidacy's first name as a stem (`Seeker.first`), the whole
         #: list's: what tells "Michał Rzepka" from the Józef a unit seeks.
         self.first_names = first_names
+        #: A host's server (`server_of`), by which `run` keeps walks apart.
+        self.resolve = resolve
         #: A host's sitemaps, read once a run: a shared platform's units share them.
         self._sitemaps: dict[str, list[str]] = {}
         self._sitemap_locks: dict[str, threading.Lock] = {}
@@ -931,7 +940,8 @@ class PeopleSearch:
 
     def run(self, rows: list[PersonRow]) -> dict[str, int]:
         """Search every unit ``rows`` name, most wanted first, at most
-        `PeopleOptions.max_per_host` at once on one host; counts of outcomes."""
+        `PeopleOptions.max_per_host` at once on one host and
+        `PeopleOptions.max_per_server` on one server; counts of outcomes."""
         by_unit: dict[str, list[PersonRow]] = defaultdict(list)
         for r in rows:
             by_unit[r.unit].append(r)
@@ -942,8 +952,13 @@ class PeopleSearch:
         if self.options.max_run_seconds is not None:
             self.deadline = self.clock() + self.options.max_run_seconds
         hosts = {unit: self._unit_host(unit) for unit in waiting}
+        with ThreadPoolExecutor(max_workers=32) as lookups:
+            names = sorted(set(hosts.values()))
+            servers = dict(zip(names, lookups.map(self.resolve, names), strict=True))
         busy: Counter[str] = Counter()
+        on_server: Counter[str] = Counter()
         limit = max(1, self.options.max_per_host)
+        server_limit = max(1, self.options.max_per_server)
         counts: dict[str, int] = defaultdict(int)
         with ThreadPoolExecutor(max_workers=self.options.workers) as pool:
             running: dict[Future[dict[str, str] | None], str] = {}
@@ -953,19 +968,27 @@ class PeopleSearch:
                     self.timed_out = True
                 while waiting and len(running) < self.options.workers:
                     free = next(
-                        (i for i, u in enumerate(waiting) if busy[hosts[u]] < limit),
+                        (
+                            i
+                            for i, u in enumerate(waiting)
+                            if busy[hosts[u]] < limit
+                            and on_server[servers[hosts[u]]] < server_limit
+                        ),
                         None,
                     )
                     if free is None:
                         break  # every waiting unit's host is busy: wait for one
                     unit = waiting.pop(free)
                     busy[hosts[unit]] += 1
+                    on_server[servers[hosts[unit]]] += 1
                     running[pool.submit(self._unit, unit, by_unit[unit])] = unit
                 if not running:
                     break
                 done, _ = wait(running, return_when=FIRST_COMPLETED)
                 for future in done:
-                    busy[hosts[running.pop(future)]] -= 1
+                    host = hosts[running.pop(future)]
+                    busy[host] -= 1
+                    on_server[servers[host]] -= 1
                     outcomes = future.result()
                     if outcomes is None:
                         self.timed_out = True
@@ -975,6 +998,15 @@ class PeopleSearch:
                         self.timed_out |= outcome.endswith(":timeout")
         self.bundles.flush()
         return dict(sorted(counts.items()))
+
+
+def server_of(host: str) -> str:
+    """The address ``host`` resolves to, or ``host`` itself when it does not."""
+    try:
+        info = socket.getaddrinfo(host, 443, socket.AF_INET, socket.SOCK_STREAM)
+    except (OSError, UnicodeError):
+        return host
+    return str(info[0][4][0]) if info else host
 
 
 def _split_scope(scope: str) -> tuple[str, str]:
@@ -1067,6 +1099,7 @@ def run_people_mode(
         max_run_seconds=args.max_minutes * 60 if args.max_minutes else None,
         max_unit_seconds=args.max_unit_minutes * 60 if args.max_unit_minutes else None,
         max_per_host=args.max_per_host,
+        max_per_server=args.max_per_server,
     )
     known = load_known_urls(Path(args.known_urls)) if args.known_urls else {}
     if known:
@@ -1097,6 +1130,7 @@ def run_people_mode(
         first_names=frozenset(
             stem(p.first_name, min_a=4) for p in people if p.first_name
         ),
+        resolve=server_of,
     )
     try:
         counts = search.run(todo)

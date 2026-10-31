@@ -391,6 +391,13 @@ def build_parser() -> argparse.ArgumentParser:
         "its rate)",
     )
     people.add_argument(
+        "--max-per-server",
+        type=int,
+        default=2,
+        help="units searched at once on one server, the address their start hosts "
+        "resolve to (default 2: a hosting platform serves dozens of BIPs)",
+    )
+    people.add_argument(
         "--known-urls",
         default=None,
         help="newline-delimited JSON of known URLs ({url, category}, e.g. the blind "

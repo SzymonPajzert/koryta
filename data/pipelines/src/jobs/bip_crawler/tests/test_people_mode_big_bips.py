@@ -579,6 +579,45 @@ def test_units_on_one_host_are_searched_one_at_a_time(tmp_path, monkeypatch):
     assert peak["d.pl"] == 1 and peak["e.pl"] == 1
 
 
+def test_units_on_one_server_are_searched_two_at_a_time(tmp_path, monkeypatch):
+    # bip.net.pl: 105 BIPs under their own names on one address (10-31).
+    seeds = {
+        u: UnitSeed(u, bip_urls=[f"https://bip.{u}.pl"], scopes=[f"bip.{u}.pl"])
+        for u in ("a", "b", "c", "d", "e")
+    }
+    active: Counter[str] = Counter()
+    peak: Counter[str] = Counter()
+    lock = threading.Lock()
+
+    def unit(self, unit, rows):
+        server = self.resolve(self._unit_host(unit))
+        with lock:
+            active[server] += 1
+            peak[server] = max(peak[server], active[server])
+        time.sleep(0.05)
+        with lock:
+            active[server] -= 1
+        return {r.key: "found" for r in rows}
+
+    monkeypatch.setattr(PeopleSearch, "_unit", unit)
+    rows = [row(u, u, "Ewa", "Lis") for u in "abcde"]
+    store = MemoryBipPeopleStore()
+    store.upsert_people(rows)
+    people = PeopleSearch(
+        store,
+        cast("BipQueue", FakeFrontier([])),
+        LocalBundleStore(tmp_path / "b"),
+        seeds,
+        PeopleOptions(workers=5),
+        resolve=lambda host: "10.0.0.1" if host != "bip.e.pl" else host,
+    )
+    counts = people.run(
+        store.people_to_search(refresh=False, max_priority=None, limit=None)
+    )
+    assert counts == {"found": 5}
+    assert peak["10.0.0.1"] == 2
+
+
 def test_a_walk_past_its_own_time_ends_as_budget(tmp_path):
     # A chain of pages that never ends; each look at the clock moves it 60 s.
     sites = {
