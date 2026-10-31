@@ -506,6 +506,170 @@ describe("/oswiadczenia, the tally at the top", () => {
   });
 });
 
+/** A phone: a finger for a pointer and, unless told otherwise, the page's
+ * phone layout, where the tally's reason to sign in waits behind its „?”. */
+function onAPhone({ phoneLayout = true } = {}) {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches:
+      query === "(pointer: coarse)" ||
+      (phoneLayout && query === "(max-width: 599.98px)"),
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }));
+}
+
+/** Where this browser notes that its reader without an account has seen the
+ * reason to sign in. */
+const TALLY_INFO_SEEN_KEY = "koryta:declaration-tally-info-seen";
+
+/** A stranger on a phone with work to lose: the reason to sign in, which a
+ * phone keeps behind the tally's „?”, opens by itself once they have read ten
+ * crops, once a browser, and never for a reader who opened it already. */
+describe("/oswiadczenia, the reason to sign in after ten readings on a phone", () => {
+  let unregister: () => void;
+
+  beforeEach(() => {
+    window.localStorage.removeItem(TALLY_INFO_SEEN_KEY);
+    strangerMine = { today: 9, total: 9 };
+    // The tenth reading, as the server counts it.
+    unregister = registerEndpoint("/api/declarations/a1/answer", {
+      method: "POST",
+      handler: () =>
+        ({
+          ...served(["a2", "a3"], { today: 10, total: 10 }),
+          settled: false,
+          answered: {
+            id: "a1",
+            documentUrl:
+              "https://bip.gmina-testowa.example/oswiadczenie-a1.pdf",
+            host: "bip.gmina-testowa.example",
+          },
+        }) satisfies DeclarationAnswerResult,
+    });
+  });
+
+  afterEach(() => {
+    unregister();
+    window.localStorage.removeItem(TALLY_INFO_SEEN_KEY);
+  });
+
+  type Page = Awaited<ReturnType<typeof mountPage>>;
+  const info = (wrapper: Page) =>
+    wrapper.find('[data-testid="declaration-tally-info"]');
+  const more = (wrapper: Page) =>
+    wrapper.get('[data-testid="declaration-tally-more"]');
+  const sendDate = async (wrapper: Page) => {
+    await wrapper
+      .get('[data-testid="declaration-date-input"]')
+      .setValue("15.07.1979");
+    await wrapper
+      .get('[data-testid="declaration-task"] form')
+      .trigger("submit");
+  };
+  /** The tally says `count`, with whatever that set going. */
+  const tallyAt = async (wrapper: Page, count: number) => {
+    await vi.waitFor(() =>
+      expect(tallyRows(wrapper)[0]).toBe(`Sprawdzono ${count}`),
+    );
+    await flushPromises();
+  };
+
+  it("opens with the tenth reading, takes the caret out of the next date and brings the reason into view", async () => {
+    onAPhone();
+    const wrapper = await mountPage({ attached: true });
+    await cropShown(wrapper);
+    await tallyAt(wrapper, 9);
+    expect(info(wrapper).exists()).toBe(false);
+    const blurred = vi.spyOn(HTMLElement.prototype, "blur");
+    const scrolled = vi.spyOn(Element.prototype, "scrollIntoView");
+
+    await sendDate(wrapper);
+
+    await vi.waitFor(() => expect(info(wrapper).exists()).toBe(true));
+    expect(tallyRows(wrapper)[0]).toBe("Sprawdzono 10");
+    expect(info(wrapper).text()).toContain(
+      "Zaloguj się, by zapisać znalezione daty",
+    );
+    expect(more(wrapper).attributes("aria-expanded")).toBe("true");
+    // The next crop's field had the caret, and a phone its keyboard up over
+    // the page: it goes down, so the reason is read before the next date.
+    const date = wrapper.get('[data-testid="declaration-date-input"]').element;
+    expect(blurred.mock.contexts).toContain(date);
+    expect(document.activeElement).not.toBe(date);
+    await vi.waitFor(() =>
+      expect(scrolled.mock.contexts).toContain(info(wrapper).element),
+    );
+    expect(scrolled).toHaveBeenCalledWith({ block: "center" });
+    expect(window.localStorage.getItem(TALLY_INFO_SEEN_KEY)).toBe("1");
+  });
+
+  it("opens on a visit that starts past ten readings too", async () => {
+    onAPhone();
+    strangerMine = { today: 0, total: 12 };
+    const wrapper = await mountPage({ attached: true });
+    await cropShown(wrapper);
+
+    await vi.waitFor(() => expect(info(wrapper).exists()).toBe(true));
+  });
+
+  it("does not open again in a browser where it was seen", async () => {
+    onAPhone();
+    window.localStorage.setItem(TALLY_INFO_SEEN_KEY, "1");
+    strangerMine = { today: 0, total: 12 };
+    const wrapper = await mountPage({ attached: true });
+    await cropShown(wrapper);
+    await tallyAt(wrapper, 12);
+
+    expect(info(wrapper).exists()).toBe(false);
+  });
+
+  it("does not open for a reader who opened it with the „?” before", async () => {
+    onAPhone();
+    const wrapper = await mountPage({ attached: true });
+    await cropShown(wrapper);
+    await tallyAt(wrapper, 9);
+    await more(wrapper).trigger("click");
+    expect(info(wrapper).exists()).toBe(true);
+    await more(wrapper).trigger("click");
+    expect(info(wrapper).exists()).toBe(false);
+
+    await sendDate(wrapper);
+    await tallyAt(wrapper, 10);
+
+    expect(info(wrapper).exists()).toBe(false);
+  });
+
+  it("does not open on a wider screen, where the reason stands beside the button", async () => {
+    onAPhone({ phoneLayout: false });
+    strangerMine = { today: 0, total: 12 };
+    const wrapper = await mountPage({ attached: true });
+    await cropShown(wrapper);
+    await tallyAt(wrapper, 12);
+
+    expect(info(wrapper).exists()).toBe(false);
+    expect(window.localStorage.getItem(TALLY_INFO_SEEN_KEY)).toBeNull();
+  });
+
+  it("does not open for a signed-in reader, whose finds are kept", async () => {
+    onAPhone();
+    window.localStorage.removeItem(READER_KEY);
+    currentUser.value = READER;
+    mockAuthRequest.mockImplementation(async () =>
+      served(["b1", "b2", "b3"], { today: 2, total: 12, found: 3 }),
+    );
+    const wrapper = await mountPage({ attached: true });
+    await cropShown(wrapper);
+    await tallyAt(wrapper, 12);
+
+    expect(info(wrapper).exists()).toBe(false);
+  });
+});
+
 /** /oswiadczenia is open to readers without an account, whose readings are
  * filed under this browser's reader id
  * and count once an account claims them. The claim has to reach the server

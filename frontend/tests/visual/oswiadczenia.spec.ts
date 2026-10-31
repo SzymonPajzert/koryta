@@ -19,8 +19,9 @@ import { expectFitsThePhone } from "./phoneWidth";
  * councillor's asset declaration: one field that says back what it
  * understood (variant B of round bip-czytanie-r1), open to readers without an
  * account, with the date line alone, one button that skips until a date is
- * typed, and once something is read the tally in Oliwka at the top, whose
- * reason to sign in sits behind a „?” on a phone.
+ * typed, and once something is read the tally in Oliwka at the top, with a
+ * red „Zaloguj się” for a reader without an account, whose reason to sign in
+ * sits behind a „?” on a phone until ten readings open it.
  *
  * Every crop is fetched in the browser - with the reader's token, or with
  * this browser's reader id when nobody is signed in - so the two endpoints the
@@ -403,6 +404,51 @@ test(
     await expect(info).toHaveCount(0);
   },
 );
+
+/** Ten readings in without an account, on a phone: the reason to sign in,
+ * which waits behind the „?”, opens by itself, once a browser, and the caret
+ * leaves the next crop's field so the keyboard goes down over it. */
+test("oswiadczenia-po-dziesieciu", OSWIADCZENIA, async ({ page }, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "visual-mobile",
+    "the „?” is a phone's: a wider screen shows the reason beside the button",
+  );
+  test.setTimeout(120_000);
+  await serveReading(
+    page,
+    new ReadingDesk(readingCrops(), {
+      open: 1284,
+      mine: { today: 9, total: 9, found: 2 },
+    }),
+  );
+  await freezeClock(page);
+  await page.goto("/oswiadczenia");
+  await cropShown(page, 1);
+  const info = page.getByTestId("declaration-tally-info");
+  await expect(info).toHaveCount(0);
+
+  const date = page.getByTestId("declaration-date-input");
+  await date.fill(FIRST_DATE);
+  await date.press("Enter");
+
+  await cropShown(page, 2);
+  await expect
+    .poll(() => tallyRows(page))
+    .toEqual(["Sprawdzono 10", "Znaleziono 2"]);
+  await expect(info).toContainText("Zaloguj się, by zapisać znalezione daty");
+  await expect(page.getByTestId("declaration-tally-more")).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(date).not.toBeFocused();
+
+  await readyForFullPage(page);
+  await expect(page).toHaveScreenshot("oswiadczenia-po-dziesieciu.png", {
+    fullPage: true,
+  });
+
+  await expectFitsThePhone(page, testInfo);
+});
 
 const ZNALEZIONE = { tag: pageTag("oswiadczenia/znalezione") };
 
