@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
 import type { NodeMentions } from "../../../server/api/nodes/[id]/mentions.get";
-import type {
-  DeclarationOverview,
-  DeclarationPublicationRow,
-  DeclarationReviewRow,
-  LocalOffice,
-  PersonDeclarations,
-  PublicationHoldReason,
+import {
+  DAILY_AUTO_PUBLISH_LIMIT,
+  type DeclarationOverview,
+  type DeclarationPublicationRow,
+  type DeclarationReviewRow,
+  type LocalOffice,
+  type PersonDeclarations,
+  type PublicationHoldReason,
 } from "../../../shared/declarations";
 import { NOW } from "../clock";
 
@@ -378,7 +379,7 @@ function recentRows(daysBack = 0): DeclarationPublicationRow[] {
  *   extracts 1,070: the prototype run's queued declarations, 151 of them
  *     without a crop (64 blank Word forms, 29 blank fields, 29 with no date
  *     line, 27 scans saved as Word, 2 not fetched)
- *   dailyLimit 10: DAILY_AUTO_PUBLISH_LIMIT
+ *   dailyLimit: DAILY_AUTO_PUBLISH_LIMIT, as the site ships
  * DERIVED
  *   candidacies by status, the other not-found reasons: split by guess
  *   extracts by status: of 911 to read, readers settled 312 + 11
@@ -391,7 +392,7 @@ function recentRows(daysBack = 0): DeclarationPublicationRow[] {
  */
 export const declarationOverview: DeclarationOverview = {
   at: hoursAgo(5 / 60),
-  dailyLimit: 10,
+  dailyLimit: DAILY_AUTO_PUBLISH_LIMIT,
   candidacies: {
     total: 3368,
     people: 2159,
@@ -480,11 +481,11 @@ export const declarationOverviewOff: DeclarationOverview = {
   lists: { ...declarationOverview.lists, recent: recentRows(1) },
 };
 
-/** Right after the deploy, before the job's first upload, and with the
- * automatic publication still switched off, as it ships. */
+/** Right after the deploy, before the job's first upload: nobody published
+ * yet, under the limit the site ships with. */
 export const declarationOverviewEmpty: DeclarationOverview = {
   at: hoursAgo(1 / 60),
-  dailyLimit: 0,
+  dailyLimit: DAILY_AUTO_PUBLISH_LIMIT,
   candidacies: {
     total: 0,
     people: 0,

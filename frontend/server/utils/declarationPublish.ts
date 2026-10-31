@@ -624,9 +624,10 @@ function sameOutcomes(
 
 /**
  * Publishes queued pages, oldest first, while the Warsaw day's count is under
- * `limit`. Takes up no new page at a limit of 0, which is how the feature
- * ships, and does nothing at all inside `PEOPLE_IMPORT_WINDOW` or while a
- * people import is running (`peopleImportRunning`).
+ * `limit`. Takes up no new page at a limit of 0, which is how the automatic
+ * publication is switched off, and does nothing at all inside
+ * `PEOPLE_IMPORT_WINDOW` or while a people import is running
+ * (`peopleImportRunning`).
  *
  * Two steps a page. A transaction claims it - `queued` to `publishing` - and
  * takes a slot of the day, only while slots are left; then `publishPage` does
