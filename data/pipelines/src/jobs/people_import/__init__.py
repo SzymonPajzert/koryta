@@ -120,6 +120,30 @@ the Treasury's 317 companies, 981 of them waiting for a page. The night sent
 one of 150 with new=100 sends 153, 100 new. The rest of the 500 goes as
 before, less as many drafts to change.
 
+Two groups are not a category's: the people the BIP crawler's people mode
+found an oświadczenie majątkowe for, by the newest list `koryta_scrape_bip
+found` left in the shared cache (`stores.bip_found`). Szymon, 2026-10-31,
+drafts first: `oswiadczenia-szkice` sends the unpublished pages with no birth
+date - the night's payload dates them, and the readers of /oswiadczenia can
+settle a crop only against a page that shows one - and `oswiadczenia-bez-strony`
+makes pages for the people with none, in a public post or not. Somebody in no
+public post is in a tier of their own (`DECLARED`), which nothing but that
+group sends, since no other tier makes a page for anybody in no public post.
+Replayed on the night of 2026-10-31, on its own outputs and the crawl's list of
+that morning (8,143 candidacies found): 411 drafts with no birth date, and
+2,751 people with no page - 405 in a public post, 2,344 in none - which empties
+the drafts after 3 nights at 200 and the rest after 28 at 200:new=100, 14 at
+300:new=200, with no inflow. 908 more with no page had no rejestr.io entry on
+the list, which no id finds. The groups' sends come out of `--max-uploads` as
+any group's do: at 800 the 400 left the published pages none of their 76 and
+the run's own rejestr.io pages 84 of 200; at 1,200 every tier of the run's own
+kept what it sent that night.
+
+    koryta_people_import --scope priority --max-uploads 1200 \\
+        --priority-group skarb-panstwa:200:new=100 \\
+        --priority-group oswiadczenia-szkice:200 \\
+        --priority-group oswiadczenia-bez-strony:200:new=100
+
 Once the drafts to change run out - late November 2026 at 500 a night - every
 tier left has a cap: the 2026-10-28 plan without them sends 214.
 `--fill-rejestrio-current` gives the slots left to the people with a
@@ -196,6 +220,7 @@ from uuid_extensions import uuid7str  # type: ignore
 
 from analysis.payloads.priority import (
     AHEAD_OF_GROUPS,
+    DECLARED,
     GROUPED,
     NEW_HIRE,
     ODPIS_ONLY_CURRENT,
@@ -204,7 +229,13 @@ from analysis.payloads.priority import (
 )
 from analysis.payloads.target import NEW, PageTarget
 from entities.company_categories import CATEGORY_VALUES
-from entities.priority_groups import Group, parse_group, repeated
+from entities.priority_groups import (
+    DECLARATION_GROUPS,
+    Declared,
+    Group,
+    parse_group,
+    repeated,
+)
 from jobs.nightly import export_refusal, export_time, latest_export
 from jobs.people_import.payloads import (
     PRIORITY,
@@ -220,6 +251,7 @@ from scrapers.koryta.created import SENT_LOG
 from scrapers.koryta.download import KorytaEdges, KorytaExport, KorytaNodes
 from scrapers.krs.coverage import parse_person_connections_url
 from scrapers.stores import Pipeline, ProcessPolicy
+from stores.bip_found import FOUND_PREFIX, newest_found
 from stores.config import VERSIONED_DIR, pesel_salt
 from stores.job_requests import PEOPLE_REQUEST, Request, read_request
 from stores.job_runs import ERROR_CHARS, ERRORS_KEPT, FinalState, JobRun
@@ -288,7 +320,7 @@ STOP_NO_COMPANIES = "nic do dodania - kopia bazy ma firmy wszystkich tych osób"
 
 #: The tiers whose people the run is meant to create pages for. A page
 #: created for anybody else is the identity lookup missing somebody.
-CREATING = (NEW_HIRE, ODPIS_ONLY_CURRENT, REJESTRIO_CURRENT, NEW)
+CREATING = (NEW_HIRE, ODPIS_ONLY_CURRENT, REJESTRIO_CURRENT, DECLARED, NEW)
 
 #: Rebuilt on every run, whatever is on disk or in the shared cache, so that
 #: the payloads are made from the newest crawl and this morning's export.
@@ -419,7 +451,8 @@ class RunSummary:
     #: its budget and `new`, its members by tier before any cap, how many it
     #: planned and how many of those are pages to create, how many more of
     #: its members the run's own tiers planned, and what the site did with
-    #: the ones sent for it.
+    #: the ones sent for it; a declaration group's also the list it read
+    #: (`source`, "" for none).
     groups: dict[str, dict] = field(default_factory=dict)
     #: A priority run: the plan, in sending order, as runs of
     #: [group, tier, count] - group "" for the run's own tiers - so that the
@@ -811,7 +844,9 @@ def plan_priority(
     somebody in two groups is sent for the first that has room. Only the
     members in the `GROUPED` tiers: the tiers before the groups go first
     anyway, a published page leaves a reviewer a proposal, and somebody only
-    an odpis names is checked by hand, so those keep the run's own caps.
+    an odpis names is checked by hand, so those keep the run's own caps. The
+    declared (`DECLARED`, in no public post) have no tier of the run's own to
+    go in: past their group's budget they wait for the next run.
 
     `fill_to` is what the run sends at most, given to have the slots its
     plan leaves under it filled (`--fill-rejestrio-current`): by the people
@@ -885,6 +920,9 @@ class PriorityPlan:
         """Whether the run's own tiers have room for `candidate`; counted in
         when they have."""
         tier = candidate.tier
+        if tier == DECLARED:
+            # Only its group sends somebody in no public post.
+            return False
         if tier in CREATING and self.created >= self.max_new:
             return False
         if tier == NEW_HIRE:
@@ -1066,6 +1104,9 @@ class PeopleImport:
         self.uploader: PersonUploader | None = None
         self.ending = Ending()
         self._client: Client | None = None
+        #: A run given a declaration group: the list it read the declarations
+        #: off, "" for none (`declared`).
+        self.declared_from = ""
         #: A priority run, or one asked for: each payload's tier, in sending order.
         self.tiers: list[str] | None = None
         #: A priority run: whether each payload's page is published, in
@@ -1203,6 +1244,29 @@ class PeopleImport:
     def policy(self) -> ProcessPolicy:
         return refresh_policy(self.args.refresh, self.rebuild)
 
+    def declared(self, groups: Sequence[Group]) -> Declared | None:
+        """Who the BIP crawl found a declaration for, as its newest list in the
+        shared cache has it (`stores.bip_found`) - read only for a run given a
+        declaration group. With no list the groups have nobody in them, and
+        the run goes on without them: the night is not held over a list."""
+        if not any(group.of_declarations for group in groups):
+            return None
+        declared = newest_found(self.client())
+        if declared is None:
+            print(
+                f"No list of the people the BIP crawl found a declaration for "
+                f"under gs://{SHARED_BUCKET}/{FOUND_PREFIX} (koryta_scrape_bip "
+                f"found writes one): {', '.join(DECLARATION_GROUPS)} have nobody "
+                "in them"
+            )
+            return Declared()
+        print(
+            f"Declarations downloaded: {len(declared.register_ids)} rejestr.io "
+            f"entries, {len(declared.page_ids)} pages, from {declared.source}"
+        )
+        self.declared_from = declared.source
+        return declared
+
     def plan(self) -> list[dict]:
         """A priority run's payloads, in sending order: built, the already sent
         left out, the pages to create cut at --max-new, the new hires only an
@@ -1227,6 +1291,7 @@ class PeopleImport:
             args.recent_days,
             bought,
             groups,
+            declared=self.declared(groups),
         )
         already: set[tuple[str, str]] = set()
         if args.resend_after:
@@ -1326,6 +1391,7 @@ class PeopleImport:
                 "planned_in_own_tiers": sum(
                     group.name in c.groups and not c.group for c in planned
                 ),
+                **({"source": self.declared_from} if group.of_declarations else {}),
             }
             print(
                 f"Priority group {group.name}: {report['planned']} of "
@@ -1333,6 +1399,12 @@ class PeopleImport:
                 f"{report['to_create']} of them pages to create "
                 f"(new={group.new}); {report['planned_in_own_tiers']} more in "
                 "the run's own tiers"
+            )
+        if waiting := unsent([c for c in candidates if c.tier == DECLARED]):
+            print(
+                f"People with a downloaded declaration in no public post: "
+                f"{sum(c.tier == DECLARED for c in planned)} of {len(waiting)} "
+                "planned, all for their group"
             )
         if args.fill_rejestrio_current:
             self.summary.filled = sum(c.filled for c in planned)
@@ -1895,7 +1967,7 @@ def parser() -> argparse.ArgumentParser:
         "--priority-group",
         action="append",
         type=parse_group,
-        metavar="CATEGORY:BUDGET[:new=N]",
+        metavar="NAME:BUDGET[:new=N]",
         help="Priority: right after the noted pages, the people in a post now "
         f"at the public companies of a category, one of "
         f"{', '.join(CATEGORY_VALUES)} (skarb-panstwa: those on Prokuratoria's "
@@ -1905,6 +1977,10 @@ def parser() -> argparse.ArgumentParser:
         "and the ones past the budget go as if there were no group. Only "
         "drafts to change and pages for people in an older public post: "
         "published pages and the people only an odpis names keep their caps. "
+        "Or the people the BIP crawl downloaded an oświadczenie majątkowe for, "
+        "by its newest list (koryta_scrape_bip found): oswiadczenia-szkice "
+        "their drafts with no birth date, oswiadczenia-bez-strony those with "
+        "no page, whom it makes one for in a public post or not. "
         "Repeatable: the groups go in the order given, and somebody in two "
         "is sent for the first with room (entities.priority_groups).",
     )

@@ -426,17 +426,18 @@ SKARB = "skarb-panstwa:100:new=50"
 def test_the_priority_groups_and_the_fill_reach_both_steps_that_plan_people(world):
     """Szymon, 2026-10-27: groups of companies whose people go first, defined
     in flags. The companies step plans tonight's people as the people step
-    does, so both are given them, in order."""
-    obrona = "obronnosc:20"
+    does, so both are given them, in order. A declaration group too
+    (2026-10-31)."""
+    obrona, drafts = "obronnosc:20", "oswiadczenia-szkice:200"
     night.main(
         ["--priority-group", SKARB, "--priority-group", obrona]
-        + ["--fill-rejestrio-current"]
+        + ["--priority-group", drafts, "--fill-rejestrio-current"]
     )
 
     for name in ("koryta_people_import", "koryta_people_import --companies-only"):
         argv, _ = world.command(name)
         groups = [argv[n + 1] for n, a in enumerate(argv) if a == "--priority-group"]
-        assert groups == [SKARB, obrona]
+        assert groups == [SKARB, obrona, drafts]
         assert "--fill-rejestrio-current" in argv
 
 
