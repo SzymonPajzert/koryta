@@ -336,6 +336,9 @@ def _years(text: str) -> list[int]:
 
 
 _ID_QUERY = re.compile(r"[?&](?:id|zid|iddok|idplik)=[^&#]*", re.I)
+#: An AkcessNet page, menu item or article: its "&id=" makes it look like a
+#: file, and a page titled with one seeker's name lent them its ~100 menu links.
+_AKCESSNET_PAGE = re.compile(r"/index\.php\?(?:[^#]*&)?idg=\d", re.I)
 
 
 def is_file_link(url: str) -> bool:
@@ -487,7 +490,7 @@ def candidates(
     )
     out: list[Candidate] = []
     for link in links:
-        if not is_document_url(link.url):
+        if not is_document_url(link.url) or _AKCESSNET_PAGE.search(link.url):
             continue
         # The path's words, not the host's: "piotr" in powiat-piotrkowski-api's
         # name is nobody's first name.
