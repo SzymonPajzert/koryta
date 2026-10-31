@@ -153,6 +153,8 @@ definePageMeta({
   middleware: "auth",
   // Per reader: nothing in it is for a search result.
   robots: false,
+  // The reading page's column, centred: 880 px and the layout's padding.
+  maxWidth: 912,
 });
 
 // The site's title template adds „| Koryta.pl” itself.
@@ -260,7 +262,6 @@ onMounted(async () => {
 
 .of-work {
   margin-top: 20px;
-  max-width: 880px;
 }
 
 .of-skeleton {

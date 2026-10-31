@@ -315,6 +315,15 @@ const pictureURL = computed(() => userConfig?.data?.value?.photoURL);
   min-width: 0;
 }
 
+/* A page narrower than the column is centred in it, not left at its start: a
+   flex item takes the room its content asks for, so a short page whose root
+   claims no width (/crawler, a lone message, a table narrower than a wide
+   screen) sat against the left edge with the rest of the column empty beside
+   it. A page that fills the column is not moved. */
+.v-container.fill-height {
+  justify-content: center;
+}
+
 /* Vuetify clips the toolbar content, so on narrow screens the trailing
    buttons are unreachable. Let it scroll sideways instead. The spacers
    collapse to zero once the buttons overflow, so wide screens still centre. */
