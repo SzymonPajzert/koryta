@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from jobs.bip_crawler import people as people_mode
-from jobs.bip_crawler.madkom import ROBOTS, Madkom, Route, route
+from jobs.bip_crawler.madkom import PROBES, ROBOTS, Madkom, Route, route
 from jobs.bip_crawler.tests.test_people_mode_big_bips import search
 from jobs.bip_crawler.tests.test_people_mode_review import PDF, Web, row
 from scrapers.common.fetch import HttpResult
@@ -324,6 +324,18 @@ def test_the_walk_reads_a_madkom_bip_through_its_api(tmp_path: Path) -> None:
     assert store_people.madkom.knows("https://bip.m.pl/ugx")
 
 
+def test_a_walk_whose_madkom_api_says_not_now_is_left_for_later(tmp_path) -> None:
+    busy = {url: (429, "text/html", b"busy") for url in office() if API in url}
+    _, store, _ = search(
+        tmp_path,
+        office(**busy),
+        [row("lis", "u1", "Ewa", "Lis")],
+        scopes={"u1": "bip.m.pl/ugx"},
+        sitemaps=False,
+    )
+    assert store.people["lis"].reason == "throttled"
+
+
 def test_madkom_and_the_walk_agree_on_robots() -> None:
     assert ROBOTS == people_mode.ROBOTS
 
@@ -428,10 +440,32 @@ def test_files_named_by_the_councillor_alone_come_down_under_a_separator(
 
 def test_a_listing_that_fails_keeps_the_menu() -> None:
     madkom, _ = probed(
-        office(**{API + f"menu/11/articles?{LIST}": (503, "text/html", b"busy")})
+        office(**{API + f"menu/11/articles?{LIST}": (500, "text/html", b"error")})
     )
     found = links(madkom.page("https://bip.m.pl/ugx,m,11,radni.html"))
     assert found["https://bip.m.pl/ugx,m,20,przetargi.html"] == "Przetargi"
+
+
+def test_a_listing_that_says_not_now_is_left_unread() -> None:
+    # Drawn without its articles, the section read as listing nobody.
+    madkom, _ = probed(
+        office(**{API + f"menu/11/articles?{LIST}": (429, "text/html", b"busy")})
+    )
+    page = madkom.page("https://bip.m.pl/ugx,m,11,radni.html")
+    assert isinstance(page, HttpResult) and page.status == 429
+
+
+def test_an_api_that_says_not_now_hands_the_walk_its_answer() -> None:
+    def busy(url: str) -> HttpResult:
+        return HttpResult(url, 429, "text/html", b"busy")
+
+    madkom = Madkom(busy, lambda url: True)
+    shell = HttpResult("https://bip.m.pl/ugx", 200, "text/html", SHELL)
+    for _ in range(PROBES + 1):  # no probe used up: the host stays undecided
+        assert not madkom.probe(shell)
+        answer = madkom.busy("https://bip.m.pl/ugx,m,11,radni.html")
+        assert answer is not None and answer.status == 429
+    assert madkom.busy("https://bip.m.pl/ugx") is None
 
 
 def test_an_article_as_the_first_page_draws_the_offices_menu() -> None:

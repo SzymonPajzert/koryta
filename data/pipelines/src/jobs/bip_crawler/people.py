@@ -460,25 +460,27 @@ class PeopleSearch:
         return self.deadline is not None and self.clock() > self.deadline
 
     # -- one request -----------------------------------------------------------
-    def _get(self, url: str) -> HttpResult | str:
+    def _get(self, url: str, tries: int = NOT_NOW_TRIES) -> HttpResult | str:
         """robots.txt, the host's rate, then the fetch.
 
         ROBOTS when robots.txt keeps the crawler out, UNREACHABLE when the host
         did not even answer for its robots.txt (the cache denies those too),
         REFUSED when the answer refuses the crawler (`_refused`). A "not now"
-        (`_NOT_NOW`) is asked again after a pause, not past the run's deadline.
+        (`_NOT_NOW`) pauses the host, the last one too, so whatever asks it next
+        waits as well; ``url`` is asked ``tries`` times, not past the deadline.
         """
         if not self.robots_allowed(url):
             return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
         host = host_of(url)
-        for attempt in range(NOT_NOW_TRIES):
-            if attempt:
-                self.limiter.pause(host, NOT_NOW_PAUSE_S)
+        for _ in range(max(1, tries)):
             self._wait_turn(host)
             result = self.fetch(
                 url, self.options.request_timeout_s, self.options.user_agent
             )
-            if result.status not in _NOT_NOW or self._past_deadline():
+            if result.status not in _NOT_NOW:
+                break
+            self.limiter.pause(host, NOT_NOW_PAUSE_S)
+            if self._past_deadline():
                 break
         return REFUSED if _refused(result) else result
 
@@ -496,10 +498,13 @@ class PeopleSearch:
             page = self.madkom.page(url)
             return self._get(url) if page is None else page
         result = self._get(url)
-        if isinstance(result, HttpResult) and result.ok and self.madkom.probe(result):
-            page = self.madkom.page(result.url)
-            if page is not None:
-                return page
+        if isinstance(result, HttpResult) and result.ok:
+            if self.madkom.probe(result):
+                page = self.madkom.page(result.url)
+                if page is not None:
+                    return page
+            elif (busy := self.madkom.busy(result.url)) is not None:
+                return busy  # its API said "not now": the shell is no page yet
         return result
 
     @staticmethod
@@ -551,13 +556,17 @@ class PeopleSearch:
         run however many units the host serves; each unit's scope picks its own."""
         host = host_of(root)
         with self._sitemap_locks.setdefault(host, threading.Lock()):
-            if host not in self._sitemaps:
-                self._sitemaps[host] = self._read_sitemaps(root)
-        return self._sitemaps[host]
+            if host in self._sitemaps:
+                return self._sitemaps[host]
+            urls, answered = self._read_sitemaps(root)
+            if answered:  # one that said "not now" is the next unit's to read
+                self._sitemaps[host] = urls
+        return urls
 
-    def _read_sitemaps(self, root: str) -> list[str]:
+    def _read_sitemaps(self, root: str) -> tuple[list[str], bool]:
         """Those robots.txt names, else /sitemap.xml; an index's declaration-like
-        sitemaps first, at most `PeopleOptions.max_sitemap_files` files."""
+        sitemaps first, at most `PeopleOptions.max_sitemap_files` files. And
+        whether the host answered: False when one said "not now"."""
         parts = urlsplit(root)
         base = f"{parts.scheme}://{parts.netloc}"
         robots = self._get(base + "/robots.txt")
@@ -574,6 +583,8 @@ class PeopleSearch:
                 continue
             seen.add(sitemap)
             result = self._get(sitemap)
+            if isinstance(result, HttpResult) and result.status in _NOT_NOW:
+                return found, False
             if isinstance(result, str) or not result.ok:
                 continue
             body = result.content
@@ -587,7 +598,7 @@ class PeopleSearch:
                 todo = sorted(locs, key=lambda u: not _declaration_like(u)) + todo
             else:
                 found.extend(u for u in locs if _declaration_like(u))
-        return found
+        return found, True
 
     def _seed_known(
         self,
@@ -680,6 +691,7 @@ class PeopleSearch:
         blocked = down = requests = 0
         # Pages a "not now" kept from the walk, all told and in a row.
         unread = unread_in_a_row = 0
+        stopped = False
         # Links that keep turning out to be files cost requests, not pages.
         while (
             frontier
@@ -718,6 +730,7 @@ class PeopleSearch:
                 unread += 1
                 unread_in_a_row += 1
                 if unread_in_a_row >= NOT_NOW_IN_A_ROW:
+                    stopped = True
                     break
                 continue
             unread_in_a_row = 0
@@ -730,7 +743,15 @@ class PeopleSearch:
                 out.files[url] = result  # a file behind a page-like link
                 continue
             self._read_page(out, result, depth, frontier, seekers, prefer)
-        if unread and out.status in ("searched", "budget"):
+        # A host that kept saying "not now" leaves the walk to a later run; a
+        # page or two that never answer (a module down) settle nothing, or
+        # every run would walk the unit again.
+        kept_saying = (
+            stopped
+            or (unread and out.pages_ok == 0)
+            or (unread >= NOT_NOW_IN_A_ROW and 10 * unread >= requests + unread)
+        )
+        if kept_saying and out.status in ("searched", "budget"):
             out.status = THROTTLED
         # Known URLs may find everybody before a page is asked for.
         tried = requests or blocked or down
@@ -818,10 +839,14 @@ class PeopleSearch:
 
     # -- downloads -----------------------------------------------------------------
     def _download(
-        self, url: str, page_url: str, fetched: HttpResult | None = None
+        self,
+        url: str,
+        page_url: str,
+        fetched: HttpResult | None = None,
+        tries: int = NOT_NOW_TRIES,
     ) -> tuple[str, str, str]:
         """(status, sha256, bundle) of one file, stored as the blind crawl stores."""
-        result = fetched if fetched is not None else self._get(url)
+        result = fetched if fetched is not None else self._get(url, tries)
         if isinstance(result, str):
             return result, "", ""
         if result.error:
@@ -881,13 +906,30 @@ class PeopleSearch:
         downloaded: dict[str, tuple[str, str, str]] = {}
         hosts: set[str] = set()
         doc_rows: list[PersonDocRow] = []
+        # Files a "not now" kept back, by host, in a row: past NOT_NOW_IN_A_ROW
+        # the rest of that host's wait for a later run. A walk the host
+        # throttled asks each file once.
+        not_now: Counter[str] = Counter()
+        tries = 1 if search.status == THROTTLED else NOT_NOW_TRIES
         for key, chosen in picks.items():
             for c in chosen:
                 once = same_file(c.url)  # http and https, www. or not: one file
                 if once not in downloaded:
-                    cached = search.files.get(normalize_url(c.url))
-                    downloaded[once] = self._download(c.url, c.page_url, cached)
-                    hosts.add(host_of(c.url))
+                    host = host_of(c.url)
+                    if not_now[host] >= NOT_NOW_IN_A_ROW:
+                        downloaded[once] = ("http 429", "", "")
+                    else:
+                        cached = search.files.get(normalize_url(c.url))
+                        downloaded[once] = self._download(
+                            c.url, c.page_url, cached, tries
+                        )
+                        said = downloaded[once][0]
+                        not_now[host] = (
+                            not_now[host] + 1
+                            if said in {f"http {s}" for s in _NOT_NOW}
+                            else 0
+                        )
+                    hosts.add(host)
                 status, sha, bundle = downloaded[once]
                 doc_rows.append(
                     PersonDocRow(
@@ -1032,7 +1074,7 @@ def _outcome(
         statuses = {d.status for d in mine}
         if statuses == {REFUSED}:
             return "not_found", REFUSED, 0
-        if statuses <= {f"http {status}" for status in _NOT_NOW}:
+        if statuses & {f"http {status}" for status in _NOT_NOW}:
             return "not_found", THROTTLED, 0
         return "not_found", "download_failed", 0
     if search.declaration_pages == 0 and not any(
