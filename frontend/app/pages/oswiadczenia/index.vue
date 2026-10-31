@@ -297,6 +297,9 @@ import { READ_NAMES } from "~~/shared/declarations";
 definePageMeta({
   // A task page: nothing in it is for a search result.
   robots: false,
+  // A column of its own, centred like every page narrower than the layout's:
+  // 880 px of work, and the layout's 16 px of padding on each side.
+  maxWidth: 912,
 });
 
 // The site's title template adds „| Koryta.pl” itself.
@@ -531,9 +534,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* The page keeps the layout's column, as every working page does; only the
-   work in it is narrower. A date crop is about 950 px, so 960 holds one at
-   its own size, the sharpest it gets. */
+/* The page is a column of 880 px (`maxWidth` above): a date crop is about
+   950 px, and nearly its own size is about as sharp as it gets. */
 .ow {
   padding-block: 8px 48px;
   width: 100%;
@@ -541,7 +543,6 @@ onMounted(() => {
 
 .ow-work {
   margin-top: 20px;
-  max-width: 880px;
 }
 
 /* What the reader did so far, split down the middle at every width: the two
@@ -555,7 +556,6 @@ onMounted(() => {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   margin-top: 16px;
-  max-width: 880px;
   overflow: hidden;
 }
 
@@ -660,7 +660,6 @@ onMounted(() => {
   border: 1px solid rgba(var(--v-border-color), 0.16);
   border-radius: 10px;
   margin-top: 8px;
-  max-width: 880px;
   padding: 12px 16px;
 }
 

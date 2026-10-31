@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "waskie-strony-na-srodku-ekranu",
+    title: "Wąskie strony są na środku ekranu",
+    description:
+      "Strony węższe niż kolumna serwisu, np. /oswiadczenia, /tematy, /admin/zadania i /admin/wyszukiwania, stały przy lewej krawędzi, a obok zostawało puste miejsce. Teraz są na środku.",
+    steps: [
+      "Na szerokim ekranie otwórz /oswiadczenia, /tematy i /admin/zadania: treść ma po obu stronach tyle samo wolnego miejsca.",
+    ],
+    link: "/oswiadczenia",
+    area: "public",
+  },
+  {
     id: "oswiadczenia-znalezione-osoby",
     title: "Lista osób, które znaleziono dzięki Twoim odczytom",
     description:

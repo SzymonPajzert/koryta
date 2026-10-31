@@ -32,7 +32,12 @@
       </v-btn>
     </div>
 
-    <v-alert v-if="loadError" type="error" variant="tonal" class="mb-4">
+    <v-alert
+      v-if="loadError"
+      type="error"
+      variant="tonal"
+      class="tasks-page__note mb-4"
+    >
       {{ loadError }}
     </v-alert>
     <v-alert
@@ -40,11 +45,15 @@
       type="info"
       variant="tonal"
       density="compact"
-      class="mb-4"
+      class="tasks-page__note mb-4"
     >
       Nie ma takiego zadania.
     </v-alert>
-    <v-progress-linear v-if="pending" indeterminate class="mb-4" />
+    <v-progress-linear
+      v-if="pending"
+      indeterminate
+      class="tasks-page__note mb-4"
+    />
 
     <div
       v-if="tasks.length > 0"
@@ -305,6 +314,7 @@
       v-if="!pending && !loadError && tasks.length === 0"
       type="info"
       variant="tonal"
+      class="tasks-page__note"
     >
       Nie ma jeszcze żadnych zadań. Dodaj pierwsze albo poproś agenta, żeby
       zapisał swoje (narzędzie <code>task_add</code>).
@@ -674,9 +684,13 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* The lists' column, centred on the page, with what is said above and under
+   them: the page is full width for the map, which uses all of it. */
 .tasks-page__head,
 .tasks-page__filters,
+.tasks-page__note,
 .tasks-page__lists {
+  margin-inline: auto;
   max-width: 1100px;
 }
 
