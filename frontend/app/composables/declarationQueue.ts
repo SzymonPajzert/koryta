@@ -243,6 +243,30 @@ export function firstClaimRefusal(): boolean {
   return true;
 }
 
+/** Where this browser notes that its reader without an account has seen the
+ * tally's reason to sign in, which on a phone waits behind the „?”: the page
+ * opens it by itself, once, for a reader who has read enough to lose and
+ * never opened it. */
+const TALLY_INFO_SEEN_KEY = "koryta:declaration-tally-info-seen";
+
+/** Whether the reader without an account was shown the reason to sign in on
+ * an earlier visit. A browser that keeps nothing never was. */
+export function tallyInfoSeen(): boolean {
+  try {
+    return window.localStorage.getItem(TALLY_INFO_SEEN_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+export function noteTallyInfoSeen() {
+  try {
+    window.localStorage.setItem(TALLY_INFO_SEEN_KEY, "1");
+  } catch {
+    // Storage refused: the page's own note keeps it to once a visit.
+  }
+}
+
 /** How many crops /oswiadczenia asks for at a time: the one to read and two
  * behind it, so the next is drawn the moment an answer is given. */
 const BATCH = 3;

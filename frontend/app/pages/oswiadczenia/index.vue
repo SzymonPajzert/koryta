@@ -272,7 +272,9 @@ import { useCurrentUser, useIsCurrentUserLoaded } from "vuefire";
 import {
   claimStoredReadings,
   firstClaimRefusal,
+  noteTallyInfoSeen,
   refusalOf,
+  tallyInfoSeen,
   useDeclarationQueue,
 } from "~/composables/declarationQueue";
 import { polishNumber } from "~/composables/polish";
@@ -465,6 +467,49 @@ const signInOnScreen = useSignInOnScreen();
 // sign-in is on screen waits for it (the snackbar's `model-value`).
 watch(signInOnScreen, (onScreen) => {
   if (onScreen) failure.value = "";
+});
+
+/** Readings after which the reason to sign in opens by itself under the
+ * tally on a phone, where it otherwise waits behind the „?”: for a reader
+ * without an account who never opened it, since by then there is work to
+ * lose. Once a browser (`tallyInfoSeen`). */
+const ASK_AFTER_READINGS = 10;
+/** The page's phone layout, the one with the „?” (the styles' breakpoint). */
+const PHONE_LAYOUT = "(max-width: 599.98px)";
+/** The reason was opened on this visit, which a browser that keeps nothing
+ * remembers no longer than this. */
+let tallyInfoShown = false;
+
+// Seen once is seen, whoever opened it, as long as the reason was the one a
+// reader without an account is given.
+watch(tallyInfoOpen, (open) => {
+  if (!open || user.value) return;
+  tallyInfoShown = true;
+  noteTallyInfoSeen();
+});
+
+// Opened over the work: the caret leaves the date field, so a phone's
+// keyboard goes down and the reason is read before the next date is typed,
+// and the box comes into the middle of the window. Not under a sign-in: the
+// next reading opens it if the dialog closes without one.
+watch(readSoFar, async (count) => {
+  if (
+    user.value ||
+    count < ASK_AFTER_READINGS ||
+    tallyInfoOpen.value ||
+    signInOnScreen.value ||
+    tallyInfoShown ||
+    !window.matchMedia(PHONE_LAYOUT).matches ||
+    tallyInfoSeen()
+  ) {
+    return;
+  }
+  tallyInfoOpen.value = true;
+  (document.activeElement as HTMLElement | null)?.blur();
+  await nextTick();
+  document
+    .getElementById("declaration-tally-info")
+    ?.scrollIntoView({ block: "center" });
 });
 
 /** The claim's refusal, until it can be said. After a sign-in in a dialog,
