@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { collectActivityEvents } from "../../../server/utils/activityEvents";
+import { DECLARATION_ACTOR } from "../../../shared/declarations";
 
 // `vi.mock` is hoisted above the import, so the collector picks this up.
 // `Timestamp` is only used to convert the window bounds for the revision scan,
@@ -395,6 +396,33 @@ describe("collectPublications", () => {
     ]);
 
     expect(events).toHaveLength(2);
+  });
+
+  it("counts a page an admin pressed „Opublikuj z kolejki” for as the admin's", async () => {
+    // The declarations' automation checks and files the page either way. What
+    // it published on its own stays its own, which `aggregateActivity` drops.
+    const { events } = await audit([
+      {
+        user: DECLARATION_ACTOR,
+        pressed_by: "admin",
+        at: AT,
+        action: "publish",
+        collection: "nodes",
+        target_id: "n1",
+      },
+      {
+        user: DECLARATION_ACTOR,
+        at: AT,
+        action: "publish",
+        collection: "nodes",
+        target_id: "n2",
+      },
+    ]);
+
+    expect(events).toEqual([
+      { uid: "admin", at: AT, kind: "publication" },
+      { uid: DECLARATION_ACTOR, at: AT, kind: "publication" },
+    ]);
   });
 });
 
