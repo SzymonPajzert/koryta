@@ -176,6 +176,12 @@ def _passing(answer: HttpResult | str) -> bool:
     return answer.status in (0, 408, 429) or answer.status >= 500
 
 
+def _not_now(answer: HttpResult | str) -> bool:
+    """Whether an answer asks to come back later (429, 503): the walk counts
+    such a page unread rather than drawing what it has."""
+    return isinstance(answer, HttpResult) and answer.status in (429, 503)
+
+
 class _Failed(Exception):
     """An API call did not answer with JSON: ``answer`` is what came instead."""
 
@@ -234,6 +240,8 @@ class Madkom:
         self.allowed = allowed
         self._sites: dict[str, _Site | None] = {}
         self._undecided: Counter[str] = Counter()
+        #: A host's last probe answered "not now": what `busy` hands the walk.
+        self._busy: dict[str, HttpResult] = {}
         self._lock = threading.Lock()
 
     def _site(self, url: str) -> _Site | None:
@@ -273,6 +281,10 @@ class Madkom:
             else:
                 if any(a == ROBOTS for a in answers):
                     site.blocked = True
+                elif busy := next((a for a in answers if _not_now(a)), None):
+                    with self._lock:  # no probe used up: the next page asks again
+                        self._busy[origin] = busy  # type: ignore[assignment]
+                    return False
                 elif any(_passing(a) for a in answers):
                     with self._lock:
                         self._undecided[origin] += 1
@@ -283,6 +295,11 @@ class Madkom:
                     site = None
         with self._lock:
             return self._sites.setdefault(origin, site) is not None
+
+    def busy(self, url: str) -> HttpResult | None:
+        """The "not now" the API gave ``url``'s host at its last probe, once."""
+        with self._lock:
+            return self._busy.pop(_origin(url), None)
 
     def page(self, url: str) -> HttpResult | str | None:
         """The page at ``url`` as the app draws it: an HTML page, the error an
@@ -432,8 +449,8 @@ class Madkom:
                 listing = self._json(
                     f"{site.api}menu/{quote(where.id)}/articles?{query}"
                 )
-            except _Failed:
-                if not menu:
+            except _Failed as failed:
+                if not menu or _not_now(failed.answer):
                     raise
                 listing = {}  # the menu drawn still leads on
             if not isinstance(listing, dict):

@@ -128,13 +128,39 @@ def test_a_page_that_says_not_now_is_asked_again(tmp_path):
 
 
 def test_a_bip_that_keeps_saying_not_now_is_left_for_a_later_run(tmp_path):
-    web = NotNow(DECLARATIONS, {"https://u1.pl/om": 99})
+    years = "".join(
+        f'<a href="/om/{y}">Oświadczenia majątkowe {y}</a>' for y in (2023, 2024, 2025)
+    )
+    sites = {**DECLARATIONS, "https://u1.pl": html("BIP", years)}
+    busy = {f"https://u1.pl/om/{y}": 99 for y in (2023, 2024, 2025)}
+    web = NotNow(sites, busy)
     _, store, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
     assert (store.people["n"].status, store.people["n"].reason) == (
         "not_found",
         "throttled",
     )
     assert store.units["u1"].status == "throttled"
+    web = NotNow(DECLARATIONS, {"https://u1.pl": 99})  # nothing read at all
+    _, store, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
+    assert store.people["n"].reason == "throttled"
+
+
+def test_one_page_that_never_answers_settles_nothing(tmp_path):
+    # A module that is down must not send the unit back to every later run.
+    sites = {
+        **DECLARATIONS,
+        "https://u1.pl": html(
+            "BIP",
+            '<a href="/om">Oświadczenia majątkowe radnych</a>'
+            '<a href="/rejestr">Oświadczenia - rejestr</a>',
+        ),
+    }
+    web = NotNow(sites, {"https://u1.pl/rejestr": 99})
+    _, store, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
+    assert store.people["n"].status == "found"
+    web = NotNow(sites, {"https://u1.pl/rejestr": 99, "https://u1.pl/f/1.pdf": 0})
+    _, store, _, _ = search(tmp_path, {}, [row("x", "u1", "Ewa", "Lis")], web=web)
+    assert store.units["u1"].status == "searched"
 
 
 def test_a_refusal_dressed_as_a_page_ends_the_walk(tmp_path):
@@ -208,3 +234,33 @@ def test_akcessnet_menu_links_are_pages_not_files():
     jan = Seeker.of("k", "Jan", "Kowalski")
     found = candidates(f"{base}/o", "Jan Kowalski - oświadczenia", links, [jan])
     assert [c.url for c in found] == [links[1].url]
+
+
+def test_a_file_a_host_holds_back_is_left_for_a_later_run(tmp_path):
+    web = NotNow(DECLARATIONS, {"https://u1.pl/f/1.pdf": 99})
+    _, store, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
+    assert store.people["n"].reason == "throttled"
+    assert web.calls.count("https://u1.pl/f/1.pdf") == 3
+
+
+def test_a_file_held_back_beside_a_lost_one_is_left_for_a_later_run(tmp_path):
+    sites = {
+        **DECLARATIONS,
+        "https://u1.pl/om": html(
+            "Oświadczenia majątkowe",
+            '<a href="/f/1.pdf">Jan Nowak - oświadczenie majątkowe 2024</a>'
+            '<a href="/f/2.pdf">Jan Nowak - oświadczenie majątkowe 2023</a>',
+        ),
+    }
+    web = NotNow(sites, {"https://u1.pl/f/1.pdf": 99})  # /f/2.pdf is gone: 404
+    _, store, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
+    assert store.people["n"].reason == "throttled"
+
+
+def test_a_sitemap_that_says_not_now_is_read_again_by_the_next_unit(tmp_path):
+    sitemap = b"<urlset><url><loc>https://u1.pl/oswiadczenia</loc></url></urlset>"
+    sites = {**DECLARATIONS, "https://u1.pl/sitemap.xml": (200, "text/xml", sitemap)}
+    web = NotNow(sites, {"https://u1.pl/sitemap.xml": 3})
+    people, _, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
+    assert "u1.pl" not in people._sitemaps
+    assert people._sitemap_urls("https://u1.pl") == ["https://u1.pl/oswiadczenia"]
