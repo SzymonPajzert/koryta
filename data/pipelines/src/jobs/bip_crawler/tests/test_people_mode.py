@@ -11,6 +11,7 @@ from typing import cast
 import pytest
 
 from analysis.bip_people_of_interest import BipPeopleOfInterest
+from jobs.bip_crawler import _units
 from jobs.bip_crawler.people import PeopleOptions, PeopleSearch, list_policy
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from scrapers.bip.classify import normalize_url
@@ -354,6 +355,13 @@ def test_a_retry_can_take_only_what_an_older_walk_settled():
     assert due(retry=retry) == ["never", "new", "old"]
     # Pending ones are searched whatever the cutoff.
     assert due(retry=retry, retry_before=cutoff) == ["never", "old"]
+
+
+def test_a_run_can_take_only_the_units_it_is_given(tmp_path):
+    listed = tmp_path / "units.txt"
+    listed.write_text("141104  # Krasnosielc\n\n240702\n", encoding="utf-8")
+    assert _units(f"@{listed}") == {"141104", "240702"}
+    assert _units("141104, 240702,") == {"141104", "240702"}
 
 
 def test_time_budget_leaves_units_pending(run):

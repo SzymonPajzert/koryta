@@ -66,6 +66,21 @@ def _utc_time(value: str) -> datetime:
     return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
 
 
+def _units(value: str) -> frozenset[str]:
+    """'141104,240702' or '@units.txt' (one a line, '#' comments) -> the units."""
+    if value.startswith("@"):
+        try:
+            text = Path(value[1:]).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise argparse.ArgumentTypeError(
+                f"cannot read {value[1:]}: {exc}"
+            ) from None
+        items = [line.split("#", 1)[0] for line in text.splitlines()]
+    else:
+        items = value.split(",")
+    return frozenset(item.strip() for item in items if item.strip())
+
+
 def registry_xml(xml_cache: Path, *, refresh: bool) -> tuple[bytes, str]:
     """The gov.pl registry's XML (cached unless `refresh`) and where it came from."""
     if xml_cache.exists() and not refresh:
@@ -357,6 +372,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --poi-retry, only the candidacies last searched before this time "
         "(ISO 8601, UTC unless it says): those an older walk settled, e.g. "
         "2026-10-30T05:43Z",
+    )
+    people.add_argument(
+        "--poi-units",
+        type=_units,
+        default=None,
+        help="only these units' candidacies: TERYT codes, comma-separated, or "
+        "@FILE with one a line",
     )
     people.add_argument(
         "--unit-pages",

@@ -155,7 +155,8 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   `unconfirmed` or any other), with `--poi-retry-before` only those last searched
   before a time (the ones an older walk settled: `--poi-retry
   no_declarations,not_listed,robots --poi-retry-before 2026-10-30T05:43Z`);
-  `--poi-refresh` searches everybody. A search that finds nothing never undoes
+  `--poi-refresh` searches everybody; `--poi-units 141104,240702` (or
+  `@FILE`, one a line) keeps a run to those units. A search that finds nothing never undoes
   an earlier find or an earlier downloaded file.
 - The run ends with this run's outcomes, every candidacy's, and both per election
   year: 2014-only candidacies are past BIP's six years more often than not, and the
