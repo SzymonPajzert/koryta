@@ -21,22 +21,26 @@
 import { mdiCheck } from "@mdi/js";
 import { readTyped } from "~/utils/declarationReading";
 
-/** The line under a date field that says back what it understood: „15 lipca
- * 1979”, „tylko rok: 1979”, or why what was typed is not a date.
+/** The line beside a date field that says back what it understood: „15 lipca
+ * 1979”, or why what was typed is not a date yet.
  *
- * A problem is said once the text looks finished, or once the reader tried to
- * save it - not on every key of a date still being typed, when it would only
- * flicker. Until then the line is empty: the field's own „dd.mm.rrrr” says
- * how to type a date, and no examples stand under the field. */
+ * A problem is said once all eight digits are typed, once the reader stops
+ * typing short of them, or once the reader tried to save - not on every key
+ * of a date still being typed, when it would only flicker. Until then the
+ * line is empty: the field's own „dd.mm.rrrr” says how to type a date, and no
+ * examples stand under the field. */
 const props = withDefaults(
   defineProps<{
     text: string;
-    /** The reader pressed Zapisz: a problem now stops the save, so it says
+    /** The reader tried to save: a problem now stops the save, so it says
      * so in the danger ink rather than as a hint. */
     attempted?: boolean;
+    /** The reader stopped typing short of the whole date, so what is missing
+     * is worth saying: „Pomiń” stays until it is typed, and this says why. */
+    stalled?: boolean;
     compact?: boolean;
   }>(),
-  { attempted: false, compact: false },
+  { attempted: false, stalled: false, compact: false },
 );
 
 const reading = computed(() => readTyped(props.text));
@@ -46,8 +50,7 @@ const tone = computed<"idle" | "ok" | "hint" | "error">(() => {
   if (r.state === "ok") return "ok";
   if (r.state === "empty") return "idle";
   if (props.attempted) return "error";
-  if (r.state === "problem" && r.settled) return "hint";
-  return "idle";
+  return r.whole || props.stalled ? "hint" : "idle";
 });
 
 const words = computed(() => {

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   answerWords,
   documentHost,
+  dotTyped,
   lineParts,
   readingWords,
   readTyped,
@@ -13,32 +14,17 @@ const TODAY = new Date("2026-10-29T12:00:00Z");
 
 /** What the date field on /oswiadczenia says back, which is the one check a
  * reader gets on their own typing: a slip of one digit shows up as the wrong
- * month in words before it is sent. `parseTypedDate` decides what a reading
- * is (tests/shared/declarations.test.ts); these are about the words. */
+ * month in words before it is sent. The field holds the eight digits of
+ * dd.mm.rrrr with their dots (`dotTyped`), and part of a date is of no use:
+ * `parseTypedDate` decides what a day is (tests/shared/declarations.test.ts);
+ * these are about the words. */
 describe("readTyped", () => {
   it.each([
     ["15.07.1979", "1979-07-15", "15 lipca 1979"],
     ["15071979", "1979-07-15", "15 lipca 1979"],
-    ["15 VII 1979", "1979-07-15", "15 lipca 1979"],
-    ["1979-07-15", "1979-07-15", "15 lipca 1979"],
+    ["01.01.1900", "1900-01-01", "1 stycznia 1900"],
   ])("says %s back as a day in words", (typed, value, words) => {
-    expect(readTyped(typed, TODAY)).toEqual({
-      state: "ok",
-      kind: "date",
-      value,
-      words,
-    });
-  });
-
-  // The form often gives only the year, and the reader should see that the
-  // year is all they sent.
-  it("says a year typed alone is only a year", () => {
-    expect(readTyped("1979", TODAY)).toEqual({
-      state: "ok",
-      kind: "year",
-      value: "1979",
-      words: "tylko rok: 1979",
-    });
+    expect(readTyped(typed, TODAY)).toEqual({ state: "ok", value, words });
   });
 
   it("has nothing to say about an empty field", () => {
@@ -48,50 +34,130 @@ describe("readTyped", () => {
 
   it.each([
     ["31.02.1979", "Taki dzień nie istnieje."],
-    ["31021979", "Taki dzień nie istnieje."],
+    ["00.07.1979", "Taki dzień nie istnieje."],
     ["15.13.1979", "Nie ma takiego miesiąca."],
-    ["15131979", "Nie ma takiego miesiąca."],
-    ["1979-13-15", "Nie ma takiego miesiąca."],
-    ["15 XIII 1979", "Nie rozpoznaję miesiąca."],
-    // A month and a year: the year is there, the day is what is missing.
-    ["07.1979", "Brakuje dnia. Wpisz pełną datę albo sam rok."],
-    ["lipiec 1979", "Brakuje dnia. Wpisz pełną datę albo sam rok."],
-    // A year and something that is no month: no telling what is missing.
-    ["15 1979", "To nie wygląda na datę - wpisz ją jako dd.mm.rrrr."],
-    ["150719790", "Za dużo cyfr na jedną datę."],
+    ["15.00.1979", "Nie ma takiego miesiąca."],
     ["15.07.1879", "Rok przed 1900 - sprawdź jeszcze raz."],
-    ["1850", "Rok przed 1900 - sprawdź jeszcze raz."],
     ["30.10.2026", "To data z przyszłości - sprawdź jeszcze raz."],
-    ["15 07 19 79", "To nie wygląda na datę - wpisz ją jako dd.mm.rrrr."],
-  ])("says why %j is not a date, at once", (typed, words) => {
+    ["15.07.2027", "To data z przyszłości - sprawdź jeszcze raz."],
+    ["150719790", "Za dużo cyfr na jedną datę."],
+  ])("says why the whole of %j is not a day, at once", (typed, words) => {
     expect(readTyped(typed, TODAY)).toEqual({
       state: "problem",
-      settled: true,
+      whole: true,
       words,
     });
   });
 
-  // A date on its way: the problem is held back until the reader tries to
-  // save, or the hint would change with every key.
-  it.each([
-    ["15.07", "Brakuje roku."],
-    ["15.07.79", "Wpisz cały rok, cztery cyfry."],
-    ["150779", "Wpisz rok czterema cyframi, np. 15071979."],
-    ["15079", "Za mało cyfr na pełną datę, np. 15071979."],
-    ["15", "Wpisz cały rok albo pełną datę."],
-    // The year 1507 to the parser, the first half of 15071979 to the reader.
-    ["1507", "Wpisz cały rok albo pełną datę, np. 15071979."],
-    ["abc", "To nie wygląda na datę - wpisz ją jako dd.mm.rrrr."],
-  ])(
-    "holds back the problem with %j until it looks finished",
-    (typed, words) => {
+  // A date on its way, and a year alone, which is no more use than any other
+  // part of a date: the field wants all eight digits, and says so once the
+  // reader stops short of them or tries to save.
+  it.each(["1", "15", "15.07", "15.07.19", "15.07.197", "1979", "1507"])(
+    "wants all eight digits of %j",
+    (typed) => {
       expect(readTyped(typed, TODAY)).toEqual({
         state: "problem",
-        settled: false,
-        words,
+        whole: false,
+        words: "Wpisz wszystkie 8 cyfr.",
       });
     },
   );
+});
+
+/** What the field shows as a reader types: the digits with the dots put in,
+ * each with the first digit after it, and the caret where the next digit
+ * goes. */
+describe("dotTyped", () => {
+  /** The field after typing `keys` one by one at its end, as a phone's keypad
+   * does. */
+  function typeKeys(keys: string): string {
+    let text = "";
+    for (const key of keys) {
+      text = dotTyped(text + key, text.length + 1, key).text;
+    }
+    return text;
+  }
+
+  it.each([
+    ["1", "1"],
+    ["15", "15"],
+    ["150", "15.0"],
+    ["1507", "15.07"],
+    ["15071", "15.07.1"],
+    ["15071979", "15.07.1979"],
+  ])("shows %s as %s", (keys, shown) => {
+    expect(typeKeys(keys)).toBe(shown);
+  });
+
+  it("takes no ninth digit, and no letter", () => {
+    expect(typeKeys("150719791")).toBe("15.07.1979");
+    expect(typeKeys("15a0b7")).toBe("15.07");
+    expect(typeKeys("abc")).toBe("");
+  });
+
+  // A computer's keyboard, or a phone's with a dot on it: the reader's own
+  // separator closes the day or the month, whichever digits it follows.
+  it.each([
+    ["15.", "15."],
+    ["15.07.1979", "15.07.1979"],
+    ["1.7.1979", "01.07.1979"],
+    ["1.", "01."],
+    ["15.7.", "15.07."],
+    ["15/07/1979", "15.07.1979"],
+    ["15 07 1979", "15.07.1979"],
+    ["15-07-1979", "15.07.1979"],
+    ["15..07", "15.07"],
+    [".15", "15"],
+    ["15.07.1979.", "15.07.1979"],
+  ])("reads the separators of %j as the dots of %j", (keys, shown) => {
+    expect(typeKeys(keys)).toBe(shown);
+  });
+
+  // A dot shows with the digit after it, so every backspace takes a digit,
+  // and a dot left with nothing after it goes with that digit.
+  it("gives back one digit to every backspace", () => {
+    const shown: string[] = [];
+    let text = "15.07.1979";
+    while (text) {
+      text = dotTyped(text.slice(0, -1), text.length - 1).text;
+      shown.push(text);
+    }
+    expect(shown).toEqual([
+      "15.07.197",
+      "15.07.19",
+      "15.07.1",
+      "15.07",
+      "15.0",
+      "15",
+      "1",
+      "",
+    ]);
+  });
+
+  it("takes a date pasted or filled in whole, whatever its separators", () => {
+    expect(dotTyped("15.07.1979", 10, "15.07.1979")).toEqual({
+      text: "15.07.1979",
+      caret: 10,
+    });
+    expect(dotTyped("15/07/1979", 10)).toEqual({
+      text: "15.07.1979",
+      caret: 10,
+    });
+  });
+
+  // A reader who went back to mend a digit keeps the caret after it, though
+  // the dots move around it.
+  it("keeps the caret after the digit it was after", () => {
+    // „15.07.1979” with its „0” taken out by a backspace.
+    expect(dotTyped("15.7.1979", 3)).toEqual({ text: "15.71.979", caret: 2 });
+    // A „1” typed where the „0” was.
+    expect(dotTyped("151.71.979", 3, "1")).toEqual({
+      text: "15.17.1979",
+      caret: 4,
+    });
+    // A separator typed in the middle is not one that closes anything.
+    expect(dotTyped("15..07", 3, ".")).toEqual({ text: "15.07", caret: 2 });
+  });
 });
 
 describe("readingWords", () => {

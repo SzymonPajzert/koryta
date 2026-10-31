@@ -18,8 +18,9 @@ import { expectFitsThePhone } from "./phoneWidth";
 /** /oswiadczenia, where readers type the birth date off a line cut out of a
  * councillor's asset declaration: one field that says back what it
  * understood (variant B of round bip-czytanie-r1), open to readers without an
- * account, with the date line alone, one button that skips until a date is
- * typed, and once something is read the tally in Oliwka at the top, with a
+ * account, with the date line alone, a field that takes the date's eight
+ * digits and puts the dots in itself, one button that skips until all eight
+ * are typed, and once something is read the tally in Oliwka at the top, with a
  * red „Zaloguj się” for a reader without an account, whose reason to sign in
  * sits behind a „?” on a phone until ten readings open it.
  *
@@ -161,17 +162,20 @@ test("oswiadczenia", OSWIADCZENIA, async ({ page }, testInfo) => {
   await expectFitsThePhone(page, testInfo);
 });
 
-/** What the field understood, said back beside its label. */
+/** What the field understood, said back beside its label. The reader types
+ * the digits alone, and the field puts the dots in. */
 test("oswiadczenia-data-wpisana", OSWIADCZENIA, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   await openSignedIn(page, readerAtWork());
   await cropShown(page, 1);
 
-  await page.getByTestId("declaration-date-input").fill(FIRST_DATE);
+  const date = page.getByTestId("declaration-date-input");
+  await date.pressSequentially(FIRST_DATE.replaceAll(".", ""));
+  await expect(date).toHaveValue(FIRST_DATE);
   await expect(page.getByTestId("declaration-reading")).toHaveText(
     "15 lipca 1979",
   );
-  // Something typed: the button saves it rather than skipping the crop.
+  // All eight digits: the button saves the date rather than skipping the crop.
   await expect(page.getByTestId("declaration-submit")).toHaveText("Zapisz");
 
   await readyForFullPage(page);
@@ -203,6 +207,34 @@ test("oswiadczenia-zla-data", OSWIADCZENIA, async ({ page }, testInfo) => {
 
   await readyForFullPage(page);
   await expect(page).toHaveScreenshot("oswiadczenia-zla-data.png", {
+    fullPage: true,
+  });
+
+  await expectFitsThePhone(page, testInfo);
+});
+
+/** Part of a date, and the reader stopped: the button still skips, since
+ * part of a date is of no use, and after a few seconds the line beside the
+ * label asks for all eight digits (round bip-czytanie-r6). */
+test("oswiadczenia-niepelna-data", OSWIADCZENIA, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const desk = readerAtWork();
+  await openSignedIn(page, desk);
+  await cropShown(page, 1);
+
+  const date = page.getByTestId("declaration-date-input");
+  await date.pressSequentially("150719");
+  await expect(date).toHaveValue("15.07.19");
+  await expect(page.getByTestId("declaration-skip")).toHaveText("Pomiń");
+  const reading = page.getByTestId("declaration-reading");
+  await expect(reading).toHaveText("Wpisz wszystkie 8 cyfr.", {
+    timeout: 10_000,
+  });
+  await expect(reading).toHaveClass(/ow-reading--hint/);
+  expect(desk.answers).toEqual([]);
+
+  await readyForFullPage(page);
+  await expect(page).toHaveScreenshot("oswiadczenia-niepelna-data.png", {
     fullPage: true,
   });
 
