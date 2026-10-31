@@ -78,6 +78,7 @@ from scrapers.bip.people import (
     office_terms,
     same_file,
     satisfied,
+    stem,
     url_words,
 )
 from scrapers.bip.registry import parse_subjects_xml
@@ -360,6 +361,7 @@ class PeopleSearch:
         known: dict[str, list[str]] | None = None,
         render: Callable[[str], rendering.Drawn] | None = None,
         unit_sizes: dict[str, int] | None = None,
+        first_names: frozenset[str] = frozenset(),
     ) -> None:
         self.people_store = people_store
         self.bip_queue = bip_queue
@@ -373,6 +375,9 @@ class PeopleSearch:
         #: Every candidacy a unit has, searched in this run or not: the budget's
         #: measure, so a retry of a big unit's few left gets a big unit's pages.
         self.unit_sizes = unit_sizes or {}
+        #: Every candidacy's first name as a stem (`Seeker.first`), the whole
+        #: list's: what tells "Michał Rzepka" from the Józef a unit seeks.
+        self.first_names = first_names
         #: A host's sitemaps, read once a run: a shared platform's units share them.
         self._sitemaps: dict[str, list[str]] = {}
         self._sitemap_locks: dict[str, threading.Lock] = {}
@@ -558,7 +563,13 @@ class PeopleSearch:
                 elif not frontier.has(target):
                     link = LinkContext(target, "")
                     frontier.add(target, 50 + link_score(link, seekers, 1, prefer), 1)
-            found = [c for c in candidates(source, "", files, seekers) if c.key]
+            found = [
+                c
+                for c in candidates(
+                    source, "", files, seekers, first_names=self.first_names
+                )
+                if c.key
+            ]
             if source == KNOWN_URLS:
                 # Addresses from an older crawl: a page found today ranks first.
                 found = [replace(c, score=c.score - 0.5) for c in found]
@@ -667,13 +678,21 @@ class PeopleSearch:
                 else:
                     # The script went elsewhere: what it drew counts there.
                     out.found.extend(
-                        candidates(drawn.url, drawn_title, drawn_links, seekers)
+                        candidates(
+                            drawn.url,
+                            drawn_title,
+                            drawn_links,
+                            seekers,
+                            first_names=self.first_names,
+                        )
                     )
                     follow = links + drawn_links
         folded_title = fold(title)
         if DECLARATION.search(folded_title) or ASSETS.search(folded_title):
             out.declaration_pages += 1
-        out.found.extend(candidates(result.url, title, links, seekers))
+        out.found.extend(
+            candidates(result.url, title, links, seekers, first_names=self.first_names)
+        )
         if depth < self.options.max_depth:
             frontier.follow(follow, seekers, depth + 1, prefer)
 
@@ -980,6 +999,9 @@ def run_people_mode(
         known=known,
         render=renderer.render if renderer else None,
         unit_sizes=Counter(p.teryt for p in people),
+        first_names=frozenset(
+            stem(p.first_name, min_a=4) for p in people if p.first_name
+        ),
     )
     try:
         counts = search.run(todo)
