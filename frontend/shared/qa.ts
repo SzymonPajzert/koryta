@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "oswiadczenia-data-osiem-cyfr",
+    title: "Pole daty na /oswiadczenia samo wstawia kropki i czeka na 8 cyfr",
+    description:
+      "W pole daty wpisuje się same cyfry, a kropki pojawiają się same: 15071979 to 15.07.1979. Część daty nic nam nie daje, więc przycisk zostaje „Pomiń”, dopóki nie ma wszystkich 8 cyfr, a gdy ktoś przestanie pisać wcześniej, przy etykiecie pola pojawia się „Wpisz wszystkie 8 cyfr.”.",
+    steps: [
+      "Na /oswiadczenia wpisz 150719: w polu ma być 15.07.19, a przycisk dalej „Pomiń”. Po około 3 sekundach przy „Data urodzenia” pojawia się „Wpisz wszystkie 8 cyfr.”. Dopisz 79: pole pokazuje 15.07.1979, obok jest „15 lipca 1979”, a przycisk zmienia się w „Zapisz”.",
+      "Wpisz część daty i naciśnij Enter: nic nie znika, a napis przy etykiecie robi się czerwony. Kliknij wtedy „Pomiń”: pojawia się następny wycinek.",
+    ],
+    link: "/oswiadczenia",
+    area: "public",
+  },
+  {
     id: "oswiadczenia-powod-logowania-po-dziesieciu",
     title:
       "Na telefonie /oswiadczenia po 10 odczytach sam pokazuje, po co się zalogować",

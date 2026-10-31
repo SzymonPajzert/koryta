@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
+import { defineComponent, h, shallowRef } from "vue";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import TaskCard from "../../../app/components/oswiadczenia/TaskCard.vue";
 import type { DeclarationTask } from "../../../shared/declarations";
@@ -38,6 +39,7 @@ async function mount(
 
 afterEach(() => {
   for (const wrapper of mounted.splice(0)) wrapper.unmount();
+  vi.useRealTimers();
 });
 
 const DATE = '[data-testid="declaration-date-input"]';
@@ -47,12 +49,13 @@ const SKIP = '[data-testid="declaration-skip"]';
 const SAVE = '[data-testid="declaration-submit"]';
 
 /** The card a reader reads one crop on, „jedno pole”, picked in round
- * bip-czytanie-r1. One field takes the date however it is typed and says back
- * what it understood, so a slip of a digit is seen before it is sent; one
- * button beside it skips the crop until something is typed and saves it once
- * something is (his call of 2026-10-30). The name line and its field stay off
- * while readers are not asked for names (READ_NAMES); TaskCard.names.test.ts
- * keeps them working for the day they are. */
+ * bip-czytanie-r1. One field takes the date's eight digits, puts the dots in
+ * itself and says back what it understood, so a slip of a digit is seen
+ * before it is sent; one button beside it skips the crop until all eight are
+ * typed and saves the date once they are, since part of a date is of no use
+ * (his calls of 2026-10-30 and 2026-10-31). The name line and its field stay
+ * off while readers are not asked for names (READ_NAMES);
+ * TaskCard.names.test.ts keeps them working for the day they are. */
 describe("OswiadczeniaTaskCard", () => {
   it("lays out the date line alone, with no word of whose it is", async () => {
     const wrapper = await mount();
@@ -74,16 +77,27 @@ describe("OswiadczeniaTaskCard", () => {
     expect(wrapper.get(READING).text()).toBe("");
   });
 
-  it("says back what it understood of a day, and of a year typed alone", async () => {
+  it("puts the dots in as the digits are typed, and says back the day they make", async () => {
     const wrapper = await mount();
     const input = wrapper.get(DATE);
 
-    await input.setValue("15.07.1979");
+    await input.setValue("150719");
+    expect((input.element as HTMLInputElement).value).toBe("15.07.19");
+    // Part of a date, while it is typed: nothing to say yet.
+    expect(wrapper.get(READING).text()).toBe("");
+
+    await input.setValue("15071979");
+    expect((input.element as HTMLInputElement).value).toBe("15.07.1979");
     expect(wrapper.get(READING).text()).toBe("15 lipca 1979");
     expect(wrapper.get(READING).classes()).toContain("ow-reading--ok");
+  });
 
-    await input.setValue("1979");
-    expect(wrapper.get(READING).text()).toBe("tylko rok: 1979");
+  it("takes no letter into the field", async () => {
+    const wrapper = await mount();
+    const input = wrapper.get(DATE);
+
+    await input.setValue("15 VII 1979");
+    expect((input.element as HTMLInputElement).value).toBe("15.19.79");
   });
 
   it("offers „Pomiń” while nothing is typed, and skips the crop with it, asking no reason", async () => {
@@ -102,26 +116,81 @@ describe("OswiadczeniaTaskCard", () => {
     ).toBe(false);
   });
 
-  // Enter in the field submits its form in a browser; happy-dom does not do
-  // that implicit submission, so the tests submit the form themselves.
-  it("skips when the empty field is sent with Enter, as its button says", async () => {
+  it("skips when Enter is pressed in the empty field, as its button says", async () => {
     const wrapper = await mount();
 
-    await wrapper.get("form").trigger("submit");
+    await wrapper.get(DATE).trigger("keydown", { key: "Enter" });
 
     expect(wrapper.emitted("answer")).toEqual([[task, { verdict: "skip" }]]);
   });
 
-  it("turns „Pomiń” into „Zapisz” once something is typed, and back once it is cleared", async () => {
+  it("keeps „Pomiń” until all eight digits are typed, and turns it into „Zapisz” then", async () => {
     const wrapper = await mount();
     const input = wrapper.get(DATE);
 
-    await input.setValue("1");
+    for (const typed of ["1", "1507", "1507197"]) {
+      await input.setValue(typed);
+      expect(wrapper.get(SKIP).text()).toBe("Pomiń");
+      expect(wrapper.find(SAVE).exists()).toBe(false);
+    }
+
+    await input.setValue("15071979");
     expect(wrapper.get(SAVE).text()).toBe("Zapisz");
     expect(wrapper.find(SKIP).exists()).toBe(false);
 
-    // A whitespace-only field is still empty.
-    await input.setValue("  ");
+    // A digit taken back is a date short of whole again.
+    await input.setValue("15.07.197");
+    expect(wrapper.get(SKIP).text()).toBe("Pomiń");
+  });
+
+  // A reader who started on a line and cannot finish it moves on without
+  // clearing the field: part of a date is of no use.
+  it("skips the crop with „Pomiń” when only part of a date is typed", async () => {
+    const wrapper = await mount();
+
+    await wrapper.get(DATE).setValue("150719");
+    await wrapper.get(SKIP).trigger("click");
+
+    expect(wrapper.emitted("answer")).toEqual([[task, { verdict: "skip" }]]);
+  });
+
+  it("asks for all eight digits once the reader stops typing short of them", async () => {
+    const wrapper = await mount();
+    vi.useFakeTimers();
+    const input = wrapper.get(DATE);
+
+    await input.setValue("1507");
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(wrapper.get(READING).text()).toBe("");
+
+    await vi.advanceTimersByTimeAsync(1);
+    const reading = wrapper.get(READING);
+    expect(reading.text()).toBe("Wpisz wszystkie 8 cyfr.");
+    // A hint, not a mistake: nothing was sent.
+    expect(reading.classes()).toContain("ow-reading--hint");
+    expect(input.classes()).not.toContain("ow-card__input--error");
+
+    // Typing again takes it away until the reader stops again.
+    await input.setValue("15071");
+    expect(wrapper.get(READING).text()).toBe("");
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(wrapper.get(READING).text()).toBe("Wpisz wszystkie 8 cyfr.");
+  });
+
+  // Enter saves everywhere else on the card, so pressed short of the whole
+  // date it is a reader who thinks they are done, not one giving up.
+  it("does not throw away part of a date on Enter, and says what is missing", async () => {
+    const wrapper = await mount();
+    const input = wrapper.get(DATE);
+
+    await input.setValue("1507197");
+    await input.trigger("keydown", { key: "Enter" });
+
+    expect(wrapper.emitted("answer")).toBeUndefined();
+    const reading = wrapper.get(READING);
+    expect(reading.text()).toBe("Wpisz wszystkie 8 cyfr.");
+    expect(reading.classes()).toContain("ow-reading--error");
+    expect(input.classes()).toContain("ow-card__input--error");
     expect(wrapper.get(SKIP).text()).toBe("Pomiń");
   });
 
@@ -145,15 +214,16 @@ describe("OswiadczeniaTaskCard", () => {
     expect(wrapper.get(READING).text()).toBe("");
   });
 
-  it("sends a typed date when its form is submitted, as YYYY-MM-DD", async () => {
+  it("sends a typed date with „Zapisz” and with Enter, as YYYY-MM-DD", async () => {
     const wrapper = await mount();
+    const input = wrapper.get(DATE);
 
-    await wrapper.get(DATE).setValue("15.07.1979");
-    await wrapper.get("form").trigger("submit");
+    await input.setValue("15071979");
+    await wrapper.get(SAVE).trigger("click");
+    await input.trigger("keydown", { key: "Enter" });
 
-    expect(wrapper.emitted("answer")).toEqual([
-      [task, { verdict: "date", value: "1979-07-15" }],
-    ]);
+    const sent = [task, { verdict: "date", value: "1979-07-15" }];
+    expect(wrapper.emitted("answer")).toEqual([sent, sent]);
   });
 
   // A crop whose save failed comes back with what the reader had typed.
@@ -172,6 +242,18 @@ describe("OswiadczeniaTaskCard", () => {
 
 type Brought = { show: () => void; focus: () => void };
 
+/** The card as the page holds it, through a template ref, which is what
+ * sees what the card exposes. */
+async function mountHeld() {
+  const card = shallowRef<Brought | null>(null);
+  const wrapper = await mountSuspended(
+    defineComponent({ setup: () => () => h(TaskCard, { task, ref: card }) }),
+    { attachTo: document.body },
+  );
+  mounted.push(wrapper);
+  return { wrapper, card: card.value! };
+}
+
 /** For a page that sent the reader elsewhere, a sign-in from under the work
  * say, and brings them back. Focusing the field alone scrolls it only as far
  * as the window's edge, where the app bar, which stays at the top, can cover
@@ -183,10 +265,10 @@ describe("OswiadczeniaTaskCard brought back into the window", () => {
 
   it("shows the date field in the middle of the window, and leaves the caret where it was", async () => {
     const scrolled = vi.spyOn(Element.prototype, "scrollIntoView");
-    const wrapper = await mount();
+    const { wrapper, card } = await mountHeld();
     (document.activeElement as HTMLElement | null)?.blur();
 
-    (wrapper.vm as unknown as Brought).show();
+    card.show();
 
     const date = wrapper.get(DATE).element;
     expect(scrolled.mock.contexts).toEqual([date]);
@@ -197,9 +279,9 @@ describe("OswiadczeniaTaskCard brought back into the window", () => {
   it("puts the caret in the date field once it is in the middle of the window, without scrolling it again", async () => {
     const scrolled = vi.spyOn(Element.prototype, "scrollIntoView");
     const focused = vi.spyOn(HTMLElement.prototype, "focus");
-    const wrapper = await mount();
+    const { wrapper, card } = await mountHeld();
 
-    (wrapper.vm as unknown as Brought).focus();
+    card.focus();
 
     const date = wrapper.get(DATE).element;
     expect(scrolled.mock.contexts).toEqual([date]);

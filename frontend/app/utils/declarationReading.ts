@@ -2,115 +2,117 @@ import { longDate } from "~~/shared/dates";
 import { parseTypedDate, type AnswerVerdict } from "~~/shared/declarations";
 
 /**
- * What a reader typed into a date field on /oswiadczenia, said back in words.
+ * What a reader typed into the date field on /oswiadczenia, said back in
+ * words.
  *
  * The page reads the crop's handwriting through the reader's fingers, so the
  * one check it can offer is to repeat what it understood: „15 lipca 1979”
  * under „15.07.1979” is how a slip of one digit gets seen before it is sent.
- * `parseTypedDate` decides what a reading is; this only words its answer.
+ * The field takes the eight digits of dd.mm.rrrr and puts the dots in itself
+ * (`dotTyped`), so the digits are all there is to read; `parseTypedDate`
+ * decides whether they make a day.
  */
 export type TypedReading =
   | { state: "empty" }
-  | { state: "ok"; kind: "date" | "year"; value: string; words: string }
+  | { state: "ok"; value: string; words: string }
   | {
       state: "problem";
       words: string;
-      /** Whether the text looks finished, so the problem is worth saying
-       * before the reader asks to save. „15.0” is a date on its way, and a
-       * hint that changed with every key would be noise. */
-      settled: boolean;
+      /** Whether all eight digits are typed. Then what is wrong is said at
+       * once: a day that does not exist, say. Short of them the text is a
+       * date on its way („15.0”), and what is missing is said once the
+       * reader stops typing or asks to save it: a hint that changed with
+       * every key would be noise. */
+      whole: boolean;
     };
 
-/** How a valid reading is shown. A year alone says so, because the form often
- * gives only the year and the reader should see that is all they sent. */
+/** How a reading is shown. A year alone, which the server still takes, is
+ * said to be only a year. */
 export function readingWords(kind: "date" | "year", value: string): string {
   return kind === "year" ? `tylko rok: ${value}` : longDate(value);
 }
+
+/** The digits of a date, dd.mm.rrrr without its dots. Part of a date is of
+ * no use, so a reading is all eight of them. */
+const DATE_DIGITS = 8;
 
 export function readTyped(
   text: string,
   today: Date = new Date(),
 ): TypedReading {
-  const parsed = parseTypedDate(text, today);
-  if (parsed.kind !== "invalid") {
-    return {
-      state: "ok",
-      kind: parsed.kind,
-      value: parsed.value,
-      words: readingWords(parsed.kind, parsed.value),
-    };
+  const digits = text.replace(/\D/g, "");
+  if (!digits) return { state: "empty" };
+  if (digits.length < DATE_DIGITS) {
+    return { state: "problem", whole: false, words: "Wpisz wszystkie 8 cyfr." };
   }
-  if (parsed.reason === "empty") return { state: "empty" };
-
-  const raw = text.trim().toLowerCase();
-  const tokens = raw.split(/[\s./-]+/).filter(Boolean);
-  const year = tokens.find((token) => /^\d{4}$/.test(token));
-  // „15.07.19” is „15.07.1979” two keys early, not a two-digit year.
-  const settled = !!year || raw.replace(/\D/g, "").length >= 8;
-
-  if (parsed.reason === "range") {
-    // „1507” is the year 1507 to the parser, and the first half of
-    // „15071979” to the reader typing it.
-    const halfTyped =
-      /^\d{4}$/.test(raw) &&
-      Number(raw.slice(0, 2)) >= 1 &&
-      Number(raw.slice(0, 2)) <= 31 &&
-      Number(raw.slice(2)) >= 1 &&
-      Number(raw.slice(2)) <= 12;
-    let words = "To data z przyszłości - sprawdź jeszcze raz.";
-    if (halfTyped && Number(raw) < 1900) {
-      words = "Wpisz cały rok albo pełną datę, np. 15071979.";
-    } else if (year && Number(year) < 1900) {
-      words = "Rok przed 1900 - sprawdź jeszcze raz.";
-    }
-    return { state: "problem", settled: !halfTyped, words };
+  const parsed = parseTypedDate(digits, today);
+  if (parsed.kind === "date") {
+    return { state: "ok", value: parsed.value, words: longDate(parsed.value) };
   }
-  return { state: "problem", settled, words: formatProblem(raw, tokens) };
+  const outOfRange = parsed.kind === "invalid" && parsed.reason === "range";
+  return {
+    state: "problem",
+    whole: true,
+    words: dayProblem(digits, outOfRange),
+  };
 }
 
-/** Why a text is not a date, in the reader's terms. The month is checked by
- * asking `parseTypedDate` about the 1st of it in 2000, so the words it knows
- * („lipca”, „VII”, „7”) are not listed a second time here. */
-function formatProblem(raw: string, tokens: string[]): string {
-  if (/^\d+$/.test(raw)) {
-    if (raw.length === 8) {
-      return Number(raw.slice(2, 4)) > 12
-        ? "Nie ma takiego miesiąca."
-        : "Taki dzień nie istnieje.";
-    }
-    if (raw.length > 8) return "Za dużo cyfr na jedną datę.";
-    if (raw.length === 6) return "Wpisz rok czterema cyframi, np. 15071979.";
-    return raw.length < 4
-      ? "Wpisz cały rok albo pełną datę."
-      : "Za mało cyfr na pełną datę, np. 15071979.";
+/** Why the digits typed are not a day, in the reader's terms. `outOfRange`
+ * is `parseTypedDate`'s word that the year is before 1900, or the day after
+ * today. */
+function dayProblem(digits: string, outOfRange: boolean): string {
+  if (digits.length > DATE_DIGITS) return "Za dużo cyfr na jedną datę.";
+  if (outOfRange) {
+    return Number(digits.slice(4)) < 1900
+      ? "Rok przed 1900 - sprawdź jeszcze raz."
+      : "To data z przyszłości - sprawdź jeszcze raz.";
   }
-  if (tokens.length === 2) {
-    // „07.1979” and „lipiec 1979” have their year: what they lack is the
-    // day, and the year alone would be a reading too.
-    const year = tokens.findIndex((token) => /^\d{4}$/.test(token));
-    if (year < 0) return "Brakuje roku.";
-    if (parseTypedDate(`1 ${tokens[1 - year]} 2000`).kind === "date") {
-      return "Brakuje dnia. Wpisz pełną datę albo sam rok.";
-    }
+  const month = Number(digits.slice(2, 4));
+  return month >= 1 && month <= 12
+    ? "Taki dzień nie istnieje."
+    : "Nie ma takiego miesiąca.";
+}
+
+/** What a reader may type between the parts of a date. */
+const SEPARATOR = /^[\s.,/-]$/;
+
+/**
+ * The date field after a key, and where its caret goes: the digits of
+ * dd.mm.rrrr with the dots put in, so a reader types „15071979” and reads
+ * „15.07.1979”. A dot comes with the first digit after it, so none stands in
+ * the way of a backspace. One the reader types at the end shows at once, and
+ * after a lone digit it closes the day or the month: „1.” is „01.”. Nothing
+ * else is taken, a letter or a ninth digit.
+ *
+ * `inserted` is what the key typed (`InputEvent.data` of an `insertText`):
+ * whether the reader has just typed a separator is the one thing the text
+ * does not tell. The caret stays after the digit it was after: at the end,
+ * where a reader types, or wherever they went back to mend one.
+ */
+export function dotTyped(
+  raw: string,
+  caret: number,
+  inserted: string | null = null,
+): { text: string; caret: number } {
+  const atEnd = caret >= raw.length;
+  const separated = atEnd && inserted !== null && SEPARATOR.test(inserted);
+  let digits = raw.replace(/\D/g, "");
+  if (separated && (digits.length === 1 || digits.length === 3)) {
+    digits = `${digits.slice(0, -1)}0${digits.slice(-1)}`;
   }
-  if (tokens.length === 3) {
-    // 1979-07-15 reads year first, the way `parseTypedDate` takes it too.
-    const yearFirst = /^\d{4}$/.test(tokens[0]!);
-    const [day, month, year] = (
-      yearFirst ? [tokens[2], tokens[1], tokens[0]] : tokens
-    ) as [string, string, string];
-    if (/^\d{1,3}$/.test(year)) return "Wpisz cały rok, cztery cyfry.";
-    if (/^\d{4}$/.test(year)) {
-      if (/^\d{1,2}$/.test(month) && Number(month) > 12) {
-        return "Nie ma takiego miesiąca.";
-      }
-      if (parseTypedDate(`1 ${month} 2000`).kind !== "date") {
-        return "Nie rozpoznaję miesiąca.";
-      }
-      if (/^\d{1,2}$/.test(day)) return "Taki dzień nie istnieje.";
-    }
+  digits = digits.slice(0, DATE_DIGITS);
+  let text = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)]
+    .filter(Boolean)
+    .join(".");
+  if (separated && (digits.length === 2 || digits.length === 4)) text += ".";
+  if (atEnd) return { text, caret: text.length };
+
+  const before = raw.slice(0, caret).replace(/\D/g, "").length;
+  let at = 0;
+  for (let seen = 0; at < text.length && seen < before; at++) {
+    if (/\d/.test(text[at]!)) seen++;
   }
-  return "To nie wygląda na datę - wpisz ją jako dd.mm.rrrr.";
+  return { text, caret: at };
 }
 
 /** A stored reading as the reader would type it back, for a field refilled

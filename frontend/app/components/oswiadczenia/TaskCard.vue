@@ -23,7 +23,7 @@
       />
     </div>
 
-    <form class="ow-card__answer" novalidate @submit.prevent="submit">
+    <form class="ow-card__answer" novalidate @submit.prevent="press">
       <!-- What the field understood sits beside its label, above the field
            rather than under it: on a phone the keyboard rises to the field's
            lower edge, and „15 lipca 1979” under it would be read by nobody. -->
@@ -33,19 +33,22 @@
           :id="readingId"
           :text="dateText"
           :attempted="attempted"
+          :stalled="stalled"
           compact
         />
       </div>
       <div class="ow-card__date-row">
-        <!-- Digits only on a phone's keypad: „15071979” and „1979” are both
-             readings, so nothing the form can say needs a letter. A
-             computer's keyboard still takes „15 VII 1979”. -->
+        <!-- Digits only, on a phone's keypad and on a computer's keyboard:
+             the field puts the dots of dd.mm.rrrr in itself (`dotTyped`),
+             so the eight digits are all a reader types. -->
         <input
           :id="dateId"
           ref="dateInput"
-          v-model="dateText"
+          :value="dateText"
           class="ow-card__input ow-card__input--date"
-          :class="{ 'ow-card__input--error': attempted && typing && !valid }"
+          :class="{
+            'ow-card__input--error': attempted && reading.state === 'problem',
+          }"
           data-testid="declaration-date-input"
           inputmode="numeric"
           autocomplete="off"
@@ -53,23 +56,26 @@
           enterkeyhint="done"
           placeholder="dd.mm.rrrr"
           :aria-describedby="readingId"
+          @input="typeDate"
+          @keydown.enter="enter"
         />
-        <!-- One button for both ways on: „Pomiń” while
-             nothing is typed, „Zapisz” once something is, and no reason
-             asked of a reader who cannot read the line. Quiet while it
-             skips, the page's colour once it saves; one width for both, so
+        <!-- One button for both ways on: „Zapisz” once all eight digits are
+             typed, „Pomiń” until then. Part of a date is of no use, so a
+             reader who started on a line they cannot finish moves on without
+             clearing the field, and no reason is asked of them. Quiet while
+             it skips, the page's colour once it saves; one width for both, so
              the field does not move under the thumb when it switches. -->
         <v-btn
           type="submit"
-          :color="typing ? 'primary' : undefined"
-          :variant="typing ? 'flat' : 'tonal'"
-          :append-icon="typing ? undefined : mdiArrowRight"
+          :color="whole ? 'primary' : undefined"
+          :variant="whole ? 'flat' : 'tonal'"
+          :append-icon="whole ? undefined : mdiArrowRight"
           height="52"
           min-width="112"
           class="text-none ow-card__save"
-          :data-testid="typing ? 'declaration-submit' : 'declaration-skip'"
+          :data-testid="whole ? 'declaration-submit' : 'declaration-skip'"
         >
-          {{ typing ? "Zapisz" : "Pomiń" }}
+          {{ whole ? "Zapisz" : "Pomiń" }}
         </v-btn>
       </div>
 
@@ -90,6 +96,7 @@
           spellcheck="false"
           enterkeyhint="done"
           placeholder="nieobowiązkowo"
+          @keydown.enter="enter"
         />
       </template>
     </form>
@@ -104,18 +111,19 @@ import {
   type DeclarationAnswer,
   type DeclarationTask,
 } from "~~/shared/declarations";
-import { readTyped } from "~/utils/declarationReading";
+import { dotTyped, readTyped } from "~/utils/declarationReading";
 
 /**
  * The reading card of /oswiadczenia, „jedno pole”: picked over the form-like
  * line and the series in round bip-czytanie-r1.
  *
  * A compact card made for a phone: the date line of the paper on a tray, and
- * under it one field for the date, typed whichever way the reader likes, with
- * what it understood said back beside the field's label. One field and one
- * button in a row is all a thumb needs: the button skips the crop while
- * nothing is typed and saves what is typed once something is. The server
- * still takes „unreadable” and „empty”; the card no longer asks for them.
+ * under it one field for the date's eight digits, which puts the dots in
+ * itself, with what it understood said back beside the field's label. One
+ * field and one button in a row is all a thumb needs: the button skips the
+ * crop until the whole date is typed and saves it once it is. The server
+ * still takes „unreadable”, „empty” and a year alone; the card no longer asks
+ * for them.
  */
 const props = withDefaults(
   defineProps<{
@@ -139,9 +147,50 @@ const nameId = useId();
 const readingId = useId();
 const dateInput = useTemplateRef<HTMLInputElement>("dateInput");
 
-const valid = computed(() => readTyped(dateText.value).state === "ok");
-/** Something is typed: the button saves it rather than skipping the crop. */
-const typing = computed(() => dateText.value.trim() !== "");
+const reading = computed(() => readTyped(dateText.value));
+/** All eight digits are typed: the button saves the date, or says what is
+ * wrong with it, rather than skipping the crop. */
+const whole = computed(
+  () =>
+    reading.value.state === "ok" ||
+    (reading.value.state === "problem" && reading.value.whole),
+);
+
+/** How long a reader may stop typing short of the whole date before the line
+ * beside the label says all eight digits are wanted. */
+const STALL_MS = 3000;
+const stalled = ref(false);
+let stallTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Starts the wait over at every key: what is missing is said once the
+ * reader stops, never while they type. */
+function waitForStall() {
+  clearTimeout(stallTimer);
+  stalled.value = false;
+  if (reading.value.state !== "problem" || reading.value.whole) return;
+  stallTimer = setTimeout(() => (stalled.value = true), STALL_MS);
+}
+
+/** Puts the dots in as the reader types (`dotTyped`). The field is set here
+ * rather than left to `dateText`: a key that changes nothing in the text, a
+ * letter, has to come out of the field too. */
+function typeDate(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const { inputType, data } = event as InputEvent;
+  const next = dotTyped(
+    input.value,
+    input.selectionStart ?? input.value.length,
+    inputType === "insertText" ? data : null,
+  );
+  if (next.text !== input.value) {
+    input.value = next.text;
+    input.setSelectionRange(next.caret, next.caret);
+  }
+  dateText.value = next.text;
+  waitForStall();
+}
+
+onBeforeUnmount(() => clearTimeout(stallTimer));
 
 const nameImage = computed(() => {
   const { images, imageSize } = props.task;
@@ -155,26 +204,40 @@ function withName(answer: DeclarationAnswer): DeclarationAnswer {
   return typed && nameImage.value ? { ...answer, name: typed } : answer;
 }
 
-function submit() {
-  if (!typing.value) {
+/** The button: a whole date is saved, or refused with the reason said beside
+ * the label. Short of it the crop is skipped, with what was typed: part of a
+ * date is of no use. */
+function press() {
+  if (whole.value) save();
+  else emit("answer", props.task, { verdict: "skip" });
+}
+
+/** Enter in a field: an empty field skips the crop and a whole date is saved,
+ * as the button does. A date short of whole is not thrown away by the key
+ * that saves: what is missing is said beside the label, and „Pomiń” is a tap
+ * away. Enter on the button itself is the button's. */
+function enter(event: KeyboardEvent) {
+  if (event.isComposing) return;
+  event.preventDefault();
+  if (reading.value.state === "empty") {
     emit("answer", props.task, { verdict: "skip" });
-    return;
-  }
-  const reading = readTyped(dateText.value);
-  if (reading.state !== "ok") {
+  } else save();
+}
+
+function save() {
+  const typed = reading.value;
+  if (typed.state !== "ok") {
     attempted.value = true;
     dateInput.value?.focus();
     return;
   }
-  emit(
-    "answer",
-    props.task,
-    withName({ verdict: "date", value: reading.value }),
-  );
+  emit("answer", props.task, withName({ verdict: "date", value: typed.value }));
 }
 
 onMounted(() => {
   if (props.autofocus) dateInput.value?.focus();
+  // A crop that came back with part of a date typed into it.
+  waitForStall();
 });
 
 /** Brings the date field into the middle of the window, with the lines of

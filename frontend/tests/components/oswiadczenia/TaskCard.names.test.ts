@@ -80,7 +80,7 @@ describe("OswiadczeniaTaskCard with names read", () => {
   it("sends the name read off the paper with the date, when one was typed", async () => {
     const wrapper = await mount();
 
-    await wrapper.get(DATE).setValue("15 VII 1979");
+    await wrapper.get(DATE).setValue("15071979");
     await wrapper.get(NAME).setValue("  Jan Przykładowy ");
     await wrapper.get('[data-testid="declaration-submit"]').trigger("click");
 
