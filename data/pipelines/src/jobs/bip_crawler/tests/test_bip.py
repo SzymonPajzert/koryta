@@ -79,6 +79,8 @@ def test_document_url_patterns() -> None:
     assert is_document_url("https://bip.x.pl/attachments/download/97417")
     assert is_document_url("https://bip.x.pl/plik.php?zid=121727")
     assert is_document_url("https://bip.x.pl/resource/12497/Postanowienie+134.pdf")
+    assert is_document_url("https://mrozy-api.bip.net.pl/api/attachments/1835")
+    assert not is_document_url("https://mrozy-api.bip.net.pl/api/attachments")
     assert not is_document_url("https://bip.x.pl/oswiadczenie-majatkowe/1/kowalski")
 
 
