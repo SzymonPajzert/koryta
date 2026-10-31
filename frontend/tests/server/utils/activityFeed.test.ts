@@ -8,6 +8,7 @@ import {
   type FeedEvent,
 } from "../../../server/utils/activityFeed";
 import { resetFeedTargetCache } from "../../../server/utils/feedTargets";
+import { DECLARATION_ACTOR } from "~~/shared/declarations";
 import {
   countedFeedKinds,
   describeFeedBatch,
@@ -1408,6 +1409,42 @@ describe("buildActivityFeed", () => {
         "other publish 1",
         "admin approve 2",
         "admin publish 1",
+      ]);
+    });
+
+    it("names the admin who pressed „Opublikuj z kolejki”, and leaves out what the automation published on its own", async () => {
+      const { batches } = await feed({
+        audit: {
+          // The import's revision, approved by the automation on the way up.
+          a: {
+            user: DECLARATION_ACTOR,
+            at: at("10:00:00"),
+            action: "approve",
+            collection: "nodes",
+            target_id: "p1",
+            revision_id: "x1",
+          },
+          pressed: {
+            user: DECLARATION_ACTOR,
+            pressed_by: "admin",
+            at: at("10:00:00"),
+            action: "publish",
+            collection: "nodes",
+            target_id: "p1",
+          },
+          own: {
+            user: DECLARATION_ACTOR,
+            at: at("11:00:00"),
+            action: "publish",
+            collection: "nodes",
+            target_id: "p2",
+          },
+        },
+      });
+
+      expect(lines(batches)).toEqual(["admin publish 1"]);
+      expect(batches[0]?.targets).toEqual([
+        expect.objectContaining({ id: "p1", type: "person" }),
       ]);
     });
 

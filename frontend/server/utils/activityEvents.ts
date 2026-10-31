@@ -106,10 +106,15 @@ export async function collectActivityEvents(
  * being *proposed* (`update_time`), and this one counts a page being published.
  *
  * Rows are still folded per (who, which page, second), which costs nothing
- * today — `/api/nodes/publish` is the only writer and files one row per request
- * — and keeps a future batch that files two rows for one page in one commit
- * from being read as two decisions. Two *different* pages published in the same
- * second stay two, which is why the page id is in the key.
+ * today — `/api/nodes/publish` and the declarations' automation each file one
+ * row per page — and keeps a future batch that files two rows for one page in
+ * one commit from being read as two decisions. Two *different* pages published
+ * in the same second stay two, which is why the page id is in the key.
+ *
+ * A page an administrator pressed „Opublikuj z kolejki” for is filed under the
+ * declarations' automation, which checked it, with the administrator in
+ * `pressed_by`; it counts as theirs. What the automation published on its own
+ * stays the automation's, which `aggregateActivity` leaves out.
  */
 async function collectPublications(
   db: Firestore,
@@ -119,7 +124,7 @@ async function collectPublications(
   // `at` would need a composite index, and the scan is capped either way. The
   // rows that are not publications are dropped here instead.
   const snap = await windowed(db.collection("audit"), "at", window)
-    .select("user", "at", "action", "collection", "target_id")
+    .select("user", "pressed_by", "at", "action", "collection", "target_id")
     .limit(SCAN_CAP)
     .get();
 
@@ -130,7 +135,9 @@ async function collectPublications(
       continue;
     }
 
-    const uid = doc.get("user");
+    const pressedBy = doc.get("pressed_by");
+    const uid =
+      typeof pressedBy === "string" && pressedBy ? pressedBy : doc.get("user");
     const at = doc.get("at");
     if (typeof uid !== "string" || typeof at !== "string") continue;
 

@@ -445,6 +445,7 @@ async function scanAudit(
   const snapshot = await inWindow(db.collection("audit"), "at", window)
     .select(
       "user",
+      "pressed_by",
       "at",
       "action",
       "collection",
@@ -654,7 +655,9 @@ export function readFeedAuditRow(
   get: Getter,
   window: FeedWindow,
 ): FeedAuditRow | null {
-  const uid = person(get("user"));
+  // A page the declarations' automation put up at an administrator's press
+  // of „Opublikuj z kolejki” is that administrator's publication.
+  const uid = person(get("pressed_by")) ?? person(get("user"));
   const at = feedInstant(get("at"), window);
   const action = get("action");
   const targetId = get("target_id");
