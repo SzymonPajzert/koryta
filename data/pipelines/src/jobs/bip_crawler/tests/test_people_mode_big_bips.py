@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import cast
 
 from jobs.bip_crawler.people import (
+    RENDER_TURNS,
     PeopleOptions,
     PeopleSearch,
     apply_unit_starts,
@@ -316,6 +317,60 @@ def test_a_render_pays_a_turn_for_each_request_to_the_host(tmp_path):
     )
     people._drawn("https://u1.pl/om")
     assert limiter.turns == ["u1.pl"] * 4
+
+
+def drawing(tmp_path, asked: int) -> tuple[PeopleSearch, CountingLimiter]:
+    limiter = CountingLimiter()
+    people = PeopleSearch(
+        MemoryBipPeopleStore(),
+        cast("BipQueue", FakeFrontier([])),
+        LocalBundleStore(tmp_path / "b"),
+        {},
+        PeopleOptions(),
+        limiter=cast("HostTokenBucket", limiter),
+        sleep=lambda s: None,
+        render=lambda url: (HttpResult(url, 200, "text/html", b"<html></html>"), asked),
+    )
+    return people, limiter
+
+
+def test_a_render_that_keeps_polling_pays_a_capped_bill(tmp_path):
+    people, limiter = drawing(tmp_path, 1500)
+    people._drawn("https://u1.pl/om")
+    assert len(limiter.turns) == 1 + RENDER_TURNS
+    assert "u1.pl" in people._render_off
+
+
+def test_no_render_turns_are_paid_past_the_deadline(tmp_path):
+    people, limiter = drawing(tmp_path, 30)
+    people.deadline = time.monotonic() - 1
+    people._drawn("https://u1.pl/om")
+    assert limiter.turns == ["u1.pl"]
+
+
+def test_a_host_whose_render_polls_is_not_rendered_again(tmp_path):
+    shell = (
+        b'<html><body><div id="root"></div><script src="/a.js"></script></body></html>'
+    )
+    sites = {
+        "https://u1.pl": (200, "text/html", shell),
+        "https://u1.pl/rada": (200, "text/html", shell),
+    }
+    drawn = (
+        "<html><head><title>BIP</title></head><body>"
+        '<a href="/rada">Rada - oświadczenia majątkowe</a></body></html>'
+    ).encode()
+    rendered: list[str] = []
+
+    def render(url: str):
+        rendered.append(url)
+        return HttpResult(url, 200, "text/html", drawn), 1500
+
+    _, _, web = search(
+        tmp_path, sites, [row("lis", "u1", "Ewa", "Lis")], render=render, sitemaps=False
+    )
+    assert any(c.endswith("/rada") for c in web.calls)  # read, as its HTML
+    assert [u.rstrip("/") for u in rendered] == ["https://u1.pl"]
 
 
 def test_a_retry_of_a_big_unit_gets_a_big_units_pages(tmp_path, monkeypatch):
