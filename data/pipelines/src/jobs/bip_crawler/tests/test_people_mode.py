@@ -417,6 +417,59 @@ def test_first_name_rule_and_stems():
     assert [c.url for c in picks["a"]] == ["https://b.pl/2.pdf"]
 
 
+def test_a_namesakes_file_is_not_the_seekers():
+    # The 10-31 crawl's found ones that named no first name included Michał
+    # Rzepka's file for Józef, Iwona Chęcińska's for Arkadiusz Chęciński, and
+    # L. Barwinek's for Ryszard.
+    first_names = frozenset(
+        stem(n, min_a=4) for n in ("Józef", "Michał", "Iwona", "Marcin", "Ryszard")
+    )
+
+    def named(first: str, last: str, anchor: str, path: str) -> list[str]:
+        link = LinkContext(f"https://bip.x.pl{path}", anchor)
+        seeker = Seeker.of("s", first, last)
+        found = candidates(
+            "https://bip.x.pl/o",
+            "Oświadczenia",
+            [link],
+            [seeker],
+            first_names=first_names,
+        )
+        return [c.key for c in found]
+
+    assert named("Józef", "Rzepka", "Michał Rzepka.pdf", "/f/1.pdf") == []
+    assert named("Arkadiusz", "Chęciński", "Chęcińska Iwona.pdf", "/f/2.pdf") == []
+    assert named("Zofia", "Borowska", "pobierz", "/files/borowski_marcin.pdf") == []
+    assert named("Arkadiusz", "Chęciński", "Chęcińska.pdf", "/f/5.pdf") == []
+    assert named("Anna", "Kowalska", "radnego Kowalskiego", "/f/6.pdf") == []
+    assert (
+        named("Ryszard", "Barwinek", "zobacz", "/d/Oswiadczenie-L.Barwinek.pdf") == []
+    )
+    assert (
+        named("Józef", "Kuropatwa", "Za rok 2024", "/attach/8571_s-kuropatwa.pdf") == []
+    )
+    assert named("Zbigniew", "Szatkowski", "Szatkowski D.pdf", "/api/files/9") == []
+    # Their own initial, a word that is no initial, a bare surname: still theirs.
+    assert named("Wanda", "Kułaj", "Kułaj.W (pdf)", "/api/files/7") == ["s"]
+    assert named("Dariusz", "Semeniuk", "za 2024", "/pliki/semeniuk_d-pk.pdf") == ["s"]
+    assert named("Jan", "Kowalski", "Kowalskiego w 2024", "/f/3.pdf") == ["s"]
+    assert named("Józef", "Rzepka", "Rzepka - radny", "/f/4.pdf") == ["s"]
+    assert named("Anna", "Wąsowicz", "za 2024 r.- p. Wąsowicz", "/api/files/8") == ["s"]
+    assert named("Anna", "Wąsowicz", "za 2024 r.- P. Wąsowicz", "/api/files/8") == []
+
+
+def test_a_first_name_is_not_read_out_of_the_host():
+    # powiat-piotrkowski-api.bip.net.pl handed Dariusz Wojtysiak's files to
+    # Piotr Wojtysiak as if they named his first name.
+    link = LinkContext(
+        "https://powiat-piotrkowski-api.bip.net.pl/api/attachments/8243",
+        "Wojtysiak.pdf",
+    )
+    piotr = Seeker.of("p", "Piotr", "Wojtysiak")
+    (found,) = candidates("https://x.pl/o", "Oświadczenia", [link], [piotr])
+    assert not found.first_name
+
+
 def test_a_page_about_somebody_else_lends_nobody_its_files():
     # Chojnów's BIP gives each councillor a page titled with an initial and the
     # surname, and labels that name nobody: the 10-29 trial took three of them

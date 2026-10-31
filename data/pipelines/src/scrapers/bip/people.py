@@ -72,18 +72,31 @@ def stem(word: str, *, min_a: int = 5) -> str:
 
 @dataclass(frozen=True)
 class Seeker:
-    """One person to find on a unit's BIP: a candidacy's key and name stems."""
+    """One person to find on a unit's BIP: a candidacy's key and name stems.
+
+    ``form`` is "m" or "f" for a surname that tells a man's from a woman's
+    (Kowalski, Kowalska), "" for one that does not (Nowak).
+    """
 
     key: str
     first: str
     last: str
+    form: str = ""
 
     @classmethod
     def of(cls, key: str, first_name: str, last_name: str) -> Seeker:
         # A double surname is matched by its longer part; labels drop one now and then.
         parts = [p for p in re.split(r"[-\s]+", last_name or "") if p]
         longest = max(parts, key=len) if parts else ""
-        return cls(key, stem(first_name, min_a=4), stem(longest))
+        folded = fold(longest)
+        form = (
+            "m"
+            if folded.endswith(("ski", "cki", "dzki"))
+            else "f"
+            if folded.endswith(("ska", "cka", "dzka"))
+            else ""
+        )
+        return cls(key, stem(first_name, min_a=4), stem(longest), form)
 
     @property
     def name(self) -> tuple[str, str]:
@@ -334,13 +347,114 @@ def is_file_link(url: str) -> bool:
     return is_document_url(url) and is_document_url(_ID_QUERY.sub("", url))
 
 
-def _named(text: str, url: str, seekers: list[Seeker]) -> list[tuple[Seeker, bool]]:
+def _plain(text: str) -> str:
+    """``text`` without diacritics, its case and punctuation kept: the dot in
+    "L.Barwinek" tells an initial from the word "w" in "Kowalski w Gminie"."""
+    raw = unicodedata.normalize(
+        "NFKD", (text or "").replace("ł", "l").replace("Ł", "L")
+    )
+    return "".join(c for c in raw if not unicodedata.combining(c))
+
+
+@functools.cache
+def _mention(stem_: str) -> re.Pattern[str]:
+    """A surname's stem and its ending, as a word of `_plain` text."""
+    endings = "|".join(sorted(_ENDINGS, key=len, reverse=True))
+    return re.compile(
+        r"(?<![a-z0-9])" + re.escape(stem_) + r"(" + endings + r")(?![a-z0-9])"
+    )
+
+
+#: Endings of a -ski/-cki/-dzki surname, folded, that say whose it is: Kowalska,
+#: Kowalskiej are a woman's; Kowalski, Kowalskiego, Kowalskiemu, Kowalskim a man's.
+_HERS, _HIS = frozenset({"a", "iej"}), frozenset({"i", "iego", "iemu", "im"})
+_INITIAL_BEFORE = re.compile(r"(?:^|[^a-z0-9])([a-z])\s*([._-])\s*$")
+_INITIAL_AFTER = re.compile(r"\s*[._-]\s*([a-z])(?![a-z0-9])|\s+([a-z])\.")
+_WORD_BEFORE = re.compile(r"([a-z]+)[^a-z0-9]*$")
+_WORD_AFTER = re.compile(r"[^a-z0-9]*([a-z]+)")
+
+
+def _first_name(word: str, first_names: frozenset[str]) -> bool:
+    """Whether a `_plain` word is a first name (a stem in ``first_names``), declined
+    or not: Michał, Michała, Iwony."""
+    if len(word) < 3:
+        return False
+    stems = {stem(word, min_a=4)} | {
+        word[: -len(e)] for e in _ENDINGS if e and word.endswith(e)
+    }
+    return bool(stems & first_names)
+
+
+def _somebody_elses(
+    seeker: Seeker, raws: Iterable[str], first_names: frozenset[str]
+) -> bool:
+    """Whether every mention of the seeker's surname in ``raws`` is a namesake's:
+    an initial that is not theirs ("L.Barwinek", "Kułaj.W", "8571_s-kuropatwa.pdf"
+    for a Ryszard, a Jan, a Józef), another first name beside it ("Michał Rzepka"
+    for Józef Rzepka) or the other one's form ("Chęcińska" for Arkadiusz
+    Chęciński). Asked only of a seeker the text names without their first name."""
+    mentions = 0
+    for raw in raws:
+        cased = _plain(raw)
+        plain = cased.lower()
+        for match in _mention(seeker.last).finditer(plain):
+            mentions += 1
+            before, after = plain[: match.start()], plain[match.end() :]
+            ending = match.group(1)
+            if seeker.form == "m" and ending in _HERS:
+                continue
+            if seeker.form == "f" and ending in _HIS:
+                continue
+            letter = ""
+            if found := _INITIAL_BEFORE.search(before):
+                # "p. Wąsowicz" is pani or pan Wąsowicz, "P. Wąsowicz" a Paweł.
+                if cased[found.start(1)] != "p" or found.group(2) != ".":
+                    letter = found.group(1)
+            elif found := _INITIAL_AFTER.match(after):
+                letter = found.group(1) or found.group(2)
+            if letter and seeker.first and letter != seeker.first[0]:
+                continue
+            beside = [
+                m.group(1)
+                for m in (_WORD_BEFORE.search(before), _WORD_AFTER.match(after))
+                if m
+            ]
+            if any(
+                _first_name(word, first_names) and not _word(seeker.first).search(word)
+                for word in beside
+            ):
+                continue
+            return False
+    return mentions > 0
+
+
+def _named(
+    text: str,
+    url: str,
+    seekers: list[Seeker],
+    raws: Iterable[str] = (),
+    first_names: frozenset[str] = frozenset(),
+) -> tuple[list[tuple[Seeker, bool]], bool]:
+    """The seekers ``text`` names (with whether by first name too), and whether
+    it named one only as somebody else of their surname (`_somebody_elses`)."""
+    raws = list(raws)
     found = [(s, *s.named_in(text, url)) for s in seekers]
-    return [(s, first) for s, last, first in found if last]
+    named = [(s, first) for s, last, first in found if last]
+    kept = [
+        (s, first)
+        for s, first in named
+        if first or not _somebody_elses(s, raws, first_names)
+    ]
+    return kept, len(kept) < len(named)
 
 
 def candidates(
-    page_url: str, page_title: str, links: list[LinkContext], seekers: list[Seeker]
+    page_url: str,
+    page_title: str,
+    links: list[LinkContext],
+    seekers: list[Seeker],
+    *,
+    first_names: frozenset[str] = frozenset(),
 ) -> list[Candidate]:
     """Document links on one page that name one of the seekers, or that name nobody.
 
@@ -348,12 +462,15 @@ def candidates(
     list item; failing that, the heading over it; failing that, the page's title
     (a page about one person, "Jan Kowalski - oświadczenia majątkowe", lends that
     person its documents). A tier that names somebody who is not a seeker ends
-    the search: the link is theirs, not anybody's from a wider tier. Documents
-    on a declarations page that name nobody at all (one file for the whole
-    council, or labels like "za 2023") come back with an empty ``key``.
+    the search: the link is theirs, not anybody's from a wider tier. So does one
+    that names a seeker's surname only as somebody else's (``first_names``, the
+    first names' stems, tell "Michał Rzepka" from Józef; `_somebody_elses`).
+    Documents on a declarations page that name nobody at all (one file for the
+    whole council, or labels like "za 2023") come back with an empty ``key``.
     """
     title = fold(page_title)
-    title_names = {s.name for s in seekers if s.named_in(title)[0]}
+    in_title, namesake_titled = _named(title, "", seekers, [page_title], first_names)
+    title_names = {s.name for s, _ in in_title}
     page_people = (
         [s for s in seekers if s.name in title_names] if len(title_names) == 1 else []
     )
@@ -361,15 +478,21 @@ def candidates(
     # A page about one person nobody seeks ("... - B. Kułacz - Stan majątkowy na
     # 31.12.2025 r."): its files are theirs, whatever the labels say. Unless a
     # seeker could be that person in a form named_in misses ("J. Kaczmarka").
-    title_somebody = not title_names and any(
-        not _could_be(seekers, initial, word)
-        for initial, word in initialled_names(page_title)
+    title_somebody = not title_names and (
+        namesake_titled
+        or any(
+            not _could_be(seekers, initial, word)
+            for initial, word in initialled_names(page_title)
+        )
     )
     out: list[Candidate] = []
     for link in links:
         if not is_document_url(link.url):
             continue
-        address = url_words(link.url)
+        # The path's words, not the host's: "piotr" in powiat-piotrkowski-api's
+        # name is nobody's first name.
+        path = decode_url(path_of(link.url))
+        address = fold(path)
         label = fold(link.anchor) + " " + address
         if BLANK_FORM.search(label):
             continue
@@ -377,15 +500,15 @@ def candidates(
         around += " " + address
         named: list[tuple[Seeker, bool]] = []
         somebody_else = False
-        for text, raw, url in (
-            (label, link.anchor, address),
-            (fold(link.row), link.row, ""),
-            (fold(link.heading), link.heading, ""),
+        for text, raws, url in (
+            (label, (link.anchor, path), address),
+            (fold(link.row), (link.row,), ""),
+            (fold(link.heading), (link.heading,), ""),
         ):
-            named = _named(text, url, seekers)
+            named, namesake = _named(text, url, seekers, raws, first_names)
             if named:
                 break
-            if names_somebody(raw, initials=not page_people):
+            if namesake or names_somebody(raws[0], initials=not page_people):
                 somebody_else = True
                 break
         if not named and not somebody_else and page_people:
