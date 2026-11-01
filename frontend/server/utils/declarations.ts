@@ -578,6 +578,10 @@ export type ClaimedAnswers = {
   claimed: number;
   /** The crops they settled, and what they settled. */
   settled: { extractId: string; settlement: Settlement }[];
+  /** Answers still under the browser's id because their crop's transaction
+   * failed, in parallel and then alone: the next claim moves them, so the
+   * page has to keep the id. */
+  left: number;
 };
 
 /**
@@ -624,8 +628,20 @@ export type ClaimedAnswers = {
  * has since been cut again is dropped, as a reading of nothing the crop shows
  * now. At most `CLAIM_LIMIT` answers a claim.
  *
+ * One crop's failure stops nothing else. The crops go `CLAIM_CONCURRENCY` at
+ * a time, and their transactions can abort one another (on 2026-10-31 one of
+ * twenty lost to contention five times over, and the claim stopped with eight
+ * readings unmoved); what failed is tried again one at a time once the rest
+ * are done, with nothing of the claim's own beside it. A crop that fails
+ * alone too ends the retries: whatever stops it is not the claim's own
+ * crowding, and each failure costs the client library's five attempts,
+ * seconds the page is waiting for. What is left stays under the browser's id
+ * (`left`), its votes are given back, and the next claim moves it.
+ *
  * Idempotent: a claimed answer is gone from the browser's id, so a second
- * claim finds nothing to move, and writes nothing.
+ * claim finds nothing to move, and writes nothing. The finds move on every
+ * claim, with or without answers to go with them, so a claim that stopped
+ * after its answers had moved leaves nothing behind for good.
  */
 export async function claimAnswers(
   db: Firestore,
@@ -641,7 +657,7 @@ export async function claimAnswers(
       .where("counted", "==", true)
       .limit(1)
       .get();
-    if (readings.empty) return { claimed: 0, settled: [] };
+    if (readings.empty) return { claimed: 0, settled: [], left: 0 };
     throw createError({
       statusCode: 403,
       message:
@@ -664,7 +680,11 @@ export async function claimAnswers(
       },
     ];
   });
-  if (listed.length === 0) return { claimed: 0, settled: [] };
+  const result: ClaimedAnswers = { claimed: 0, settled: [], left: 0 };
+  if (listed.length === 0) {
+    await moveFinds(db, from, to);
+    return result;
+  }
 
   // A skip is no answer the limit counts, and has no say either way.
   const wanted = new Map<string, number>();
@@ -681,30 +701,48 @@ export async function claimAnswers(
     return { ...answer, votes: left > 0 };
   });
 
-  const result: ClaimedAnswers = { claimed: 0, settled: [] };
   const unused = new Map<string, number>();
+  const giveBack = (answer: (typeof plan)[number]) => {
+    if (answer.counted && answer.votes) {
+      unused.set(answer.day, (unused.get(answer.day) ?? 0) + 1);
+    }
+  };
+  const move = async (answer: (typeof plan)[number]) => {
+    const { moved, settled } = await claimAnswer(db, {
+      extractId: answer.extractId,
+      from,
+      to,
+      votes: answer.votes,
+      now,
+    });
+    if (moved) result.claimed += 1;
+    else giveBack(answer);
+    if (settled) {
+      result.settled.push({ extractId: answer.extractId, settlement: settled });
+    }
+  };
+
+  const failed: typeof plan = [];
   for (let i = 0; i < plan.length; i += CLAIM_CONCURRENCY) {
-    await Promise.all(
-      plan.slice(i, i + CLAIM_CONCURRENCY).map(async (answer) => {
-        const { moved, settled } = await claimAnswer(db, {
-          extractId: answer.extractId,
-          from,
-          to,
-          votes: answer.votes,
-          now,
-        });
-        if (moved) result.claimed += 1;
-        else if (answer.counted && answer.votes) {
-          unused.set(answer.day, (unused.get(answer.day) ?? 0) + 1);
-        }
-        if (settled) {
-          result.settled.push({
-            extractId: answer.extractId,
-            settlement: settled,
-          });
-        }
-      }),
-    );
+    const batch = plan.slice(i, i + CLAIM_CONCURRENCY);
+    const outcomes = await Promise.allSettled(batch.map(move));
+    outcomes.forEach((outcome, j) => {
+      if (outcome.status === "rejected") failed.push(batch[j]!);
+    });
+  }
+  for (const [i, answer] of failed.entries()) {
+    try {
+      await move(answer);
+    } catch (error) {
+      console.error(
+        `[declarations] claiming ${answer.extractId} failed twice, ${failed.length - i} answers left for the next claim`,
+        error,
+      );
+      const left = failed.slice(i);
+      left.forEach(giveBack);
+      result.left = left.length;
+      break;
+    }
   }
   await giveBackVotes(db, to, unused);
   await moveFinds(db, from, to);

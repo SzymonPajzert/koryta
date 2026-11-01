@@ -31,6 +31,12 @@ const CROPS_COMPARED_PER_CLAIM = 10;
  * where the browser has readings to move, though: for one that only looked,
  * this answers 0 and the page forgets the id.
  *
+ * A claim that moved some answers and not others (`left`, a crop whose
+ * transaction kept failing) is a 503, after the crops it did settle have been
+ * compared: the page keeps the id on any failure, and the next signed-in
+ * visit moves the rest. Answered 200, the page would forget the id, and the
+ * answers left under it with it.
+ *
  * The reader id is the only proof the answers are this reader's, so it never
  * goes to Sentry: not in this body (`PRIVATE_BODIES` in
  * sentry.server.config.ts covers every /api/declarations/ path), nor in the
@@ -50,7 +56,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = getFirestore(getApp(), "koryta-pl");
-  const { claimed, settled } = await claimAnswers(db, { readerId, user });
+  const { claimed, settled, left } = await claimAnswers(db, {
+    readerId,
+    user,
+  });
   const settledOnDay = settled
     .filter(
       ({ settlement }) =>
@@ -63,6 +72,13 @@ export default defineEventHandler(async (event) => {
     settledOnDay.slice(0, CROPS_COMPARED_PER_CLAIM),
     PAGES_PER_CLAIM,
   );
+  if (left > 0) {
+    throw createError({
+      statusCode: 503,
+      message:
+        "Nie wszystkie odczyty z tej przeglądarki przeszły na Twoje konto. Reszta przejdzie przy następnej wizycie.",
+    });
+  }
 
   setResponseHeader(event, "Cache-Control", "private, no-store");
   return { claimed, settled: settled.length } satisfies DeclarationClaimResult;
