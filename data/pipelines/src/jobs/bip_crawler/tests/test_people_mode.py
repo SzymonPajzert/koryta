@@ -624,6 +624,69 @@ def test_statements_that_are_no_asset_declaration_name_nobody():
     ] == ["k"]
 
 
+def test_a_page_or_row_of_blank_forms_lends_nobody_its_files():
+    # 11-01: ~250 candidacies unconfirmed on nothing but blank forms, the form
+    # named only by the row, the heading, the page's title or its address.
+    wilk = Seeker.of("w", "Marek", "Wilk")
+    decl = "Oświadczenia majątkowe"
+    for page, title, link in (
+        (
+            "https://bip.umww.pl/7---k_62---formularze-oswiadczen-majatkowych",
+            "Formularze oświadczeń majątkowych",
+            LinkContext(
+                "https://bip.umww.pl/attachments/download/71",
+                "pobierz (PDF, 308.8 KB)",
+                row="Formularz - oświadczenie majątkowe radnego województwa (pdf)",
+            ),
+        ),
+        (
+            "https://bip.grudziadz.pl/artykul/wzor-oswiadczenia-majatkowego-dla-radnego",
+            "Biuletyn Informacji Publicznej - oświadczenia majątkowe",
+            LinkContext("https://bip.grudziadz.pl/plik/1.pdf", "oswiadczenie nowe v1"),
+        ),
+        (
+            "https://bip.mazovia.pl/pl/bip/oswiadczenia-majatkowe/lista.html",
+            decl,
+            LinkContext(
+                "https://bip.mazovia.pl/resource/file/preview/id.137226",
+                "Podgląd dokumentu",
+                row="Formularz oświadczenia majątkowego członka zarządu województwa",
+            ),
+        ),
+        (
+            "https://bip.gmstrzelin.finn.pl/bipkod/003",
+            decl,
+            LinkContext(
+                "https://res.finn.pl/eurzad/1/radnego.doc",
+                "Oświadczenie majątkowe radnego.doc",
+                row="Wzór oświadczenia majątkowego radnego gminy",
+            ),
+        ),
+        (
+            "https://bip.kroscienkowyzne.pl/?c=mdTresc-cmPokazTresc-993-5883",
+            decl,
+            LinkContext(
+                "https://bip.kroscienkowyzne.pl/pliki/radnego.pdf",
+                "Oświadczenie majątkowe radnego - pdf",
+                heading="Wzory oświadczeń majątkowych",
+            ),
+        ),
+    ):
+        assert candidates(page, title, [link], [wilk]) == [], page
+    # The same file on a declarations page is the council's, whoever's; a page's
+    # "wersja do druku" makes no form of it; a file that names a seeker is
+    # theirs, forms page or not.
+    page = "https://bip.x.pl/oswiadczenia-majatkowe-2024"
+    unnamed = LinkContext("https://bip.x.pl/f/1.pdf", "Oświadczenie majątkowe za 2024")
+    printable = replace(unnamed, heading="Wersja do druku")
+    for link in (unnamed, printable):
+        (found,) = candidates(page, decl, [link], [wilk])
+        assert found.key == ""
+    own = LinkContext("https://bip.x.pl/f/2.pdf", "Oświadczenie majątkowe Marek Wilk")
+    forms = "https://bip.x.pl/wzory-i-zlozone-oswiadczenia-majatkowe"
+    assert [c.key for c in candidates(forms, decl, [own], [wilk])] == ["w"]
+
+
 def test_a_declined_first_name_is_the_seekers_own():
     for first, label in (("Marek", "Marka"), ("Paweł", "Pawła"), ("Ewa", "Ewy")):
         assert Seeker.of("s", first, "Nowak").named_in(fold(f"{label} Nowak"))[1]
