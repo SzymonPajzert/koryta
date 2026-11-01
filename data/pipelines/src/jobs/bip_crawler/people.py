@@ -32,13 +32,15 @@ not_found with a reason, in ``bip_poi`` (``stores.bip_people``):
 
 Politeness is the blind crawl's: robots.txt, one request per host per
 ``--rate`` seconds, the same User-Agent and fetch. Madkom's BIPs are read
-through the API their pages are drawn from (``madkom``), other pages a script
-draws are rendered (``render``).
+through the API their pages are drawn from (``madkom``), FINN's registers
+through the JSON-RPC calls of the e-Urząd app their pages embed (``finn``),
+other pages a script draws are rendered (``render``).
 """
 
 from __future__ import annotations
 
 import csv
+import functools
 import gzip
 import hashlib
 import heapq
@@ -54,12 +56,13 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 from urllib.parse import urljoin, urlsplit
 
 from analysis.bip_people_of_interest import BipPeopleOfInterest
 from conductor import setup_context
 from entities.bip import BipPersonOfInterest
+from jobs.bip_crawler import finn
 from jobs.bip_crawler import render as rendering
 from jobs.bip_crawler.madkom import Madkom
 from scrapers.bip.classify import (
@@ -88,7 +91,7 @@ from scrapers.bip.people import (
 )
 from scrapers.bip.registry import parse_subjects_xml
 from scrapers.bip.units import UnitSeed, scope_of, terc_index, unit_seeds
-from scrapers.common.fetch import HttpResult, http_get
+from scrapers.common.fetch import HttpResult, http_get, http_post_json
 from scrapers.common.links import LinkContext, extract_link_contexts
 from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.krs.data import read_public_bodies_catalogue
@@ -190,6 +193,8 @@ class UnitSearch:
     #: Files the walk reached as links it could not tell from pages, kept so the
     #: download does not fetch them a second time.
     files: dict[str, HttpResult] = field(default_factory=dict)
+    #: FINN e-Urząd clients whose registers the walk has read (`finn`).
+    eurzad: set[str] = field(default_factory=set)
 
 
 #: Hosts no unit's BIP lives on, though a unit's website may link to them.
@@ -400,6 +405,7 @@ class PeopleSearch:
         options: PeopleOptions,
         *,
         fetch: Callable[[str, float, str], HttpResult] | None = None,
+        post: Callable[[str, dict[str, Any], float, str], HttpResult] | None = None,
         robots_allowed: Callable[[str], bool] = lambda url: True,
         robots_unreachable: Callable[[str], bool] = lambda url: False,
         limiter: HostTokenBucket | None = None,
@@ -432,6 +438,7 @@ class PeopleSearch:
         self._sitemaps: dict[str, list[str]] = {}
         self._sitemap_locks: dict[str, threading.Lock] = {}
         self.fetch = fetch or _one_hop
+        self.post = post or http_post_json
         self.robots_allowed = robots_allowed
         self.robots_unreachable = robots_unreachable
         # No burst: the shared default lets a host take 60 requests at once, and
@@ -454,6 +461,11 @@ class PeopleSearch:
         self._write_lock = threading.Lock()
         #: Madkom's BIPs, read through the API their pages are drawn from.
         self.madkom = Madkom(self._get, robots_allowed)
+        #: FINN's registers, read through the e-Urząd app their pages embed.
+        self.eurzad = finn.Eurzad(self._post)
+        #: Whether e-Urząd's files are out of the crawler's reach (robots.txt),
+        #: said once a run.
+        self._eurzad_files_said = False
         #: Hosts whose render asked for more than `RENDER_TURNS` requests: their
         #: pages are read as their HTML for the rest of the run.
         self._render_off: set[str] = set()
@@ -475,23 +487,54 @@ class PeopleSearch:
         for _ in range(MAX_HOPS + 1):
             if not self.robots_allowed(url):
                 return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
-            host = host_of(url)
-            for _ in range(max(1, tries)):
-                self._wait_turn(host)
-                result = self.fetch(
-                    url, self.options.request_timeout_s, self.options.user_agent
-                )
-                if result.status not in _NOT_NOW:
-                    break
-                self.limiter.pause(host, NOT_NOW_PAUSE_S)
-                if self._past_deadline():
-                    break
+            result = self._ask(
+                url,
+                functools.partial(
+                    self.fetch,
+                    url,
+                    self.options.request_timeout_s,
+                    self.options.user_agent,
+                ),
+                tries,
+            )
             # A redirect is asked about too: AkcessNet's /admin goes to the
             # /admin/ its robots.txt disallows.
             if not (result.location and 300 <= result.status < 400):
                 break
             url = urljoin(result.url, result.location)
         return REFUSED if _refused(result) else result
+
+    def _post(self, url: str, payload: dict[str, Any]) -> HttpResult | str:
+        """An API call (`finn`), asked as `_get` asks for a page: robots.txt,
+        which says the same of any method, the host's rate and its "not now"s;
+        no redirect followed."""
+        if not self.robots_allowed(url):
+            return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
+        call = functools.partial(
+            self.post,
+            url,
+            payload,
+            self.options.request_timeout_s,
+            self.options.user_agent,
+        )
+        result = self._ask(url, call, NOT_NOW_TRIES)
+        return REFUSED if _refused(result) else result
+
+    def _ask(
+        self, url: str, request: Callable[[], HttpResult], tries: int
+    ) -> HttpResult:
+        """``request`` in the host's turn; a "not now" (`_NOT_NOW`) pauses the
+        host and asks again, ``tries`` times in all, not past the deadline."""
+        host = host_of(url)
+        for _ in range(max(1, tries)):
+            self._wait_turn(host)
+            result = request()
+            if result.status not in _NOT_NOW:
+                break
+            self.limiter.pause(host, NOT_NOW_PAUSE_S)
+            if self._past_deadline():
+                break
+        return result
 
     def _wait_turn(self, host: str) -> None:
         while not self.limiter.acquire(host):
@@ -829,8 +872,49 @@ class PeopleSearch:
         out.found.extend(
             candidates(result.url, title, links, seekers, first_names=self.first_names)
         )
+        self._read_eurzad(out, result, seekers, prefer)
         if depth < self.options.max_depth:
             frontier.follow(follow, seekers, depth + 1, prefer)
+
+    def _read_eurzad(
+        self,
+        out: UnitSearch,
+        page: HttpResult,
+        seekers: list[Seeker],
+        prefer: re.Pattern[str] | None,
+    ) -> None:
+        """The declaration registers of the e-Urząd clients ``page`` embeds or
+        links, each read once a walk as a page of its own (`finn`). Not while
+        robots.txt keeps the crawler from e-Urząd's files: nothing read there
+        would come down."""
+        for client in finn.clients(page.content, page.url):
+            if client in out.eurzad:
+                continue
+            out.eurzad.add(client)
+            if not self.robots_allowed(finn.FILES):
+                with self._write_lock:
+                    said, self._eurzad_files_said = self._eurzad_files_said, True
+                if not said:
+                    logger.warning(
+                        "%s: robots.txt keeps the crawler from e-Urząd's files; "
+                        "its registers are not read",
+                        finn.FILES,
+                    )
+                continue
+            registers = self.eurzad.registers(
+                client, seekers, prefer, self.first_names, self.options.per_person
+            )
+            for register in registers:
+                out.declaration_pages += 1
+                out.found.extend(
+                    candidates(
+                        register.url,
+                        register.name,
+                        list(register.links),
+                        seekers,
+                        first_names=self.first_names,
+                    )
+                )
 
     def _drawn(self, url: str) -> HttpResult:
         """``url`` rendered, paid for as the requests it made: a turn of the

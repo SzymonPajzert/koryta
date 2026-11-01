@@ -1,4 +1,5 @@
 import gzip
+import json
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -216,6 +217,44 @@ def test_a_page_under_an_encoding_curl_does_not_know_is_read_raw() -> None:
         assert plain.ok and plain.content == body
         packed = fetch.http_get(base + "/gz")  # gzip under a name curl did not know
         assert packed.ok and packed.content == body
+    finally:
+        server.shutdown()
+
+
+def test_a_post_sends_its_json_as_an_apps_script_would() -> None:
+    """FINN e-Urząd's JSON-RPC: a JSON body, the crawler's own User-Agent, and
+    a redirect handed back rather than followed."""
+    seen: list[tuple[str, dict[str, str], bytes]] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            body = self.rfile.read(int(self.headers["Content-Length"]))
+            seen.append((self.path, dict(self.headers), body))
+            moved = self.path == "/moved"
+            self.send_response(303 if moved else 200)
+            if moved:
+                self.send_header("Location", "/elsewhere")
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
+        payload = {"id": 1, "method": "/rpc/x0", "params": ['"OMR"']}
+        answer = fetch.http_post_json(base + "/rpc/x0", payload, user_agent="Koryta")
+        assert answer.ok and answer.content == b"{}"
+        path, headers, body = seen[0]
+        assert path == "/rpc/x0" and json.loads(body) == payload
+        assert headers["Content-Type"] == "application/json"
+        assert headers["User-Agent"] == "Koryta"
+        moved = fetch.http_post_json(base + "/moved", payload)
+        assert moved.status == 303 and len(seen) == 2
     finally:
         server.shutdown()
 

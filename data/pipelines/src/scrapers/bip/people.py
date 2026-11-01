@@ -568,6 +568,14 @@ def _named(
     return kept, len(kept) < len(named)
 
 
+def named_by(
+    raw: str, seekers: list[Seeker], first_names: frozenset[str] = frozenset()
+) -> tuple[list[tuple[Seeker, bool]], bool]:
+    """`_named` for a raw text that stands alone, a register record's subject
+    ("Oświadczenie majątkowe za 2025 rok radnej Anny Piotrowskiej")."""
+    return _named(fold(raw), "", seekers, [raw], first_names)
+
+
 def candidates(
     page_url: str,
     page_title: str,

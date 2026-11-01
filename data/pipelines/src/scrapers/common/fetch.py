@@ -1,4 +1,4 @@
-"""The one place both crawlers issue HTTP GETs."""
+"""The one place both crawlers issue HTTP requests."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import re
 import threading
 import zlib
 from dataclasses import dataclass
+from typing import Any
 
 from curl_cffi import CurlHttpVersion, CurlOpt, requests
 
@@ -141,4 +142,34 @@ def http_get(
         content_type=response.headers.get("Content-Type", ""),
         content=content,
         location=location,
+    )
+
+
+def http_post_json(
+    url: str,
+    payload: dict[str, Any],
+    timeout: float = 15.0,
+    user_agent: str = DEFAULT_UA,
+    impersonate: str = "chrome136",
+) -> HttpResult:
+    """A POST of ``payload`` as JSON, the way an app's own script calls its API
+    (FINN e-Urząd's JSON-RPC); a redirect is not followed."""
+    try:
+        response = _session(impersonate).post(
+            url,
+            json=payload,
+            headers={"User-Agent": user_agent, "X-Requested-With": "XMLHttpRequest"},
+            timeout=timeout,
+            allow_redirects=False,
+            verify=verify(),  # type: ignore[arg-type]
+        )
+    except Exception as exc:
+        return HttpResult(
+            url=url, status=0, content_type="", content=b"", error=str(exc)[:200]
+        )
+    return HttpResult(
+        url=str(response.url),
+        status=response.status_code,
+        content_type=response.headers.get("Content-Type", ""),
+        content=response.content,
     )
