@@ -2,7 +2,10 @@
 
 The job (`jobs.bip_declarations`) reads the people mode's ``bip_poi``,
 ``bip_poi_docs``, ``bip_units`` and ``bip_docs``, and keeps three tables of its
-own in the same database, created on first use like theirs:
+own in the same database, created on first use like theirs. Who the
+candidacies are, whether they have a page and their priority come from the
+night's list, which the job reads each run and hands the store
+(`jobs.bip_crawler.people_list`); ``bip_poi`` gives only what the search found.
 
 - ``bip_decl_cuts``: one row per file - what the cutter made of it and with
   which version of the cutter, so a new version cuts everything again;
@@ -19,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import (
@@ -29,7 +33,9 @@ from scrapers.stores import (
     DeclarationLink,
     PersonRow,
     SentRow,
+    with_outcomes,
 )
+from stores.bip_people import read_searched
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS bip_decl_cuts (
@@ -116,8 +122,11 @@ def _crop(
 
 
 class PostgresBipDeclarationStore(BipDeclarationStore):
-    def __init__(self, pg: PostgresClient) -> None:
+    def __init__(self, pg: PostgresClient, people: Iterable[PersonRow] = ()) -> None:
+        """`people`: the night's list (`people_list.read_list`), for the cut's
+        order and the upload's candidacies; `status` needs none."""
         self.pg = pg
+        self.people = {p.key: p for p in people}
         self.ensure_schema()
 
     def ensure_schema(self) -> None:
@@ -128,24 +137,44 @@ class PostgresBipDeclarationStore(BipDeclarationStore):
     def files_to_cut(self, version: int, limit: int | None) -> list[DeclarationFile]:
         rows = self.pg.fetchall(
             """
-            SELECT d.sha256, d.host, d.url, d.bundle, d.filename,
-                   NOT bool_or(p.named)
-                   OR count(DISTINCT lower(b.first_name || ' ' || b.last_name))
-                        FILTER (WHERE p.named) > 1
+            SELECT d.sha256, d.host, d.url, d.bundle, d.filename, p.key, p.named
               FROM bip_poi_docs p
               JOIN bip_docs d ON d.sha256 = p.sha256
-              JOIN bip_poi b ON b.key = p.key
               LEFT JOIN bip_decl_cuts c ON c.sha256 = p.sha256
              WHERE p.status = 'ok' AND p.sha256 <> ''
                AND (c.sha256 IS NULL OR c.version < %s)
-             GROUP BY d.sha256, d.host, d.url, d.bundle, d.filename
-             ORDER BY bool_or(jsonb_array_length(b.person -> 'koryta_ids') > 0) DESC,
-                      min(b.priority), d.sha256
-             LIMIT %s
             """,
-            (version, limit),
+            (version,),
         )
-        return [DeclarationFile(*row) for row in rows]
+        files: dict[str, tuple[str, str, str, str, str]] = {}
+        linked: dict[str, list[tuple[PersonRow, bool]]] = {}
+        for sha, host, url, bundle, filename, key, named in rows:
+            person = self.people.get(key)
+            if person is None:
+                continue  # nobody the list looks for any more
+            files[sha] = (sha, host, url, bundle, filename)
+            linked.setdefault(sha, []).append((person, bool(named)))
+
+        def council(sha: str) -> bool:
+            names = {
+                f"{p.first_name} {p.last_name}".lower()
+                for p, named in linked[sha]
+                if named
+            }
+            return not names or len(names) > 1
+
+        def order(sha: str) -> tuple[bool, int, str]:
+            people = [p for p, _ in linked[sha]]
+            return (
+                not any(p.person.get("koryta_ids") for p in people),
+                min(p.priority for p in people),
+                sha,
+            )
+
+        due = sorted(files, key=order)
+        if limit is not None:
+            due = due[:limit]
+        return [DeclarationFile(*files[sha], council(sha)) for sha in due]
 
     def record_cut(
         self, cut: DeclarationCutRow, crops: list[DeclarationCropRow]
@@ -198,43 +227,8 @@ class PostgresBipDeclarationStore(BipDeclarationStore):
                 )
 
     def candidacies(self) -> list[PersonRow]:
-        rows = self.pg.fetchall(
-            """
-            SELECT key, unit, priority, election_year, first_name, last_name,
-                   person, status, reason, docs
-              FROM bip_poi ORDER BY key
-            """
-        )
-        people = []
-        for (
-            key,
-            unit,
-            priority,
-            year,
-            first,
-            last,
-            person,
-            status,
-            reason,
-            docs,
-        ) in rows:
-            if isinstance(person, str):
-                person = json.loads(person)
-            people.append(
-                PersonRow(
-                    key,
-                    unit,
-                    priority,
-                    year,
-                    first,
-                    last,
-                    person or {},
-                    status,
-                    reason,
-                    docs,
-                )
-            )
-        return people
+        listed = [self.people[key] for key in sorted(self.people)]
+        return with_outcomes(listed, read_searched(self.pg))
 
     def links(self) -> list[DeclarationLink]:
         rows = self.pg.fetchall(

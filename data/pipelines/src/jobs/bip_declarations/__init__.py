@@ -24,6 +24,11 @@ a PDF's text layer inside the candidacy's PKW window settles without them.
 `upload --priority 1 --sample 100` is a test run: a hundred crops not sent yet
 of drafts whose page has a birth date, and only the candidacies they serve.
 
+Who the candidacies are - their page, whether it shows a birth date, the
+priority - is the night's newest list (`jobs.bip_crawler.people_list`), read
+by `cut` and `upload` each run, so a draft the night dated is priority 1 the
+morning after.
+
 Exit codes: 0 when the work is done; 75 when a run stopped with work left (its
 time ran out, the site did not answer) - the next run carries on; 1 when the
 site refused a request; 130 when interrupted.
@@ -43,7 +48,9 @@ from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 
+from conductor import setup_context
 from jobs.bip_crawler import DEFAULT_OUT
+from jobs.bip_crawler.people_list import list_policy, read_list
 from jobs.bip_declarations.cutter import FileCut, Ocr, cut_file
 from jobs.bip_declarations.upload import (
     DEFAULT_ENDPOINT,
@@ -199,8 +206,16 @@ def run_cut(
     return EXIT_TRY_LATER if stopped else 0
 
 
+def store_with_list() -> PostgresBipDeclarationStore:
+    """The job's store, handed the night's newest list of people of interest."""
+    ctx, _ = setup_context(policy=list_policy())
+    return PostgresBipDeclarationStore(
+        PostgresClient.from_env(max_size=2), people=read_list(ctx)
+    )
+
+
 def cmd_cut(args: argparse.Namespace) -> int:
-    store = PostgresBipDeclarationStore(PostgresClient.from_env(max_size=2))
+    store = store_with_list()
     return run_cut(
         store,
         Path(args.out).expanduser(),
@@ -212,7 +227,7 @@ def cmd_cut(args: argparse.Namespace) -> int:
 
 
 def cmd_upload(args: argparse.Namespace) -> int:
-    store = PostgresBipDeclarationStore(PostgresClient.from_env(max_size=2))
+    store = store_with_list()
     priorities = set(args.priority) if args.priority else None
     if args.dry_run:
         candidacies, extracts = plan(store, priorities=priorities, sample=args.sample)
@@ -299,7 +314,7 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
         type=int,
         action="append",
         choices=(0, 1, 3),
-        help="only the candidacies the people mode ranked so: 0 a draft without a "
+        help="only the candidacies the night's list ranks so: 0 a draft without a "
         "birth date, 1 a draft with one, 3 a published page (repeat for more)",
     )
     send.add_argument(
