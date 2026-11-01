@@ -54,9 +54,14 @@ def fold(text: object) -> str:
     return re.sub(r"[^a-z0-9]+", " ", raw.encode("ascii", "ignore").decode()).strip()
 
 
+#: Between a letter and a digit glued to it: Wrota Lubelszczyzny prefixes a
+#: file name it already holds with one ("0murat_piotr.pdf", "3durlak.pdf").
+_DIGITS = re.compile(r"(?<=[a-z])(?=[0-9])|(?<=[0-9])(?=[a-z])")
+
+
 def url_words(url: str) -> str:
-    """A URL's words, decoded and folded."""
-    return fold(decode_url(url))
+    """A URL's words, decoded and folded, digits parted from letters."""
+    return _DIGITS.sub(" ", fold(decode_url(url)))
 
 
 def stem(word: str, *, min_a: int = 5) -> str:
@@ -336,8 +341,16 @@ def office_terms(
 
 
 def same_file(url: str) -> str:
-    """A file however its address is spelt: http or https, with www. or without."""
-    clean = normalize_url(url)
+    """A file however its address is spelt: http or https, with www. or without,
+    asked for as a download or not (Wrota Lubelszczyzny links each file twice,
+    plain and with ?download=1: two of a councillor's three picks were one)."""
+    base, _, query = normalize_url(url).partition("?")
+    kept = "&".join(
+        pair
+        for pair in query.split("&")
+        if pair and not pair.lower().startswith("download=")
+    )
+    clean = f"{base}?{kept}" if kept else base
     return host_of(clean) + path_of(clean)
 
 
@@ -466,9 +479,6 @@ def _first_name(word: str, first_names: frozenset[str]) -> bool:
         word[: -len(e)] for e in _FIRST_ENDINGS if word.endswith(e)
     }
     return bool(stems & first_names)
-
-
-_DIGITS = re.compile(r"(?<=[a-z])(?=[0-9])|(?<=[0-9])(?=[a-z])")
 
 
 def _in_address(first: str, last: str, url: str, first_names: frozenset[str]) -> bool:
@@ -643,7 +653,7 @@ def candidates(
         # The path's words, not the host's: "piotr" in powiat-piotrkowski-api's
         # name is nobody's first name.
         path = decode_url(path_of(link.url))
-        address = fold(path)
+        address = _DIGITS.sub(" ", fold(path))
         label = fold(link.anchor) + " " + address
         if BLANK_FORM.search(label):
             continue

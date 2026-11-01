@@ -22,6 +22,7 @@ from scrapers.bip.people import (
     fold,
     initialled_names,
     names_somebody,
+    same_file,
     stem,
     url_words,
 )
@@ -382,6 +383,52 @@ def test_link_contexts_carry_rows_and_headings():
     a, b = links
     assert a.heading == "Jan Kowalski" and "Oświadczenie za 2023" in a.row
     assert "Anna Nowak" in b.row
+
+
+def test_a_links_heading_is_the_nearest_before_it_or_around_it():
+    html = (
+        "<h2>Rada gminy</h2><p><b><a href='/a.pdf'>Jan Kowalski</a></b></p>"
+        "<p><a href='/b.pdf'><strong>Anna Nowak</strong> pobierz</a></p>"
+    )
+    _, (a, b) = extract_link_contexts(html, "https://bip.x.pl/o")
+    assert a.heading == "Jan Kowalski"  # the <b> around it
+    assert b.heading == "Jan Kowalski"  # not the <strong> inside it
+
+
+def test_a_menu_far_below_its_heading_is_read_in_time():
+    # Wrota Lubelszczyzny carries its whole menu on every page, 1,300 links in
+    # 1.3 MB: asked link by link, each read the page back to its heading.
+    menu = "".join(
+        f"<li><span><a href='/index.php?id={i}'>Pozycja {i}</a></span></li>"
+        for i in range(3000)
+    )
+    started = time.monotonic()
+    _, links = extract_link_contexts(f"<h2>Menu</h2><ul>{menu}</ul>", "https://x.pl")
+    assert time.monotonic() - started < 5
+    assert links[-1].heading == "Menu"
+
+
+def test_a_digit_glued_to_a_name_in_an_address_parts_from_it():
+    # Wrota Lubelszczyzny prefixes a file name it already holds with a digit:
+    # "Murat" is too short to be found run into other letters.
+    link = LinkContext(
+        "https://bip.x.pl/upload/pliki/0murat_piotr.pdf",
+        "Pobierz",
+        "Oświadczenie majątkowe za 2025 rok",
+    )
+    murat = Seeker.of("m", "Piotr", "Murat")
+    (found,) = candidates("https://bip.x.pl/o", "Oświadczenia", [link], [murat])
+    assert found.key == "m" and found.first_name
+    assert url_words("https://bip.x.pl/upload/pliki/3durlak.pdf").endswith(
+        "3 durlak pdf"
+    )
+
+
+def test_a_file_asked_for_as_a_download_is_the_same_file():
+    plain = "https://umchelm.bip.lubelskie.pl/upload/pliki/0bozenski_longin.pdf"
+    assert same_file(plain + "?download=1") == same_file(plain)
+    assert same_file(plain + "?download=1&v=2") == same_file(plain + "?v=2")
+    assert same_file(plain + "?v=2") != same_file(plain)
 
 
 def test_a_row_keeps_its_own_link_and_drops_the_others():
