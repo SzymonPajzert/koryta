@@ -5,8 +5,6 @@ import type { AnsweredCrop } from "../../../app/composables/declarationQueue";
 
 const crop = (over: Partial<AnsweredCrop> = {}): AnsweredCrop => ({
   id: "crop-1",
-  documentUrl: "https://bip.gmina-testowa.example/oswiadczenie-1.pdf",
-  host: "bip.gmina-testowa.example",
   verdict: "date",
   value: "1979-07-15",
   settled: true,
@@ -16,39 +14,17 @@ const crop = (over: Partial<AnsweredCrop> = {}): AnsweredCrop => ({
 const mount = (over: Partial<AnsweredCrop> = {}) =>
   mountSuspended(Answered, { props: { crop: crop(over) } });
 
-const LINK = '[data-testid="declaration-document-link"]';
-
-/** The line under the next crop about the one just answered, and the only
- * place its declaration is linked: the form names the person, so before the
- * answer it would be a way to look the date up rather than read it. */
+/** The line under the next crop about the one just answered. Its declaration
+ * is linked on its own card, not here: a link under the next crop read as
+ * that crop's. */
 describe("OswiadczeniaAnswered", () => {
-  it("says what was saved, links the whole declaration and says when the crop has its readings", async () => {
+  it("says what was saved and when the crop has its readings, and links nothing", async () => {
     const wrapper = await mount();
 
     expect(wrapper.text()).toContain("Zapisane: 15 lipca 1979");
-    const link = wrapper.get(LINK);
-    expect(link.attributes("href")).toBe(
-      "https://bip.gmina-testowa.example/oswiadczenie-1.pdf",
-    );
-    expect(link.attributes("target")).toBe("_blank");
-    expect(link.attributes("rel")).toBe("noopener");
-    expect(wrapper.text()).toContain("bip.gmina-testowa.example");
     expect(wrapper.text()).toContain("ten wycinek ma już komplet odczytów");
-  });
-
-  // The server checks the address at upload; the page that puts it in front
-  // of a reader checks it again.
-  it("links nothing that is not an http(s) address", async () => {
-    const wrapper = await mount({
-      documentUrl: "javascript:alert(document.cookie)",
-      host: null,
-    });
-
-    expect(wrapper.find(LINK).exists()).toBe(false);
     expect(wrapper.find("a").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("Zobacz całe oświadczenie");
-    // What was saved is still said.
-    expect(wrapper.text()).toContain("Zapisane: 15 lipca 1979");
   });
 
   it("says a skip was a skip, and nothing was saved", async () => {

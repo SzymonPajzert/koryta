@@ -100,18 +100,34 @@
         />
       </template>
     </form>
+    <!-- The whole declaration this line was cut from, on BIP, with the
+         host it leads to: at the foot of the card, its own crop's, so it is
+         not taken for the next one's (round bip-poprzedni-r2). -->
+    <p v-if="link" class="ow-card__source">
+      <a
+        :href="link"
+        target="_blank"
+        rel="noopener"
+        class="ow-card__link"
+        data-testid="declaration-document-link"
+      >
+        Zobacz całe oświadczenie
+        <v-icon :icon="mdiOpenInNew" size="14" />
+      </a>
+      <span v-if="host" class="ow-card__host">{{ host }}</span>
+    </p>
   </article>
 </template>
 
 <script setup lang="ts">
-import { mdiArrowRight } from "@mdi/js";
+import { mdiArrowRight, mdiOpenInNew } from "@mdi/js";
 import {
   READ_NAME_MAX_LENGTH,
   READ_NAMES,
   type DeclarationAnswer,
   type DeclarationTask,
 } from "~~/shared/declarations";
-import { dotTyped, readTyped } from "~/utils/declarationReading";
+import { documentHost, dotTyped, readTyped } from "~/utils/declarationReading";
 
 /**
  * The reading card of /oswiadczenia, „jedno pole”: picked over the form-like
@@ -137,6 +153,16 @@ const props = withDefaults(
 const emit = defineEmits<{
   answer: [task: DeclarationTask, answer: DeclarationAnswer];
 }>();
+
+/** An http(s) address only: the server checks it at upload, and a page that
+ * puts a link in front of a reader checks it again. */
+const link = computed(() =>
+  /^https?:\/\//i.test(props.task.documentUrl) ? props.task.documentUrl : null,
+);
+
+const host = computed(() =>
+  link.value ? documentHost(link.value, props.task.host) : null,
+);
 
 const dateText = ref(props.draft?.date ?? "");
 const name = ref(props.draft?.name ?? "");
@@ -291,6 +317,44 @@ defineExpose({
    edge takes a slightly firmer hairline than on white. */
 .ow-card__paper :deep(.ow-crop__img) {
   outline-color: rgba(0, 0, 0, 0.16);
+}
+
+/* Where the line comes from, at the foot of the card: as quiet as the paper
+   is loud, and below the answer, which comes first. */
+.ow-card__source {
+  align-items: center;
+  color: rgb(var(--v-theme-ink-neutral));
+  column-gap: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  margin: 12px 0 0;
+  row-gap: 2px;
+}
+
+/* Dark sage, underlined, as the person page's declaration links, rather than
+   the blue link ink (bip-osoba-r1). The two inks are the same
+   lightness, so the underline is what tells the link from the text. */
+.ow-card__link {
+  align-items: center;
+  color: rgb(var(--v-theme-ink-sage));
+  display: inline-flex;
+  gap: 2px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: rgba(var(--v-theme-ink-sage), 0.45);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.ow-card__link:hover,
+.ow-card__link:focus-visible {
+  text-decoration-color: currentColor;
+}
+
+.ow-card__host {
+  font-size: 0.75rem;
 }
 
 .ow-card__answer {

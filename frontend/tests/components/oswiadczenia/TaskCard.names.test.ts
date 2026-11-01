@@ -18,6 +18,8 @@ const task: DeclarationTask = {
   unit: "Testowice (gmina miejsko-wiejska)",
   office: "Rada gminy",
   declarationYear: 2019,
+  documentUrl: "https://bip.gmina-testowa.example/oswiadczenie-1.pdf",
+  host: "bip.gmina-testowa.example",
   images: {
     date: "data:image/png;base64,ZGF0YQ==",
     name: "data:image/png;base64,bmF6d2lza28=",

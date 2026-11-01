@@ -9,6 +9,8 @@ const task: DeclarationTask = {
   unit: "Testowice (gmina miejsko-wiejska)",
   office: "Rada gminy",
   declarationYear: 2019,
+  documentUrl: "https://bip.gmina-testowa.example/oswiadczenie-1.pdf",
+  host: "bip.gmina-testowa.example",
   images: {
     date: "data:image/png;base64,ZGF0YQ==",
     name: "data:image/png;base64,bmF6d2lza28=",
@@ -47,6 +49,7 @@ const NAME = '[data-testid="declaration-name-input"]';
 const READING = '[data-testid="declaration-reading"]';
 const SKIP = '[data-testid="declaration-skip"]';
 const SAVE = '[data-testid="declaration-submit"]';
+const LINK = '[data-testid="declaration-document-link"]';
 
 /** The card a reader reads one crop on, „jedno pole”, picked in round
  * bip-czytanie-r1. One field takes the date's eight digits, puts the dots in
@@ -75,6 +78,37 @@ describe("OswiadczeniaTaskCard", () => {
     expect(wrapper.get("label").text()).toBe("Data urodzenia");
     expect(wrapper.get(DATE).attributes("placeholder")).toBe("dd.mm.rrrr");
     expect(wrapper.get(READING).text()).toBe("");
+  });
+
+  // Its own, before it is answered: under the next crop, the one just
+  // answered read as the next one's.
+  it("links the whole declaration this crop was cut from, with its host", async () => {
+    const wrapper = await mount();
+
+    const link = wrapper.get(LINK);
+    expect(link.text()).toBe("Zobacz całe oświadczenie");
+    expect(link.attributes("href")).toBe(
+      "https://bip.gmina-testowa.example/oswiadczenie-1.pdf",
+    );
+    expect(link.attributes("target")).toBe("_blank");
+    expect(link.attributes("rel")).toBe("noopener");
+    expect(wrapper.text()).toContain("bip.gmina-testowa.example");
+  });
+
+  // The server checks the address at upload; the page that puts it in front
+  // of a reader checks it again.
+  it("links nothing that is not an http(s) address", async () => {
+    const wrapper = await mount({
+      task: {
+        ...task,
+        documentUrl: "javascript:alert(document.cookie)",
+        host: null,
+      },
+    });
+
+    expect(wrapper.find(LINK).exists()).toBe(false);
+    expect(wrapper.find("a").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Zobacz całe oświadczenie");
   });
 
   it("puts the dots in as the digits are typed, and says back the day they make", async () => {

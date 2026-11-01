@@ -278,11 +278,10 @@ export type QueuedTask = {
   draft: { date: string; name: string } | null;
 };
 
-/** The crop answered last, for the line that links its whole declaration. */
+/** The crop answered last, for the line under the next one that says what
+ * was saved. */
 export type AnsweredCrop = {
   id: string;
-  documentUrl: string;
-  host: string | null;
   verdict: AnswerVerdict;
   value: string | null;
   settled: boolean;

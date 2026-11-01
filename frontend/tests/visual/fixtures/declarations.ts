@@ -30,8 +30,8 @@ import type {
  * not in the seed, so the page is answered from here: every crop is fetched in
  * the browser, signed in or not, where a route handler can answer it. */
 
-/** Where the made-up declarations are, for the link the page shows only once
- * a crop has been answered. `.example` never resolves. */
+/** Where the made-up declarations are, for the link under each crop.
+ * `.example` never resolves. */
 export const DOCUMENT_HOST = "bip.testowice.example";
 
 const png = (file: string) =>
@@ -59,6 +59,8 @@ export function readingCrops(): DeclarationTask[] {
     unit,
     office,
     declarationYear,
+    documentUrl: `https://${DOCUMENT_HOST}/oswiadczenia/wycinek-${n}.pdf`,
+    host: DOCUMENT_HOST,
     images: {
       date: png(`crop-${n}-data.png`),
       name: png(`crop-${n}-nazwisko.png`),
@@ -151,11 +153,7 @@ export class ReadingDesk {
     return {
       ...this.next(3),
       settled,
-      answered: {
-        id,
-        documentUrl: `https://${DOCUMENT_HOST}/oswiadczenia/${id}.pdf`,
-        host: DOCUMENT_HOST,
-      },
+      answered: { id },
     };
   }
 }

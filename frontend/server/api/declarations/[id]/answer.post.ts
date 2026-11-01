@@ -41,8 +41,7 @@ const PAGES_PER_ANSWER = 1;
 /**
  * A reader's answer to one crop: the date they read, that it cannot be read,
  * that the field is empty, or a skip. Settles the crop when enough readers
- * agree (`recordAnswer`) and answers with the next crops, plus - now that the
- * crop was read blind - the link to the whole declaration on BIP.
+ * agree (`recordAnswer`) and answers with the next crops.
  *
  * Signed in or not (`getReader`): without an account, or with one whose
  * address nobody confirmed, the answer is kept as the reader's but has no
@@ -97,6 +96,6 @@ export default defineEventHandler(async (event) => {
   return {
     ...queue,
     settled: recorded.settled !== null,
-    answered: { id, documentUrl: recorded.documentUrl, host: recorded.host },
+    answered: { id },
   } satisfies DeclarationAnswerResult;
 });

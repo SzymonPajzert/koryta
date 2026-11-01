@@ -258,8 +258,8 @@ export function dataUrl(bytes: unknown): string | null {
   return `data:image/png;base64,${buffer.toString("base64")}`;
 }
 
-/** A crop as a reader gets it: nothing about whose it is but the unit and
- * office, no date, no link to the form (see `DeclarationTask`). */
+/** A crop as a reader gets it: nothing about whose it is but the unit, the
+ * office and the link to the form, and no date (see `DeclarationTask`). */
 export function taskOf(
   extract: DocumentSnapshot,
   images: DocumentSnapshot | undefined,
@@ -272,6 +272,8 @@ export function taskOf(
     id: extract.id,
     ...unitOf(data),
     declarationYear: data.declarationYear ?? null,
+    documentUrl: String(data.url ?? ""),
+    host: (data.host as string | null) ?? null,
     images: { date, name: READ_NAMES ? dataUrl(images?.get("name")) : null },
     imageSize: {
       date: size.date ?? { width: 0, height: 0 },
@@ -451,8 +453,6 @@ function writeSettlement(
 export type RecordedAnswer = {
   /** What the answers settle, if this answer settled the crop. */
   settled: Settlement | null;
-  documentUrl: string;
-  host: string | null;
   /** The person pages the crop is linked to, for crediting the reader with
    * whom a date found (`creditFinds`). */
   personIds: string[];
@@ -566,8 +566,6 @@ export async function recordAnswer(
             now,
           )
         : null,
-      documentUrl: String(data.url ?? ""),
-      host: (data.host as string | null) ?? null,
       personIds: Array.isArray(data.personIds)
         ? data.personIds.filter((id): id is string => typeof id === "string")
         : [],

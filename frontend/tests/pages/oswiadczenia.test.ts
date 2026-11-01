@@ -60,6 +60,8 @@ const crop = (id: string): DeclarationTask => ({
   unit: "Testowice (gmina miejsko-wiejska)",
   office: "Rada gminy",
   declarationYear: 2019,
+  documentUrl: `https://bip.gmina-testowa.example/oswiadczenie-${id}.pdf`,
+  host: "bip.gmina-testowa.example",
   images: { date: `data:image/png;base64,${id}`, name: null },
   imageSize: { date: { width: 950, height: 105 }, name: null },
 });
@@ -139,11 +141,7 @@ registerEndpoint("/api/declarations/a1/answer", {
     return {
       ...served(["a2", "a3"], { today: 1, total: 1 }),
       settled: false,
-      answered: {
-        id: "a1",
-        documentUrl: "https://bip.gmina-testowa.example/oswiadczenie-a1.pdf",
-        host: "bip.gmina-testowa.example",
-      },
+      answered: { id: "a1" },
     } satisfies DeclarationAnswerResult;
   },
 });
@@ -480,12 +478,7 @@ describe("/oswiadczenia, the tally at the top", () => {
         ({
           ...served(["a2", "a3"], { today: 3, total: 5, found: 2 }),
           settled: false,
-          answered: {
-            id: "a1",
-            documentUrl:
-              "https://bip.gmina-testowa.example/oswiadczenie-a1.pdf",
-            host: "bip.gmina-testowa.example",
-          },
+          answered: { id: "a1" },
         }) satisfies DeclarationAnswerResult,
     });
     try {
@@ -543,12 +536,7 @@ describe("/oswiadczenia, the reason to sign in after ten readings on a phone", (
         ({
           ...served(["a2", "a3"], { today: 10, total: 10 }),
           settled: false,
-          answered: {
-            id: "a1",
-            documentUrl:
-              "https://bip.gmina-testowa.example/oswiadczenie-a1.pdf",
-            host: "bip.gmina-testowa.example",
-          },
+          answered: { id: "a1" },
         }) satisfies DeclarationAnswerResult,
     });
   });
