@@ -374,6 +374,29 @@ def test_a_robots_txt_that_answers_4xx_is_none(
     assert not cache.unreachable("https://res.finn.pl/eurzad/447/1/1113346/x.pdf")
 
 
+def test_robots_txt_is_read_as_its_hosts_agent_and_its_rules_as_the_crawlers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """E-LINE answers the crawler's own name with a refusal page, robots.txt too:
+    the real file comes to the exception's agent, and binds the crawler."""
+    asked: list[str] = []
+
+    def get(url: str, **kwargs: object) -> object:
+        asked.append(kwargs["headers"]["User-Agent"])  # type: ignore[index]
+
+        class Response:
+            status_code = 200
+            text = "User-agent: test-agent\nDisallow: /oswiadczenia/\n"
+
+        return Response()
+
+    monkeypatch.setattr(web.cffi_requests, "get", get)
+    cache = RobotsCache("test-agent", agent_for=lambda host: "Mozilla/5.0 (compatible)")
+    assert not cache.allowed("https://bip.lubuskie.pl/oswiadczenia/22/rok/")
+    assert cache.allowed("https://bip.lubuskie.pl/")
+    assert asked == ["Mozilla/5.0 (compatible)"]
+
+
 @pytest.mark.parametrize("status", [500, 503])
 def test_an_error_status_denies_whatever_its_body(
     monkeypatch: pytest.MonkeyPatch, status: int

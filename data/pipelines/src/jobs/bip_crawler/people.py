@@ -67,6 +67,7 @@ from conductor import setup_context
 from entities.bip import BipPersonOfInterest
 from jobs.bip_crawler import finn, sisco, softres, wrota, zeto
 from jobs.bip_crawler import render as rendering
+from jobs.bip_crawler.identity import Agents
 from jobs.bip_crawler.madkom import Madkom
 from scrapers.bip.classify import (
     filename_from_url,
@@ -432,6 +433,7 @@ class PeopleSearch:
         unit_sizes: dict[str, int] | None = None,
         first_names: frozenset[str] = frozenset(),
         resolve: Callable[[str], str] = lambda host: host,
+        agents: Callable[[str], str] | None = None,
     ) -> None:
         self.people_store = people_store
         self.bip_queue = bip_queue
@@ -450,6 +452,8 @@ class PeopleSearch:
         self.first_names = first_names
         #: A host's server (`server_of`), by which `run` keeps walks apart.
         self.resolve = resolve
+        #: The User-Agent a host is asked with (`identity`).
+        self.agents = agents or Agents(options.user_agent, resolve)
         #: A host's sitemaps, read once a run: a shared platform's units share them.
         self._sitemaps: dict[str, list[str]] = {}
         self._sitemap_locks: dict[str, threading.Lock] = {}
@@ -511,7 +515,7 @@ class PeopleSearch:
                     self.fetch,
                     url,
                     self.options.request_timeout_s,
-                    self.options.user_agent,
+                    self.agents(host_of(url)),
                 ),
                 tries,
             )
@@ -533,7 +537,7 @@ class PeopleSearch:
             url,
             payload,
             self.options.request_timeout_s,
-            self.options.user_agent,
+            self.agents(host_of(url)),
         )
         result = self._ask(url, call, NOT_NOW_TRIES)
         return REFUSED if _refused(result) else result
@@ -1304,6 +1308,7 @@ def run_people_mode(
     bundles: LocalBundleStore,
     robots_allowed: Callable[[str], bool],
     robots_unreachable: Callable[[str], bool] = lambda url: False,
+    agents: Callable[[str], str] | None = None,
 ) -> int:
     """`koryta_scrape_bip crawl --people-of-interest`: read the list, search, report."""
     # The package imports this module, so its helpers come in at call time.
@@ -1388,6 +1393,7 @@ def run_people_mode(
             stem(p.first_name, min_a=4) for p in people if p.first_name
         ),
         resolve=server_of,
+        agents=agents,
     )
     try:
         counts = search.run(todo)
