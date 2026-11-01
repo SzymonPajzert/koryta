@@ -1807,7 +1807,8 @@ def parser() -> argparse.ArgumentParser:
         "most 50 of them new pages. Or oswiadczenia-szkice / "
         "oswiadczenia-bez-strony: the people the BIP crawl downloaded an "
         "oświadczenie majątkowe for, with a draft that shows no birth date / "
-        "with no page. Repeatable; see koryta_people_import --help.",
+        "with no page and a public post now or in the past. Repeatable; see "
+        "koryta_people_import --help.",
     )
     parser.add_argument(
         "--fill-rejestrio-current",
