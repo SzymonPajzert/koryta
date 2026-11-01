@@ -1593,8 +1593,8 @@ class BipDeclarationStore(metaclass=ABCMeta):
 
     @abstractmethod
     def files_to_cut(self, version: int, limit: int | None) -> list[DeclarationFile]:
-        """Files that came down for some candidacy and have no cut of this
-        version, those of people on the site first."""
+        """Files that came down for some candidacy of the list and have no cut
+        of this version, those of people on the site first."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -1606,6 +1606,8 @@ class BipDeclarationStore(metaclass=ABCMeta):
 
     @abstractmethod
     def candidacies(self) -> list[PersonRow]:
+        """The night's list the store was given, with the people mode's
+        outcomes, by key."""
         raise NotImplementedError()
 
     @abstractmethod

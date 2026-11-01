@@ -421,7 +421,7 @@ def plan(
     """What a run would send: the candidacies and extracts new or changed since
     the last, each candidacy with its digest.
 
-    `priorities` keeps the candidacies the people mode ranked so
+    `priorities` keeps the candidacies the night's list ranks so
     (`BipPersonOfInterest.priority`: 0 a draft page without a birth date, 1 a
     draft with one, 3 a published page) and the extracts that serve them.
     `sample` makes a test run of it: that many crops not sent yet, by their ids
