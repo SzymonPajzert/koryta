@@ -12,7 +12,7 @@ import functools
 import re
 import threading
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote, urlsplit
@@ -182,8 +182,17 @@ ROBOTS_BUSY_S = 60.0
 
 
 class RobotsCache:
-    def __init__(self, user_agent: str, clock: Any = time.monotonic) -> None:
+    def __init__(
+        self,
+        user_agent: str,
+        clock: Any = time.monotonic,
+        agent_for: Callable[[str], str] | None = None,
+    ) -> None:
         self.user_agent = user_agent
+        #: The User-Agent a host's robots.txt is asked with, when it is not
+        #: ``user_agent`` (`jobs.bip_crawler.identity`); its rules are read for
+        #: ``user_agent`` all the same.
+        self.agent_for = agent_for
         self._parsers: dict[str, Robots | None] = {}
         self._unreachable: set[str] = set()
         #: Hosts whose robots.txt said "not now" (429), until when.
@@ -202,9 +211,8 @@ class RobotsCache:
         allow_all = busy = False
         for scheme in ("https", "http"):
             try:
-                response = _get_robots(
-                    f"{scheme}://{host}/robots.txt", self.user_agent
-                )
+                agent = self.agent_for(host) if self.agent_for else self.user_agent
+                response = _get_robots(f"{scheme}://{host}/robots.txt", agent)
             except Exception:
                 continue
             reachable = True

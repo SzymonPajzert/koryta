@@ -24,7 +24,8 @@ from tqdm import tqdm
 
 from jobs.bip_crawler import found
 from jobs.bip_crawler.coordinator import BipCoordinator, CoordinatorOptions
-from jobs.bip_crawler.people import run_people_mode
+from jobs.bip_crawler.identity import Agents
+from jobs.bip_crawler.people import run_people_mode, server_of
 from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
 from scrapers.common.fetch import use_ca_bundle
 from scrapers.common.pg import PostgresClient
@@ -165,9 +166,13 @@ def _crawl(args: argparse.Namespace) -> int:
     store = LocalBundleStore(root)
     robots = RobotsCache(USER_AGENT)
     if args.people_of_interest:
+        # The people mode asks the hosts that keep public declarations from the
+        # crawler's name as a browser, robots.txt too (`identity`).
+        agents = Agents(USER_AGENT, server_of)
+        robots = RobotsCache(USER_AGENT, agent_for=agents)
         try:
             return run_people_mode(
-                args, pg, bip_queue, store, robots.allowed, robots.unreachable
+                args, pg, bip_queue, store, robots.allowed, robots.unreachable, agents
             )
         finally:
             pg.close()
