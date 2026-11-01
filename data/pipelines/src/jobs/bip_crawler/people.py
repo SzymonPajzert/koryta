@@ -192,6 +192,9 @@ class UnitSearch:
     #: Files the walk reached as links it could not tell from pages, kept so the
     #: download does not fetch them a second time.
     files: dict[str, HttpResult] = field(default_factory=dict)
+    #: Links the walk read as pages (normalised): no file, whatever their
+    #: ``?id=`` made candidates() think.
+    read: set[str] = field(default_factory=set)
     #: FINN e-Urząd clients whose registers the walk has read (`finn`).
     eurzad: set[str] = field(default_factory=set)
     #: Wrota Lubelszczyzny's document lists the walk has read (`wrota`).
@@ -761,6 +764,7 @@ class PeopleSearch:
                 [c for c in out.found if c.page_url != KNOWN_URLS],
                 seekers,
                 self.options.per_person,
+                out.files,
             )
         ):
             if self._past_deadline():
@@ -798,6 +802,7 @@ class PeopleSearch:
             if not self._is_page(result):
                 out.files[url] = result  # a file behind a page-like link
                 continue
+            out.read.add(url)
             self._read_page(out, result, depth, frontier, seekers, prefer)
         # A host that kept saying "not now" leaves the walk to a later run; a
         # page or two that never answer (a module down) settle nothing, or
@@ -1087,8 +1092,12 @@ class PeopleSearch:
             (str(r.person.get("unit_name") or "") for r in rows),
         )
         search = self.search_unit(unit, seekers, prefer)
+        # A link the walk read as a page is no file: Grójec's year pages name the
+        # councillor in full, the PDF on each only by its surname, and choose()
+        # would take the pages for the first name.
+        files = [c for c in search.found if normalize_url(c.url) not in search.read]
         picks = choose(
-            search.found, seekers, self.options.per_person, self.options.unnamed_cap
+            files, seekers, self.options.per_person, self.options.unnamed_cap
         )
         named_urls = {(c.key, c.url) for c in search.found if c.key}
         downloaded: dict[str, tuple[str, str, str]] = {}
