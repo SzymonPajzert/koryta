@@ -5,13 +5,20 @@ import { test, expect } from "@playwright/test";
  * przycisk działaj z nami dla telefonów, żeby mapa koryciarstwa była głównym
  * punktem zaczepienia" - is about order and presence, which is what this
  * asserts; how it looks is the visual suite's business.
+ *
+ * The button came back on 2026-11-01, once it led to /oswiadczenia - a task a
+ * reader can start without an account - and once it no longer stood 8px left
+ * of the search it wraps under. The map still has to start on the first
+ * screen.
  */
 const PHONE = { width: 375, height: 667 };
 
 test.describe("the home page on a phone", () => {
   test.use({ viewport: PHONE });
 
-  test("leads with a sentence, a search and the map", async ({ page }) => {
+  test("leads with a sentence, a search, the button and the map", async ({
+    page,
+  }) => {
     await page.goto("/", { waitUntil: "load" });
 
     const intro = page.getByText(
@@ -28,18 +35,29 @@ test.describe("the home page on a phone", () => {
     const searchBox = await search.boundingBox();
     expect(introBox!.y).toBeLessThan(searchBox!.y);
 
-    await expect(
-      page.getByRole("heading", { name: /Mapa koryciarstwa/ }),
-    ).toBeVisible();
+    // Under the search and exactly as wide: a few pixels off its edge is what
+    // read as „dziwnie po lewej” the first time round. The edges are the
+    // field's, the drawn pill, not the input's, which starts at the
+    // placeholder.
+    const field = page.locator(".home-actions .v-field");
+    const fieldBox = await field.boundingBox();
+    const cta = page.getByTestId("home-cta");
+    await expect(cta).toBeVisible();
+    const ctaBox = await cta.boundingBox();
+    expect(ctaBox!.y).toBeGreaterThan(fieldBox!.y + fieldBox!.height);
+    expect(Math.abs(ctaBox!.x - fieldBox!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(ctaBox!.width - fieldBox!.width)).toBeLessThanOrEqual(1);
 
-    // Hidden by the stylesheet rather than dropped from the markup, so this
-    // asks whether it is on screen, not whether it is in the document.
-    await expect(page.getByTestId("home-cta")).toBeHidden();
+    // And the map still starts on the first screen.
+    const map = page.getByRole("heading", { name: /Mapa koryciarstwa/ });
+    await expect(map).toBeInViewport();
+    const mapBox = await map.boundingBox();
+    expect(mapBox!.y).toBeGreaterThan(ctaBox!.y + ctaBox!.height);
   });
 
-  // The hero button above is desktop-only on purpose, so on a phone this
-  // section is the page's only ask before the feed starts. Pinned, because the
-  // thing that made it worth rewriting was a reader not finding the ask at all.
+  // The ask with an account behind it, below the map: the hero button above
+  // is the one without. Pinned, because the thing that made it worth
+  // rewriting was a reader not finding the ask at all.
   test("carries the help section on a phone", async ({ page }) => {
     await page.goto("/", { waitUntil: "load" });
 
