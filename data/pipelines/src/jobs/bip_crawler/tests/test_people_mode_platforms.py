@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import cast
 
 from jobs.bip_crawler.people import PeopleOptions, PeopleSearch
@@ -15,7 +16,7 @@ from jobs.bip_crawler.tests.test_people_mode_review import (
     search,
 )
 from scrapers.bip.classify import normalize_url
-from scrapers.bip.people import Seeker, candidates
+from scrapers.bip.people import Candidate, Seeker, candidates, satisfied
 from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext
@@ -367,3 +368,87 @@ def test_a_seekers_declaration_page_comes_before_the_next_person(tmp_path):
     rows = [row(last, "u1", first, last) for first, last in people]
     _, store, _, _ = search(tmp_path, sites, rows, unit_pages=3, pages_per_candidacy=1)
     assert store.outcomes["Benedykciński"].status == "found"
+
+
+def test_only_files_satisfy_a_seeker():
+    wojtczak = Seeker.of("w", "Wojciech", "Wojtczak")
+    pages = [
+        Candidate(
+            "w",
+            f"https://u1.pl/index.php?cmd=zawartosc&opt=pokaz&id={year}",
+            f"Oświadczenie majątkowe za rok {year}",
+            "Wojtczak Wojciech",
+            "https://u1.pl",
+            True,
+            True,
+            6.5,
+        )
+        for year in (2022, 2023, 2024)
+    ]
+    assert not satisfied(pages, [wojtczak], 3)
+    # The walk asked for each and got a file back.
+    assert satisfied(pages, [wojtczak], 3, {normalize_url(c.url) for c in pages})
+    pdfs = [replace(c, url=f"https://u1.pl/f/{i}.pdf") for i, c in enumerate(pages)]
+    assert satisfied(pdfs, [wojtczak], 3)
+
+
+def test_a_link_the_walk_read_as_a_page_is_no_file(tmp_path):
+    # Grójec (11-01): a councillor's row links a page a year (index.php?...&id=),
+    # which names them in full only in a link back to their page and holds the
+    # PDF, named by the surname alone. The walk took the three links for files,
+    # ended on the list and downloaded three pages.
+    show = "/index.php?cmd=zawartosc&opt=pokaz&id="
+    years = (2024, 2023, 2022)
+    cells = "".join(
+        f'<td><a href="{show}{y}">Oświadczenie majątkowe za rok {y}</a></td>'
+        for y in years
+    )
+    sites = {
+        "https://u1.pl": html(
+            "Oświadczenia majątkowe radnych",
+            f"<table><tr><td>Wojtczak Wojciech</td>{cells}</tr></table>",
+        ),
+        f"https://u1.pl{show}900": html("Wojtczak Wojciech", f"<table>{cells}</table>"),
+    }
+    for y in years:
+        sites[f"https://u1.pl{show}{y}"] = html(
+            f"Oświadczenie majątkowe za rok {y}",
+            f'<a href="{show}900">Wojtczak Wojciech</a>'
+            f"<h3>Oświadczenie majątkowe za rok {y}</h3>"
+            f'<a href="/pliki/radni/wojtczak_{y}.pdf">Pobierz plik</a>',
+        )
+        sites[f"https://u1.pl/pliki/radni/wojtczak_{y}.pdf"] = (
+            200,
+            "application/pdf",
+            PDF + str(y).encode(),
+        )
+    _, store, _, _ = search(tmp_path, sites, [row("w", "u1", "Wojciech", "Wojtczak")])
+    assert store.outcomes["w"].status == "found"
+    assert {d.url for d in store.person_docs("w")} == {
+        f"https://u1.pl/pliki/radni/wojtczak_{y}.pdf" for y in years
+    }
+
+
+def test_an_id_link_that_is_a_file_ends_the_walk_and_comes_down_once(tmp_path):
+    # Most ?id= links are files: the walk asks for them as pages, keeps what
+    # comes back, counts it, and the download takes it from there.
+    get = "/index.php?id="
+    items = "".join(
+        f'<li><a href="{get}{i}">Oświadczenie majątkowe za {y} - Jan Nowak</a></li>'
+        for i, y in enumerate((2024, 2023, 2022), 1)
+    )
+    sites = {
+        "https://u1.pl": html(
+            "Oświadczenia majątkowe radnych",
+            f'<ul>{items}</ul><a href="/dalej">Dalej</a>',
+        ),
+        "https://u1.pl/dalej": html("Oświadczenia majątkowe", "nic"),
+    }
+    for i in (1, 2, 3):
+        sites[f"https://u1.pl{get}{i}"] = (200, "application/pdf", PDF + bytes([i]))
+    _, store, web, _ = search(tmp_path, sites, [row("n", "u1", "Jan", "Nowak")])
+    assert store.outcomes["n"].status == "found"
+    assert len(store.person_docs("n")) == 3
+    for i in (1, 2, 3):
+        assert web.calls.count(f"https://u1.pl{get}{i}") == 1
+    assert "https://u1.pl/dalej" not in web.calls

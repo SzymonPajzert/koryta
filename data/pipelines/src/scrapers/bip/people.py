@@ -18,7 +18,7 @@ import functools
 import re
 import unicodedata
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Container, Iterable
 from dataclasses import dataclass
 
 from entities.util import decode_url
@@ -893,10 +893,26 @@ def choose(
     return picked
 
 
-def satisfied(found: list[Candidate], seekers: list[Seeker], per_person: int) -> bool:
-    """Every seeker has ``per_person`` declaration-like links with their first name."""
+def satisfied(
+    found: list[Candidate],
+    seekers: list[Seeker],
+    per_person: int,
+    files: Container[str] = frozenset(),
+) -> bool:
+    """Every seeker has ``per_person`` declaration-like files with their first name.
+
+    A file is a link whose address says so, or one the walk asked for and got a
+    file back (``files``, normalised). Another ``?id=`` link may be a page with
+    the file on it: Grójec's "Oświadczenie majątkowe za rok 2024", three to a
+    councillor, ended the walk before it read one (11-01, 179 candidacies left
+    with nothing but pages).
+    """
     counts: dict[str, set[str]] = {}
     for c in found:
-        if c.declaration_like and c.first_name:
+        if (
+            c.declaration_like
+            and c.first_name
+            and (is_file_link(c.url) or normalize_url(c.url) in files)
+        ):
             counts.setdefault(c.key, set()).add(same_file(c.url))
     return all(len(counts.get(s.key, ())) >= per_person for s in seekers)
