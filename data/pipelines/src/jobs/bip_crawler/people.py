@@ -91,6 +91,7 @@ from scrapers.bip.people import (
     Seeker,
     candidates,
     choose,
+    declarants,
     fold,
     is_file_link,
     link_score,
@@ -254,6 +255,9 @@ class _Frontier:
     #: Pages a link that says declarations led to (`says_declarations`): one
     #: counts as a declarations page whatever its title says.
     declared: set[str] = field(default_factory=set)
+    #: Pages a link saying one seeker's declaration led to (`declarants`): the
+    #: page lends them its files when its title names nobody.
+    lenders: dict[str, tuple[str, str]] = field(default_factory=dict)
 
     def __bool__(self) -> bool:
         return bool(self.heap)
@@ -306,6 +310,8 @@ class _Frontier:
             if score > -3:
                 if says_declarations(link):
                     self.declared.add(target)
+                if len(owners := declarants(link, seekers)) == 1:
+                    self.lenders[target] = owners.pop()
                 self.add(target, score + bonus, depth, link.url)
 
 
@@ -809,8 +815,16 @@ class PeopleSearch:
                 out.files[url] = result  # a file behind a page-like link
                 continue
             out.read.add(url)
-            led = url in frontier.declared
-            self._read_page(out, result, depth, frontier, seekers, prefer, led)
+            self._read_page(
+                out,
+                result,
+                depth,
+                frontier,
+                seekers,
+                prefer,
+                url in frontier.declared,
+                frontier.lenders.get(url),
+            )
         # A host that kept saying "not now" leaves the walk to a later run; a
         # page or two that never answer (a module down) settle nothing, or
         # every run would walk the unit again.
@@ -846,9 +860,11 @@ class PeopleSearch:
         seekers: list[Seeker],
         prefer: re.Pattern[str] | None = None,
         led: bool = False,
+        lender: tuple[str, str] | None = None,
     ) -> None:
         """Read one page: its candidates, and its links queued. ``led``: a link
-        that says declarations led here (`_Frontier.declared`)."""
+        that says declarations led here (`_Frontier.declared`); ``lender``: the
+        one seeker whose declaration it said (`_Frontier.lenders`)."""
         out.pages += 1
         out.pages_ok += 1
         if depth == 0:
@@ -908,7 +924,14 @@ class PeopleSearch:
         if DECLARATION.search(folded_title) or ASSETS.search(folded_title):
             out.declaration_pages += 1
         out.found.extend(
-            candidates(result.url, title, links, seekers, first_names=self.first_names)
+            candidates(
+                result.url,
+                title,
+                links,
+                seekers,
+                first_names=self.first_names,
+                lender=lender,
+            )
         )
         self._read_eurzad(out, result, seekers, prefer)
         self._read_wrota(out, result, seekers, prefer)
