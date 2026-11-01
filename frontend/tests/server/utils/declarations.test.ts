@@ -356,8 +356,6 @@ describe("recordAnswer", () => {
     const recorded = await answer("a", "1979-07-15");
     expect(recorded).toEqual({
       settled: null,
-      documentUrl: "https://bip.example.pl/c1.pdf",
-      host: "bip.example.pl",
       personIds: ["kowalska"],
     });
     expect(stored.get("declarationAnswers/c1_a")).toMatchObject({
@@ -691,13 +689,18 @@ describe("queueFor", () => {
       unit: "Strzelin",
       office: "Rada gminy",
       declarationYear: 2023,
+      // The whole form, for a reader who wants to see the line in it.
+      documentUrl: "https://bip.example.pl/half-read.pdf",
+      host: "bip.example.pl",
       images: {
         date: `data:image/png;base64,${PNG.toString("base64")}`,
         name: null,
       },
     });
-    // Blind: nothing that names the person or the form.
-    expect(JSON.stringify(queue)).not.toMatch(/kowalska|bip\.example\.pl/);
+    // Nothing that names the person but the form, and no date.
+    expect(JSON.stringify(queue)).not.toMatch(
+      /kowalska|birth|\d{4}-\d{2}-\d{2}/,
+    );
     expect(queue.open).toBe(4);
     expect(queue.mine.total).toBe(1);
   });

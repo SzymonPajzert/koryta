@@ -16,8 +16,7 @@
           <template v-else>
             Pokazujemy Ci tylko wyciętą z nich linijkę z datą urodzenia.
           </template>
-          Czytasz na ślepo - link do całego oświadczenia pojawia się dopiero po
-          odpowiedzi.
+          Całe oświadczenie otworzysz linkiem pod polem daty.
         </p>
         <p class="mb-2">
           Każdy wycinek czyta kilka osób. Gdy dwie zalogowane osoby wpiszą tę
@@ -300,12 +299,11 @@ import { READ_NAMES } from "~~/shared/declarations";
  * them; with one that is a Google sign-in or a confirmed address they count
  * towards the agreement that can publish a page.
  *
- * The crop is the page. Everything else - who the declarations belong to, why
- * the page exists, what an agreed date does - is either withheld until the
- * crop is answered or kept behind the (i), and the reader's own count is one
- * quiet line rather than a score. The reading is blind: the task carries only
- * the unit and the office, and the link to the whole declaration, which names
- * the person, arrives with the answer (`DeclarationTask`).
+ * The crop is the page. Everything else - why the page exists, what an
+ * agreed date does - is kept behind the (i), and the reader's own count is
+ * one quiet line rather than a score. The task carries the unit, the office
+ * and the link to the whole declaration, which the card puts at its foot
+ * (`DeclarationTask`), and no date from anywhere.
  */
 
 definePageMeta({

@@ -12,20 +12,6 @@
         Zapisane: <strong class="ow-answered__what">{{ words }}</strong>
       </template>
     </span>
-    <template v-if="link">
-      <span class="ow-answered__sep" aria-hidden="true">·</span>
-      <a
-        :href="link"
-        target="_blank"
-        rel="noopener"
-        class="ow-answered__link"
-        data-testid="declaration-document-link"
-      >
-        Zobacz całe oświadczenie
-        <v-icon :icon="mdiOpenInNew" size="14" />
-      </a>
-      <span v-if="host" class="ow-answered__host">{{ host }}</span>
-    </template>
     <span v-if="crop.settled" class="ow-answered__settled">
       <span class="ow-answered__sep" aria-hidden="true">·</span>
       ten wycinek ma już komplet odczytów
@@ -34,26 +20,16 @@
 </template>
 
 <script setup lang="ts">
-import { mdiArrowRight, mdiCheck, mdiOpenInNew } from "@mdi/js";
+import { mdiArrowRight, mdiCheck } from "@mdi/js";
 import type { AnsweredCrop } from "~/composables/declarationQueue";
-import { answerWords, documentHost } from "~/utils/declarationReading";
+import { answerWords } from "~/utils/declarationReading";
 
-/** The quiet line about the crop just answered, and the only place its
- * declaration is linked: until the reader has answered, the form - which names
- * the person - would be a way to look the date up rather than read it. */
+/** The quiet line under the next crop about the one just answered. Its
+ * declaration is not linked here: a link under the next crop reads as that
+ * crop's, so each crop's own is on its card (`TaskCard`). */
 const props = defineProps<{ crop: AnsweredCrop }>();
 
 const words = computed(() => answerWords(props.crop.verdict, props.crop.value));
-
-/** An http(s) address only: the server checks it at upload, and a page that
- * puts a link in front of a reader checks it again. */
-const link = computed(() =>
-  /^https?:\/\//i.test(props.crop.documentUrl) ? props.crop.documentUrl : null,
-);
-
-const host = computed(() =>
-  link.value ? documentHost(link.value, props.crop.host) : null,
-);
 </script>
 
 <style scoped>
@@ -76,30 +52,6 @@ const host = computed(() =>
 .ow-answered__what {
   color: rgb(var(--v-theme-ink-strong));
   font-weight: 500;
-}
-
-/* Dark sage, underlined, as the person page's declaration links, rather than
-   the blue link ink (bip-osoba-r1). The two inks are the same
-   lightness, so the underline is what tells the link from the text. */
-.ow-answered__link {
-  align-items: center;
-  color: rgb(var(--v-theme-ink-sage));
-  display: inline-flex;
-  gap: 2px;
-  font-weight: 500;
-  text-decoration: underline;
-  text-decoration-color: rgba(var(--v-theme-ink-sage), 0.45);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-}
-
-.ow-answered__link:hover,
-.ow-answered__link:focus-visible {
-  text-decoration-color: currentColor;
-}
-
-.ow-answered__host {
-  font-size: 0.75rem;
 }
 
 .ow-answered__sep {

@@ -583,17 +583,20 @@ export function nameFitsPage(readName: string, pageName: string): boolean {
 
 /** A crop to read, as /oswiadczenia gets it.
  *
- * Read blind: nothing about whose it is beyond the unit and office it was
- * filed for, no date from anywhere, and not even the link to the whole form,
- * which names the person - a reader who looked them up on the site could copy
- * the page's date instead of reading the crop, and that is exactly the
- * agreement that publishes. The link comes back with the answer. */
+ * Nothing about whose it is beyond the unit and office it was filed for, and
+ * no date from anywhere, but the link to the whole form, which names the
+ * person, comes with it. It used to come back with the answer, and was then
+ * shown under the next crop, where it read as that crop's (Szymon,
+ * 2026-11-01). */
 export type DeclarationTask = {
   id: string;
   /** The unit, e.g. "Strzelin (gmina miejsko-wiejska)". */
   unit: string;
   office: LocalOffice | null;
   declarationYear: number | null;
+  /** The whole declaration on BIP, and the host it is on. */
+  documentUrl: string;
+  host: string | null;
   /** data: URLs, because an <img> cannot send the reader's token. */
   images: { date: string; name: string | null };
   imageSize: {
@@ -630,9 +633,8 @@ export type DeclarationAnswer = {
 export type DeclarationAnswerResult = DeclarationQueue & {
   /** Whether this answer settled the crop it answered. */
   settled: boolean;
-  /** The crop just answered, now that it was read blind: the whole form on
-   * BIP, for a reader who wants to see it. */
-  answered: { id: string; documentUrl: string; host: string | null };
+  /** The crop just answered. */
+  answered: { id: string };
 };
 
 /** The id a browser files its readings under while nobody is signed in, sent

@@ -15,11 +15,10 @@ import { pageIsPublic } from "~~/shared/model";
  * page it went into, once; one that is gone, removed or no longer a person is
  * left out, and stays in `total` only.
  *
- * Drafts are listed with their names. The reader read the crop blind, but the
- * link to the whole declaration, which names the person, came back with the
- * answer, and any signed-in reader may open a draft (`wantsLatest`). That is
- * the promise the tally makes a reader without an account: sign in, and see
- * whom you found.
+ * Drafts are listed with their names. The crop came with the link to the
+ * whole declaration, which names the person, and any signed-in reader may
+ * open a draft (`wantsLatest`). That is the promise the tally makes a reader
+ * without an account: sign in, and see whom you found.
  */
 export async function findsOf(
   db: Firestore,

@@ -52,6 +52,8 @@ const crop = (id: string): DeclarationTask => ({
   unit: "Testowice (gmina miejsko-wiejska)",
   office: "Rada gminy",
   declarationYear: 2019,
+  documentUrl: `https://bip.gmina-testowa.example/oswiadczenie-${id}.pdf`,
+  host: "bip.gmina-testowa.example",
   images: { date: `data:image/png;base64,${id}`, name: null },
   imageSize: { date: { width: 950, height: 105 }, name: null },
 });
@@ -73,11 +75,7 @@ const answeredA1 = (
 ): DeclarationAnswerResult => ({
   ...served(["a2", "a3"], { mine: { today: 1, total: 1 } }),
   settled: false,
-  answered: {
-    id: "a1",
-    documentUrl: "https://bip.gmina-testowa.example/oswiadczenie-a1.pdf",
-    host: "bip.gmina-testowa.example",
-  },
+  answered: { id: "a1" },
   ...over,
 });
 
@@ -90,11 +88,7 @@ const saved = (
 ): DeclarationAnswerResult => ({
   ...served(next, over),
   settled: false,
-  answered: {
-    id,
-    documentUrl: `https://bip.gmina-testowa.example/oswiadczenie-${id}.pdf`,
-    host: "bip.gmina-testowa.example",
-  },
+  answered: { id },
 });
 
 /** A response the test lets land when it chooses, so that two can land in
@@ -275,8 +269,6 @@ describe("useDeclarationQueue", () => {
     expect(mockAuthRequest).not.toHaveBeenCalled();
     expect(reading.answered.value).toEqual({
       id: "a1",
-      documentUrl: "https://bip.gmina-testowa.example/oswiadczenie-a1.pdf",
-      host: "bip.gmina-testowa.example",
       verdict: "date",
       value: "1979-07-15",
       settled: false,

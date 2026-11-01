@@ -142,8 +142,6 @@ beforeEach(() => {
 function settles(settled: unknown) {
   mocks.recordAnswer.mockResolvedValue({
     settled,
-    documentUrl: "https://bip.strzelin.pl/download/1",
-    host: "bip.strzelin.pl",
     personIds: ["kowalska"],
   });
 }
