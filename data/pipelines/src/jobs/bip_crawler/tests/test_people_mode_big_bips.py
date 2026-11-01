@@ -26,7 +26,7 @@ from jobs.bip_crawler.people_list import to_search
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from jobs.bip_crawler.tests.test_people_mode_review import PDF, Web, html, row
 from scrapers.bip.classify import normalize_url
-from scrapers.bip.people import link_score, office_terms
+from scrapers.bip.people import Seeker, link_score, office_terms, says_declarations
 from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext, extract_link_contexts
@@ -185,6 +185,84 @@ def test_the_seekers_own_council_is_walked_first():
     district = office_terms(["Rada dzielnicy"])
     assert link_score(districts, [], 1, district) > link_score(districts, [], 1, city)
     assert office_terms(["nobody knows"]) is None
+
+
+def test_a_seekers_own_page_comes_before_the_menus_around_it():
+    # Gdańsk (11-01): each year's councillors are links to their own pages,
+    # under titles that all read alike; the council's and the president's
+    # menu links came first, 840 pages of them.
+    bejm = Seeker.of("b", "Łukasz", "Bejm")
+    city = office_terms(["Rada miasta", "Prezydent"])
+    own = LinkContext(
+        "https://bip.gdansk.pl/prawo-lokalne/Bejm-Lukasz-Kacper,a,263769",
+        "Bejm Łukasz Kacper",
+    )
+    for label in ("Rada Miasta Gdańska", "Prezydent Miasta Gdańska"):
+        menu = LinkContext("https://bip.gdansk.pl/link/1/x", label)
+        assert link_score(own, [bejm], 3, city) > link_score(menu, [bejm], 3, city)
+    surname = LinkContext("https://bip.gdansk.pl/prawo-lokalne/Bejm,a,1", "Bejm")
+    assert link_score(surname, [bejm], 3, city) < link_score(own, [bejm], 3, city)
+
+
+def test_a_page_a_declarations_link_leads_to_is_a_declarations_page(tmp_path):
+    # Gdańsk (11-01): every page titled alike; "Oświadczenia - 2024 rok" leads
+    # to the year's offices, its "Radni Miasta" to the councillors' own pages,
+    # which ranked below the next year's offices.
+    title = "BIP Urząd Miasta"
+    offices = "".join(
+        f'<li><a href="/2024/{i}">{name} Miasta</a></li>'
+        for i, name in enumerate(("Sekretarz", "Skarbnik"))
+    )
+    sites = {
+        "https://u1.pl": html(
+            title,
+            '<h2>Oświadczenia majątkowe</h2><a href="/2024">Oświadczenia - 2024 rok</a>'
+            '<a href="/2023">Oświadczenia - 2023 rok</a>',
+        ),
+        "https://u1.pl/2024": html(
+            title,
+            '<h2>Oświadczenia - 2024 rok</h2><ul><li><a href="/2024/radni">'
+            f"Radni Miasta</a></li>{offices}</ul>",
+        ),
+        "https://u1.pl/2024/radni": html(
+            title,
+            '<ul><li><a href="/osoba/bejm">Bejm Łukasz Kacper</a></li>'
+            '<li><a href="/osoba/lis">Lis Ewa</a></li></ul>',
+        ),
+        "https://u1.pl/osoba/bejm": html(
+            title,
+            '<h3>Bejm Łukasz Kacper</h3><a href="/f/bejm.pdf">Oświadczenie (pdf)</a>',
+        ),
+        "https://u1.pl/f/bejm.pdf": (200, "application/pdf", PDF + b"b"),
+        "https://u1.pl/2024/0": html(title, "nic"),
+        "https://u1.pl/2024/1": html(title, "nic"),
+    }
+    _, store, web = search(
+        tmp_path,
+        sites,
+        [row("b", "u1", "Łukasz", "Bejm")],
+        unit_pages=6,
+        pages_per_candidacy=0,
+        sitemaps=False,
+    )
+    assert store.outcomes["b"].status == "found"
+    assert "https://u1.pl/2023" not in web.calls
+
+
+def test_a_link_that_says_declarations_marks_the_page_it_leads_to():
+    frontier = people_mode._Frontier([("x.pl", "")])
+    links = [
+        LinkContext("https://x.pl/radni", "Radni Miasta", heading="Oświadczenia 2024"),
+        LinkContext("https://x.pl/om", "Oświadczenia majątkowe"),
+        LinkContext("https://x.pl/rada", "Rada Miasta"),
+    ]
+    frontier.follow(links, [], 1)
+    assert frontier.declared == {"https://x.pl/radni", "https://x.pl/om"}
+    # A tender under a declarations heading says nothing of declarations.
+    tender = LinkContext(
+        "https://x.pl/z", "Zamówienia publiczne", heading="Oświadczenia"
+    )
+    assert not says_declarations(tender)
 
 
 def test_a_known_file_finds_a_person_the_menu_hides(tmp_path):
