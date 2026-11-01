@@ -19,6 +19,7 @@ from scrapers.bip.people import (
     Seeker,
     candidates,
     choose,
+    fold,
     initialled_names,
     names_somebody,
     stem,
@@ -464,6 +465,76 @@ def test_a_namesakes_file_is_not_the_seekers():
     assert named("Józef", "Rzepka", "Rzepka - radny", "/f/4.pdf") == ["s"]
     assert named("Anna", "Wąsowicz", "za 2024 r.- p. Wąsowicz", "/api/files/8") == ["s"]
     assert named("Anna", "Wąsowicz", "za 2024 r.- P. Wąsowicz", "/api/files/8") == []
+
+
+def test_whose_a_surname_is_weighs_every_mention_and_tier():
+    # The branch review's cases (10-31/11-01), from the crawl's own files.
+    first_names = frozenset(
+        stem(n, min_a=4)
+        for n in "Józef Michał Jan Tomasz Wacław Bartosz Maja Benedykt Marek".split()
+    )
+    fob = "/fobjects/download/1"
+
+    def named(
+        name: str, anchor: str, path: str, row="", title="Oświadczenia", middle=""
+    ) -> bool:
+        first, last = name.split(" ", 1)
+        link = LinkContext(f"https://bip.x.pl{path}", anchor, row)
+        seeker = Seeker.of("s", first, last, middle)
+        found = candidates(
+            "https://bip.x.pl/o", title, [link], [seeker], first_names=first_names
+        )
+        return bool(found)
+
+    # A bare surname in the address abstains; a namesake elsewhere decides.
+    bare = "/plik,1459,rzepka-pdf.pdf"
+    assert not named("Józef Rzepka", "Michał Rzepka - oświadczenie", bare)
+    assert not named("Józef Rzepka", "pobierz", bare, row="Michał Rzepka | radny")
+    assert not named("Józef Rzepka", "pobierz", bare, title="Michał Rzepka")
+    assert named("Józef Rzepka", "pobierz", bare)
+    # Initials however written; digits after a surname; a letter glued on.
+    assert not named("Ryszard Barwinek", "Korekta", "/Korekta-L.-Barwinek,4.pdf")
+    assert not named("Michał Litwiniuk", "Oświadczenie", "/f/d.litwiniuk12.pdf")
+    assert not named("Marek Materek", "pobierz", "/Oswiadczenie-JMaterek.pdf")
+    assert named("Krzysztof Rzączyński", "Ośw.", "/f/k._rzaczynski_o_w_2020.pdf")
+    assert not named("Tomasz Gontarz", "Ośw.", "/f/s._gontarz_p_w_2026.pdf")
+    assert not named("Stanisław Kowalski", "Sz. Kowalski", "/f/6.pdf")
+    assert named("Szymon Kowalski", "Sz. Kowalski", "/f/6.pdf")
+    assert not named("Kazimierz Górski", "GÓRSKI BARTOSZ.pdf", "/api/files/1")
+    # No initial, no first name: a preposition, a year's r., majątkowe, a town.
+    assert named("Jan Kowalski", "radnego Kowalskiego - w związku z", "/f/1.pdf")
+    assert named("Jan Kowalski", "za 2023 r. Kowalski", "/f/2.pdf")
+    assert named("Tomasz Zeman", "Osw. maj. Zeman T.", "/f/osw_maj_ZEMAN_T.pdf")
+    assert named("Tomasz Zeman", "pobierz", "/f/osw_maj_zeman.pdf")
+    assert named("Tomasz Nowak", "Urząd Gminy Józefów - Nowak", "/f/7.pdf")
+    # The seeker's own other names and a man's noun -ska.
+    assert named("Jacek Nowak", "J. B. Nowak", fob, middle="Benedykt")
+    assert named("Marek Kowalski", "Marka Jana Kowalskiego", "/f/3.pdf", middle="Jan")
+    assert named("Adam Ciupiński", "pobierz", "/f/ciupinski.pdf", row="Adam Wacław")
+    assert named("Marek Gąska", "radnego Marka Gąski", "/f/4.pdf")
+    assert named("Marek Gąska", "radnego Gąski", "/f/4.pdf")
+    assert named("Jacek Nowak", "Benedykt Nowak", fob, middle="Benedykt")
+    assert named("Tomasz Dudek", "Otwórz", "/dokumenty/T.D.Dudek_25.pdf")
+    assert not named("Tomasz Dudek", "Otwórz", "/dokumenty/A.D.Dudek_25.pdf")
+    assert named("Urszula Solińska-Marek", "Solińska-Marek", "/f/5.pdf")
+
+
+def test_a_declined_first_name_is_the_seekers_own():
+    for first, label in (("Marek", "Marka"), ("Paweł", "Pawła"), ("Ewa", "Ewy")):
+        assert Seeker.of("s", first, "Nowak").named_in(fold(f"{label} Nowak"))[1]
+
+
+def test_a_page_titled_with_a_namesake_lends_nobody_its_unnamed_files():
+    names = frozenset(stem(n, min_a=4) for n in ("Michał", "Józef"))
+    link = LinkContext("https://bip.x.pl/f/1.pdf", "oświadczenie majątkowe za 2024")
+    found = candidates(
+        "https://bip.x.pl/o",
+        "Michał Rzepka - oświadczenia majątkowe",
+        [link],
+        [Seeker.of("s", "Józef", "Rzepka")],
+        first_names=names,
+    )
+    assert found == []
 
 
 def test_a_first_name_is_not_read_out_of_the_host():

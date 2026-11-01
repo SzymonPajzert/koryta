@@ -909,7 +909,15 @@ class PeopleSearch:
             return {r.key: "not_found:error" for r in rows}
 
     def _search_and_record(self, unit: str, rows: list[PersonRow]) -> dict[str, str]:
-        seekers = [Seeker.of(r.key, r.first_name, r.last_name) for r in rows]
+        seekers = [
+            Seeker.of(
+                r.key,
+                r.first_name,
+                r.last_name,
+                str(r.person.get("middle_name") or ""),
+            )
+            for r in rows
+        ]
         prefer = office_terms(
             (str(r.person.get("office") or "") for r in rows),
             (str(r.person.get("unit_name") or "") for r in rows),
@@ -990,11 +998,15 @@ class PeopleSearch:
         limit = self.options.max_unit_seconds
         return limit is not None and self.clock() - started > limit
 
-    def _unit_host(self, unit: str) -> str:
+    def _unit_host(self, unit: str, *, as_written: bool = False) -> str:
         """The host a unit's walk starts on: units that share it share its rate."""
         seed = self.seeds.get(unit)
         urls = (seed.bip_urls or seed.www_urls) if seed else []
-        return host_of(urls[0]) if urls else unit
+        if not urls:
+            return unit
+        if as_written:
+            return (urlsplit(urls[0]).hostname or "").lower() or host_of(urls[0])
+        return host_of(urls[0])
 
     def run(self, rows: list[PersonRow]) -> dict[str, int]:
         """Search every unit ``rows`` name, most wanted first, at most
@@ -1010,9 +1022,14 @@ class PeopleSearch:
         if self.options.max_run_seconds is not None:
             self.deadline = self.clock() + self.options.max_run_seconds
         hosts = {unit: self._unit_host(unit) for unit in waiting}
+        # Resolved as written: host_of drops a www. some hosts have no address without.
+        written = {
+            self._unit_host(u): self._unit_host(u, as_written=True) for u in waiting
+        }
         with ThreadPoolExecutor(max_workers=32) as lookups:
             names = sorted(set(hosts.values()))
-            servers = dict(zip(names, lookups.map(self.resolve, names), strict=True))
+            found = lookups.map(self.resolve, [written[n] for n in names])
+            servers = dict(zip(names, found, strict=True))
         busy: Counter[str] = Counter()
         on_server: Counter[str] = Counter()
         limit = max(1, self.options.max_per_host)
