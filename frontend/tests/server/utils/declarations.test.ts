@@ -47,11 +47,14 @@ vi.mock("firebase-admin/auth", () => ({
  * equality filters, ordering on several fields, a cursor, limits, count(),
  * getAll, increments, and transactions whose writes land only when the
  * function returns. It notes the queries transactions run, and how many
- * answers each read.
+ * answers each read. A transaction that reads a document in `aborting` fails
+ * as one that lost to contention every time the client library tried it,
+ * as many times as the map says, and writes nothing.
  */
 type Data = Record<string, unknown>;
 let stored: Map<string, Data>;
 let reads: { filters: [string, unknown][]; docs: number }[];
+let aborting: Map<string, number>;
 
 function snapshot(path: string) {
   const data = stored.get(path);
@@ -152,6 +155,16 @@ const db = {
           const docs = run(target.__query);
           reads.push({ filters: target.__query.filters, docs: docs.length });
           return { docs, empty: docs.length === 0 };
+        }
+        const times = aborting.get(target.path!) ?? 0;
+        if (times > 0) {
+          aborting.set(target.path!, times - 1);
+          throw Object.assign(
+            new Error(
+              "10 ABORTED: Aborted due to cross-transaction contention.",
+            ),
+            { code: 10 },
+          );
         }
         return snapshot(target.path!);
       },
@@ -268,6 +281,7 @@ function fill(room: Room, limit: number) {
 beforeEach(() => {
   stored = new Map();
   reads = [];
+  aborting = new Map();
   vi.clearAllMocks();
 });
 
@@ -818,6 +832,29 @@ describe("a reader's finds", () => {
     expect((await queueFor(firestore, "a", 1)).mine.found).toBe(2);
   });
 
+  // A claim that failed after its answers had moved, and before its finds
+  // did: the page kept the id, and the next claim has only finds to move.
+  it("moves what a browser found when no answer is left to move with it", async () => {
+    const anon = `anon:${readerId(1)}`;
+    stored.set(`declarationReaderFinds/${anon}_kowalska`, {
+      uid: anon,
+      personId: "kowalska",
+      extractId: "c1",
+    });
+
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 0,
+      settled: [],
+      left: 0,
+    });
+
+    expect(stored.has(`declarationReaderFinds/${anon}_kowalska`)).toBe(false);
+    expect(stored.get("declarationReaderFinds/a_kowalska")).toMatchObject({
+      uid: "a",
+      personId: "kowalska",
+    });
+  });
+
   /** A person page, live or a draft. */
   function personPage(id: string, fields: Data = {}) {
     stored.set(`nodes/${id}`, {
@@ -959,7 +996,7 @@ describe("claimAnswers", () => {
 
     const result = await claim(1, account("a"));
 
-    expect(result).toEqual({ claimed: 2, settled: [] });
+    expect(result).toEqual({ claimed: 2, settled: [], left: 0 });
     expect(stored.has(`declarationAnswers/c1_anon:${readerId(1)}`)).toBe(false);
     expect(stored.get("declarationAnswers/c1_a")).toMatchObject({
       extractId: "c1",
@@ -993,7 +1030,11 @@ describe("claimAnswers", () => {
     await answer("a", "1980-01-01");
     await answerAs(stranger(1), "1979-07-15");
 
-    expect(await claim(1, account("a"))).toEqual({ claimed: 0, settled: [] });
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 0,
+      settled: [],
+      left: 0,
+    });
 
     expect(stored.get("declarationAnswers/c1_a")).toMatchObject({
       value: "1980-01-01",
@@ -1014,7 +1055,11 @@ describe("claimAnswers", () => {
     await answerAs(unconfirmed("u"), "1980-01-01");
     await answerAs(stranger(1), "1979-07-15");
 
-    expect(await claim(1, account("u"))).toEqual({ claimed: 1, settled: [] });
+    expect(await claim(1, account("u"))).toEqual({
+      claimed: 1,
+      settled: [],
+      left: 0,
+    });
 
     expect(stored.get("declarationAnswers/c1_u")).toMatchObject({
       value: "1979-07-15",
@@ -1032,7 +1077,11 @@ describe("claimAnswers", () => {
     await answerAs(stranger(1), "1979-07-15");
     await answerAs(stranger(2), "1979-07-15");
 
-    expect(await claim(1, account("a"))).toEqual({ claimed: 1, settled: [] });
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 1,
+      settled: [],
+      left: 0,
+    });
     expect(stored.get("declarationExtracts/c1")).toMatchObject({
       status: "open",
     });
@@ -1052,6 +1101,7 @@ describe("claimAnswers", () => {
           },
         },
       ],
+      left: 0,
     });
     expect(stored.get("declarationExtracts/c1")).toMatchObject({
       status: "agreed",
@@ -1071,7 +1121,11 @@ describe("claimAnswers", () => {
     await expect(refused).rejects.toThrow(/Potwierdź adres/);
     expect(stored).toEqual(before);
 
-    expect(await claim(1, account("u"))).toEqual({ claimed: 1, settled: [] });
+    expect(await claim(1, account("u"))).toEqual({
+      claimed: 1,
+      settled: [],
+      left: 0,
+    });
     expect(stored.get("declarationAnswers/c1_u")).toMatchObject({
       votes: true,
     });
@@ -1089,6 +1143,7 @@ describe("claimAnswers", () => {
     expect(await claim(1, account("u", { email_verified: false }))).toEqual({
       claimed: 0,
       settled: [],
+      left: 0,
     });
     expect(stored).toEqual(before);
 
@@ -1099,6 +1154,7 @@ describe("claimAnswers", () => {
     expect(await claim(2, account("u", { email_verified: false }))).toEqual({
       claimed: 0,
       settled: [],
+      left: 0,
     });
     expect(stored).toEqual(skipped);
   });
@@ -1169,7 +1225,11 @@ describe("claimAnswers", () => {
     await answerAs(stranger(1), "1979-07-15");
     crop("c1", { imageHash: "recut" });
 
-    expect(await claim(1, account("a"))).toEqual({ claimed: 0, settled: [] });
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 0,
+      settled: [],
+      left: 0,
+    });
 
     expect(stored.has(`declarationAnswers/c1_anon:${readerId(1)}`)).toBe(false);
     expect(stored.has("declarationAnswers/c1_a")).toBe(false);
@@ -1189,7 +1249,11 @@ describe("claimAnswers", () => {
     const extract = stored.get("declarationExtracts/c1");
     const limit = stored.get(`${LIMITS}_a`);
 
-    expect(await claim(1, account("a"))).toEqual({ claimed: 0, settled: [] });
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 0,
+      settled: [],
+      left: 0,
+    });
     // Nothing written: every write here stores a new object.
     expect([...stored.keys()].sort()).toEqual(paths);
     expect(stored.get("declarationAnswers/c1_a")).toBe(moved);
@@ -1231,5 +1295,80 @@ describe("claimAnswers", () => {
         path.startsWith("declarationAnswers/") && data.votes === true,
     );
     expect(voting).toHaveLength(READER_DAILY_LIMIT);
+  });
+
+  // 2026-10-31: one of twenty crops lost to contention, and the claim stopped
+  // with eight readings under the browser's id.
+  it("moves the rest when one crop's transaction fails among the others, and that crop once they are done", async () => {
+    // More crops than a claim works on at once, so another round follows the
+    // one the failure is in.
+    const crops = Array.from({ length: 25 }, (_, i) => `c${i}`);
+    for (const id of crops) {
+      crop(id);
+      await answerAs(stranger(1), "1979-07-15", id);
+    }
+    aborting.set("declarationExtracts/c3", 1);
+
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 25,
+      settled: [],
+      left: 0,
+    });
+    for (const id of crops) {
+      expect(stored.get(`declarationAnswers/${id}_a`)).toMatchObject({
+        votes: true,
+      });
+    }
+    expect(stored.get(`${LIMITS}_a`)).toMatchObject({ count: 25 });
+  });
+
+  it("leaves what fails alone too under the browser's id, gives back its votes, and moves it with the next claim", async () => {
+    crop("c1");
+    crop("c2");
+    crop("c3");
+    for (const id of ["c1", "c2", "c3"]) {
+      await answerAs(stranger(1), "1979-07-15", id);
+    }
+    const from = anonymousUid(readerId(1));
+    stored.set(`declarationReaderFinds/${from}_kowalska`, {
+      uid: from,
+      personId: "kowalska",
+      extractId: "c1",
+    });
+    // c1 fails with the others and alone; c2 with the others only, and is
+    // not tried alone once c1 has failed there.
+    aborting.set("declarationExtracts/c1", 2);
+    aborting.set("declarationExtracts/c2", 1);
+
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 1,
+      settled: [],
+      left: 2,
+    });
+    expect(stored.get(`declarationAnswers/c1_${from}`)).toMatchObject({
+      votes: false,
+    });
+    expect(stored.get(`declarationAnswers/c2_${from}`)).toMatchObject({
+      votes: false,
+    });
+    expect(stored.get("declarationAnswers/c3_a")).toMatchObject({
+      votes: true,
+    });
+    // The votes taken for the two are given back, and the finds go to the
+    // account all the same.
+    expect(stored.get(`${LIMITS}_a`)).toMatchObject({ count: 1 });
+    expect(stored.get("declarationReaderFinds/a_kowalska")).toMatchObject({
+      uid: "a",
+    });
+
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 2,
+      settled: [],
+      left: 0,
+    });
+    expect(stored.get("declarationAnswers/c1_a")).toMatchObject({
+      votes: true,
+    });
+    expect(stored.get(`${LIMITS}_a`)).toMatchObject({ count: 3 });
   });
 });
