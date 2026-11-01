@@ -154,6 +154,11 @@ test("oswiadczenia", OSWIADCZENIA, async ({ page }, testInfo) => {
     "Zobacz listę",
   );
   await expect(page.getByTestId("declaration-skip")).toHaveText("Pomiń");
+  // The crop's own declaration, at the foot of its card, before any answer.
+  await expect(page.getByTestId("declaration-document-link")).toHaveAttribute(
+    "href",
+    `https://${DOCUMENT_HOST}/oswiadczenia/wycinek-1.pdf`,
+  );
   // The way on to /pomoc, at the foot of the page: „Działaj z nami” leads
   // here now rather than there.
   const moreHelp = page.getByTestId("declaration-more-help");
@@ -249,9 +254,10 @@ test("oswiadczenia-niepelna-data", OSWIADCZENIA, async ({ page }, testInfo) => {
   await expectFitsThePhone(page, testInfo);
 });
 
-/** The next crop, and under it the line about the one just answered: what was
- * saved, the link to the whole declaration in dark sage (round
- * bip-czytanie-r2), and that the crop has enough readings now. */
+/** The next crop, with the link to its own whole declaration in dark sage at
+ * the foot of its card (rounds bip-czytanie-r2, bip-poprzedni-r2), and under
+ * it the line about the one just answered: what was saved, and that the crop
+ * has enough readings now. */
 test("oswiadczenia-po-odpowiedzi", OSWIADCZENIA, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const desk = readerAtWork();
@@ -275,12 +281,18 @@ test("oswiadczenia-po-odpowiedzi", OSWIADCZENIA, async ({ page }, testInfo) => {
   ]);
   askedSignedIn(asked);
 
+  // The crop on the card, not the one just answered: under the next crop,
+  // that one's link read as the next one's.
   const link = page.getByTestId("declaration-document-link");
+  await expect(link).toHaveCount(1);
   await expect(link).toHaveAttribute(
     "href",
-    `https://${DOCUMENT_HOST}/oswiadczenia/wycinek-1.pdf`,
+    `https://${DOCUMENT_HOST}/oswiadczenia/wycinek-2.pdf`,
   );
-  await expect(answered).toContainText(DOCUMENT_HOST);
+  await expect(page.getByTestId("declaration-task")).toContainText(
+    DOCUMENT_HOST,
+  );
+  await expect(answered.getByRole("link")).toHaveCount(0);
   // In the dark sage ink, not the blue one links elsewhere take.
   const inks = await link.evaluate((el) => {
     const probe = document.createElement("span");
