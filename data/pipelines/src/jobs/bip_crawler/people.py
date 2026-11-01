@@ -35,7 +35,9 @@ Politeness is the blind crawl's: robots.txt, one request per host per
 through the API their pages are drawn from (``madkom``), FINN's registers
 through the JSON-RPC calls of the e-Urząd app their pages embed (``finn``),
 Wrota Lubelszczyzny's document lists through the JSON their pages are drawn
-from (``wrota``), other pages a script draws are rendered (``render``).
+from (``wrota``), SISCO eDc's attachment tables through the call their pages'
+script makes (``sisco``), other pages a script draws are rendered
+(``render``).
 """
 
 from __future__ import annotations
@@ -57,13 +59,13 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 from urllib.parse import urljoin, urlsplit
 
 from analysis.bip_people_of_interest import BipPeopleOfInterest
 from conductor import setup_context
 from entities.bip import BipPersonOfInterest
-from jobs.bip_crawler import finn, wrota
+from jobs.bip_crawler import finn, sisco, wrota
 from jobs.bip_crawler import render as rendering
 from jobs.bip_crawler.madkom import Madkom
 from scrapers.bip.classify import (
@@ -92,7 +94,7 @@ from scrapers.bip.people import (
 )
 from scrapers.bip.registry import parse_subjects_xml
 from scrapers.bip.units import UnitSeed, scope_of, terc_index, unit_seeds
-from scrapers.common.fetch import HttpResult, http_get, http_post_json
+from scrapers.common.fetch import HttpResult, Payload, http_get, http_post
 from scrapers.common.links import LinkContext, extract_link_contexts
 from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.krs.data import read_public_bodies_catalogue
@@ -411,7 +413,7 @@ class PeopleSearch:
         options: PeopleOptions,
         *,
         fetch: Callable[[str, float, str], HttpResult] | None = None,
-        post: Callable[[str, dict[str, Any], float, str], HttpResult] | None = None,
+        post: Callable[[str, Payload, float, str], HttpResult] | None = None,
         robots_allowed: Callable[[str], bool] = lambda url: True,
         robots_unreachable: Callable[[str], bool] = lambda url: False,
         limiter: HostTokenBucket | None = None,
@@ -444,7 +446,7 @@ class PeopleSearch:
         self._sitemaps: dict[str, list[str]] = {}
         self._sitemap_locks: dict[str, threading.Lock] = {}
         self.fetch = fetch or _one_hop
-        self.post = post or http_post_json
+        self.post = post or http_post
         self.robots_allowed = robots_allowed
         self.robots_unreachable = robots_unreachable
         # No burst: the shared default lets a host take 60 requests at once, and
@@ -512,8 +514,8 @@ class PeopleSearch:
             url = urljoin(result.url, result.location)
         return REFUSED if _refused(result) else result
 
-    def _post(self, url: str, payload: dict[str, Any]) -> HttpResult | str:
-        """An API call (`finn`), asked as `_get` asks for a page: robots.txt,
+    def _post(self, url: str, payload: Payload) -> HttpResult | str:
+        """An API call (`finn`, `sisco`), asked as `_get` asks for a page: robots.txt,
         which says the same of any method, the host's rate and its "not now"s;
         no redirect followed."""
         if not self.robots_allowed(url):
@@ -887,6 +889,7 @@ class PeopleSearch:
         )
         self._read_eurzad(out, result, seekers, prefer)
         self._read_wrota(out, result, seekers, prefer)
+        self._read_sisco(out, result, title, seekers)
         if depth < self.options.max_depth:
             frontier.follow(follow, seekers, depth + 1, prefer)
 
@@ -967,6 +970,21 @@ class PeopleSearch:
                     first_names=self.first_names,
                 )
             )
+
+    def _read_sisco(
+        self, out: UnitSearch, page: HttpResult, title: str, seekers: list[Seeker]
+    ) -> None:
+        """The attachments a SISCO eDc declarations page draws into an empty
+        table, read through its script's call (`sisco`)."""
+        links = sisco.attachments(page, title, self._post)
+        if links is None:
+            return
+        folded = fold(title)
+        if not (DECLARATION.search(folded) or ASSETS.search(folded)):
+            out.declaration_pages += 1  # its breadcrumb says so, not its title
+        out.found.extend(
+            candidates(page.url, title, links, seekers, first_names=self.first_names)
+        )
 
     def _drawn(self, url: str) -> HttpResult:
         """``url`` rendered, paid for as the requests it made: a turn of the
