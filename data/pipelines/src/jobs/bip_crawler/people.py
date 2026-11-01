@@ -97,6 +97,7 @@ from scrapers.bip.people import (
     office_terms,
     same_file,
     satisfied,
+    says_declarations,
     stem,
     url_words,
 )
@@ -250,6 +251,9 @@ class _Frontier:
     sequence: int = 0
     #: A queued page as it was linked, where normalize_url changed it.
     linked: dict[str, str] = field(default_factory=dict)
+    #: Pages a link that says declarations led to (`says_declarations`): one
+    #: counts as a declarations page whatever its title says.
+    declared: set[str] = field(default_factory=set)
 
     def __bool__(self) -> bool:
         return bool(self.heap)
@@ -300,6 +304,8 @@ class _Frontier:
                 continue
             score = link_score(link, seekers, depth, prefer)
             if score > -3:
+                if says_declarations(link):
+                    self.declared.add(target)
                 self.add(target, score + bonus, depth, link.url)
 
 
@@ -803,7 +809,8 @@ class PeopleSearch:
                 out.files[url] = result  # a file behind a page-like link
                 continue
             out.read.add(url)
-            self._read_page(out, result, depth, frontier, seekers, prefer)
+            led = url in frontier.declared
+            self._read_page(out, result, depth, frontier, seekers, prefer, led)
         # A host that kept saying "not now" leaves the walk to a later run; a
         # page or two that never answer (a module down) settle nothing, or
         # every run would walk the unit again.
@@ -838,7 +845,10 @@ class PeopleSearch:
         frontier: _Frontier,
         seekers: list[Seeker],
         prefer: re.Pattern[str] | None = None,
+        led: bool = False,
     ) -> None:
+        """Read one page: its candidates, and its links queued. ``led``: a link
+        that says declarations led here (`_Frontier.declared`)."""
         out.pages += 1
         out.pages_ok += 1
         if depth == 0:
@@ -904,7 +914,10 @@ class PeopleSearch:
         self._read_wrota(out, result, seekers, prefer)
         self._read_sisco(out, result, title, seekers)
         if depth < self.options.max_depth:
-            says = DECLARATION.search(folded_title + " " + fold(where))
+            # Gdańsk's pages are all titled alike: its councillors' list for a
+            # year, reached from "Oświadczenia - 2024 rok", said nothing of
+            # declarations, and its links ranked below every menu (11-01).
+            says = led or DECLARATION.search(folded_title + " " + fold(where))
             bonus = DECLARATIONS_BONUS if says else 0.0
             frontier.follow(follow, seekers, depth + 1, prefer, bonus)
 

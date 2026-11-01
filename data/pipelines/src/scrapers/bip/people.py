@@ -387,7 +387,14 @@ def link_score(
         score += 2
     if prefer is not None and prefer.search(text):
         score += 3
-    if any(s.named_in(text)[0] for s in seekers):
+    named = [s.named_in(text) for s in seekers]
+    if any(surname for surname, _ in named):
+        score += 3
+    # First name and all: a person's own page, read before the menus around
+    # it. Gdańsk lists each year's councillors as links to their pages, its
+    # titles all alike; the walk read every year's menus first, 840 pages and
+    # no declaration (11-01).
+    if any(surname and first for surname, first in named):
         score += 3
     # A label that says it is a seeker's declaration, first name and all, is
     # read before the next person on a list: Mazowieckie's councillors' pages
@@ -402,6 +409,16 @@ def link_score(
     if NEGATIVE.search(text):
         score -= 4
     return score - 0.5 * depth
+
+
+def says_declarations(link: LinkContext) -> bool:
+    """Whether a link says it leads to declarations: its label or address, or
+    the menu sections and heading above a label that is no tender's."""
+    text = fold(link.anchor) + " " + url_words(link.url)
+    if DECLARATION.search(text):
+        return True
+    context = fold(link.path + " " + link.heading)
+    return bool(DECLARATION.search(context) and not NEGATIVE.search(text))
 
 
 @dataclass(frozen=True)
