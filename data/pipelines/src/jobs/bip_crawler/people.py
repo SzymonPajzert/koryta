@@ -36,8 +36,8 @@ through the API their pages are drawn from (``madkom``), FINN's registers
 through the JSON-RPC calls of the e-Urząd app their pages embed (``finn``),
 Wrota Lubelszczyzny's document lists through the JSON their pages are drawn
 from (``wrota``), SISCO eDc's attachment tables through the call their pages'
-script makes (``sisco``), other pages a script draws are rendered
-(``render``).
+script makes (``sisco``), BUK Softres's file buttons as links (``softres``),
+other pages a script draws are rendered (``render``).
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ from urllib.parse import urljoin, urlsplit
 from analysis.bip_people_of_interest import BipPeopleOfInterest
 from conductor import setup_context
 from entities.bip import BipPersonOfInterest
-from jobs.bip_crawler import finn, sisco, wrota, zeto
+from jobs.bip_crawler import finn, sisco, softres, wrota, zeto
 from jobs.bip_crawler import render as rendering
 from jobs.bip_crawler.madkom import Madkom
 from scrapers.bip.classify import (
@@ -853,6 +853,8 @@ class PeopleSearch:
         title, links = extract_link_contexts(
             result.content, result.url, result.content_type
         )
+        # Files offered as form buttons, under the position's name (`softres`).
+        links = links + softres.files(result.content, result.url)
         # A persons list's files, each under its person (`wrota.persons`).
         if owners := wrota.persons(result.content, result.url):
             links = [
