@@ -1,5 +1,5 @@
 <template>
-  <HomeSection color>
+  <HomeSection color data-testid="home-hero">
     <!-- Desktop only. On a phone the logo and the headline are most of the
          first screen, and neither of them is something a reader can act on -
          the search below is, so it starts the page instead. -->
@@ -46,7 +46,7 @@
          the logo and the h1 off the first screen also took away the one line
          that said what the site is for, and a search box on its own does not
          say it. One sentence, above the field it explains, so the first screen
-         reads as a sentence, a search and then the map. -->
+         reads as a sentence, a search, „Działaj z nami” and then the map. -->
     <v-container fluid class="d-md-none px-4 pt-4 pb-0">
       <!-- Full emphasis, not medium: this sits on the green band, where
            rgba(0,0,0,.6) is the wrong side of readable. -->
@@ -68,11 +68,11 @@
         class="home-actions d-flex flex-wrap align-center ga-4 pa-4 pa-md-8"
       >
         <omni-search />
-        <!-- Desktop only. Wrapped under a full width search field it read as a
-             stray control rather than as the search's companion, and on a
-             phone the first screen is better spent getting the reader to the
-             map than to a second call to action. The app bar carries the same
-             link on a desktop.
+        <!-- On a phone too, under the search and as wide as it - see
+             `.home-cta` below. It was taken off phones on 2026-08-25 for
+             reading as a stray control wrapped under the search ("dziwnie po
+             lewej"). It came back once it led to a task a reader can start on
+             the spot.
 
              To /oswiadczenia rather than /pomoc: reading a date off a crop is
              a task a reader can start this minute, without an account, and the
@@ -82,7 +82,7 @@
           :append-icon="mdiChevronRight"
           color="secondary"
           border
-          class="text-none d-none d-md-inline-flex"
+          class="home-cta text-none"
           flat
           rounded="lg"
           slim
@@ -167,6 +167,22 @@ definePageMeta({
 @media (min-width: 960px) {
   .home-actions :deep(.v-input) {
     max-width: 66%;
+  }
+}
+
+/* Below `sm` the search fills its line and the button wraps under it, sized
+   the way the search is: the whole line up to the search's 400px, inset by the
+   8px OmniSearch carries on either side (`ma-2`, for the app bar). Without the
+   inset the button stood 8px left of the search, which is what read as
+   „dziwnie po lewej” and took it off phones in August. The 100% basis is what
+   makes it wrap, at any width up to `sm`, rather than squeeze in beside the
+   search. 44px, a thumb's height, where it is the only thing on its line. */
+@media (max-width: 599.98px) {
+  .home-cta {
+    flex: 1 1 100%;
+    max-width: 400px;
+    height: 44px;
+    margin-inline: 8px;
   }
 }
 </style>
