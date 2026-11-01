@@ -357,11 +357,29 @@ def test_a_robots_txt_that_says_not_now_is_a_no_for_a_while(
     assert not cache.allowed("https://bip.x.pl/private/x")
 
 
+@pytest.mark.parametrize("status", [401, 403, 404, 410])
+def test_a_robots_txt_that_answers_4xx_is_none(
+    monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    """RFC 9309: the crawler may go anywhere. res.finn.pl, FINN e-Urząd's MinIO
+    store, answers 403 AccessDenied: a bucket holds no such key."""
+
+    class Response:
+        status_code = status
+        text = "<?xml version='1.0'?><Error><Code>AccessDenied</Code></Error>"
+
+    monkeypatch.setattr(web.cffi_requests, "get", lambda url, **_: Response())
+    cache = RobotsCache("test-agent")
+    assert cache.allowed("https://res.finn.pl/eurzad/447/1/1113346/x.pdf")
+    assert not cache.unreachable("https://res.finn.pl/eurzad/447/1/1113346/x.pdf")
+
+
+@pytest.mark.parametrize("status", [500, 503])
 def test_an_error_status_denies_whatever_its_body(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, status: int
 ) -> None:
     class Response:
-        status_code = 500
+        status_code = status
         text = ""
 
     monkeypatch.setattr(web.cffi_requests, "get", lambda url, **_: Response())
