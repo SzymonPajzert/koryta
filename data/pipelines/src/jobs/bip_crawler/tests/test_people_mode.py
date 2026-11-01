@@ -632,6 +632,24 @@ def test_a_mans_declined_surname_is_his_beside_his_first_name():
     assert anna.named_in(fold("Anny Kaczmarek")) == (True, True)
 
 
+def test_a_page_filed_under_declarations_makes_its_named_files_declarations():
+    # Podkarpackie: /oswiadczenia-majatkowe/2025/radni-wojewodztwa, titled
+    # "Radni Województwa", each file labelled with a councillor's name alone.
+    page = "https://bip.x.pl/oswiadczenia-majatkowe/2025/radni-wojewodztwa"
+    baran = Seeker.of("b", "Bronisław", "Baran")
+    named = LinkContext(
+        "https://bip.x.pl/component/govarticle?task=downloadAttachment&id=871",
+        "BARAN BRONISŁAW",
+    )
+    nobody = LinkContext("https://bip.x.pl/f/zarzadzenie.pdf", "Zarządzenie nr 5")
+    found = candidates(page, "Radni Województwa", [named, nobody], [baran])
+    assert [(c.key, c.declaration_like) for c in found] == [("b", True)]
+    # A section of lustration statements is no asset declaration.
+    lustration = "https://bip.x.pl/oswiadczenia-lustracyjne/2025"
+    (other,) = candidates(lustration, "2025", [named], [baran])
+    assert not other.declaration_like
+
+
 def test_a_page_titled_with_a_namesake_lends_nobody_its_unnamed_files():
     names = frozenset(stem(n, min_a=4) for n in ("Michał", "Józef"))
     link = LinkContext("https://bip.x.pl/f/1.pdf", "oświadczenie majątkowe za 2024")

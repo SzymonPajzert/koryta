@@ -731,6 +731,13 @@ def candidates(
         [s for s in seekers if s.name in title_names] if len(title_names) == 1 else []
     )
     page_declarations = bool(DECLARATION.search(title) or ASSETS.search(title))
+    # An address can say what a title does not: Podkarpackie's councillors
+    # stand on /oswiadczenia-majatkowe/2025/radni-wojewodztwa, titled "Radni
+    # Województwa", each file labelled with a name alone (11-01: 39 named, none
+    # taken). Enough for the files a page names people in; it lends nobody a
+    # file that names nobody.
+    address = url_words(page_url)
+    filed_under = bool(DECLARATION.search(address) and ASSETS.search(address))
     # A page about one person nobody seeks ("... - B. Kułacz - Stan majątkowy na
     # 31.12.2025 r."): its files are theirs, whatever the labels say. Unless a
     # seeker could be that person in a form named_in misses ("J. Kaczmarka").
@@ -783,7 +790,10 @@ def candidates(
         if not named and not somebody_else and page_people:
             named = [(s, s.named_in(title)[1]) for s in page_people]
         declaration_like = bool(
-            DECLARATION.search(around) or ASSETS.search(around) or page_declarations
+            DECLARATION.search(around)
+            or ASSETS.search(around)
+            or page_declarations
+            or filed_under
         )
         years = _years(around)
         base: float = (3 if declaration_like else 0) + (
