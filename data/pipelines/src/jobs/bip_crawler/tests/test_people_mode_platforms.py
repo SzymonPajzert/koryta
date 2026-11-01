@@ -325,3 +325,30 @@ def test_a_start_whose_robots_txt_does_not_answer_is_unreachable(tmp_path):
     )
     people.run(store.people_to_search(refresh=False, max_priority=None, limit=None))
     assert store.people["n"].reason == "unreachable"
+
+
+def test_a_seekers_declaration_page_comes_before_the_next_person(tmp_path):
+    # Mazowieckie's sejmik: every councillor sought, a list of their pages,
+    # each linking a page per declaration, the file one click further.
+    people = [("Grzegorz", "Benedykciński"), ("Katarzyna", "Bornowska")]
+    people += [("Anna", "Brzezińska")]
+    om = "/oswiadczenia-majatkowe"
+    sites = {
+        "https://u1.pl": html(
+            "Oświadczenia majątkowe",
+            "".join(f'<a href="{om}?p=Radni^{s}">{s}@{f}</a>' for f, s in people),
+        )
+    }
+    for first, last in people:
+        sites[f"https://u1.pl{om}?p=Radni^{last}"] = html(
+            "Oświadczenia majątkowe",
+            f'<a href="{om}/{last}.html">Oświadczenie majątkowe {first} {last}</a>',
+        )
+        sites[f"https://u1.pl{om}/{last}.html"] = html(
+            f"Oświadczenie majątkowe {first} {last}",
+            f'<a href="/f/{last}.pdf">pobierz</a>',
+        )
+        sites[f"https://u1.pl/f/{last}.pdf"] = (200, "application/pdf", PDF + b"x")
+    rows = [row(last, "u1", first, last) for first, last in people]
+    _, store, _, _ = search(tmp_path, sites, rows, unit_pages=3, pages_per_candidacy=1)
+    assert store.people["Benedykciński"].status == "found"

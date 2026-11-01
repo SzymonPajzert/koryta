@@ -338,6 +338,13 @@ def link_score(
         score += 3
     if any(s.named_in(text)[0] for s in seekers):
         score += 3
+    # A label that says it is a seeker's declaration, first name and all, is
+    # read before the next person on a list: Mazowieckie's councillors' pages
+    # each link a page per declaration, and the walk read 120 people's pages,
+    # out of time, before any (11-01).
+    anchor = fold(link.anchor)
+    if DECLARATION.search(anchor) and any(all(s.named_in(anchor)) for s in seekers):
+        score += 8
     years = [int(y) for y in YEAR.findall(text)]
     if years and max(years) >= 2018:
         score += 1
