@@ -1,11 +1,11 @@
 """robots.txt handling shared by both crawlers.
 
 `RobotsCache` is the single implementation: it tries https then http, treats a
-missing/empty robots.txt as allow-all, an unreachable host or a hard error
-status (403/5xx) as deny, and caches per host (thread-safe — fetcher threads
-share it). 429 is rate limiting, not a robots verdict, so it is not cached as
-a deny. `Robots` reads the file. `WebImpl` keeps the old Context-facing method
-delegating here.
+missing or empty robots.txt as allow-all (any 4xx but 429, as RFC 9309 has
+it), an unreachable host or a 5xx as deny, and caches per host (thread-safe —
+fetcher threads share it). 429 is rate limiting, not a robots verdict, so it is
+not cached as a deny. `Robots` reads the file. `WebImpl` keeps the old
+Context-facing method delegating here.
 """
 
 import functools
@@ -208,25 +208,28 @@ class RobotsCache:
             except Exception:
                 continue
             reachable = True
-            # 404 (no robots) and an empty 200 allow, a 200 parses, a 429 says
-            # no for now; any other status is a hard error and denies, empty or
-            # not (a 500 with no body used to allow all).
-            if response.status_code == 404 or (
-                response.status_code == 200 and not response.text.strip()
+            # RFC 9309 (2.3.1.3): a 4xx says there is no robots.txt and the
+            # crawler may go anywhere; so does an empty 200. A storage bucket
+            # answers 403 AccessDenied for a key it does not hold (res.finn.pl,
+            # FINN e-Urząd's files, 11-01). A 200 parses, a 429 is no for now,
+            # a 5xx says no, empty or not (a 500 with no body used to allow all).
+            status = response.status_code
+            if (400 <= status < 500 and status != 429) or (
+                status == 200 and not response.text.strip()
             ):
                 allow_all = True
                 break
-            if response.status_code == 200:
+            if status == 200:
                 parser = Robots(robots_lines(response.text), self.user_agent)
                 break
-            if response.status_code == 429:
+            if status == 429:
                 busy = True
                 break
         with self._lock:
             if busy:  # asked again once the while is over
                 self._busy[host] = self._clock() + ROBOTS_BUSY_S
                 return None
-            # Unreachable, or an error status (403/5xx): deny.
+            # Unreachable, or a 5xx: deny.
             if not reachable or (parser is None and not allow_all):
                 self._unreachable.add(host)
             self._parsers[host] = parser
