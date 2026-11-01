@@ -25,6 +25,11 @@ _EMPTY_REPLY = re.compile(r"curl: \(52\)")
 #: four more BIPs of the people mode (115 candidacies on 10-30) send "identity,
 #: compress" over a plain page: read with curl's decoding off, it is all there.
 _UNKNOWN_ENCODING = re.compile(r"curl: \(61\)")
+#: curl's error for a reply that is no HTTP. ZETO-RZESZÓW's servers spoil the
+#: connection a &printtype=pdf answer came on, and the next request on it
+#: failed so ("Invalid status line"): Domaradz lost its declarations page to
+#: it on 10-31. Asked again on a fresh connection it answers.
+_WEIRD_REPLY = re.compile(r"curl: \(8\)")
 
 _sessions = threading.local()
 #: The certificates every GET verifies against; None is curl's own roots.
@@ -62,6 +67,15 @@ def _session(impersonate: str) -> requests.Session:
         session = requests.Session(impersonate=impersonate)  # type: ignore[arg-type]
         cache[impersonate] = session
     return session
+
+
+def _fresh_session(impersonate: str) -> None:
+    """Let the thread's next request open a new connection."""
+    cache = getattr(_sessions, "cache", None) or {}
+    session = cache.pop(impersonate, None)
+    if session is not None:
+        with contextlib.suppress(Exception):
+            session.close()
 
 
 @dataclass(frozen=True)
@@ -122,6 +136,9 @@ def http_get(
                 response = get(http_version=CurlHttpVersion.V1_1)
             elif _UNKNOWN_ENCODING.search(str(exc)):
                 response, decoded = raw(), False
+            elif _WEIRD_REPLY.search(str(exc)):
+                _fresh_session(impersonate)
+                response = get()
             else:
                 raise
     except Exception as exc:

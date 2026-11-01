@@ -368,3 +368,33 @@ def test_an_error_status_denies_whatever_its_body(
     cache = RobotsCache("test-agent")
     assert not cache.allowed("https://bip.x.pl/a")
     assert cache.unreachable("https://bip.x.pl/a")
+
+
+def test_a_reply_that_is_no_http_is_asked_again_on_a_fresh_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ZETO-RZESZÓW: the request after a &printtype=pdf answer, on the
+    connection it spoiled, fails with curl (8)."""
+
+    class Spoilt:
+        calls = 0
+
+        def get(self, url: str, **kwargs: object) -> object:
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("Failed to perform, curl: (8) Invalid status line")
+
+            class Response:
+                status_code = 200
+                content = b"<html></html>"
+                headers = {"Content-Type": "text/html"}
+
+            Response.url = url  # type: ignore[attr-defined]
+            return Response()
+
+    server = Spoilt()
+    fresh: list[str] = []
+    monkeypatch.setattr(fetch, "_session", lambda impersonate: server)
+    monkeypatch.setattr(fetch, "_fresh_session", fresh.append)
+    result = fetch.http_get("https://bip.domaradz.pl/Oswiadczenia_majatkowe")
+    assert result.ok and server.calls == 2 and fresh == ["chrome136"]

@@ -65,7 +65,7 @@ from urllib.parse import urljoin, urlsplit
 from analysis.bip_people_of_interest import BipPeopleOfInterest
 from conductor import setup_context
 from entities.bip import BipPersonOfInterest
-from jobs.bip_crawler import finn, sisco, wrota
+from jobs.bip_crawler import finn, sisco, wrota, zeto
 from jobs.bip_crawler import render as rendering
 from jobs.bip_crawler.madkom import Madkom
 from scrapers.bip.classify import (
@@ -849,6 +849,15 @@ class PeopleSearch:
         if owners := wrota.persons(result.content, result.url):
             links = [
                 replace(x, row=owners[x.url]) if x.url in owners else x for x in links
+            ]
+        # A declarations page only its breadcrumb says is one: its files carry
+        # the breadcrumb, not its title, so it lends nobody a name (`zeto`).
+        if (where := zeto.trail(result.content)) and DECLARATION.search(fold(where)):
+            links = [
+                replace(x, heading=f"{x.heading} | {where}".lstrip(" |"))
+                if is_file_link(x.url)
+                else x
+                for x in links
             ]
         follow = links
         if (
