@@ -34,7 +34,8 @@ Politeness is the blind crawl's: robots.txt, one request per host per
 ``--rate`` seconds, the same User-Agent and fetch. Madkom's BIPs are read
 through the API their pages are drawn from (``madkom``), FINN's registers
 through the JSON-RPC calls of the e-Urząd app their pages embed (``finn``),
-other pages a script draws are rendered (``render``).
+Wrota Lubelszczyzny's document lists through the JSON their pages are drawn
+from (``wrota``), other pages a script draws are rendered (``render``).
 """
 
 from __future__ import annotations
@@ -62,7 +63,7 @@ from urllib.parse import urljoin, urlsplit
 from analysis.bip_people_of_interest import BipPeopleOfInterest
 from conductor import setup_context
 from entities.bip import BipPersonOfInterest
-from jobs.bip_crawler import finn
+from jobs.bip_crawler import finn, wrota
 from jobs.bip_crawler import render as rendering
 from jobs.bip_crawler.madkom import Madkom
 from scrapers.bip.classify import (
@@ -195,6 +196,11 @@ class UnitSearch:
     files: dict[str, HttpResult] = field(default_factory=dict)
     #: FINN e-Urząd clients whose registers the walk has read (`finn`).
     eurzad: set[str] = field(default_factory=set)
+    #: Wrota Lubelszczyzny's document lists the walk has read (`wrota`).
+    lists: set[str] = field(default_factory=set)
+    #: Register records and list documents the walk has opened, by person
+    #: (`entries_to_open`): a council's lists come one a year or a person.
+    opened: Counter[tuple[str, str]] = field(default_factory=Counter)
 
 
 #: Hosts no unit's BIP lives on, though a unit's website may link to them.
@@ -463,6 +469,8 @@ class PeopleSearch:
         self.madkom = Madkom(self._get, robots_allowed)
         #: FINN's registers, read through the e-Urząd app their pages embed.
         self.eurzad = finn.Eurzad(self._post)
+        #: Wrota Lubelszczyzny's document lists, read through their JSON.
+        self.wrota = wrota.Wrota(self._get)
         #: Whether e-Urząd's files are out of the crawler's reach (robots.txt),
         #: said once a run.
         self._eurzad_files_said = False
@@ -835,6 +843,11 @@ class PeopleSearch:
         title, links = extract_link_contexts(
             result.content, result.url, result.content_type
         )
+        # A persons list's files, each under its person (`wrota.persons`).
+        if owners := wrota.persons(result.content, result.url):
+            links = [
+                replace(x, row=owners[x.url]) if x.url in owners else x for x in links
+            ]
         follow = links
         if (
             self.render is not None
@@ -873,6 +886,7 @@ class PeopleSearch:
             candidates(result.url, title, links, seekers, first_names=self.first_names)
         )
         self._read_eurzad(out, result, seekers, prefer)
+        self._read_wrota(out, result, seekers, prefer)
         if depth < self.options.max_depth:
             frontier.follow(follow, seekers, depth + 1, prefer)
 
@@ -902,7 +916,12 @@ class PeopleSearch:
                     )
                 continue
             registers = self.eurzad.registers(
-                client, seekers, prefer, self.first_names, self.options.per_person
+                client,
+                seekers,
+                prefer,
+                self.first_names,
+                self.options.per_person,
+                out.opened,
             )
             for register in registers:
                 out.declaration_pages += 1
@@ -915,6 +934,39 @@ class PeopleSearch:
                         first_names=self.first_names,
                     )
                 )
+
+    def _read_wrota(
+        self,
+        out: UnitSearch,
+        page: HttpResult,
+        seekers: list[Seeker],
+        prefer: re.Pattern[str] | None,
+    ) -> None:
+        """The documents of the Wrota Lubelszczyzny declarations list ``page``
+        is, those that may be the seekers', each as a page of its own (`wrota`);
+        a list once a walk."""
+        listing = wrota.document_list(page.content, page.url)
+        if listing is None or not listing.declarations or listing.source in out.lists:
+            return
+        out.lists.add(listing.source)
+        out.declaration_pages += 1
+        for document in self.wrota.documents(
+            listing,
+            seekers,
+            prefer,
+            self.first_names,
+            self.options.per_person,
+            out.opened,
+        ):
+            out.found.extend(
+                candidates(
+                    document.url,
+                    document.title,
+                    list(document.links),
+                    seekers,
+                    first_names=self.first_names,
+                )
+            )
 
     def _drawn(self, url: str) -> HttpResult:
         """``url`` rendered, paid for as the requests it made: a turn of the

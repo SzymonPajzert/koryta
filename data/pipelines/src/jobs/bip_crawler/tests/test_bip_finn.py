@@ -9,9 +9,9 @@ from typing import Any
 
 import pytest
 
-from jobs.bip_crawler.finn import FILES, MAX_PAGES, UNNAMED, Eurzad, clients
+from jobs.bip_crawler.finn import FILES, MAX_PAGES, Eurzad, clients
 from jobs.bip_crawler.tests.test_people_mode_review import PDF, Web, html, row, search
-from scrapers.bip.people import Seeker, candidates, office_terms
+from scrapers.bip.people import UNNAMED_ENTRIES, Seeker, candidates, office_terms
 from scrapers.common.fetch import HttpResult
 
 CLIENT = "pzwodzislawsl"
@@ -258,14 +258,14 @@ def test_a_namesakes_record_is_left_closed() -> None:
 
 def test_a_few_records_that_name_nobody_are_read_in_the_councils_registers() -> None:
     nobody = "Oświadczenie majątkowe na zakończenie V kadencji Rady Powiatu"
-    council = [record(i, nobody, 2018) for i in range(1, UNNAMED + 3)] + [
+    council = [record(i, nobody, 2018) for i in range(1, UNNAMED_ENTRIES + 3)] + [
         record(50, "Oświadczenie o stanie majątkowym za 2023 r. - Jacek Jarco")
     ]
     staff = [record(60, "Oświadczenie majątkowe pracownika", 2026)]
     names = {i: [{"id": i * 10, "nazwa": f"skan{i}.pdf"}] for i in range(1, 9)}
     app = App([COUNCIL, STAFF], {"WOZ.2124R": council, "WOZ.2124P": staff}, names)
     (register, _) = read(app, [WALA], office_terms(["Rada powiatu"]))
-    assert len(app.opened()) == UNNAMED
+    assert len(app.opened()) == UNNAMED_ENTRIES
     assert 50 not in app.opened() and 60 not in app.opened()
     # Files that name nobody, on a declarations register: the OCR step's.
     found = candidates(register.url, register.name, list(register.links), [WALA])
