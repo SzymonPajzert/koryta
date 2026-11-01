@@ -452,3 +452,31 @@ def test_an_id_link_that_is_a_file_ends_the_walk_and_comes_down_once(tmp_path):
     for i in (1, 2, 3):
         assert web.calls.count(f"https://u1.pl{get}{i}") == 1
     assert "https://u1.pl/dalej" not in web.calls
+
+
+def test_a_files_publication_record_names_nobody_it_is_about():
+    # Kraków's declaration cards (11-01): each version's row ends in who entered
+    # it, which took the PDF from the councillor the card is titled with.
+    card = "https://www.bip.krakow.pl/oswiadczenie/25420/karta/"
+    title = "BIP MK | Oświadczenie nr 25420, Sławomir Pietrzyk, rok: 2024"
+    pdf = LinkContext(
+        "https://www.bip.krakow.pl/oswiadczenia/osw_25420.pdf",
+        "zobacz",
+        row="zobacz 1.11 MB 2024-05-22 13:23:37 AGATA MICHALISZYN 1 (Najnowsza)",
+        heading="wersja",
+    )
+    pietrzyk = Seeker.of("p", "Sławomir", "Pietrzyk")
+    (found,) = candidates(card, title, [pdf], [pietrzyk])
+    assert (found.key, found.first_name, found.declaration_like) == ("p", True, True)
+    # A declarant named before the record stays the row's (Warka).
+    warka = LinkContext(
+        "https://warka.bipgminy.pl/f/1.pdf",
+        "Oświadczenie majątkowe złożone na koniec kadencji",
+        row="Oświadczenie majątkowe złożone na koniec kadencji Typ pliku: PDF, "
+        "Rozmiar: 700 KB Wytworzył: Grzegorz Szydło Udostępnił: Fronczek Mariusz "
+        "(2024-03-13 12:57:47)",
+    )
+    szydlo = Seeker.of("s", "Grzegorz", "Szydło")
+    page = "https://warka.bipgminy.pl/oswiadczenia"
+    (own,) = candidates(page, "Oświadczenia majątkowe", [warka], [szydlo])
+    assert (own.key, own.first_name) == ("s", True)
