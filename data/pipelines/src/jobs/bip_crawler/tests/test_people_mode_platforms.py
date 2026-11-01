@@ -19,7 +19,7 @@ from scrapers.bip.classify import normalize_url
 from scrapers.bip.people import Candidate, Seeker, candidates, satisfied
 from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
-from scrapers.common.links import LinkContext
+from scrapers.common.links import LinkContext, extract_link_contexts
 from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.stores import BipQueue, with_outcomes
 from stores.bip_bundles import LocalBundleStore
@@ -480,3 +480,64 @@ def test_a_files_publication_record_names_nobody_it_is_about():
     page = "https://warka.bipgminy.pl/oswiadczenia"
     (own,) = candidates(page, "Oświadczenia majątkowe", [warka], [szydlo])
     assert (own.key, own.first_name) == ("s", True)
+
+
+RYBNIK = (("Joanna", "Brzózka"), ("Marian", "Kaim"), ("Tadeusz", "Pałka"))
+
+
+def rybnik_detail(first: str, last: str, file: str) -> str:
+    """The page "Pokaż" opens: the person in a form field, the editor beside."""
+    return (
+        '<a href="/Default.aspx?Page=18&Id=667">Sylwia Grzyb (Kierownik Biura)</a>'
+        f"<div><strong>Nazwisko i imię</strong></div><div>{first} {last}</div>"
+        f'<span><a href="{file}">Oświadczenie majątkowe</a> [pdf - 1037 KB]</span>'
+    )
+
+
+def test_a_page_a_seekers_declaration_link_opens_lends_them_its_file():
+    palka = Seeker.of("p", "Tadeusz", "Pałka")
+    page = "https://u1.pl/Default.aspx?Page=88&Id=2"
+    detail = rybnik_detail("Tadeusz", "Pałka", "/Download.ashx?id=7")
+    _, _, body = html("Radni - BIP", detail)
+    title, links = extract_link_contexts(body, page)
+    assert [c.key for c in candidates(page, title, links, [palka])] == []
+    (lent,) = candidates(page, title, links, [palka], lender=palka.name)
+    assert (lent.url, lent.key, lent.first_name, lent.declaration_like) == (
+        "https://u1.pl/Download.ashx?id=7",
+        "p",
+        True,
+        True,
+    )
+    # A page titled with somebody else's name lends nobody its files.
+    other = "Oświadczenie majątkowe - J. Kowalski"
+    assert candidates(page, other, links, [palka], lender=palka.name) == []
+
+
+def test_a_pokaz_whose_row_says_a_seekers_declaration_is_read_first(tmp_path):
+    # Rybnik (11-01): 254 rows like "Joanna Brzózka Oświadczenie majątkowe
+    # 2026-04-30 Pokaż", every link only "Pokaż": all ranked alike.
+    rows = "".join(
+        f"<tr><td>{first} {last}</td><td>Oświadczenie majątkowe</td>"
+        f'<td>2026-04-30</td><td><a href="/Default.aspx?Page=88&Id={i}">Pokaż</a>'
+        "</td></tr>"
+        for i, (first, last) in enumerate(RYBNIK)
+    )
+    sites = {"https://u1.pl": html("Radni - BIP", f"<table>{rows}</table>")}
+    for i, (first, last) in enumerate(RYBNIK):
+        file = f"/Download.ashx?id={100 + i}"
+        sites[f"https://u1.pl/Default.aspx?Page=88&Id={i}"] = html(
+            "Radni - BIP", rybnik_detail(first, last, file)
+        )
+        sites[f"https://u1.pl{file}"] = (200, "application/pdf", PDF + bytes([i]))
+    _, store, _, _ = search(
+        tmp_path,
+        sites,
+        [row("p", "u1", "Tadeusz", "Pałka")],
+        unit_pages=2,
+        pages_per_candidacy=0,
+        sitemaps=False,
+    )
+    assert store.outcomes["p"].status == "found"
+    assert [d.url for d in store.person_docs("p")] == [
+        "https://u1.pl/Download.ashx?id=102"
+    ]

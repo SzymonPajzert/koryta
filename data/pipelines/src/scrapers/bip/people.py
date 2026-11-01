@@ -399,9 +399,8 @@ def link_score(
     # A label that says it is a seeker's declaration, first name and all, is
     # read before the next person on a list: Mazowieckie's councillors' pages
     # each link a page per declaration, and the walk read 120 people's pages,
-    # out of time, before any (11-01).
-    anchor = fold(link.anchor)
-    if DECLARATION.search(anchor) and any(all(s.named_in(anchor)) for s in seekers):
+    # out of time, before any (11-01). So is a bare "Pokaż" whose row says so.
+    if declarants(link, seekers):
         score += 8
     years = [int(y) for y in YEAR.findall(text)]
     if years and max(years) >= 2018:
@@ -409,6 +408,19 @@ def link_score(
     if NEGATIVE.search(text):
         score -= 4
     return score - 0.5 * depth
+
+
+def declarants(link: LinkContext, seekers: list[Seeker]) -> set[tuple[str, str]]:
+    """The names of the seekers whose declaration a link's label says it is,
+    first name and all, or its row around a bare "Pokaż" (Rybnik: "Joanna
+    Brzózka Oświadczenie majątkowe 2026-04-30 Pokaż")."""
+    return {
+        s.name
+        for said in (fold(link.anchor), fold(link.row))
+        if DECLARATION.search(said)
+        for s in seekers
+        if all(s.named_in(said))
+    }
 
 
 def says_declarations(link: LinkContext) -> bool:
@@ -748,6 +760,7 @@ def candidates(
     seekers: list[Seeker],
     *,
     first_names: frozenset[str] = frozenset(),
+    lender: tuple[str, str] | None = None,
 ) -> list[Candidate]:
     """Document links on one page that name one of the seekers, or that name nobody.
 
@@ -791,6 +804,13 @@ def candidates(
             for initial, word in initialled_names(page_title)
         )
     )
+    # A page the walk reached through a link saying one seeker's declaration
+    # (``lender``, `declarants`) is theirs when its title names nobody:
+    # Rybnik's "Pokaż" opens a page titled "Radni" with the person in a form
+    # field and the file labelled "Oświadczenie majątkowe".
+    lent = lender is not None and not title_names and not title_somebody
+    if lent:
+        page_people = [s for s in seekers if s.name == lender]
     out: list[Candidate] = []
     for link in links:
         if not is_document_url(link.url) or _AKCESSNET_PAGE.search(link.url):
@@ -832,7 +852,7 @@ def candidates(
                 somebody_else = True
                 break
         if not named and not somebody_else and page_people:
-            named = [(s, s.named_in(title)[1]) for s in page_people]
+            named = [(s, s.named_in(title)[1] or lent) for s in page_people]
         declaration_like = bool(
             DECLARATION.search(around)
             or ASSETS.search(around)
