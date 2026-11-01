@@ -1,5 +1,13 @@
 <template>
-  <div class="d-inline-block">
+  <!-- With the activator hidden nothing here takes up room - the dialog
+       teleports to the body - so the wrapper is no box at all. Left an empty
+       inline-block, it was a flex item of its own beside the home page's
+       search, worth one more gap: the search stopped 16px short of its line
+       on a phone and the button beside it stood 40px off rather than 24. -->
+  <div
+    :class="{ 'd-inline-block': !hideActivator }"
+    :style="hideActivator ? 'display: contents' : undefined"
+  >
     <slot
       v-if="!hideActivator"
       name="activator"
