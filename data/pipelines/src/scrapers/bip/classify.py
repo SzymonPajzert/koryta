@@ -27,7 +27,8 @@ _DOC_PATTERNS = [
     re.compile(r"/fls/bip_pliki/", re.IGNORECASE),
     re.compile(r"[?&](?:id|zid|iddok|idplik)=.*", re.IGNORECASE),
     re.compile(r"/(?:plik|file|download|pobierz)(?:[.,?/]|$)", re.IGNORECASE),
-    re.compile(r"\.(?:pdf|docx?|xlsx?|csv|zip|rtf|odt|ods)(?:$|\?)", re.IGNORECASE),
+    # Liferay names the file, then its UUID: /documents/1/2/x.pdf/345f...?t=1
+    re.compile(r"\.(?:pdf|docx?|xlsx?|csv|zip|rtf|odt|ods)(?:$|\?|/)", re.IGNORECASE),
 ]
 
 _DOC_CONTENT_TYPES = (
@@ -89,6 +90,10 @@ _NOISE_QUERY_PARAMS = frozenset(
     {"x", "y", "fontsize", "print", "pokaz_rejestr_zmian"}
 )
 _NOISE_QUERY_PREFIXES = ("switch_",)
+# A way back, not a page: Liferay's ?redirect= holds the page linking, and
+# nests deeper on each visit (bip.warszawa.pl, 11-01: one councillor's page as
+# a dozen URLs).
+_NOISE_QUERY_SUFFIXES = ("redirect", "backurl")
 
 
 def normalize_url(url: str) -> str:
@@ -116,7 +121,12 @@ def normalize_url(url: str) -> str:
         noise = noise - {"x", "y"}
     for key, value in parsed:
         lowered = key.lower()
-        if not key or lowered in noise or lowered.startswith(_NOISE_QUERY_PREFIXES):
+        if (
+            not key
+            or lowered in noise
+            or lowered.startswith(_NOISE_QUERY_PREFIXES)
+            or lowered.endswith(_NOISE_QUERY_SUFFIXES)
+        ):
             continue
         pair = (key, value)
         if pair in seen:
