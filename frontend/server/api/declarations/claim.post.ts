@@ -19,24 +19,30 @@ const PAGES_PER_CLAIM = 1;
 const CROPS_COMPARED_PER_CLAIM = 10;
 
 /**
- * The readings a browser made without an account, moved onto the account
- * that has just signed in there (`claimAnswers`): /oswiadczenia sends the
- * browser's reader id once the reader signs in, and forgets the id when this
- * answers. They vote from then on, so the crops they settle are compared with
- * their pages as after an answer (`compareSettled`).
+ * The readings a browser made without an account, taken over by the account
+ * that has just signed in there and copied to it (`claimAnswers`):
+ * /oswiadczenia sends the browser's reader id once the reader signs in, and
+ * forgets the id when this answers. The account's copies vote from then on,
+ * so the crops they settle are compared with their pages as after an answer
+ * (`compareSettled`). The browser's own answers stay where they were given,
+ * marked with the account.
  *
- * A token is required: the answers go to its account. An account whose
+ * Answered once the readings are taken over, which is a few writes that read
+ * nothing: whatever of them this request did not copy, the sweep copies
+ * later, so the page may forget the id even then.
+ *
+ * A token is required: the readings go to its account. An account whose
  * address nobody confirmed gets a 403 (`claimAnswers`), and the page keeps
- * the id for a later visit: moved now, the answers would never vote. Only
- * where the browser has readings to move, though: for one that only looked,
- * this answers 0 and the page forgets the id.
+ * the id for a later visit: copied now, the answers would never vote. Only
+ * where the browser has readings to wait for, though: for one that only
+ * looked, this answers 0 and the page forgets the id.
  *
- * The reader id is the only proof the answers are this reader's, so it never
- * goes to Sentry: not in this body (`PRIVATE_BODIES` in
- * sentry.server.config.ts covers every /api/declarations/ path), nor in the
- * `X-Reader-Id` header the other declaration requests carry it in
- * (`PRIVATE_HEADERS` there). Sent twice, the second claim finds nothing and
- * answers 0.
+ * The reader id is the proof the answers are this reader's. The database
+ * holds only its hash, and it never goes to Sentry: not in this body
+ * (`PRIVATE_BODIES` in sentry.server.config.ts covers every
+ * /api/declarations/ path), nor in the `X-Reader-Id` header the other
+ * declaration requests carry it in (`PRIVATE_HEADERS` there). Sent twice, the
+ * second claim finds nothing and answers 0.
  */
 export default defineEventHandler(async (event) => {
   const user = await getUser(event);

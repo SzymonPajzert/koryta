@@ -637,18 +637,22 @@ export type DeclarationAnswerResult = DeclarationQueue & {
   answered: { id: string };
 };
 
-/** The id a browser files its readings under while nobody is signed in, sent
- * as `X-Reader-Id`: `crypto.randomUUID()`, a version 4 UUID, made once and
- * kept in that browser. */
+/** What a browser's readings while nobody is signed in are known by, sent as
+ * `X-Reader-Id`: `crypto.randomUUID()`, a version 4 UUID, made once and kept
+ * in that browser. The server files them under its hash and stores nothing
+ * else of it, so the id is what proves them the browser's
+ * (`readerKeyOf` in server/utils/declarations.ts). */
 export const READER_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 /** `POST /api/declarations/claim` with `{ readerId }`: the readings made in
- * this browser without an account, for the account that has just signed in. */
+ * this browser without an account, for the account that has just signed in.
+ * Answered once the account has taken them over; what is left to copy goes
+ * over with the next sweep. */
 export type DeclarationClaimResult = {
-  /** Answers that are the account's now. One to a crop where the account's
-   * own answer stands is dropped and not counted, and so is one read off a
-   * picture the crop has since been cut again from. */
+  /** Answers the account has now. One to a crop where the account's own
+   * answer stands gets no copy and is not counted, and neither does one read
+   * off a picture the crop has since been cut again from. */
   claimed: number;
   /** Crops the claimed answers settled. */
   settled: number;
@@ -833,11 +837,14 @@ export type DrainResult = {
   waiting: number | null;
 };
 
-/** What `POST /api/declarations/sweep` did: the settled crops it compared with
- * their pages again, the pages it found taken off the site by a stale write
- * and put back up (or held, with their relations taken down), and the pass
- * over the queue after it. */
+/** What `POST /api/declarations/sweep` did: the answers accounts took over
+ * that it copied to them, the settled crops it compared with their pages
+ * again, the pages it found taken off the site by a stale write and put back
+ * up (or held, with their relations taken down), and the pass over the queue
+ * after it. */
 export type SweepResult = {
+  /** Answers taken over that it finished, and those of them still left. */
+  claims: { finished: number; left: number };
   checked: number;
   /** Crops whose comparison came out differently this time. */
   changed: number;

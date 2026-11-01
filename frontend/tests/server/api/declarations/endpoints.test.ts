@@ -13,6 +13,7 @@ import {
   PRESS_BATCH,
   READ_NAME_MAX_LENGTH,
 } from "../../../../shared/declarations";
+import { anonymousUid } from "../../../../server/utils/declarations";
 
 /** What the endpoints hand to server/utils/declarationPublish.ts and
  * server/utils/declarations.ts, which are tested on their own: the reader
@@ -101,6 +102,8 @@ vi.mock("../../../../server/utils/declarationPublish", () => ({
 
 const ID = `${"a".repeat(64)}-p0`;
 const READER = "0f8fad5b-d9cb-469f-a165-70867728950e";
+/** Where the answers of the browser with that id are filed: under its hash. */
+const STRANGER = anonymousUid(READER);
 const QUEUE = {
   task: null,
   upcoming: [],
@@ -192,9 +195,9 @@ describe("api/declarations/[id]/answer", () => {
 
     expect(mocks.getUser).not.toHaveBeenCalled();
     expect(mocks.recordAnswer.mock.calls[0]![1]).toMatchObject({
-      reader: { uid: `anon:${READER}`, votes: false, anonymous: true },
+      reader: { uid: STRANGER, votes: false, anonymous: true },
     });
-    expect(mocks.queueFor.mock.calls[0]![1]).toBe(`anon:${READER}`);
+    expect(mocks.queueFor.mock.calls[0]![1]).toBe(STRANGER);
     expect(mocks.matchAndDrain).not.toHaveBeenCalled();
   });
 
@@ -225,7 +228,7 @@ describe("api/declarations/[id]/answer", () => {
         value: "1979-07-15",
       },
       {
-        uid: `anon:${READER}`,
+        uid: STRANGER,
         extractId: ID,
         personIds: ["kowalska"],
         value: "1979",
@@ -297,14 +300,11 @@ describe("api/declarations/next", () => {
 
     expect(await next({} as never)).toBe(QUEUE);
     expect(mocks.admitToQueue.mock.calls[0]![1]).toEqual({
-      uid: `anon:${READER}`,
+      uid: STRANGER,
       votes: false,
       anonymous: true,
     });
-    expect(mocks.queueFor.mock.calls[0]!.slice(1, 3)).toEqual([
-      `anon:${READER}`,
-      3,
-    ]);
+    expect(mocks.queueFor.mock.calls[0]!.slice(1, 3)).toEqual([STRANGER, 3]);
   });
 
   it("serves an account without a confirmed address", async () => {

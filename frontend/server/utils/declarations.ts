@@ -10,6 +10,7 @@ import type {
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import type { H3Event } from "h3";
+import { createHash } from "node:crypto";
 import { warsawDate } from "~~/shared/dates";
 import {
   agreedName,
@@ -68,12 +69,10 @@ export const ROOM_SHARDS = 10;
 const VOTELESS_ANSWERS = "voteless-answers";
 const VOTELESS_ASKS = "voteless-asks";
 
-/** Answers one claim moves at most: days of reading in one browser, as a
- * reader without an account may give `READER_DAILY_LIMIT` a day, and few
- * enough that the claim stays a request. Past it the rest stay under the
- * browser's id, which the page forgets once the claim succeeds. Nothing that
- * counted is lost: those answers never voted, and the account is served their
- * crops again. */
+/** Answers a claim copies to the account at most: days of reading in one
+ * browser, as a reader without an account may give `READER_DAILY_LIMIT` a
+ * day, and few enough that the claim stays a request. It takes over all of
+ * them, and the sweep copies the rest (`finishClaims`). */
 export const CLAIM_LIMIT = 1000;
 
 /** Crops a claim works on at once, each in a transaction of its own: a
@@ -96,7 +95,7 @@ export function isCountedReader(user: DecodedIdToken): boolean {
 
 /** Who answers a crop. */
 export type DeclarationReader = {
-  /** Whose the answers are: the account's uid, or `anon:<reader id>`. */
+  /** Whose the answers are: the account's uid, or `anon:<reader key>`. */
   uid: string;
   /** Whether the answers count towards an agreement. */
   votes: boolean;
@@ -104,9 +103,25 @@ export type DeclarationReader = {
   anonymous: boolean;
 };
 
-/** The uid the answers of a browser without an account are filed under. The
- * prefix keeps it apart from every account's uid. */
+/** What the database knows a browser without an account by: the SHA-256 of
+ * its reader id, in hex. The browser keeps the id and sends it with what it
+ * asks; nothing stored, nor an export of it, holds the id, so nothing there
+ * is enough to read as that browser or to claim what it read
+ * (`claimAnswers`). */
+export function readerKeyOf(readerId: string): string {
+  return createHash("sha256").update(readerId).digest("hex");
+}
+
+/** The uid the answers of a browser without an account are filed under: its
+ * key (`readerKeyOf`), behind a prefix that keeps it apart from every
+ * account's uid. */
 export function anonymousUid(readerId: string): string {
+  return `anon:${readerKeyOf(readerId)}`;
+}
+
+/** Where a browser's answers given before the database held keys (2026-11)
+ * are filed: under its reader id itself. A claim reads them still. */
+export function legacyAnonymousUid(readerId: string): string {
   return `anon:${readerId}`;
 }
 
@@ -126,8 +141,9 @@ export function readerIdOf(value: unknown): string | null {
  * A token makes the reader its account, whose answers vote once it is some
  * evidence of a person (`isCountedReader`); an account without a confirmed
  * address reads all the same, without a vote. Without a token, the browser's
- * reader id (`X-Reader-Id`) files the answers under `anon:<id>`, never with a
- * vote. A token that does not verify is a 401 even beside a reader id: a
+ * reader id (`X-Reader-Id`) files the answers under its key
+ * (`anonymousUid`), never with a vote. A token that does not verify is a 401
+ * even beside a reader id: a
  * signed-in reader whose token lapsed must find out, not have their answers
  * filed as a stranger's.
  */
@@ -574,174 +590,332 @@ export async function recordAnswer(
 }
 
 export type ClaimedAnswers = {
-  /** Answers that are the account's now. */
+  /** Answers the account has now, copied from the browser's. */
   claimed: number;
   /** The crops they settled, and what they settled. */
   settled: { extractId: string; settlement: Settlement }[];
+  /** The browser's answers the account took over and has no copy of yet,
+   * which the sweep copies (`finishClaims`). Taken over is all the claim
+   * needs, so the page forgets the id whatever this says. */
+  left: number;
 };
 
 /**
- * Moves the answers a browser gave without an account onto the account that
- * has just signed in there (`POST /api/declarations/claim`), and settles what
- * they settle now that they vote. An answer keeps its reading and its day,
- * and names the id it came from (`claimedFrom`).
+ * Gives the account that has just signed in to a browser what the browser
+ * read without an account (`POST /api/declarations/claim`), and settles what
+ * the readings settle now that they vote. Nothing is deleted, and no record
+ * of its own keeps the claim: the browser's answers say who took them over.
+ *
+ * In two steps. First the browser's answers are taken over: each is marked
+ * with the account (`claimedBy`, `claimPending`), in batched writes that read
+ * nothing, so no other reader's transaction stands in their way. That is the
+ * claim, and the page may forget the id once it is made. Then each answer
+ * taken over is copied to the account, under the account's uid, crop by
+ * crop, each in a transaction that settles the crop again: the copy names
+ * the document it claims (`claims`) and is what votes, counts in the reader's
+ * tally and keeps the crop out of their queue. The browser's answer stays
+ * where it was given, as it was given, and notes whether it was copied
+ * (`copied`). What one request does not copy stays marked, and the sweep
+ * copies it (`finishClaims`): all it needs is in the answers. So one crop's
+ * failure stops nothing, and a browser whose reader never comes back loses
+ * nothing.
+ *
+ * Where the account answered a crop itself, its own answer stands, unless it
+ * has no say and the browser's would have one: an answer given before the
+ * address was confirmed gives way to the same person's reading that votes.
+ * An answer read off a picture that has since been cut again gets no copy,
+ * as a reading of nothing the crop shows now.
  *
  * Only an account that votes can claim (`isCountedReader`). One whose address
  * nobody confirmed gets a 403, which the page takes as "not yet": it keeps
  * the reader id and claims again on a later visit, once the address is
- * confirmed. Moved before that, the answers would have no vote for good and
- * the page would have forgotten the id - and a password sign-up is signed in
- * before its confirmation mail can even be opened (LoginForm.vue), so every
- * reader who signs up that way would claim too early.
+ * confirmed. Copied before that, the answers would have no vote for good -
+ * and a password sign-up is signed in before its confirmation mail can even
+ * be opened (LoginForm.vue), so every reader who signs up that way would
+ * claim too early.
  *
  * The 403 is for a browser with readings to wait for, as its words promise
  * („odczyty z tej przeglądarki przejdą na Twoje konto”). A browser that only
  * looked has a reader id all the same, made with its first ask for crops, and
  * a skip is no reading, as the reader's own count has it (`counted`): for such
- * an id the claim answers 0 and moves nothing, and the page forgets the id.
- * One read to tell, for an account without a vote only.
+ * an id the claim answers 0 and takes over nothing, and the page forgets the
+ * id. A read a uid the browser files under to tell, for an account without a
+ * vote only.
  *
- * Holding the reader id is the only proof that the answers are this
- * person's, and that is enough. The id is 122 random bits, kept in the one
- * browser that made it and sent only to this site (never to Sentry: see
- * `PRIVATE_HEADERS` in sentry.server.config.ts), so it is not guessed; and
- * what it unlocks is answers that never had a say. Somebody who did get hold
- * of one could only file a stranger's readings under their own account, one
- * answer a crop, which that account could give by reading the crops itself.
+ * Holding the reader id is the proof that the answers are this person's.
+ * The database holds only the id's hash (`readerKeyOf`), so neither it nor an
+ * export of it is enough to claim them; the id itself is 122 random bits,
+ * kept in the one browser that made it and sent only to this site (never to
+ * Sentry: see `PRIVATE_HEADERS` in sentry.server.config.ts).
  *
- * The claimed answers vote within the account's daily limit, on the days
- * they were given (`READER_DAILY_LIMIT`): an account that claimed one
- * browser's readings after another's would otherwise vote on as many crops a
- * day as it has browsers. What a day has no room for moves all the same,
- * without a vote. The room is taken before anything moves, in one
- * transaction, so two claims at once cannot both spend it, and what was taken
- * for an answer that did not move is given back afterwards.
+ * The copies vote within the account's daily limit, on the days the answers
+ * were given (`READER_DAILY_LIMIT`): an account that claimed one browser's
+ * readings after another's would otherwise vote on as many crops a day as it
+ * has browsers. What a day has no room for is copied all the same, without a
+ * vote. The room is taken before anything is copied, in one transaction, so
+ * two passes at once cannot both spend it, and what was taken for an answer
+ * that got no copy is given back afterwards.
  *
- * A transaction per crop, as in `recordAnswer`. Where the account answered a
- * crop itself, its own answer stands, unless it has no say and the browser's
- * would have one: an answer given before the address was confirmed gives way
- * to the same person's reading that votes. An answer read off a picture that
- * has since been cut again is dropped, as a reading of nothing the crop shows
- * now. At most `CLAIM_LIMIT` answers a claim.
- *
- * Idempotent: a claimed answer is gone from the browser's id, so a second
- * claim finds nothing to move, and writes nothing.
+ * Each answer goes to the first account that claims it: should the page have
+ * kept the id, an account that signs in there later gets what was read since.
+ * Idempotent: a second claim finds nothing to take over or copy, and writes
+ * nothing.
  */
 export async function claimAnswers(
   db: Firestore,
   args: { readerId: string; user: DecodedIdToken; now?: Date },
 ): Promise<ClaimedAnswers> {
   const now = args.now ?? new Date();
-  const from = anonymousUid(args.readerId);
+  const from = [anonymousUid(args.readerId), legacyAnonymousUid(args.readerId)];
   const to = args.user.uid;
+  const none: ClaimedAnswers = { claimed: 0, settled: [], left: 0 };
   if (!isCountedReader(args.user)) {
-    const readings = await db
-      .collection(ANSWERS)
-      .where("uid", "==", from)
-      .where("counted", "==", true)
-      .limit(1)
-      .get();
-    if (readings.empty) return { claimed: 0, settled: [] };
+    const readings = await Promise.all(
+      from.map((uid) =>
+        db
+          .collection(ANSWERS)
+          .where("uid", "==", uid)
+          .where("counted", "==", true)
+          .limit(1)
+          .get(),
+      ),
+    );
+    if (readings.every((found) => found.empty)) return none;
     throw createError({
       statusCode: 403,
       message:
         "Potwierdź adres e-mail (link przyszedł po rejestracji), a odczyty z tej przeglądarki przejdą na Twoje konto.",
     });
   }
-  const theirs = await db
+
+  const given = await browserAnswers(db, from, now);
+  const free = given.filter((answer) => answer.claimedBy === null);
+  await takeOver(db, free, to, now);
+  await takeOverFinds(db, from, to, now);
+  const waiting = [
+    ...given.filter((answer) => answer.claimedBy === to && answer.pending),
+    ...free,
+  ];
+  if (waiting.length === 0) return none;
+  const pass = waiting.slice(0, CLAIM_LIMIT);
+  const result = await copyClaimed(db, to, pass, now);
+  return { ...result, left: result.left + waiting.length - pass.length };
+}
+
+/** Answers taken over and not copied yet that a sweep copies at most. */
+const CLAIMS_PER_SWEEP = 200;
+
+/**
+ * Copies the answers accounts took over and have no copy of yet
+ * (`claimPending`): what failed in a claim, or what was past its
+ * `CLAIM_LIMIT`. The sweep the job runs after every upload calls it before
+ * it compares the settled crops, so a crop a copy settled is compared in the
+ * same sweep. The reader need not be there: the answers say whose they are.
+ */
+export async function finishClaims(
+  db: Firestore,
+  now: Date,
+  size = CLAIMS_PER_SWEEP,
+): Promise<{ finished: number; left: number }> {
+  const pending = await db
     .collection(ANSWERS)
-    .where("uid", "==", from)
-    .limit(CLAIM_LIMIT)
+    .where("claimPending", "==", true)
+    .limit(size)
     .get();
-  const listed = theirs.docs.flatMap((doc) => {
-    const extractId = doc.get("extractId");
-    if (typeof extractId !== "string" || extractId === "") return [];
-    return [
-      {
-        extractId,
-        day: String(doc.get("day") ?? warsawDate(now)),
-        counted: doc.get("counted") === true,
-      },
-    ];
-  });
-  if (listed.length === 0) return { claimed: 0, settled: [] };
+  const byAccount = new Map<string, GivenAnswer[]>();
+  for (const answer of pending.docs.flatMap((doc) => givenAnswer(doc, now))) {
+    if (!answer.claimedBy) continue;
+    byAccount.set(answer.claimedBy, [
+      ...(byAccount.get(answer.claimedBy) ?? []),
+      answer,
+    ]);
+  }
+  let finished = 0;
+  let left = 0;
+  for (const [to, answers] of byAccount) {
+    const done = await copyClaimed(db, to, answers, now);
+    finished += answers.length - done.left;
+    left += done.left;
+  }
+  return { finished, left };
+}
+
+/** One of a browser's answers, as a claim weighs it. */
+type GivenAnswer = {
+  ref: DocumentReference;
+  extractId: string;
+  day: string;
+  counted: boolean;
+  /** The account that took it over, or null. */
+  claimedBy: string | null;
+  /** Taken over, and not copied yet. */
+  pending: boolean;
+};
+
+function givenAnswer(doc: DocumentSnapshot, now: Date): GivenAnswer[] {
+  const extractId = doc.get("extractId");
+  if (typeof extractId !== "string" || extractId === "") return [];
+  const claimedBy = doc.get("claimedBy");
+  return [
+    {
+      ref: doc.ref,
+      extractId,
+      day: String(doc.get("day") ?? warsawDate(now)),
+      counted: doc.get("counted") === true,
+      claimedBy: typeof claimedBy === "string" ? claimedBy : null,
+      pending: doc.get("claimPending") === true,
+    },
+  ];
+}
+
+/** Every answer a browser gave, under each uid it files under. */
+async function browserAnswers(
+  db: Firestore,
+  uids: readonly string[],
+  now: Date,
+): Promise<GivenAnswer[]> {
+  const found = await Promise.all(
+    uids.map((uid) => db.collection(ANSWERS).where("uid", "==", uid).get()),
+  );
+  return found.flatMap((snapshot) =>
+    snapshot.docs.flatMap((doc) => givenAnswer(doc, now)),
+  );
+}
+
+/** Writes one batch takes, under a batch's 500. */
+const WRITES_PER_BATCH = 400;
+
+/** Marks a browser's answers as the account's, to be copied: the claim. */
+async function takeOver(
+  db: Firestore,
+  answers: readonly GivenAnswer[],
+  to: string,
+  now: Date,
+) {
+  for (let i = 0; i < answers.length; i += WRITES_PER_BATCH) {
+    const batch = db.batch();
+    for (const answer of answers.slice(i, i + WRITES_PER_BATCH)) {
+      batch.update(answer.ref, {
+        claimedBy: to,
+        claimedAt: Timestamp.fromDate(now),
+        claimPending: true,
+      });
+    }
+    await batch.commit();
+  }
+}
+
+/** The people a browser found go to the account too: a copy of each record
+ * under the account (`claims` names the browser's), kept once where the
+ * account found the same person itself, and the browser's own record marked
+ * with the account. */
+async function takeOverFinds(
+  db: Firestore,
+  from: readonly string[],
+  to: string,
+  now: Date,
+) {
+  const found = await Promise.all(
+    from.map((uid) =>
+      db.collection(READER_FINDS).where("uid", "==", uid).get(),
+    ),
+  );
+  const free = found
+    .flatMap((snapshot) => snapshot.docs)
+    .filter((find) => !find.get("claimedBy") && find.get("personId"));
+  // Two writes a find.
+  for (let i = 0; i < free.length; i += WRITES_PER_BATCH / 2) {
+    const batch = db.batch();
+    for (const find of free.slice(i, i + WRITES_PER_BATCH / 2)) {
+      batch.set(
+        db.collection(READER_FINDS).doc(`${to}_${find.get("personId")}`),
+        { ...find.data(), uid: to, claims: find.id },
+        { merge: true },
+      );
+      batch.update(find.ref, {
+        claimedBy: to,
+        claimedAt: Timestamp.fromDate(now),
+      });
+    }
+    await batch.commit();
+  }
+}
+
+/**
+ * Copies to an account the answers it took over (`claimAnswers`):
+ * `CLAIM_CONCURRENCY` at a time, each crop in a transaction of its own, then
+ * what failed once more alone, with nothing of the pass's own beside it. A
+ * crop that fails alone too ends the pass: whatever stops it is not the
+ * pass's own crowding, and each failure costs the client library's five
+ * attempts. What is left stays marked for the sweep (`left`).
+ */
+async function copyClaimed(
+  db: Firestore,
+  to: string,
+  answers: readonly GivenAnswer[],
+  now: Date,
+): Promise<ClaimedAnswers> {
+  const result: ClaimedAnswers = { claimed: 0, settled: [], left: 0 };
 
   // A skip is no answer the limit counts, and has no say either way.
   const wanted = new Map<string, number>();
-  for (const answer of listed) {
+  for (const answer of answers) {
     if (answer.counted) {
       wanted.set(answer.day, (wanted.get(answer.day) ?? 0) + 1);
     }
   }
   const room = await takeVotes(db, to, wanted);
-  const plan = listed.map((answer) => {
+  const plan = answers.map((answer) => {
     if (!answer.counted) return { ...answer, votes: true };
     const left = room.get(answer.day) ?? 0;
     room.set(answer.day, left - 1);
     return { ...answer, votes: left > 0 };
   });
 
-  const result: ClaimedAnswers = { claimed: 0, settled: [] };
   const unused = new Map<string, number>();
+  const giveBack = (answer: (typeof plan)[number]) => {
+    if (answer.counted && answer.votes) {
+      unused.set(answer.day, (unused.get(answer.day) ?? 0) + 1);
+    }
+  };
+  const copy = async (answer: (typeof plan)[number]) => {
+    const { copied, settled } = await copyAnswer(db, {
+      extractId: answer.extractId,
+      original: answer.ref,
+      to,
+      votes: answer.votes,
+      now,
+    });
+    if (copied) result.claimed += 1;
+    else giveBack(answer);
+    if (settled) {
+      result.settled.push({ extractId: answer.extractId, settlement: settled });
+    }
+  };
+  const failed: typeof plan = [];
   for (let i = 0; i < plan.length; i += CLAIM_CONCURRENCY) {
-    await Promise.all(
-      plan.slice(i, i + CLAIM_CONCURRENCY).map(async (answer) => {
-        const { moved, settled } = await claimAnswer(db, {
-          extractId: answer.extractId,
-          from,
-          to,
-          votes: answer.votes,
-          now,
-        });
-        if (moved) result.claimed += 1;
-        else if (answer.counted && answer.votes) {
-          unused.set(answer.day, (unused.get(answer.day) ?? 0) + 1);
-        }
-        if (settled) {
-          result.settled.push({
-            extractId: answer.extractId,
-            settlement: settled,
-          });
-        }
-      }),
-    );
+    const batch = plan.slice(i, i + CLAIM_CONCURRENCY);
+    const outcomes = await Promise.allSettled(batch.map(copy));
+    outcomes.forEach((outcome, j) => {
+      if (outcome.status === "rejected") failed.push(batch[j]!);
+    });
+  }
+  for (const [i, answer] of failed.entries()) {
+    try {
+      await copy(answer);
+    } catch (error) {
+      result.left = failed.length - i;
+      console.error(
+        `[declarations] copying ${answer.extractId} failed twice, ${result.left} answers left for the sweep`,
+        error,
+      );
+      failed.slice(i).forEach(giveBack);
+      break;
+    }
   }
   await giveBackVotes(db, to, unused);
-  await moveFinds(db, from, to);
   return result;
 }
-
-/** The people a browser found go with its answers to the account, kept once
- * where the account found the same person itself. A transaction a slice, two
- * writes a find under a transaction's 500. */
-async function moveFinds(db: Firestore, from: string, to: string) {
-  for (;;) {
-    const moved = await db.runTransaction(async (tx) => {
-      const finds = await tx.get(
-        db
-          .collection(READER_FINDS)
-          .where("uid", "==", from)
-          .limit(FINDS_PER_MOVE),
-      );
-      for (const find of finds.docs) {
-        const personId = String(find.get("personId") ?? "");
-        if (personId) {
-          tx.set(
-            db.collection(READER_FINDS).doc(`${to}_${personId}`),
-            { ...find.data(), uid: to },
-            { merge: true },
-          );
-        }
-        tx.delete(find.ref);
-      }
-      return finds.docs.length;
-    });
-    if (moved < FINDS_PER_MOVE) return;
-  }
-}
-
-/** Finds one transaction of a claim moves. */
-const FINDS_PER_MOVE = 200;
 
 /** Takes from an account's daily limits the votes a claim gives, in one
  * transaction: as many of each day's answers as that day has room for.
@@ -791,78 +965,97 @@ async function giveBackVotes(
   );
 }
 
-/** A browser's answer as the account that claimed it keeps it. */
+/** The account's copy of a browser's answer it took over. */
 type ClaimedAnswer = ReaderAnswer & {
-  /** The browser's `anon:<reader id>`. */
+  extractId: string;
+  counted: boolean;
+  day: unknown;
+  imageHash: string | null;
+  at: unknown;
+  /** The browser's `anon:<reader key>`. */
   claimedFrom: string;
+  /** The browser's answer this is a copy of, which stays where it is. */
+  claims: string;
   claimedAt: Timestamp;
 };
 
-/** One crop of a claim: the browser's answer becomes the account's, unless
- * the account's own stands or the picture was cut again since, and the crop
- * is settled again when what its answers that vote say has changed. */
-async function claimAnswer(
+/** One crop of a claim: the account gets a copy of the browser's answer it
+ * took over, unless the account's own stands or the picture was cut again
+ * since, and the crop is settled again when what its answers that vote say
+ * has changed. The browser's answer stays, and notes whether it was
+ * copied. */
+async function copyAnswer(
   db: Firestore,
   args: {
     extractId: string;
-    from: string;
+    /** The browser's answer. */
+    original: DocumentReference;
     to: string;
-    /** Whether the answer votes once moved: the account's limit decides. */
+    /** Whether the copy votes: the account's limit decides. */
     votes: boolean;
     now: Date;
   },
-): Promise<{ moved: boolean; settled: Settlement | null }> {
-  const { extractId, from, to, now } = args;
+): Promise<{ copied: boolean; settled: Settlement | null }> {
+  const { extractId, original, to, now } = args;
   const extractRef = db.collection(EXTRACTS).doc(extractId);
-  const fromRef = db.collection(ANSWERS).doc(answerId(extractId, from));
   const toRef = db.collection(ANSWERS).doc(answerId(extractId, to));
 
   return db.runTransaction(async (tx) => {
     const [extract, theirs, own] = await Promise.all([
       tx.get(extractRef),
-      tx.get(fromRef),
+      tx.get(original),
       tx.get(toRef),
     ]);
-    // Moved since the claim listed it, by the same claim sent twice at once.
-    if (!theirs.exists) return { moved: false, settled: null };
+    // Copied since the pass listed it, by a claim sent twice at once or a
+    // sweep beside it; or given again since, which no account took over.
+    if (theirs.get("claimPending") !== true || theirs.get("claimedBy") !== to) {
+      return { copied: false, settled: null };
+    }
     const data = extract.data();
-    const answer = theirs.data() as ReaderAnswer & {
-      imageHash?: string | null;
-    };
-    const moved: ClaimedAnswer = {
-      ...answer,
+    const given = theirs.data() as ReaderAnswer & Record<string, unknown>;
+    // The reading alone: not the marks of the take-over, which are the
+    // browser's answer's.
+    const copy: ClaimedAnswer = {
+      extractId,
       uid: to,
+      verdict: given.verdict,
+      value: given.value ?? null,
+      name: given.name ?? null,
       votes: args.votes,
-      claimedFrom: from,
+      counted: given.counted === true,
+      day: given.day,
+      imageHash: (given.imageHash as string | null | undefined) ?? null,
+      at: given.at,
+      claimedFrom: String(given.uid),
+      claims: original.id,
       claimedAt: Timestamp.fromDate(now),
     };
     const outdated =
-      data !== undefined &&
-      (answer.imageHash ?? null) !== (data.imageHash ?? null);
+      data !== undefined && copy.imageHash !== (data.imageHash ?? null);
     const ownStands =
       own.exists &&
-      (isVotingReading(own.data() as ReaderAnswer) || !isVotingReading(moved));
+      (isVotingReading(own.data() as ReaderAnswer) || !isVotingReading(copy));
     if (outdated || ownStands) {
-      tx.delete(fromRef);
-      return { moved: false, settled: null };
+      tx.update(original, { claimPending: false, copied: false });
+      return { copied: false, settled: null };
     }
 
     // Read before anything is written, as a transaction must.
     const voting =
-      data && isVotingReading(moved)
+      data && isVotingReading(copy)
         ? await tx.get(votingAnswersTo(db, extractId))
         : null;
-    tx.delete(fromRef);
-    tx.set(toRef, moved);
+    tx.update(original, { claimPending: false, copied: true });
+    tx.set(toRef, copy);
     return {
-      moved: true,
+      copied: true,
       settled:
         data && voting
           ? writeSettlement(
               tx,
               extractRef,
               data,
-              [...answersOf(voting).filter((other) => other.uid !== to), moved],
+              [...answersOf(voting).filter((other) => other.uid !== to), copy],
               now,
             )
           : null,

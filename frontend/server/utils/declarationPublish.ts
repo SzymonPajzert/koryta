@@ -69,6 +69,7 @@ import { placeClashes } from "~~/shared/twoPlaces";
 import { recordAudit } from "./audit";
 import {
   EXTRACTS,
+  finishClaims,
   PUBLICATIONS,
   PUBLISH_LIMITS,
   READER_FINDS,
@@ -1752,13 +1753,15 @@ export async function matchAndDrain(
 }
 
 /**
- * What the job on predator calls after every upload: compares the settled
- * crops that have not been compared yet - an answer or an upload whose own
- * comparison failed, or a crop an upload named more pages for - and those
- * marked to be compared again (`pageRecheck`), which left a page without a
- * birth date or with another one, in case the nightly import or a reviewer
- * has changed that since. Then it puts back what a stale write took down
- * (`restoreReverted`) and takes up the queue.
+ * What the job on predator calls after every upload: first copies to
+ * accounts the answers they took over that a claim left uncopied
+ * (`finishClaims`), then compares the settled crops that have not been
+ * compared yet - an answer, a claim or an upload whose own comparison failed,
+ * or a crop an upload named more pages for - and those marked to be compared
+ * again (`pageRecheck`), which left a page without a birth date or with
+ * another one, in case the nightly import or a reviewer has changed that
+ * since. Then it puts back what a stale write took down (`restoreReverted`)
+ * and takes up the queue.
  *
  * The ones compared again go least recently compared first: a crop compared
  * to no effect is stamped and goes to the back, so each sweep reaches others.
@@ -1770,6 +1773,7 @@ export async function sweepDeclarations(
   options: { batch?: number } = {},
 ): Promise<SweepResult> {
   const size = options.batch ?? SWEEP_BATCH;
+  const claims = await finishClaims(db, now);
   const extracts = db.collection(EXTRACTS);
   const [unmatched, recheck] = await Promise.all([
     extracts
@@ -1803,6 +1807,7 @@ export async function sweepDeclarations(
   const reverted = await restoreReverted(db, now);
   const drain = await drainPublications(db, now, limit);
   return {
+    claims,
     checked: unmatched.size + recheck.size,
     changed,
     reverted,

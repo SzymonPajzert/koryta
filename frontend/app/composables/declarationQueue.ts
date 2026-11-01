@@ -91,10 +91,12 @@ async function refreshToken(user: User) {
   }
 }
 
-/** Where a reader without an account keeps the id their readings are filed
- * under. Reading is open to readers who are not signed in: their answers are
- * kept under this id, count towards no automatic publication, and move to an
- * account once they sign in. A random id in this browser, never an account:
+/** Where a reader without an account keeps the id their readings are known
+ * by. Reading is open to readers who are not signed in: their answers are
+ * kept under this id's hash, count towards no automatic publication, and go
+ * to an account once they sign in. The id is what proves them this
+ * browser's, so it stays here: the server stores only its hash. A random id
+ * in this browser, never an account:
  * a Firebase anonymous
  * sign-in would make the reader "signed in" everywhere, and a signed-in
  * reader sees drafts and their dates, which a blind reading must not. */
@@ -184,12 +186,13 @@ async function readerRequest<T>(
   });
 }
 
-/** Moves this browser's readings without an account onto the account the
- * reader just signed in to, so what they read before counts as theirs. Kept
- * for another try when it fails, a 403 for an address nobody confirmed among
- * it (`refusalOf` has the server's words), which the server gives only where
- * there are readings to move; forgotten once the server has them, or has
- * found none, as for a browser that only looked.
+/** Gives the account the reader just signed in to the readings made in this
+ * browser without an account, so what they read before counts as theirs.
+ * Kept for another try when it fails, a 403 for an address nobody confirmed
+ * among it (`refusalOf` has the server's words), which the server gives only
+ * where there are readings to wait for; forgotten once the account has taken
+ * them over, as the server finishes copying them on its own, or once the
+ * server has found none, as for a browser that only looked.
  *
  * Firebase reloads the account when the page loads, so `emailVerified` says
  * whether the address is confirmed now; the token may not say so yet, and

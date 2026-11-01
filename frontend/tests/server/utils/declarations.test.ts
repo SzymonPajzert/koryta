@@ -9,9 +9,12 @@ import {
   anonymousUid,
   CLAIM_LIMIT,
   claimAnswers,
+  finishClaims,
   getReader,
   isCountedReader,
+  legacyAnonymousUid,
   queueFor,
+  readerKeyOf,
   recordAnswer,
   READER_DAILY_LIMIT,
   ROOM_SHARDS,
@@ -45,20 +48,23 @@ vi.mock("firebase-admin/auth", () => ({
 /**
  * A Firestore double that runs queries for real over an in-memory map:
  * equality filters, ordering on several fields, a cursor, limits, count(),
- * getAll, increments, and transactions whose writes land only when the
- * function returns. It notes the queries transactions run, and how many
- * answers each read.
+ * getAll, increments, batches, and transactions whose writes land only when
+ * the function returns. It notes the queries transactions run, and how many
+ * answers each read. A transaction that reads a document in `aborting` fails
+ * as one that lost to contention every time the client library tried it, as
+ * many times as the map says, and writes nothing.
  */
 type Data = Record<string, unknown>;
 let stored: Map<string, Data>;
 let reads: { filters: [string, unknown][]; docs: number }[];
+let aborting: Map<string, number>;
 
 function snapshot(path: string) {
   const data = stored.get(path);
   const id = path.slice(path.indexOf("/") + 1);
   return {
     id,
-    ref: { path },
+    ref: { path, id },
     exists: data !== undefined,
     data: () => (data ? structuredClone(data) : undefined),
     get: (field: string) => data?.[field],
@@ -144,6 +150,18 @@ const db = {
   }),
   getAll: async (...refs: { path: string }[]) =>
     refs.map((ref) => snapshot(ref.path)),
+  batch: () => {
+    const writes: (() => void)[] = [];
+    return {
+      set: (ref: { path: string }, data: Data, options?: { merge?: boolean }) =>
+        writes.push(() => write(ref.path, data, options?.merge === true)),
+      update: (ref: { path: string }, data: Data) =>
+        writes.push(() => write(ref.path, data, true)),
+      commit: async () => {
+        for (const pending of writes) pending();
+      },
+    };
+  },
   runTransaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
     const writes: (() => void)[] = [];
     const tx = {
@@ -152,6 +170,16 @@ const db = {
           const docs = run(target.__query);
           reads.push({ filters: target.__query.filters, docs: docs.length });
           return { docs, empty: docs.length === 0 };
+        }
+        const times = aborting.get(target.path!) ?? 0;
+        if (times > 0) {
+          aborting.set(target.path!, times - 1);
+          throw Object.assign(
+            new Error(
+              "10 ABORTED: Aborted due to cross-transaction contention.",
+            ),
+            { code: 10 },
+          );
         }
         return snapshot(target.path!);
       },
@@ -207,6 +235,9 @@ function account(uid: string, fields: Partial<DecodedIdToken> = {}) {
 /** A browser's reader id, as `crypto.randomUUID()` makes one. */
 const readerId = (n: number) =>
   `0f8fad5b-d9cb-469f-a165-${String(n).padStart(12, "0")}`;
+
+/** The uid that browser's answers are filed under. */
+const anonOf = (n: number) => anonymousUid(readerId(n));
 
 const voter = (uid: string): DeclarationReader => ({
   uid,
@@ -268,6 +299,7 @@ function fill(room: Room, limit: number) {
 beforeEach(() => {
   stored = new Map();
   reads = [];
+  aborting = new Map();
   vi.clearAllMocks();
 });
 
@@ -312,14 +344,15 @@ describe("getReader", () => {
     });
   });
 
-  it("files a reader without an account under their reader id, lower-cased", async () => {
+  it("files a reader without an account under the hash of their reader id, lower-cased", async () => {
     await expect(
       request({ "x-reader-id": readerId(7).toUpperCase() }),
     ).resolves.toEqual({
-      uid: `anon:${readerId(7)}`,
+      uid: `anon:${readerKeyOf(readerId(7))}`,
       votes: false,
       anonymous: true,
     });
+    expect(anonOf(7)).not.toContain(readerId(7));
     expect(verifyIdToken).not.toHaveBeenCalled();
   });
 
@@ -431,13 +464,14 @@ describe("recordAnswer", () => {
     });
     expect(stored.has("declarationAnswers/c1_a")).toBe(false);
 
-    stored.set(`${LIMITS}_anon:${readerId(1)}`, {
+    stored.set(`${LIMITS}_${anonOf(1)}`, {
       count: READER_DAILY_LIMIT,
     });
     await skipAs(stranger(1));
-    expect(
-      stored.get(`declarationAnswers/c1_anon:${readerId(1)}`),
-    ).toMatchObject({ verdict: "skip", counted: false });
+    expect(stored.get(`declarationAnswers/c1_${anonOf(1)}`)).toMatchObject({
+      verdict: "skip",
+      counted: false,
+    });
   });
 
   it("counts a skip of a reader who votes in their day, but not in their readings", async () => {
@@ -478,10 +512,8 @@ describe("recordAnswer", () => {
     const recorded = await answerAs(stranger(1), "1979-07-15");
 
     expect(recorded.settled).toBeNull();
-    expect(
-      stored.get(`declarationAnswers/c1_anon:${readerId(1)}`),
-    ).toMatchObject({
-      uid: `anon:${readerId(1)}`,
+    expect(stored.get(`declarationAnswers/c1_${anonOf(1)}`)).toMatchObject({
+      uid: `${anonOf(1)}`,
       value: "1979-07-15",
       votes: false,
       counted: true,
@@ -492,7 +524,7 @@ describe("recordAnswer", () => {
     // hears it, and an upload still finds the crop unread and may cut it
     // again (every write here stores a new object).
     expect(stored.get("declarationExtracts/c1")).toBe(before);
-    expect(stored.get(`${LIMITS}_anon:${readerId(1)}`)).toMatchObject({
+    expect(stored.get(`${LIMITS}_${anonOf(1)}`)).toMatchObject({
       count: 1,
     });
     expect(used("voteless-answers")).toBe(1);
@@ -581,7 +613,7 @@ describe("recordAnswer", () => {
 
   it("holds a reader without an account to the daily limit of a reader", async () => {
     crop("c1");
-    stored.set(`${LIMITS}_anon:${readerId(1)}`, { count: READER_DAILY_LIMIT });
+    stored.set(`${LIMITS}_${anonOf(1)}`, { count: READER_DAILY_LIMIT });
     await expect(answerAs(stranger(1), "1979-07-15")).rejects.toMatchObject({
       statusCode: 429,
     });
@@ -603,9 +635,9 @@ describe("recordAnswer", () => {
     await expect(answerAs(unconfirmed("u"), "1979-07-15")).rejects.toThrow(
       /Potwierdź adres/,
     );
-    expect(stored.has(`declarationAnswers/c1_anon:${readerId(1)}`)).toBe(false);
+    expect(stored.has(`declarationAnswers/c1_${anonOf(1)}`)).toBe(false);
     expect(stored.has("declarationAnswers/c1_u")).toBe(false);
-    expect(stored.has(`${LIMITS}_anon:${readerId(1)}`)).toBe(false);
+    expect(stored.has(`${LIMITS}_${anonOf(1)}`)).toBe(false);
     expect(used("voteless-answers")).toBe(VOTELESS_DAILY_LIMIT);
 
     // A reader who votes is not held by it.
@@ -780,10 +812,10 @@ describe("a reader's finds", () => {
     expect((await queueFor(firestore, "c", 1)).mine.found).toBe(0);
   });
 
-  it("moves what a browser found to the account it signs in to, once a person", async () => {
+  it("gives the account what a browser found when it signs in there, once a person, and keeps the browser's own", async () => {
     crop("c1");
     await answerAs(stranger(1), "1979-07-15", "c1");
-    const anon = `anon:${readerId(1)}`;
+    const anon = anonOf(1);
     stored.set(`declarationReaderFinds/${anon}_kowalska`, {
       uid: anon,
       personId: "kowalska",
@@ -813,8 +845,15 @@ describe("a reader's finds", () => {
         "declarationReaderFinds/a_nowak",
       ]),
     );
-    expect(stored.has(`declarationReaderFinds/${anon}_kowalska`)).toBe(false);
-    expect(stored.has(`declarationReaderFinds/${anon}_nowak`)).toBe(false);
+    expect(stored.get("declarationReaderFinds/a_kowalska")).toMatchObject({
+      uid: "a",
+      claims: `${anon}_kowalska`,
+    });
+    for (const person of ["kowalska", "nowak"]) {
+      expect(
+        stored.get(`declarationReaderFinds/${anon}_${person}`),
+      ).toMatchObject({ uid: anon, claimedBy: "a" });
+    }
     expect((await queueFor(firestore, "a", 1)).mine.found).toBe(2);
   });
 
@@ -951,7 +990,7 @@ describe("a reader's finds", () => {
 });
 
 describe("claimAnswers", () => {
-  it("moves a browser's answers onto the account, with the account's vote", async () => {
+  it("gives the account a copy of each of a browser's answers, with the account's vote, naming the answer it claims", async () => {
     crop("c1");
     crop("c2");
     await answerAs(stranger(1), "1979-07-15", "c1");
@@ -959,8 +998,7 @@ describe("claimAnswers", () => {
 
     const result = await claim(1, account("a"));
 
-    expect(result).toEqual({ claimed: 2, settled: [] });
-    expect(stored.has(`declarationAnswers/c1_anon:${readerId(1)}`)).toBe(false);
+    expect(result).toEqual({ claimed: 2, settled: [], left: 0 });
     expect(stored.get("declarationAnswers/c1_a")).toMatchObject({
       extractId: "c1",
       uid: "a",
@@ -970,13 +1008,19 @@ describe("claimAnswers", () => {
       counted: true,
       day: "2026-10-29",
       imageHash: "hash",
-      claimedFrom: `anon:${readerId(1)}`,
+      claimedFrom: anonOf(1),
+      claims: `c1_${anonOf(1)}`,
     });
     expect(stored.get("declarationAnswers/c2_a")).toMatchObject({
       verdict: "skip",
       counted: false,
+      claims: `c2_${anonOf(1)}`,
     });
-    // The crop hears the answer now.
+    // A copy is no answer to take over or to copy again.
+    expect(stored.get("declarationAnswers/c1_a")).not.toHaveProperty(
+      "claimPending",
+    );
+    // The crop hears the copy now.
     expect(stored.get("declarationExtracts/c1")).toMatchObject({
       status: "open",
       answerCount: 1,
@@ -988,20 +1032,63 @@ describe("claimAnswers", () => {
     expect(stored.get(`${LIMITS}_a`)).toMatchObject({ count: 1 });
   });
 
-  it("keeps the account's own answer to a crop it answered itself, and gives back the vote it took for the other", async () => {
+  it("keeps the browser's answers where they were given, as they were given, marked with the account that took them over", async () => {
+    crop("c1");
+    await answerAs(stranger(1), "1979-07-15");
+    const given = stored.get(`declarationAnswers/c1_${anonOf(1)}`)!;
+
+    await claim(1, account("a"));
+
+    expect(stored.get(`declarationAnswers/c1_${anonOf(1)}`)).toEqual({
+      ...given,
+      claimedBy: "a",
+      claimedAt: { iso: NOW.toISOString() },
+      claimPending: false,
+      copied: true,
+    });
+    // And nothing beside the answers keeps the claim.
+    expect(
+      [...stored.keys()].filter(
+        (path) =>
+          !/^declaration(Answers|Extracts|ExtractImages|ReaderLimits)\//.test(
+            path,
+          ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("keeps nothing in the database that the browser's id could be read off", async () => {
+    crop("c1");
+    await answerAs(stranger(1), "1979-07-15");
+    await claim(1, account("a"));
+
+    const everything = JSON.stringify([...stored.entries()]);
+    expect(everything).not.toContain(readerId(1));
+    expect(everything).toContain(readerKeyOf(readerId(1)));
+  });
+
+  it("keeps the account's own answer to a crop it answered itself, and the browser's beside it, and gives back the vote it took", async () => {
     crop("c1");
     await answer("a", "1980-01-01");
     await answerAs(stranger(1), "1979-07-15");
 
-    expect(await claim(1, account("a"))).toEqual({ claimed: 0, settled: [] });
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 0,
+      settled: [],
+      left: 0,
+    });
 
     expect(stored.get("declarationAnswers/c1_a")).toMatchObject({
       value: "1980-01-01",
     });
-    expect(stored.get("declarationAnswers/c1_a")).not.toHaveProperty(
-      "claimedFrom",
-    );
-    expect(stored.has(`declarationAnswers/c1_anon:${readerId(1)}`)).toBe(false);
+    expect(stored.get("declarationAnswers/c1_a")).not.toHaveProperty("claims");
+    expect(stored.get(`declarationAnswers/c1_${anonOf(1)}`)).toMatchObject({
+      value: "1979-07-15",
+      votes: false,
+      claimedBy: "a",
+      claimPending: false,
+      copied: false,
+    });
     expect(stored.get("declarationExtracts/c1")).toMatchObject({
       answerCount: 1,
       answers: { readings: { "1980-01-01": 1 } },
@@ -1014,12 +1101,16 @@ describe("claimAnswers", () => {
     await answerAs(unconfirmed("u"), "1980-01-01");
     await answerAs(stranger(1), "1979-07-15");
 
-    expect(await claim(1, account("u"))).toEqual({ claimed: 1, settled: [] });
+    expect(await claim(1, account("u"))).toEqual({
+      claimed: 1,
+      settled: [],
+      left: 0,
+    });
 
     expect(stored.get("declarationAnswers/c1_u")).toMatchObject({
       value: "1979-07-15",
       votes: true,
-      claimedFrom: `anon:${readerId(1)}`,
+      claims: `c1_${anonOf(1)}`,
     });
     expect(stored.get("declarationExtracts/c1")).toMatchObject({
       answerCount: 1,
@@ -1032,7 +1123,11 @@ describe("claimAnswers", () => {
     await answerAs(stranger(1), "1979-07-15");
     await answerAs(stranger(2), "1979-07-15");
 
-    expect(await claim(1, account("a"))).toEqual({ claimed: 1, settled: [] });
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 1,
+      settled: [],
+      left: 0,
+    });
     expect(stored.get("declarationExtracts/c1")).toMatchObject({
       status: "open",
     });
@@ -1052,6 +1147,7 @@ describe("claimAnswers", () => {
           },
         },
       ],
+      left: 0,
     });
     expect(stored.get("declarationExtracts/c1")).toMatchObject({
       status: "agreed",
@@ -1060,7 +1156,7 @@ describe("claimAnswers", () => {
     });
   });
 
-  it("refuses an account without a confirmed address, and leaves the answers for a claim once it is confirmed", async () => {
+  it("refuses an account without a confirmed address, and takes over nothing until it is confirmed", async () => {
     crop("c1");
     await answerAs(stranger(1), "1979-07-15");
     const before = new Map(stored);
@@ -1071,7 +1167,11 @@ describe("claimAnswers", () => {
     await expect(refused).rejects.toThrow(/Potwierdź adres/);
     expect(stored).toEqual(before);
 
-    expect(await claim(1, account("u"))).toEqual({ claimed: 1, settled: [] });
+    expect(await claim(1, account("u"))).toEqual({
+      claimed: 1,
+      settled: [],
+      left: 0,
+    });
     expect(stored.get("declarationAnswers/c1_u")).toMatchObject({
       votes: true,
     });
@@ -1089,6 +1189,7 @@ describe("claimAnswers", () => {
     expect(await claim(1, account("u", { email_verified: false }))).toEqual({
       claimed: 0,
       settled: [],
+      left: 0,
     });
     expect(stored).toEqual(before);
 
@@ -1099,18 +1200,31 @@ describe("claimAnswers", () => {
     expect(await claim(2, account("u", { email_verified: false }))).toEqual({
       claimed: 0,
       settled: [],
+      left: 0,
     });
     expect(stored).toEqual(skipped);
   });
 
-  it("votes within the account's daily limit, on the day each answer was given, and moves the rest without a vote", async () => {
+  it("takes over nothing for a browser that only looked", async () => {
+    crop("c1");
+    const before = new Map(stored);
+
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 0,
+      settled: [],
+      left: 0,
+    });
+    expect(stored).toEqual(before);
+  });
+
+  it("votes within the account's daily limit, on the day each answer was given, and copies the rest without a vote", async () => {
     crop("c1");
     crop("c2");
     crop("c3");
     stored.set(`${LIMITS}_a`, { count: READER_DAILY_LIMIT - 1 });
     await answerAs(stranger(1), "1979-07-15", "c1");
     await answerAs(stranger(1), "1979-07-15", "c2");
-    const from = anonymousUid(readerId(1));
+    const from = anonOf(1);
     stored.set(`declarationAnswers/c3_${from}`, {
       extractId: "c3",
       uid: from,
@@ -1164,14 +1278,23 @@ describe("claimAnswers", () => {
     });
   });
 
-  it("drops an answer read off a picture the crop has since been cut again from", async () => {
+  it("copies no answer read off a picture the crop has since been cut again from, and keeps it", async () => {
     crop("c1");
     await answerAs(stranger(1), "1979-07-15");
     crop("c1", { imageHash: "recut" });
 
-    expect(await claim(1, account("a"))).toEqual({ claimed: 0, settled: [] });
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 0,
+      settled: [],
+      left: 0,
+    });
 
-    expect(stored.has(`declarationAnswers/c1_anon:${readerId(1)}`)).toBe(false);
+    expect(stored.get(`declarationAnswers/c1_${anonOf(1)}`)).toMatchObject({
+      value: "1979-07-15",
+      claimedBy: "a",
+      claimPending: false,
+      copied: false,
+    });
     expect(stored.has("declarationAnswers/c1_a")).toBe(false);
     expect(stored.get("declarationExtracts/c1")).toMatchObject({
       answerCount: 0,
@@ -1185,16 +1308,78 @@ describe("claimAnswers", () => {
     await answerAs(stranger(1), "1979-07-15");
     await claim(1, account("a"));
     const paths = [...stored.keys()].sort();
-    const moved = stored.get("declarationAnswers/c1_a");
+    const copied = stored.get("declarationAnswers/c1_a");
+    const given = stored.get(`declarationAnswers/c1_${anonOf(1)}`);
     const extract = stored.get("declarationExtracts/c1");
     const limit = stored.get(`${LIMITS}_a`);
 
-    expect(await claim(1, account("a"))).toEqual({ claimed: 0, settled: [] });
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 0,
+      settled: [],
+      left: 0,
+    });
     // Nothing written: every write here stores a new object.
     expect([...stored.keys()].sort()).toEqual(paths);
-    expect(stored.get("declarationAnswers/c1_a")).toBe(moved);
+    expect(stored.get("declarationAnswers/c1_a")).toBe(copied);
+    expect(stored.get(`declarationAnswers/c1_${anonOf(1)}`)).toBe(given);
     expect(stored.get("declarationExtracts/c1")).toBe(extract);
     expect(stored.get(`${LIMITS}_a`)).toBe(limit);
+  });
+
+  it("gives an account that signs in to a browser claimed before only what was read there since", async () => {
+    crop("c1");
+    crop("c2");
+    await answerAs(stranger(1), "1979-07-15", "c1");
+    await claim(1, account("a"));
+    // The page kept the id, and the browser read on.
+    await answerAs(stranger(1), "1979-07-16", "c2");
+
+    expect(await claim(1, account("b"))).toEqual({
+      claimed: 1,
+      settled: [],
+      left: 0,
+    });
+    expect(stored.has("declarationAnswers/c1_b")).toBe(false);
+    expect(stored.get("declarationAnswers/c2_b")).toMatchObject({
+      value: "1979-07-16",
+    });
+    expect(stored.get(`declarationAnswers/c1_${anonOf(1)}`)).toMatchObject({
+      claimedBy: "a",
+    });
+    expect(stored.get(`declarationAnswers/c2_${anonOf(1)}`)).toMatchObject({
+      claimedBy: "b",
+    });
+  });
+
+  it("gives the account the answers the browser gave before the database held keys, filed under its id", async () => {
+    crop("c1");
+    const legacy = legacyAnonymousUid(readerId(1));
+    stored.set(`declarationAnswers/c1_${legacy}`, {
+      extractId: "c1",
+      uid: legacy,
+      verdict: "date",
+      value: "1979-07-15",
+      votes: false,
+      counted: true,
+      day: "2026-10-29",
+      imageHash: "hash",
+    });
+
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 1,
+      settled: [],
+      left: 0,
+    });
+    expect(stored.get("declarationAnswers/c1_a")).toMatchObject({
+      value: "1979-07-15",
+      votes: true,
+      claimedFrom: legacy,
+      claims: `c1_${legacy}`,
+    });
+    expect(stored.get(`declarationAnswers/c1_${legacy}`)).toMatchObject({
+      claimedBy: "a",
+      copied: true,
+    });
   });
 
   it("leaves another browser's answers alone", async () => {
@@ -1204,13 +1389,17 @@ describe("claimAnswers", () => {
 
     await claim(1, account("a"));
 
-    expect(
-      stored.get(`declarationAnswers/c1_anon:${readerId(2)}`),
-    ).toMatchObject({ value: "1979-07-16", votes: false });
+    const other = stored.get(`declarationAnswers/c1_${anonOf(2)}`);
+    expect(other).toMatchObject({ value: "1979-07-16", votes: false });
+    expect(other).not.toHaveProperty("claimedBy");
   });
 
-  it(`moves at most ${CLAIM_LIMIT} answers a claim`, async () => {
-    const from = anonymousUid(readerId(1));
+  /** The browser's answers an account took over and has no copy of yet. */
+  const pending = () =>
+    [...stored.values()].filter((data) => data.claimPending === true).length;
+
+  it(`takes over every answer, copies at most ${CLAIM_LIMIT} a claim, and the rest with the next`, async () => {
+    const from = anonOf(1);
     for (let i = 0; i <= CLAIM_LIMIT; i++) {
       stored.set(`declarationAnswers/x${i}_${from}`, {
         extractId: `x${i}`,
@@ -1223,13 +1412,92 @@ describe("claimAnswers", () => {
       });
     }
 
-    expect((await claim(1, account("a"))).claimed).toBe(CLAIM_LIMIT);
+    expect(await claim(1, account("a"))).toMatchObject({
+      claimed: CLAIM_LIMIT,
+      left: 1,
+    });
+    expect(pending()).toBe(1);
     expect((await claim(1, account("a"))).claimed).toBe(1);
+    expect(pending()).toBe(0);
     // All given on one day, so a day's worth of them vote.
     const voting = [...stored.entries()].filter(
       ([path, data]) =>
         path.startsWith("declarationAnswers/") && data.votes === true,
     );
     expect(voting).toHaveLength(READER_DAILY_LIMIT);
+  });
+
+  // 2026-10-31: one of twenty crops lost to contention, and the claim stopped
+  // with eight readings under the browser's id.
+  it("copies the rest when one crop's transaction fails among the others, and that crop once they are done", async () => {
+    // More crops than a claim works on at once, so another round follows the
+    // one the failure is in.
+    const crops = Array.from({ length: 25 }, (_, i) => `c${i}`);
+    for (const id of crops) {
+      crop(id);
+      await answerAs(stranger(1), "1979-07-15", id);
+    }
+    aborting.set("declarationExtracts/c3", 1);
+
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 25,
+      settled: [],
+      left: 0,
+    });
+    for (const id of crops) {
+      expect(stored.get(`declarationAnswers/${id}_a`)).toMatchObject({
+        votes: true,
+      });
+    }
+    expect(stored.get(`${LIMITS}_a`)).toMatchObject({ count: 25 });
+    expect(pending()).toBe(0);
+  });
+
+  it("leaves what fails alone too taken over, for the sweep to copy without the browser", async () => {
+    for (const id of ["c1", "c2", "c3"]) {
+      crop(id);
+      await answerAs(stranger(1), "1979-07-15", id);
+    }
+    stored.set(`declarationReaderFinds/${anonOf(1)}_kowalska`, {
+      uid: anonOf(1),
+      personId: "kowalska",
+      extractId: "c1",
+    });
+    aborting.set("declarationExtracts/c1", 2);
+
+    // The claim answers all the same: the account took everything over, and
+    // the page may forget the id.
+    expect(await claim(1, account("a"))).toEqual({
+      claimed: 2,
+      settled: [],
+      left: 1,
+    });
+    expect(stored.has("declarationAnswers/c1_a")).toBe(false);
+    expect(stored.get(`declarationAnswers/c1_${anonOf(1)}`)).toMatchObject({
+      claimedBy: "a",
+      claimPending: true,
+    });
+    // The vote taken for it is given back, and the finds go over all the
+    // same.
+    expect(stored.get(`${LIMITS}_a`)).toMatchObject({ count: 2 });
+    expect(stored.get("declarationReaderFinds/a_kowalska")).toMatchObject({
+      uid: "a",
+    });
+
+    expect(await finishClaims(firestore, NOW)).toEqual({
+      finished: 1,
+      left: 0,
+    });
+    expect(stored.get("declarationAnswers/c1_a")).toMatchObject({
+      votes: true,
+      claims: `c1_${anonOf(1)}`,
+    });
+    expect(stored.get(`${LIMITS}_a`)).toMatchObject({ count: 3 });
+    expect(pending()).toBe(0);
+    // And the next sweep has nothing to copy.
+    expect(await finishClaims(firestore, NOW)).toEqual({
+      finished: 0,
+      left: 0,
+    });
   });
 });
