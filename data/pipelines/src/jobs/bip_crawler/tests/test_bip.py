@@ -81,6 +81,9 @@ def test_document_url_patterns() -> None:
     assert is_document_url("https://bip.x.pl/resource/12497/Postanowienie+134.pdf")
     assert is_document_url("https://mrozy-api.bip.net.pl/api/attachments/1835")
     assert not is_document_url("https://mrozy-api.bip.net.pl/api/attachments")
+    assert is_document_url(
+        "https://bip.warszawa.pl/documents/53790/75850130/x_coroczne_2025.pdf/345f937e?t=1"
+    )
     assert not is_document_url("https://bip.x.pl/oswiadczenie-majatkowe/1/kowalski")
 
 
@@ -108,6 +111,13 @@ def test_normalize_url_drops_image_map_coordinates() -> None:
     assert normalize_url("https://bip.x.pl/mapa.php?x=123&y=101&id=5") == (
         "https://bip.x.pl/mapa.php?id=5"
     )
+
+
+def test_normalize_url_drops_a_way_back() -> None:
+    page = "https://bip.warszawa.pl/web/rada-warszawy/-/tomasz-sybilski-2025"
+    back = "%2Fweb%2Frada-warszawy%2F-%2Ftomasz-sybilski-2024"
+    assert normalize_url(f"{page}?redirect={back}") == page
+    assert normalize_url(f"{page}?_portlet_backURL={back}&id=4") == f"{page}?id=4"
 
 
 def test_normalize_url_keeps_where_an_akcessnet_page_sits() -> None:
