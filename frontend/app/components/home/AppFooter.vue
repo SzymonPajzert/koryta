@@ -75,9 +75,9 @@ const sections = [
       // address from here, so somebody hunting for „kontakt" scrolled to the
       // bottom and found nothing.
       { title: "Kontakt", link: "/o-nas#kontakt" },
-      // The app bar only carries this above 960px and the home page only
-      // above 960px, so on a phone the footer is the whole of how somebody
-      // finds their way to helping.
+      // The app bar only carries this above 960px, so on a phone, on any page
+      // but the home page, the footer is the whole of how somebody finds
+      // their way to helping.
       { title: "Działaj z nami", link: "/pomoc" },
     ],
   },
