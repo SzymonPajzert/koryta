@@ -71,7 +71,7 @@ def test_the_walk_takes_a_councillors_buttons_for_his_files(tmp_path) -> None:
     _, store, _, _ = search(
         tmp_path, sites, [row("b", "u1", "Grzegorz", "Baran")], sitemaps=False
     )
-    assert store.people["b"].status == "found"
+    assert store.outcomes["b"].status == "found"
     assert {d.url for d in store.person_docs("b") if d.status == "ok"} == {
         f"{ATACH}/8424/x.pdf",
         f"{ATACH}/8919/x.pdf",

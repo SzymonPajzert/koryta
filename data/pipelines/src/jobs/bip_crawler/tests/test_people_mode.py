@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tarfile
 import time
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
@@ -12,7 +13,8 @@ import pytest
 
 from analysis.bip_people_of_interest import BipPeopleOfInterest
 from jobs.bip_crawler import _units
-from jobs.bip_crawler.people import PeopleOptions, PeopleSearch, list_policy
+from jobs.bip_crawler.people import PeopleOptions, PeopleSearch
+from jobs.bip_crawler.people_list import list_policy, to_search
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from scrapers.bip.classify import normalize_url
 from scrapers.bip.people import (
@@ -30,7 +32,7 @@ from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext, extract_link_contexts
 from scrapers.common.ratelimit import HostTokenBucket
-from scrapers.stores import BipQueue, PersonRow, Pipeline
+from scrapers.stores import BipQueue, PersonRow, Pipeline, with_outcomes
 from stores.bip_bundles import LocalBundleStore
 from stores.bip_people import MemoryBipPeopleStore
 
@@ -236,7 +238,7 @@ def run(tmp_path: Path):
     ):
         web = web or FakeWeb()
         store = store or MemoryBipPeopleStore()
-        store.upsert_people(rows)
+        listed = rows
         queue = FakeFrontier([])
         search = PeopleSearch(
             store,
@@ -251,8 +253,12 @@ def run(tmp_path: Path):
             sleep=lambda s: None,
         )
         counts = search.run(
-            store.people_to_search(
-                refresh=refresh, max_priority=None, limit=None, retry=retry
+            to_search(
+                with_outcomes(listed, store.searched()),
+                refresh=refresh,
+                max_priority=None,
+                limit=None,
+                retry=retry,
             )
         )
         return search, store, queue, web, counts
@@ -262,7 +268,7 @@ def run(tmp_path: Path):
 
 def test_every_candidacy_ends_found_or_with_a_reason(run):
     _, store, _, _, counts = run()
-    status = {k: (p.status, p.reason) for k, p in store.people.items()}
+    status = {k: (p.status, p.reason) for k, p in store.outcomes.items()}
     assert status["kowalski"] == ("found", "named")
     assert status["kowalska"] == ("found", "named")
     assert status["nowak"] == ("found", "named")
@@ -322,7 +328,7 @@ def test_robots_keeps_the_walk_out(run):
         rows=[person("kowalski", "000001", "Jan", "Kowalski")],
         robots=lambda url: "/menu/oswiadczenia" not in url,
     )
-    assert store.people["kowalski"].status == "not_found"
+    assert store.outcomes["kowalski"].status == "not_found"
     assert not any("/menu/oswiadczenia" in c for c in web.calls)
 
 
@@ -332,25 +338,31 @@ def test_a_second_run_searches_only_what_is_pending(run):
     assert counts == {} and web.calls == []
     newcomer = [person("new", "000001", "Ewa", "Nowak")]
     _, store, _, web, counts = run(rows=newcomer, store=store)
-    assert counts == {"found": 1} and store.people["new"].status == "found"
-    assert store.people["kowalski"].status == "found"  # untouched
+    assert counts == {"found": 1} and store.outcomes["new"].status == "found"
+    assert store.outcomes["kowalski"].status == "found"  # untouched
 
 
 def test_a_retry_can_take_only_what_an_older_walk_settled():
     store = MemoryBipPeopleStore()
-    store.upsert_people(
-        [PersonRow(k, "u1", 0, 2024, "Ewa", k, {}) for k in ("old", "new", "never")]
-    )
+    listed = [
+        PersonRow(k, "u1", 0, 2024, "Ewa", k, {}) for k in ("old", "new", "never")
+    ]
     store.record_person("old", "not_found", "not_listed", 0, "r1")
     store.record_person("new", "not_found", "not_listed", 0, "r2")
-    store.checked["old"] = datetime(2026, 10, 29, tzinfo=timezone.utc)
+    store.outcomes["old"] = replace(
+        store.outcomes["old"], checked_at=datetime(2026, 10, 29, tzinfo=timezone.utc)
+    )
     cutoff = datetime(2026, 10, 30, 5, 43, tzinfo=timezone.utc)
 
     def due(**kwargs) -> list[str]:
         return [
             r.key
-            for r in store.people_to_search(
-                refresh=False, max_priority=None, limit=None, **kwargs
+            for r in to_search(
+                with_outcomes(listed, store.searched()),
+                refresh=False,
+                max_priority=None,
+                limit=None,
+                **kwargs,
             )
         ]
 
@@ -370,7 +382,7 @@ def test_a_run_can_take_only_the_units_it_is_given(tmp_path):
 def test_time_budget_leaves_units_pending(run):
     search, store, _, _, _ = run(max_run_seconds=-1)
     assert search.timed_out
-    assert all(p.status == "pending" for p in store.people.values())
+    assert all(p.status == "pending" for p in store.outcomes.values())
 
 
 def test_link_contexts_carry_rows_and_headings():

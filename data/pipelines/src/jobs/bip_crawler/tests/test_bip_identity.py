@@ -60,7 +60,7 @@ def test_the_walk_asks_an_exceptions_pages_and_files_as_a_browser(tmp_path) -> N
         web=web,
         sitemaps=False,
     )
-    assert store.people["n"].status == "found"
+    assert store.outcomes["n"].status == "found"
     # u1 stands for an E-LINE BIP; the default resolve maps a host to itself.
     exceptions = Agents(OWN, lambda host: E_LINE if host == "u1.pl" else host)
     people.agents = exceptions

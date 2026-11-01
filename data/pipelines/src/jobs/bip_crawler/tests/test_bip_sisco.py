@@ -167,7 +167,7 @@ def test_the_walk_reads_a_declarations_pages_attachments(tmp_path) -> None:
         post=engine.post,
         sitemaps=False,
     )
-    assert store.people["w"].status == "found"
+    assert store.outcomes["w"].status == "found"
     (doc,) = store.person_docs("w")
     assert doc.url == file and doc.page_url == f"{HOST}/dokumenty,5_1569"
     assert len(engine.calls) == 1

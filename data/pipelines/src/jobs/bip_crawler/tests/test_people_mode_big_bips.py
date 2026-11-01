@@ -22,6 +22,7 @@ from jobs.bip_crawler.people import (
     load_known_urls,
     read_unit_starts,
 )
+from jobs.bip_crawler.people_list import to_search
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from jobs.bip_crawler.tests.test_people_mode_review import PDF, Web, html, row
 from scrapers.bip.classify import normalize_url
@@ -30,7 +31,7 @@ from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext, extract_link_contexts
 from scrapers.common.ratelimit import HostTokenBucket
-from scrapers.stores import BipQueue
+from scrapers.stores import BipQueue, with_outcomes
 from stores.bip_bundles import LocalBundleStore
 from stores.bip_people import MemoryBipPeopleStore
 
@@ -48,7 +49,7 @@ def search(
 ):
     web = Web(sites)
     store = MemoryBipPeopleStore()
-    store.upsert_people(rows)
+    listed = rows
     seeds = {
         r.unit: UnitSeed(
             r.unit,
@@ -70,7 +71,14 @@ def search(
         render=render,
         clock=clock,
     )
-    people.run(store.people_to_search(refresh=False, max_priority=None, limit=None))
+    people.run(
+        to_search(
+            with_outcomes(listed, store.searched()),
+            refresh=False,
+            max_priority=None,
+            limit=None,
+        )
+    )
     return people, store, web
 
 
@@ -151,7 +159,7 @@ def test_a_declarations_pages_own_links_come_first(tmp_path):
         pages_per_candidacy=1,
         sitemaps=False,
     )
-    assert store.people["n"].status == "found"
+    assert store.outcomes["n"].status == "found"
     assert not any("/sesja/" in url or "przetargi" in url for url in web.calls)
 
 
@@ -190,7 +198,7 @@ def test_a_known_file_finds_a_person_the_menu_hides(tmp_path):
     }
     known = {"u1.pl": ["https://u1.pl/pliki/oswiadczenie-majatkowe-ewa-lis-2024.pdf"]}
     _, store, _ = search(tmp_path, sites, [row("lis", "u1", "Ewa", "Lis")], known=known)
-    assert store.people["lis"].status == "found"
+    assert store.outcomes["lis"].status == "found"
     (doc,) = store.person_docs("lis")
     assert doc.page_url == "known-urls"
 
@@ -206,7 +214,7 @@ def test_a_known_page_starts_the_walk(tmp_path):
     }
     known = {"u1.pl": ["https://u1.pl/rada/oswiadczenia-majatkowe"]}
     _, store, _ = search(tmp_path, sites, [row("lis", "u1", "Ewa", "Lis")], known=known)
-    assert store.people["lis"].status == "found"
+    assert store.outcomes["lis"].status == "found"
 
 
 def test_a_sitemap_leads_to_the_declarations(tmp_path):
@@ -239,7 +247,7 @@ def test_a_sitemap_leads_to_the_declarations(tmp_path):
         "https://u1.pl/f/1.pdf": (200, "application/pdf", PDF + b"1"),
     }
     _, store, web = search(tmp_path, sites, [row("lis", "u1", "Ewa", "Lis")])
-    assert store.people["lis"].status == "found"
+    assert store.outcomes["lis"].status == "found"
     # The declarations' sitemap is read; the news one is not needed.
     assert "https://u1.pl/sm-oswiadczenia.xml.gz" in web.calls
 
@@ -261,7 +269,7 @@ def test_known_urls_stay_inside_a_shared_platforms_path(tmp_path):
         known=known,
         scopes={"u1": "bip.x.pl/u1"},
     )
-    assert store.people["lis"].status == "not_found"
+    assert store.outcomes["lis"].status == "not_found"
     assert not any("/u2/" in c for c in web.calls)
 
 
@@ -319,7 +327,7 @@ def test_a_page_a_script_draws_is_read_once_rendered(tmp_path):
 
     rows = [row("lis", "u1", "Ewa", "Lis")]
     _, store, _ = search(tmp_path, JS_SITE, rows, render=render, sitemaps=False)
-    assert store.people["lis"].status == "found"
+    assert store.outcomes["lis"].status == "found"
     assert [normalize_url(u).rstrip("/") for u in drawn] == [
         "https://u1.pl",
         "https://u1.pl/om",
@@ -329,7 +337,7 @@ def test_a_page_a_script_draws_is_read_once_rendered(tmp_path):
 def test_unrendered_a_script_drawn_bip_shows_nothing(tmp_path):
     rows = [row("lis", "u1", "Ewa", "Lis")]
     _, store, _ = search(tmp_path, JS_SITE, rows, sitemaps=False)
-    assert (store.people["lis"].status, store.people["lis"].reason) == (
+    assert (store.outcomes["lis"].status, store.outcomes["lis"].reason) == (
         "not_found",
         "no_declarations",
     )
@@ -473,7 +481,7 @@ def test_a_retry_of_a_big_unit_gets_a_big_units_pages(tmp_path, monkeypatch):
     rows = [row(f"r{i}", "u1", "Ewa", f"Lis{i}") for i in range(10)]
     web = Web(sites)
     store = MemoryBipPeopleStore()
-    store.upsert_people(rows)
+    listed = rows
     people = PeopleSearch(
         store,
         cast("BipQueue", FakeFrontier([])),
@@ -485,7 +493,14 @@ def test_a_retry_of_a_big_unit_gets_a_big_units_pages(tmp_path, monkeypatch):
         sleep=lambda s: None,
         unit_sizes={"u1": 60},
     )
-    people.run(store.people_to_search(refresh=False, max_priority=None, limit=None))
+    people.run(
+        to_search(
+            with_outcomes(listed, store.searched()),
+            refresh=False,
+            max_priority=None,
+            limit=None,
+        )
+    )
     assert asked == [60] and original(people, 60) == 900
 
 
@@ -513,7 +528,7 @@ def test_a_drawn_page_elsewhere_keeps_the_fetched_pages_links(tmp_path):
     sites["https://u1.pl"] = shell_with_link
     rows = [row("lis", "u1", "Ewa", "Lis")]
     _, store, _ = search(tmp_path, sites, rows, render=render, sitemaps=False)
-    assert store.people["lis"].status == "found"
+    assert store.outcomes["lis"].status == "found"
 
 
 def test_a_broken_gzip_sitemap_is_skipped_not_fatal(tmp_path):
@@ -533,7 +548,7 @@ def test_a_broken_gzip_sitemap_is_skipped_not_fatal(tmp_path):
         "https://u1.pl/f/1.pdf": (200, "application/pdf", PDF + b"1"),
     }
     _, store, _ = search(tmp_path, sites, [row("lis", "u1", "Ewa", "Lis")])
-    assert store.people["lis"].status == "found"
+    assert store.outcomes["lis"].status == "found"
 
 
 def test_known_id_addresses_are_not_walked_as_pages(tmp_path):
@@ -554,7 +569,7 @@ def test_known_id_addresses_are_not_walked_as_pages(tmp_path):
     _, store, web = search(
         tmp_path, sites, rows, known={"u1.pl": [attachment]}, sitemaps=False
     )
-    assert store.people["lis"].status == "found"
+    assert store.outcomes["lis"].status == "found"
     assert not any("govarticle" in c for c in web.calls)
 
 
@@ -569,7 +584,7 @@ def test_known_files_never_end_a_walk_before_it_starts(tmp_path):
     rows = [row("lis", "u1", "Ewa", "Lis")]
     people, store, web = search(tmp_path, sites, rows, known=known, sitemaps=False)
     assert "https://u1.pl" in [c.rstrip("/") for c in web.calls]  # the BIP was asked
-    assert store.people["lis"].status == "not_found"
+    assert store.outcomes["lis"].status == "not_found"
 
 
 def test_a_file_spelt_twice_counts_and_comes_down_once(tmp_path):
@@ -587,7 +602,7 @@ def test_a_file_spelt_twice_counts_and_comes_down_once(tmp_path):
     }
     rows = [row("lis", "u1", "Ewa", "Lis")]
     _, store, web = search(tmp_path, sites, rows, sitemaps=False)
-    assert store.people["lis"].status == "found"
+    assert store.outcomes["lis"].status == "found"
     assert len([c for c in web.calls if c.endswith(".pdf")]) == 1
 
 
@@ -650,7 +665,7 @@ def test_units_on_one_host_are_searched_one_at_a_time(tmp_path, monkeypatch):
     monkeypatch.setattr(PeopleSearch, "_unit", unit)
     rows = [row(u, u, "Ewa", "Lis") for u in "abcde"]
     store = MemoryBipPeopleStore()
-    store.upsert_people(rows)
+    listed = rows
     people = PeopleSearch(
         store,
         cast("BipQueue", FakeFrontier([])),
@@ -659,7 +674,12 @@ def test_units_on_one_host_are_searched_one_at_a_time(tmp_path, monkeypatch):
         PeopleOptions(workers=4),
     )
     counts = people.run(
-        store.people_to_search(refresh=False, max_priority=None, limit=None)
+        to_search(
+            with_outcomes(listed, store.searched()),
+            refresh=False,
+            max_priority=None,
+            limit=None,
+        )
     )
     assert counts == {"found": 5}
     assert peak["bip.shared.pl"] == 1
@@ -689,7 +709,7 @@ def test_units_on_one_server_are_searched_two_at_a_time(tmp_path, monkeypatch):
     monkeypatch.setattr(PeopleSearch, "_unit", unit)
     rows = [row(u, u, "Ewa", "Lis") for u in "abcde"]
     store = MemoryBipPeopleStore()
-    store.upsert_people(rows)
+    listed = rows
     people = PeopleSearch(
         store,
         cast("BipQueue", FakeFrontier([])),
@@ -699,7 +719,12 @@ def test_units_on_one_server_are_searched_two_at_a_time(tmp_path, monkeypatch):
         resolve=lambda host: "10.0.0.1" if host != "bip.e.pl" else host,
     )
     counts = people.run(
-        store.people_to_search(refresh=False, max_priority=None, limit=None)
+        to_search(
+            with_outcomes(listed, store.searched()),
+            refresh=False,
+            max_priority=None,
+            limit=None,
+        )
     )
     assert counts == {"found": 5}
     assert peak["10.0.0.1"] == 2
@@ -722,7 +747,7 @@ def test_a_walk_past_its_own_time_ends_as_budget(tmp_path):
         max_unit_seconds=150,
         clock=lambda: next(ticks),
     )
-    assert (store.people["lis"].status, store.people["lis"].reason) == (
+    assert (store.outcomes["lis"].status, store.outcomes["lis"].reason) == (
         "not_found",
         "budget",
     )

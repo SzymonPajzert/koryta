@@ -336,7 +336,7 @@ def test_the_walk_reads_a_councils_list_through_its_json(tmp_path) -> None:
     _, store, web, _ = search(
         tmp_path, sites, [row("b", "u1", "Longin", "Bożeński")], sitemaps=False
     )
-    assert store.people["b"].status == "found"
+    assert store.outcomes["b"].status == "found"
     (doc,) = [d for d in store.person_docs("b") if d.status == "ok"]
     assert doc.url == f"{HOST}/upload/pliki/0bozenski_longin.pdf"
     assert doc.page_url == page(295, "2049993")
@@ -362,6 +362,6 @@ def test_the_walk_reads_a_persons_list_with_each_file_under_its_person(
         [row("m", "u1", "Monika", "Durlak"), row("d", "u1", "Andrzej", "Duda")],
         sitemaps=False,
     )
-    assert store.people["m"].status == "found"
-    assert store.people["d"].status == "not_found"
+    assert store.outcomes["m"].status == "found"
+    assert store.outcomes["d"].status == "not_found"
     assert f"{HOST}/upload/pliki/0basak.pdf" not in web.calls

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import cast
 
 from jobs.bip_crawler.people import PeopleOptions, PeopleSearch
+from jobs.bip_crawler.people_list import to_search
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from jobs.bip_crawler.tests.test_people_mode_review import (
     PDF,
@@ -19,7 +20,7 @@ from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext
 from scrapers.common.ratelimit import HostTokenBucket
-from scrapers.stores import BipQueue
+from scrapers.stores import BipQueue, with_outcomes
 from stores.bip_bundles import LocalBundleStore
 from stores.bip_people import MemoryBipPeopleStore
 
@@ -64,7 +65,7 @@ def test_bip_net_pl_attachments_on_the_api_host_are_files(tmp_path):
         ),
     }
     _, store, web, _ = search(tmp_path, sites, [row("m", "u1", "Jan", "Malinowski")])
-    assert store.people["m"].status == "found"
+    assert store.outcomes["m"].status == "found"
     assert [d.url for d in store.person_docs("m")] == [
         "https://u1-api.bip.net.pl/api/attachments/1835"
     ]
@@ -91,7 +92,7 @@ def test_robots_txt_is_asked_about_a_page_as_it_was_linked(tmp_path):
         robots=lambda url: "/admin/" not in url,
     )
     assert not any("/admin" in call for call in web.calls)
-    assert store.people["n"].status == "not_found"
+    assert store.outcomes["n"].status == "not_found"
 
 
 class NotNow(Web):
@@ -123,7 +124,7 @@ DECLARATIONS = {
 def test_a_page_that_says_not_now_is_asked_again(tmp_path):
     web = NotNow(DECLARATIONS, {"https://u1.pl/om": 2})
     _, store, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
-    assert store.people["n"].status == "found"
+    assert store.outcomes["n"].status == "found"
     assert web.calls.count("https://u1.pl/om") == 3
 
 
@@ -135,14 +136,14 @@ def test_a_bip_that_keeps_saying_not_now_is_left_for_a_later_run(tmp_path):
     busy = {f"https://u1.pl/om/{y}": 99 for y in (2023, 2024, 2025)}
     web = NotNow(sites, busy)
     _, store, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
-    assert (store.people["n"].status, store.people["n"].reason) == (
+    assert (store.outcomes["n"].status, store.outcomes["n"].reason) == (
         "not_found",
         "throttled",
     )
     assert store.units["u1"].status == "throttled"
     web = NotNow(DECLARATIONS, {"https://u1.pl": 99})  # nothing read at all
     _, store, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
-    assert store.people["n"].reason == "throttled"
+    assert store.outcomes["n"].reason == "throttled"
 
 
 def test_one_page_that_never_answers_settles_nothing(tmp_path):
@@ -157,7 +158,7 @@ def test_one_page_that_never_answers_settles_nothing(tmp_path):
     }
     web = NotNow(sites, {"https://u1.pl/rejestr": 99})
     _, store, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
-    assert store.people["n"].status == "found"
+    assert store.outcomes["n"].status == "found"
     web = NotNow(sites, {"https://u1.pl/rejestr": 99, "https://u1.pl/f/1.pdf": 0})
     _, store, _, _ = search(tmp_path, {}, [row("x", "u1", "Ewa", "Lis")], web=web)
     assert store.units["u1"].status == "searched"
@@ -166,7 +167,7 @@ def test_one_page_that_never_answers_settles_nothing(tmp_path):
 def test_a_refusal_dressed_as_a_page_ends_the_walk(tmp_path):
     sites = {**DECLARATIONS, "https://u1.pl": E_LINE}
     _, store, web, _ = search(tmp_path, sites, [row("n", "u1", "Jan", "Nowak")])
-    assert (store.people["n"].status, store.people["n"].reason) == (
+    assert (store.outcomes["n"].status, store.outcomes["n"].reason) == (
         "not_found",
         "refused",
     )
@@ -176,7 +177,7 @@ def test_a_refusal_dressed_as_a_page_ends_the_walk(tmp_path):
 def test_a_refused_download_says_refused(tmp_path):
     sites = {**DECLARATIONS, "https://u1.pl/f/1.pdf": E_LINE}
     _, store, _, _ = search(tmp_path, sites, [row("n", "u1", "Jan", "Nowak")])
-    assert store.people["n"].reason == "refused"
+    assert store.outcomes["n"].reason == "refused"
 
 
 def test_a_websites_bot_check_is_a_refusal(tmp_path):
@@ -186,7 +187,7 @@ def test_a_websites_bot_check_is_a_refusal(tmp_path):
     )
     web = Web({"https://www.u1.pl": (200, "text/html", challenge)})
     store = MemoryBipPeopleStore()
-    store.upsert_people([row("n", "u1", "Jan", "Nowak")])
+    listed = [row("n", "u1", "Jan", "Nowak")]
     search_ = PeopleSearch(
         store,
         cast("BipQueue", FakeFrontier([])),
@@ -197,8 +198,15 @@ def test_a_websites_bot_check_is_a_refusal(tmp_path):
         limiter=HostTokenBucket(0),
         sleep=lambda s: None,
     )
-    search_.run(store.people_to_search(refresh=False, max_priority=None, limit=None))
-    assert store.people["n"].reason == "refused"
+    search_.run(
+        to_search(
+            with_outcomes(listed, store.searched()),
+            refresh=False,
+            max_priority=None,
+            limit=None,
+        )
+    )
+    assert store.outcomes["n"].reason == "refused"
 
 
 def test_a_walk_takes_one_request_a_second_from_the_start():
@@ -239,7 +247,7 @@ def test_akcessnet_menu_links_are_pages_not_files():
 def test_a_file_a_host_holds_back_is_left_for_a_later_run(tmp_path):
     web = NotNow(DECLARATIONS, {"https://u1.pl/f/1.pdf": 99})
     _, store, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
-    assert store.people["n"].reason == "throttled"
+    assert store.outcomes["n"].reason == "throttled"
     assert web.calls.count("https://u1.pl/f/1.pdf") == 3
 
 
@@ -254,7 +262,7 @@ def test_a_file_held_back_beside_a_lost_one_is_left_for_a_later_run(tmp_path):
     }
     web = NotNow(sites, {"https://u1.pl/f/1.pdf": 99})  # /f/2.pdf is gone: 404
     _, store, _, _ = search(tmp_path, {}, [row("n", "u1", "Jan", "Nowak")], web=web)
-    assert store.people["n"].reason == "throttled"
+    assert store.outcomes["n"].reason == "throttled"
 
 
 def test_a_sitemap_that_says_not_now_is_read_again_by_the_next_unit(tmp_path):
@@ -302,7 +310,7 @@ def test_a_redirect_is_asked_about_in_robots_txt_hop_by_hop(tmp_path):
     )
     assert "https://u1.pl/admin/" not in web.calls
     assert "https://u1.pl/om" in web.calls
-    assert store.people["n"].status == "found"
+    assert store.outcomes["n"].status == "found"
 
 
 def test_a_start_whose_robots_txt_does_not_answer_is_unreachable(tmp_path):
@@ -310,7 +318,7 @@ def test_a_start_whose_robots_txt_does_not_answer_is_unreachable(tmp_path):
     # it through the as-linked check.
     seeds_ = {"u1": UnitSeed("u1", bip_urls=["https://u1.pl/bip/"], scopes=["u1.pl"])}
     store = MemoryBipPeopleStore()
-    store.upsert_people([row("n", "u1", "Jan", "Nowak")])
+    listed = [row("n", "u1", "Jan", "Nowak")]
     people = PeopleSearch(
         store,
         cast("BipQueue", FakeFrontier([])),
@@ -323,8 +331,15 @@ def test_a_start_whose_robots_txt_does_not_answer_is_unreachable(tmp_path):
         limiter=HostTokenBucket(0),
         sleep=lambda s: None,
     )
-    people.run(store.people_to_search(refresh=False, max_priority=None, limit=None))
-    assert store.people["n"].reason == "unreachable"
+    people.run(
+        to_search(
+            with_outcomes(listed, store.searched()),
+            refresh=False,
+            max_priority=None,
+            limit=None,
+        )
+    )
+    assert store.outcomes["n"].reason == "unreachable"
 
 
 def test_a_seekers_declaration_page_comes_before_the_next_person(tmp_path):
@@ -351,4 +366,4 @@ def test_a_seekers_declaration_page_comes_before_the_next_person(tmp_path):
         sites[f"https://u1.pl/f/{last}.pdf"] = (200, "application/pdf", PDF + b"x")
     rows = [row(last, "u1", first, last) for first, last in people]
     _, store, _, _ = search(tmp_path, sites, rows, unit_pages=3, pages_per_candidacy=1)
-    assert store.people["Benedykciński"].status == "found"
+    assert store.outcomes["Benedykciński"].status == "found"

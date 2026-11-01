@@ -11,7 +11,7 @@ import os
 import posixpath
 import typing
 from abc import ABCMeta, abstractmethod
-from dataclasses import asdict, dataclass, field, is_dataclass
+from dataclasses import asdict, dataclass, field, is_dataclass, replace
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, List, NewType, Union, overload
@@ -1388,7 +1388,8 @@ class BipQueue(metaclass=ABCMeta):
 
 @dataclass(frozen=True)
 class PersonRow:
-    """One candidacy the BIP crawler's people mode looks for (BipPersonOfInterest)."""
+    """One candidacy the BIP crawler's people mode looks for (BipPersonOfInterest),
+    with what the search made of it (`PersonOutcome`; pending until searched)."""
 
     key: str
     unit: str
@@ -1400,6 +1401,39 @@ class PersonRow:
     status: str = "pending"
     reason: str = ""
     docs: int = 0
+    checked_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class PersonOutcome:
+    """What the people mode's search made of one candidacy, by its key: all the
+    crawl keeps of it. Who the candidacy is, and how much the site wants it, is
+    the night's list's (`jobs.bip_crawler.people_list`)."""
+
+    status: str  # pending | found | unconfirmed | not_found
+    reason: str = ""
+    docs: int = 0
+    checked_at: datetime | None = None
+
+
+def with_outcomes(
+    rows: typing.Iterable[PersonRow], searched: typing.Mapping[str, PersonOutcome]
+) -> list[PersonRow]:
+    """The list's candidacies, each with what the search made of it; pending
+    where it has not been searched."""
+    out = []
+    for row in rows:
+        outcome = searched.get(row.key)
+        if outcome is not None:
+            row = replace(
+                row,
+                status=outcome.status,
+                reason=outcome.reason,
+                docs=outcome.docs,
+                checked_at=outcome.checked_at,
+            )
+        out.append(row)
+    return out
 
 
 @dataclass(frozen=True)
@@ -1431,31 +1465,18 @@ class UnitRow:
 
 
 class BipPeopleStore(metaclass=ABCMeta):
-    """What the people mode knows about each candidacy (`stores.bip_people`)."""
+    """What the people mode's search found for each candidacy (`stores.bip_people`).
+
+    Only the search's own findings, by candidacy key: the candidacies themselves
+    come from the night's list each run (`jobs.bip_crawler.people_list`)."""
 
     @abstractmethod
     def ensure_schema(self) -> None:
         raise NotImplementedError()
 
     @abstractmethod
-    def upsert_people(self, rows: list[PersonRow]) -> int:
-        """Add new candidacies as pending, refresh known ones; how many are new."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def people_to_search(
-        self,
-        *,
-        refresh: bool,
-        max_priority: int | None,
-        limit: int | None,
-        retry: frozenset[str] = frozenset(),
-        retry_before: datetime | None = None,
-    ) -> list[PersonRow]:
-        """Pending candidacies, and the not_found ones whose reason (or the
-        unconfirmed ones, for "unconfirmed") is in ``retry``, with
-        ``retry_before`` only those last searched before it; all of them with
-        ``refresh``. Most wanted first."""
+    def searched(self) -> dict[str, PersonOutcome]:
+        """What each candidacy searched so far came to, by key."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -1466,6 +1487,7 @@ class BipPeopleStore(metaclass=ABCMeta):
     def record_person(
         self, key: str, status: str, reason: str, docs: int, run_id: str
     ) -> None:
+        """Keep what a search of the candidacy came to; a find stays a find."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -1474,22 +1496,6 @@ class BipPeopleStore(metaclass=ABCMeta):
 
     @abstractmethod
     def person_docs(self, key: str) -> list[PersonDocRow]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def outcomes_by_year(self) -> dict[int, dict[str, int]]:
-        """``outcomes`` per election year: what a term's BIPs still hold."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def outcomes(self) -> dict[str, int]:
-        """Counts by status and reason: {"found": 12, "not_found:not_listed": 4}."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def found(self) -> list[PersonRow]:
-        """The candidacies a declaration was downloaded for (status found),
-        most wanted first, as `people_to_search` orders them."""
         raise NotImplementedError()
 
 
