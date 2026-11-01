@@ -84,6 +84,9 @@ def test_document_url_patterns() -> None:
     assert is_document_url(
         "https://bip.warszawa.pl/documents/53790/75850130/x_coroczne_2025.pdf/345f937e?t=1"
     )
+    assert is_document_url(
+        "https://eurzad.finn.pl/pzzywiec/server/pobierz_rejestry_zalacznik/1235645"
+    )
     assert not is_document_url("https://bip.x.pl/oswiadczenie-majatkowe/1/kowalski")
 
 

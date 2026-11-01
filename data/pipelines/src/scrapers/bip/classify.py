@@ -25,6 +25,8 @@ _DOC_PATTERNS = [
     re.compile(r"/res/serwisy/pliki/", re.IGNORECASE),
     re.compile(r"/system/obj/", re.IGNORECASE),
     re.compile(r"/fls/bip_pliki/", re.IGNORECASE),
+    # FINN e-Urząd's register files, a 303 to the file itself.
+    re.compile(r"/server/pobierz_rejestry_zalacznik/\d+", re.IGNORECASE),
     re.compile(r"[?&](?:id|zid|iddok|idplik)=.*", re.IGNORECASE),
     re.compile(r"/(?:plik|file|download|pobierz)(?:[.,?/]|$)", re.IGNORECASE),
     # Liferay names the file, then its UUID: /documents/1/2/x.pdf/345f...?t=1

@@ -52,6 +52,7 @@ def search(
     unreachable=lambda u: False,
     robots=None,
     web=None,
+    post=None,
     **options,
 ):
     web = web or Web(sites)
@@ -70,6 +71,7 @@ def search(
         seeds,
         PeopleOptions(workers=2, **options),
         fetch=web.fetch,
+        post=post,
         robots_allowed=robots or (lambda u: not unreachable(u)),
         robots_unreachable=unreachable,
         limiter=HostTokenBucket(0),
