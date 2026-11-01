@@ -145,23 +145,33 @@ def http_get(
     )
 
 
-def http_post_json(
+#: A POST's body: an object sent as JSON, or a form's fields in their order.
+Payload = dict[str, Any] | list[tuple[str, str]]
+
+
+def http_post(
     url: str,
-    payload: dict[str, Any],
+    payload: Payload,
     timeout: float = 15.0,
     user_agent: str = DEFAULT_UA,
     impersonate: str = "chrome136",
 ) -> HttpResult:
-    """A POST of ``payload`` as JSON, the way an app's own script calls its API
-    (FINN e-Urząd's JSON-RPC); a redirect is not followed."""
+    """A POST, the way an app's own script calls its API: an object as JSON
+    (FINN e-Urząd's JSON-RPC), fields as a form (SISCO eDc's DataTables); a
+    redirect is not followed."""
+    headers = {"User-Agent": user_agent, "X-Requested-With": "XMLHttpRequest"}
+    body: dict[str, Any] = {"json": payload}
+    if not isinstance(payload, dict):
+        headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
+        body = {"data": payload}
     try:
         response = _session(impersonate).post(
             url,
-            json=payload,
-            headers={"User-Agent": user_agent, "X-Requested-With": "XMLHttpRequest"},
+            headers=headers,
             timeout=timeout,
             allow_redirects=False,
             verify=verify(),  # type: ignore[arg-type]
+            **body,
         )
     except Exception as exc:
         return HttpResult(

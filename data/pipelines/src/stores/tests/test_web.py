@@ -223,7 +223,7 @@ def test_a_page_under_an_encoding_curl_does_not_know_is_read_raw() -> None:
 
 def test_a_post_sends_its_json_as_an_apps_script_would() -> None:
     """FINN e-Urząd's JSON-RPC: a JSON body, the crawler's own User-Agent, and
-    a redirect handed back rather than followed."""
+    a redirect handed back rather than followed; a form for SISCO eDc."""
     seen: list[tuple[str, dict[str, str], bytes]] = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -247,14 +247,19 @@ def test_a_post_sends_its_json_as_an_apps_script_would() -> None:
     try:
         base = f"http://127.0.0.1:{server.server_port}"
         payload = {"id": 1, "method": "/rpc/x0", "params": ['"OMR"']}
-        answer = fetch.http_post_json(base + "/rpc/x0", payload, user_agent="Koryta")
+        answer = fetch.http_post(base + "/rpc/x0", payload, user_agent="Koryta")
         assert answer.ok and answer.content == b"{}"
         path, headers, body = seen[0]
         assert path == "/rpc/x0" and json.loads(body) == payload
         assert headers["Content-Type"] == "application/json"
         assert headers["User-Agent"] == "Koryta"
-        moved = fetch.http_post_json(base + "/moved", payload)
+        moved = fetch.http_post(base + "/moved", payload)
         assert moved.status == 303 and len(seen) == 2
+        # SISCO eDc's DataTables: the fields as a form, in their order.
+        fetch.http_post(base + "/engine", [("draw", "1"), ("options[a][b]", "ś")])
+        path, headers, body = seen[2]
+        assert body == b"draw=1&options%5Ba%5D%5Bb%5D=%C5%9B"
+        assert headers["Content-Type"].startswith("application/x-www-form-urlencoded")
     finally:
         server.shutdown()
 
