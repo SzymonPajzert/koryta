@@ -27,6 +27,8 @@ _DOC_PATTERNS = [
     re.compile(r"/fls/bip_pliki/", re.IGNORECASE),
     # FINN e-Urząd's register files, a 303 to the file itself.
     re.compile(r"/server/pobierz_rejestry_zalacznik/\d+", re.IGNORECASE),
+    # ZETO-RZESZÓW's attachments: ?c=mdPliki-cmPobierz-<id>-<base64 name>.
+    re.compile(r"[?&]c=mdPliki-cmPobierz-\d+", re.IGNORECASE),
     re.compile(r"[?&](?:id|zid|iddok|idplik)=.*", re.IGNORECASE),
     re.compile(r"/(?:plik|file|download|pobierz)(?:[.,?/]|$)", re.IGNORECASE),
     # Liferay names the file, then its UUID: /documents/1/2/x.pdf/345f...?t=1
@@ -88,8 +90,10 @@ _AMP_PREFIX_RE = re.compile(r"^(?:amp;)+", re.IGNORECASE)
 # Presentation-only parameters: same page, different URL. `switch_*` are the
 # accessibility toggles (letter/word spacing, dark mode, link underline), the
 # rest are font size, print view, change-log view and image-map coordinates.
+# ZETO-RZESZÓW's &printtype=pdf is the page printed, ?font_size= a 302 back to
+# it with bigger letters.
 _NOISE_QUERY_PARAMS = frozenset(
-    {"x", "y", "fontsize", "print", "pokaz_rejestr_zmian"}
+    {"x", "y", "fontsize", "font_size", "print", "printtype", "pokaz_rejestr_zmian"}
 )
 _NOISE_QUERY_PREFIXES = ("switch_",)
 # A way back, not a page: Liferay's ?redirect= holds the page linking, and
@@ -141,8 +145,16 @@ def normalize_url(url: str) -> str:
     return f"{base}?{format_query(pairs)}"
 
 
+# ZETO-RZESZÓW's article as XML, its change log, search, contacts, site map and
+# feeds: 4 to 6 on every page.
+_LOW_VALUE_QUERY_RE = re.compile(
+    r"[?&](?:printxml=true|c=md(?:rejestr|szukaj|kontakt|mapa|rss|administracja)-)",
+    re.IGNORECASE,
+)
+
+
 def is_low_value_url(url: str) -> bool:
-    return bool(_LOW_VALUE_RE.search(url))
+    return bool(_LOW_VALUE_RE.search(url) or _LOW_VALUE_QUERY_RE.search(url))
 
 
 def host_of(url: str) -> str:
