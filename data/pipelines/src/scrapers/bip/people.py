@@ -37,9 +37,14 @@ NEGATIVE = re.compile(
     r"ochron|odpad|zezwolen|konkurs|petycj|skarg|rodo|dostepnos|kontakt|ankiet|wybor|"
     r"rekrutac|planowan|zagospodarow|inwestycj|dotacj|sprawozdan|interpelac|aktualnosc"
 )
-#: A declaration-like file that is a blank form or guidance, not anybody's.
+#: A declaration-like file that is a blank form or guidance, not anybody's;
+#: or nobody's asset declaration: a GDPR clause for those who file them, a
+#: lustration or de minimis statement, the site's easy-to-read and
+#: accessibility texts, which a page titled with a seeker lent them (10-31).
 BLANK_FORM = re.compile(
-    r"wzor|druk|formularz|instrukcj|zasad|informacj|objasnien|rozporzadzen|ustaw"
+    r"wzor|druk|formularz|instrukcj|zasad|informacj|objasnien|rozporzadzen|ustaw|"
+    r"klauzul|przetwarzan\w* danych|lustrac|de minimis|pomoc\w* publiczn|"
+    r"konflikt\w* interes|latw\w* do czytania|dostepnosc|cookie|polityk\w* prywatn"
 )
 YEAR = re.compile(r"(?<!\d)(20[12]\d)(?!\d)")
 
@@ -112,9 +117,11 @@ class Seeker:
     def name(self) -> tuple[str, str]:
         return self.first, self.last
 
-    def named_in(self, text: str, url: str = "") -> tuple[bool, bool]:
+    def named_in(
+        self, text: str, url: str = "", first_names: frozenset[str] = frozenset()
+    ) -> tuple[bool, bool]:
         """(surname, first name too) in folded ``text``; a long surname may run
-        into ``url`` with no separator."""
+        into ``url`` with no separator, a first name too (`_in_address`)."""
         if not self.last:
             return False, False
         last = _word(self.last).search(text) is not None
@@ -127,7 +134,7 @@ class Seeker:
             or (
                 bool(url)
                 and len(self.first) >= 4
-                and self.first in url.replace(" ", "")
+                and _in_address(self.first, self.last, url, first_names)
             )
         )
         return True, first
@@ -431,6 +438,29 @@ def _first_name(word: str, first_names: frozenset[str]) -> bool:
     return bool(stems & first_names)
 
 
+_DIGITS = re.compile(r"(?<=[a-z])(?=[0-9])|(?<=[0-9])(?=[a-z])")
+
+
+def _in_address(first: str, last: str, url: str, first_names: frozenset[str]) -> bool:
+    """Whether a first name's stem is in an address's words as itself, run
+    into the surname or a number ("0krzysztof_adam_koltys", "nowakmichal")
+    but not inside another first name ("wojcik_mariusz" is no Maria's,
+    "kowalczyk_karolina" no Karol's), the surname ("michalek_dariusz" is no
+    Michał's) or two words ("maria_nowak" no Marian's)."""
+    longer = [n for n in first_names if len(n) > len(first) and n.startswith(first)]
+    for word in _DIGITS.sub(" ", url).split():
+        if _first_name(word, first_names) and not _word(first).search(word):
+            continue
+        surname = [m.span() for m in re.finditer(re.escape(last), word)]
+        for match in re.finditer(re.escape(first), word):
+            if any(a <= match.start() and match.end() <= b for a, b in surname):
+                continue
+            if any(word.startswith(n, match.start()) for n in longer):
+                continue
+            return True
+    return False
+
+
 def _theirs(seeker: Seeker, word: str) -> bool:
     """Whether a word is a form of the seeker's first or other own names."""
     return any(
@@ -521,7 +551,7 @@ def _named(
     """The seekers ``text`` names (with whether by first name too), and whether
     it named one only as somebody else of their surname (`_whose`)."""
     raws = list(raws)
-    found = [(s, *s.named_in(text, url)) for s in seekers]
+    found = [(s, *s.named_in(text, url, first_names)) for s in seekers]
     named = [(s, first) for s, last, first in found if last]
     kept = [
         (s, first)

@@ -23,6 +23,7 @@ from scrapers.bip.people import (
     initialled_names,
     names_somebody,
     stem,
+    url_words,
 )
 from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
@@ -517,6 +518,51 @@ def test_whose_a_surname_is_weighs_every_mention_and_tier():
     assert named("Tomasz Dudek", "Otwórz", "/dokumenty/T.D.Dudek_25.pdf")
     assert not named("Tomasz Dudek", "Otwórz", "/dokumenty/A.D.Dudek_25.pdf")
     assert named("Urszula Solińska-Marek", "Solińska-Marek", "/f/5.pdf")
+
+
+def test_a_first_name_in_an_address_counts_only_as_a_word_of_its_own():
+    # Kleszczów (10-31): Michalek_Dariusz_2024.pdf gave Michał Michałek the
+    # first-name credit for Dariusz's file.
+    names = frozenset(
+        stem(n, min_a=4)
+        for n in (
+            "Michał Dariusz Mariusz Karolina Krzysztof Maria Marian Wanda Michalina"
+        ).split()
+    )
+
+    def credit(first: str, last: str, file: str) -> bool:
+        seeker = Seeker.of("s", first, last)
+        return seeker.named_in(fold(file), url_words(file), names)[1]
+
+    assert not credit("Michał", "Michałek", "/Michalek_Dariusz_2024.pdf")
+    assert not credit("Maria", "Wójcik", "/wojcik_mariusz.pdf")
+    assert not credit("Karol", "Kowalczyk", "/kowalczyk_karolina_2024.pdf")
+    assert not credit("Marian", "Nowak", "/Maria_Nowak.pdf")
+    assert not credit("Wanda", "Lewandowska", "/krzysztof_lewandowski.pdf")
+    assert not credit("Halina", "Kamińska", "/Kaminska_Michalina.pdf")
+    assert not credit("Halina", "Kamińska", "/Kaminska_2024Michalina.pdf")
+    assert credit("Krzysztof", "Kołtyś", "/0krzysztof_adam_koltys.pdf")
+    assert credit("Maria", "Zalewska", "/MariaJolantaZalewska.pdf")
+    assert credit("Michał", "Nowak", "/nowak_michal.pdf")
+
+
+def test_statements_that_are_no_asset_declaration_name_nobody():
+    # A page titled with one seeker lent them these on 10-31.
+    title = "Piotr Kulesza - oświadczenia"
+    kulesza = Seeker.of("k", "Piotr", "Kulesza")
+    for anchor, path in (
+        ("Oświadczenie o wielkości otrzymanej pomocy de minimis", "/f/1.docx"),
+        ("Oświadczenie lustracyjne", "/f/2.pdf"),
+        ("Klauzula informacyjna dla osób składających oświadczenia", "/f/3.pdf"),
+        ("", "/f/tekst_latwy_do_czytania_etr.pdf"),
+        ("Deklaracja dostępności", "/f/4.pdf"),
+    ):
+        link = LinkContext(f"https://bip.x.pl{path}", anchor)
+        assert candidates("https://bip.x.pl/o", title, [link], [kulesza]) == [], anchor
+    own = LinkContext("https://bip.x.pl/f/5.pdf", "Oświadczenie majątkowe za 2024")
+    assert [
+        c.key for c in candidates("https://bip.x.pl/o", title, [own], [kulesza])
+    ] == ["k"]
 
 
 def test_a_declined_first_name_is_the_seekers_own():
