@@ -570,6 +570,21 @@ def test_a_declined_first_name_is_the_seekers_own():
         assert Seeker.of("s", first, "Nowak").named_in(fold(f"{label} Nowak"))[1]
 
 
+def test_a_mans_declined_surname_is_his_beside_his_first_name():
+    # FINN e-Urząd's subjects (10-31): "radnego Krzysztofa Stolarka".
+    for first, last, label in (
+        ("Krzysztof", "Stolarek", "radnego Krzysztofa Stolarka"),
+        ("Jan", "Wróbel", "oświadczenie Jana Wróbla"),
+        ("Jan", "Kozieł", "oświadczenie Jana Kozła"),
+    ):
+        assert Seeker.of("s", first, last).named_in(fold(label)) == (True, True)
+    # "Kurka" alone is a surname of its own; a woman's Kaczmarek never declines.
+    assert Seeker.of("s", "Jan", "Kurek").named_in(fold("Kurka")) == (False, False)
+    anna = Seeker.of("s", "Anna", "Kaczmarek")
+    assert anna.named_in(fold("Anny Kaczmarka")) == (False, False)
+    assert anna.named_in(fold("Anny Kaczmarek")) == (True, True)
+
+
 def test_a_page_titled_with_a_namesake_lends_nobody_its_unnamed_files():
     names = frozenset(stem(n, min_a=4) for n in ("Michał", "Józef"))
     link = LinkContext("https://bip.x.pl/f/1.pdf", "oświadczenie majątkowe za 2024")

@@ -83,6 +83,8 @@ class Seeker:
     (Kowalski, Kowalska), "" for one that does not (Nowak, or a man's Gąska,
     a noun). ``own`` holds the stems of the seeker's other given names and of
     the rest of a double surname: beside the surname they are nobody else's.
+    ``declined`` is a man's surname as it declines when it loses its e
+    (`_declined`).
     """
 
     key: str
@@ -90,6 +92,7 @@ class Seeker:
     last: str
     form: str = ""
     own: tuple[str, ...] = ()
+    declined: str = ""
 
     @classmethod
     def of(
@@ -111,7 +114,9 @@ class Seeker:
         own = tuple(stem(w, min_a=4) for w in middles) + tuple(
             stem(p) for p in parts if p is not longest
         )
-        return cls(key, stem(first_name, min_a=4), stem(longest), form, own)
+        # A woman's Stolarek does not decline: "Anny Stolarek".
+        declined = "" if fold(first_name).endswith("a") else _declined(folded)
+        return cls(key, stem(first_name, min_a=4), stem(longest), form, own, declined)
 
     @property
     def name(self) -> tuple[str, str]:
@@ -128,16 +133,34 @@ class Seeker:
         if not last and url and len(self.last) >= 6:
             last = self.last in url.replace(" ", "")
         if not last:
-            return False, False
-        first = bool(self.first) and (
-            any(_word(form).search(text) for form in _first_forms(self.first))
-            or (
-                bool(url)
-                and len(self.first) >= 4
-                and _in_address(self.first, self.last, url, first_names)
-            )
+            # "Kurka" alone is a surname of its own, "Jana Kurka" Jan Kurek.
+            declined = bool(self.declined) and bool(_word(self.declined).search(text))
+            return (True, True) if declined and self._first_in(text) else (False, False)
+        first = self._first_in(text) or (
+            bool(self.first)
+            and bool(url)
+            and len(self.first) >= 4
+            and _in_address(self.first, self.last, url, first_names)
         )
         return True, first
+
+    def _first_in(self, text: str) -> bool:
+        """Whether folded ``text`` has the first name in a form of its own."""
+        return bool(self.first) and any(
+            _word(form).search(text) for form in _first_forms(self.first)
+        )
+
+
+def _declined(surname: str) -> str:
+    """A folded surname as it declines when it loses its e, or "": Stolarek's
+    "Stolarka", Wróbel's "Wróbla", Kozieł's "Kozła"."""
+    if surname.endswith("ek"):
+        return surname[:-2] + "k"
+    if surname.endswith("iel"):
+        return surname[:-3] + "l"
+    if surname.endswith("el"):
+        return surname[:-2] + "l"
+    return ""
 
 
 @functools.cache
