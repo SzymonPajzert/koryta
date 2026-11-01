@@ -364,11 +364,20 @@ def link_score(
     """How likely following a page link leads to the unit's declarations;
     ``prefer`` (`office_terms`) names the seekers' own council."""
     text = fold(link.anchor) + " " + url_words(link.url)
+    # Where it stands, when its label says nothing: the menu sections above it
+    # and the heading over it. Brzeg's "Rok 2024" under "oświadczenia
+    # majątkowe radnych > kadencja 2024-2029" ranked 446th of the 891 links of
+    # its first page, the councillors' own pages of Hażlach 335th of 4,308.
+    context = fold(link.path + " " + link.heading)
     score = 0.0
     if DECLARATION.search(text) and ASSETS.search(text):
         score += 10
     elif DECLARATION.search(text) or ASSETS.search(text):
         score += 4
+    elif DECLARATION.search(context) and not NEGATIVE.search(text):
+        score += 8 if ASSETS.search(context) else 6
+        if prefer is not None and prefer.search(context):
+            score += 3
     if OFFICE.search(text):
         score += 2
     if prefer is not None and prefer.search(text):

@@ -12,7 +12,9 @@ from collections import Counter
 from pathlib import Path
 from typing import cast
 
+from jobs.bip_crawler import people as people_mode
 from jobs.bip_crawler.people import (
+    DECLARATIONS_BONUS,
     RENDER_TURNS,
     PeopleOptions,
     PeopleSearch,
@@ -26,7 +28,7 @@ from scrapers.bip.classify import normalize_url
 from scrapers.bip.people import link_score, office_terms
 from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
-from scrapers.common.links import LinkContext
+from scrapers.common.links import LinkContext, extract_link_contexts
 from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.stores import BipQueue
 from stores.bip_bundles import LocalBundleStore
@@ -77,6 +79,91 @@ def test_the_budget_grows_with_the_units_candidacies(tmp_path):
     assert people._budget(1) == 150
     assert people._budget(30) == 450
     assert people._budget(500) == 1000
+
+
+def test_a_menu_link_carries_the_sections_above_it():
+    menu = (
+        "<ul><li><a href='/rg'>Rada Gminy</a><ul>"
+        "<li><a href='/sk'>Skład Rady Gminy</a><ul>"
+        "<li><a href='/sk9'>IX Kadencja 2024-2029</a><ul>"
+        "<li><a href='/sk9/piksa'>Natalia Piksa</a></li></ul></li></ul></li>"
+        "<li><a href='/om'>Oświadczenia majątkowe radnych</a><ul>"
+        "<li><a href='/om9'>IX Kadencja 2024-2029</a><ul>"
+        "<li><a href='/om9/piksa'>Natalia Piksa</a> <a href='/om9/p.pdf'>pobierz</a>"
+        "</li></ul></li></ul></li></ul></li></ul>"
+    )
+    _, links = extract_link_contexts(menu, "https://bip.x.pl/")
+    path = {x.url.rsplit("/", 1)[1]: x.path for x in links}
+    assert path["rg"] == ""
+    assert (
+        path["piksa"]
+        == "Rada Gminy > Oświadczenia majątkowe radnych > IX Kadencja 2024-2029"
+    )
+    # A second link of a list item stands under its first.
+    assert path["p.pdf"].endswith("IX Kadencja 2024-2029 > Natalia Piksa")
+
+
+def test_a_link_scores_by_the_menu_sections_above_it():
+    # Brzeg's "Rok 2024" stands under seven sections of its menu; under the
+    # council's declarations it ranked 446th of 891 (10-31).
+    council = office_terms(["Rada miasta"])
+
+    def score(path: str, anchor: str = "Rok 2024") -> float:
+        return link_score(
+            LinkContext("https://x.pl/5", anchor, path=path), [], 1, council
+        )
+
+    declarations = (
+        "Rada Miejska Brzegu > Oświadczenia majątkowe radnych > Kadencja 2024-2029"
+    )
+    staff = "Urząd Miasta > Oświadczenia majątkowe > Pracownicy"
+    protocols = "Rada Miejska Brzegu > Protokoły z sesji > Kadencja 2024-2029"
+    assert score(declarations) > score(staff) > score(protocols)
+    # Neither a section of sales nor a tender under declarations is lifted.
+    assert score("Gospodarka > Sprzedaż majątku") == score(protocols)
+    assert score(declarations, "Przetargi") == score(protocols, "Przetargi")
+
+
+def test_a_declarations_pages_own_links_come_first(tmp_path):
+    # Żelazków: the session archive's pages name the council (+5); the year
+    # sections linked from the declarations page alone scored like any link.
+    sessions = "".join(
+        f'<a href="/sesja/{i}">Sesja Rady Gminy {i}</a>' for i in range(5)
+    )
+    sites = {
+        "https://u1.pl": html(
+            "BIP", sessions + '<a href="/om">Oświadczenia majątkowe</a>'
+        ),
+        "https://u1.pl/om": html(
+            "Oświadczenia majątkowe",
+            '<a href="/om/2025">Za rok 2025</a><a href="/przetargi">Przetargi</a>',
+        ),
+        "https://u1.pl/om/2025": html(
+            "Za rok 2025", '<a href="/f/nowak.pdf">Jan Nowak - oświadczenie</a>'
+        ),
+        "https://u1.pl/f/nowak.pdf": (200, "application/pdf", PDF + b"n"),
+    }
+    _, store, web = search(
+        tmp_path,
+        sites,
+        [row("n", "u1", "Jan", "Nowak")],
+        unit_pages=3,
+        pages_per_candidacy=1,
+        sitemaps=False,
+    )
+    assert store.people["n"].status == "found"
+    assert not any("/sesja/" in url or "przetargi" in url for url in web.calls)
+
+
+def test_a_declarations_pages_bonus_lifts_no_section_of_tenders():
+    frontier = people_mode._Frontier([("x.pl", "")])
+    links = [
+        LinkContext("https://x.pl/2025", "Za rok 2025"),
+        LinkContext("https://x.pl/przetargi", "Przetargi"),
+    ]
+    frontier.follow(links, [], 2, None, DECLARATIONS_BONUS)
+    queued = {url: -score for score, _, _, url in frontier.heap}
+    assert queued == {"https://x.pl/2025": DECLARATIONS_BONUS}
 
 
 def test_the_seekers_own_council_is_walked_first():

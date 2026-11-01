@@ -228,6 +228,11 @@ NOT_NOW_TRIES = 3
 NOT_NOW_IN_A_ROW = 3
 #: Redirects followed for one request, each hop asked about in robots.txt.
 MAX_HOPS = 10
+#: What a declarations page's own links score above the rest: ZETO-RZESZÓW's
+#: year and office subsections ("Za rok 2025") scored like any menu link, and
+#: Żelazków read 116 pages of the council's session archive (each named the
+#: council: +5) and not one year (10-31). Above the session pages' +5.
+DECLARATIONS_BONUS = 6.0
 #: A refusal of the crawler dressed as a page, the same at any pace (10-31):
 #: SYSTEMDOBIP.PL's 80-byte "Zbyt dużo jednoczesnych połączeń do strony" with
 #: HTTP 200 (E-LINE, 74 BIPs), on the crawler's User-Agent only, also after an
@@ -290,8 +295,11 @@ class _Frontier:
         seekers: list[Seeker],
         depth: int,
         prefer: re.Pattern[str] | None = None,
+        bonus: float = 0.0,
     ) -> None:
-        """Queue a page's links to other pages; files are for the download."""
+        """Queue a page's links to other pages; files are for the download.
+        ``bonus`` lifts those a declarations page leads to, after the cut, so a
+        section of tenders it links stays out (`DECLARATIONS_BONUS`)."""
         for link in links:
             target = normalize_url(link.url)
             if (
@@ -303,7 +311,7 @@ class _Frontier:
                 continue
             score = link_score(link, seekers, depth, prefer)
             if score > -3:
-                self.add(target, score, depth, link.url)
+                self.add(target, score + bonus, depth, link.url)
 
 
 def _under(path: str, prefix: str) -> bool:
@@ -900,7 +908,9 @@ class PeopleSearch:
         self._read_wrota(out, result, seekers, prefer)
         self._read_sisco(out, result, title, seekers)
         if depth < self.options.max_depth:
-            frontier.follow(follow, seekers, depth + 1, prefer)
+            says = DECLARATION.search(folded_title + " " + fold(where))
+            bonus = DECLARATIONS_BONUS if says else 0.0
+            frontier.follow(follow, seekers, depth + 1, prefer, bonus)
 
     def _read_eurzad(
         self,
