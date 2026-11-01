@@ -709,6 +709,21 @@ def entries_to_open(
     return chosen
 
 
+#: A system's timestamp in a file's row: the publication record starts there.
+_RECORDED = re.compile(r"\d{4}-\d{2}-\d{2},? \d{1,2}:\d{2}:\d{2}")
+
+
+def _before_record(row: str) -> str:
+    """A file's row up to its publication record, whose names say who entered
+    the file, not whose it is: Kraków's declaration cards list each version as
+    "zobacz 1.11 MB 2024-05-22 13:23:37 AGATA MICHALISZYN 1 (Najnowsza)", and
+    that name took every councillor's PDF from them (11-01: none of Kraków's
+    86 candidacies found). Warka's "Wytworzył: Grzegorz Szydło Udostępnił:
+    Fronczek Mariusz (2024-03-13 12:57:47)" keeps its declarant."""
+    found = _RECORDED.search(row)
+    return row[: found.start()] if found else row
+
+
 def candidates(
     page_url: str,
     page_title: str,
@@ -774,9 +789,10 @@ def candidates(
         around += " " + address
         named: list[tuple[Seeker, bool]] = []
         somebody_else = False
+        row = _before_record(link.row)
         tiers = (
             (label, (link.anchor, path), address),
-            (fold(link.row), (link.row,), ""),
+            (fold(row), (row,), ""),
             (fold(link.heading), (link.heading,), ""),
         )
         for i, (text, raws, url) in enumerate(tiers):
