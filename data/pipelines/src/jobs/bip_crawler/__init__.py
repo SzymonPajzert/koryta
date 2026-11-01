@@ -22,7 +22,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from jobs.bip_crawler import found
+from jobs.bip_crawler import found, robots_exceptions
 from jobs.bip_crawler.coordinator import BipCoordinator, CoordinatorOptions
 from jobs.bip_crawler.identity import Agents
 from jobs.bip_crawler.people import run_people_mode, server_of
@@ -170,9 +170,11 @@ def _crawl(args: argparse.Namespace) -> int:
         # crawler's name as a browser, robots.txt too (`identity`).
         agents = Agents(USER_AGENT, server_of)
         robots = RobotsCache(USER_AGENT, agent_for=agents)
+        # And past robots.txt on the BIPs Szymon listed (`robots_exceptions`).
+        allowed = robots_exceptions.allowed(robots.allowed)
         try:
             return run_people_mode(
-                args, pg, bip_queue, store, robots.allowed, robots.unreachable, agents
+                args, pg, bip_queue, store, allowed, robots.unreachable, agents
             )
         finally:
             pg.close()
