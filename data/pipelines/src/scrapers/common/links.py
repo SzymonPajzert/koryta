@@ -81,18 +81,46 @@ class LinkContext:
     labels that do not ("Jan Kowalski" over "za 2022", "za 2023"). ``row`` is the
     nearest enclosing table row, list item or paragraph, ``heading`` the nearest
     heading or bold text before the link, each cut to a few hundred characters.
+    ``path`` is the menu sections above it, outermost first ("Rada Gminy >
+    Oświadczenia majątkowe radnych > IX Kadencja 2024-2029" over "Natalia
+    Piksa"): a menu has no headings, its nesting says where a link leads.
     """
 
     url: str
     anchor: str
     row: str = ""
     heading: str = ""
+    path: str = ""
 
 
 _BLOCKS = ("tr", "li", "p", "dd", "dt")
 _HEADINGS = frozenset(
     {"h1", "h2", "h3", "h4", "h5", "h6", "strong", "b", "caption", "th"}
 )
+
+
+#: Menu sections a link's path carries, the innermost.
+_PATH_DEPTH = 4
+
+
+def _path(anchor: Tag, labels: dict[int, tuple[int, str]]) -> str:
+    """The list items above ``anchor``, each by its own first link, outermost
+    first (`LinkContext.path`); ``labels`` keeps each item's, by its id."""
+    found: list[str] = []
+    for parent in anchor.parents:
+        if parent.name != "li":
+            continue
+        if id(parent) not in labels:
+            first = parent.find("a")
+            labels[id(parent)] = (
+                (id(first), _text(first)[:100]) if isinstance(first, Tag) else (0, "")
+            )
+        first_id, label = labels[id(parent)]
+        if first_id != id(anchor) and label:
+            found.append(label)
+            if len(found) == _PATH_DEPTH:
+                break
+    return " > ".join(reversed(found))
 
 
 def _text(node: object) -> str:
@@ -216,6 +244,7 @@ def extract_link_contexts(
     links: list[LinkContext] = []
     seen: set[str] = set()
     rows: _Rows = {}
+    labels: dict[int, tuple[int, str]] = {}
     for anchor in soup.find_all("a", href=True):
         if not isinstance(anchor, Tag):
             continue
@@ -237,5 +266,6 @@ def extract_link_contexts(
         row = _row_text(anchor, block, rows)[:300] if isinstance(block, Tag) else ""
         previous = headings.get(id(anchor))
         heading = _text(previous)[:200] if previous is not None else ""
-        links.append(LinkContext(absolute, text, row, heading))
+        path = _path(anchor, labels)
+        links.append(LinkContext(absolute, text, row, heading, path))
     return title, links
