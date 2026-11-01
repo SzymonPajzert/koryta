@@ -90,7 +90,9 @@ class LinkContext:
 
 
 _BLOCKS = ("tr", "li", "p", "dd", "dt")
-_HEADINGS = ["h1", "h2", "h3", "h4", "h5", "h6", "strong", "b", "caption", "th"]
+_HEADINGS = frozenset(
+    {"h1", "h2", "h3", "h4", "h5", "h6", "strong", "b", "caption", "th"}
+)
 
 
 def _text(node: object) -> str:
@@ -200,6 +202,17 @@ def extract_link_contexts(
     if isinstance(first_h1, Tag):
         title_parts.append(first_h1.get_text(" ", strip=True))
     title = " | ".join(" ".join(p.split()) for p in title_parts if p)[:300]
+    # Each link's heading in one pass. Asked link by link (find_previous) it
+    # read the page back to its start every time: Wrota Lubelszczyzny's BIPs
+    # carry their whole menu on every page, 1,300 links in 1.3 MB, 6 s a page.
+    headings: dict[int, Tag] = {}
+    last: Tag | None = None
+    for node in soup.descendants:
+        if isinstance(node, Tag):
+            if node.name in _HEADINGS:
+                last = node
+            elif node.name == "a" and last is not None:
+                headings[id(node)] = last
     links: list[LinkContext] = []
     seen: set[str] = set()
     rows: _Rows = {}
@@ -222,7 +235,7 @@ def extract_link_contexts(
         text = _text(anchor) or str(anchor.get("title") or "").strip()
         block = anchor.find_parent(_BLOCKS)
         row = _row_text(anchor, block, rows)[:300] if isinstance(block, Tag) else ""
-        previous = anchor.find_previous(_HEADINGS)
-        heading = _text(previous)[:200] if isinstance(previous, Tag) else ""
+        previous = headings.get(id(anchor))
+        heading = _text(previous)[:200] if previous is not None else ""
         links.append(LinkContext(absolute, text, row, heading))
     return title, links
