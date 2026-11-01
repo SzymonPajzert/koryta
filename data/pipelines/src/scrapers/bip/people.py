@@ -17,6 +17,7 @@ from __future__ import annotations
 import functools
 import re
 import unicodedata
+from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -607,6 +608,91 @@ def named_by(
     """`_named` for a raw text that stands alone, a register record's subject
     ("Oświadczenie majątkowe za 2025 rok radnej Anny Piotrowskiej")."""
     return _named(fold(raw), "", seekers, [raw], first_names)
+
+
+#: A council's register or list, when the seekers' offices name none.
+_COUNCIL = re.compile(r"(?:^| )(?:radn\w*|rad[ay])(?= |$)")
+
+
+def is_council(name: str, prefer: re.Pattern[str] | None = None) -> bool:
+    """Whether a register or list of this name is the seekers' own council's:
+    ``prefer`` (`office_terms`) names it, or, without one, its councillors."""
+    return bool((prefer or _COUNCIL).search(fold(name)))
+
+
+#: Entries of a council's register or list that name nobody, opened newest
+#: first: one may hold the whole council's files, each named by its
+#: councillor alone.
+UNNAMED_ENTRIES = 3
+
+
+@dataclass(frozen=True)
+class Entry:
+    """A register's or a document list's entry, before its files are read: a
+    call or a page each (FINN e-Urząd, Wrota Lubelszczyzny)."""
+
+    #: What the entry says it is: "Oświadczenie majątkowe za 2025 rok radnej
+    #: Anny Piotrowskiej", or "Dokument za 2025 rok - Adamczuk Agnieszka".
+    subject: str
+    #: When it was filed, ISO: newest first.
+    date: str
+    #: Whether it stands in the seekers' own council's register or list.
+    council: bool
+    #: The register or list it stands in.
+    group: str
+
+
+def entries_to_open(
+    entries: list[Entry],
+    seekers: list[Seeker],
+    first_names: frozenset[str] = frozenset(),
+    per_person: int = 3,
+    opened: Counter[tuple[str, str]] | None = None,
+) -> list[int]:
+    """Which ``entries`` may hold the seekers' files, by index, newest first
+    and the council's before the rest: those whose subject names a seeker by
+    first name too, ``per_person`` a person; in the council's also, for a
+    person nothing else names so, those that name their surname alone, and the
+    newest `UNNAMED_ENTRIES` of a group that name nobody. Elsewhere (staff,
+    the mayor among them) a surname alone is as likely a namesake's.
+    ``opened`` counts by person what a walk has opened already, and is kept.
+    """
+    opened = Counter() if opened is None else opened
+    order = sorted(range(len(entries)), key=lambda i: entries[i].date, reverse=True)
+    order.sort(key=lambda i: not entries[i].council)
+    chosen: list[int] = []
+    unnamed: Counter[str] = Counter()
+    surname_only: list[tuple[int, list[Seeker]]] = []
+    for i in order:
+        entry = entries[i]
+        named, namesake = named_by(entry.subject, seekers, first_names)
+        firsts = [s.name for s, first in named if first]
+        if firsts:
+            if any(opened[name] < per_person for name in firsts):
+                opened.update(firsts)
+                chosen.append(i)
+        elif not entry.council:
+            continue
+        elif named:
+            surname_only.append((i, [s for s, _ in named]))
+        elif (
+            not namesake
+            and not names_somebody(entry.subject)
+            and unnamed[entry.group] < UNNAMED_ENTRIES
+        ):
+            unnamed[entry.group] += 1
+            chosen.append(i)
+    by_surname: Counter[tuple[str, str]] = Counter()
+    for i, who in surname_only:
+        wanting = [
+            s.name
+            for s in who
+            if not opened[s.name] and by_surname[s.name] < per_person
+        ]
+        if wanting:
+            by_surname.update(wanting)
+            chosen.append(i)
+    return chosen
 
 
 def candidates(

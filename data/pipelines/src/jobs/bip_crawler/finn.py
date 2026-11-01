@@ -21,13 +21,9 @@ which answers 303 to the file on `FILES`.
 links it judges like any other: the file's name for a link's label, the
 record's subject ("Oświadczenie majątkowe za 2025 rok radnej Anny
 Piotrowskiej") for its row, the register's name for the page's title. A record
-is opened, a call each, when it may be a seeker's: its subject names one by
-first name too, `per_person` records a person, newest first, the council's
-registers before the rest; in the council's registers also, for a person no
-subject names so, a subject that names their surname alone, and the newest few
-that name nobody at all. The rest (staff, the mayor among them, and the
-units' offices) offer only subjects that name a seeker by first name: their
-surnames alone are as likely a namesake's.
+is opened, a call each, when it may be a seeker's (`entries_to_open`): its
+subject names one by first name too, the council's registers before the
+staff's, where the mayor stands.
 """
 
 from __future__ import annotations
@@ -45,10 +41,11 @@ from urllib.parse import quote
 from scrapers.bip.people import (
     ASSETS,
     DECLARATION,
+    Entry,
     Seeker,
+    entries_to_open,
     fold,
-    named_by,
-    names_somebody,
+    is_council,
 )
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext
@@ -56,9 +53,6 @@ from scrapers.common.links import LinkContext
 EURZAD = "https://eurzad.finn.pl"
 #: Where e-Urząd keeps its files, behind a 303 from their addresses (10-31).
 FILES = "https://res.finn.pl/eurzad/"
-#: Records of a council's register that name nobody, opened newest first: one
-#: may hold the whole council's files, each named by its councillor alone.
-UNNAMED = 3
 #: Pages of a register's records read, a thousand records each.
 MAX_PAGES = 5
 #: The walk's call (robots.txt, the host's rate, the POST): an answer, or why
@@ -66,8 +60,6 @@ MAX_PAGES = 5
 Post = Callable[[str, dict[str, Any]], "HttpResult | str"]
 
 _CLIENT = re.compile(r"https?://eurzad\.finn\.pl/([A-Za-z0-9_-]+)")
-#: A council's register, when the seekers' offices name none (`office_terms`).
-_COUNCIL = re.compile(r"(?:^| )(?:radn\w*|rad[ay])(?= |$)")
 
 _T = TypeVar("_T")
 
@@ -192,56 +184,31 @@ class Eurzad:
         prefer: re.Pattern[str] | None = None,
         first_names: frozenset[str] = frozenset(),
         per_person: int = 3,
+        opened: Counter[tuple[str, str]] | None = None,
     ) -> list[Register]:
         """The client's declaration registers, each with the files of the
-        records that may be the seekers' (see the module) as its links; [] when
-        the app did not answer."""
+        records that may be the seekers' (`entries_to_open`) as its links; []
+        when the app did not answer. ``opened`` counts the walk's records by
+        person."""
         registers = self.declarations(client) or []
-        council = [
-            bool((prefer or _COUNCIL).search(fold(r.get("nazwa")))) for r in registers
-        ]
+        council = [is_council(str(r.get("nazwa") or ""), prefer) for r in registers]
         rows = [
             (k, record)
             for k, register in enumerate(registers)
             for record in self.records(client, str(register.get("symbol")))
         ]
-        # Newest first, the council's before the rest: a councillor's records
-        # of two terms stand in two registers.
-        rows.sort(key=lambda row: str(row[1].get("dataW") or ""), reverse=True)
-        rows.sort(key=lambda row: not council[row[0]])
-        by_first: Counter[tuple[str, str]] = Counter()
-        unnamed: Counter[int] = Counter()
-        opened: set[int] = set()
-        surname_only: list[tuple[int, list[Seeker]]] = []
-        for i, (k, record) in enumerate(rows):
-            subject = str(record.get("temat") or "")
-            named, namesake = named_by(subject, seekers, first_names)
-            firsts = [s.name for s, first in named if first]
-            if firsts:
-                if any(by_first[name] < per_person for name in firsts):
-                    by_first.update(firsts)
-                    opened.add(i)
-            elif not council[k]:
-                continue
-            elif named:
-                surname_only.append((i, [s for s, _ in named]))
-            elif not namesake and not names_somebody(subject) and unnamed[k] < UNNAMED:
-                unnamed[k] += 1
-                opened.add(i)
-        by_surname: Counter[tuple[str, str]] = Counter()
-        for i, who in surname_only:
-            wanting = [
-                s.name
-                for s in who
-                if not by_first[s.name] and by_surname[s.name] < per_person
-            ]
-            if wanting:
-                by_surname.update(wanting)
-                opened.add(i)
+        entries = [
+            Entry(
+                str(record.get("temat") or ""),
+                str(record.get("dataW") or ""),
+                council[k],
+                str(k),
+            )
+            for k, record in rows
+        ]
         links: dict[int, list[LinkContext]] = {k: [] for k in range(len(registers))}
-        for i, (k, record) in enumerate(rows):
-            if i not in opened:
-                continue
+        for i in entries_to_open(entries, seekers, first_names, per_person, opened):
+            k, record = rows[i]
             for z in self.files(client, str(record.get("id"))):
                 links[k].append(
                     LinkContext(
