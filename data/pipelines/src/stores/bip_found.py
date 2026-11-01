@@ -10,7 +10,7 @@ and the people step reads the newest for its declaration groups
 
 A line per candidacy with a file downloaded that a link names the person in -
 status found, never unconfirmed, whose files may be a stranger's: `key`,
-`priority` (`BipPersonOfInterest`'s, as of the crawl's list), `docs`,
+`priority` (`BipPersonOfInterest`'s, as of the night's list the run read), `docs`,
 `koryta_ids` and `rejestrio_ids`. No name and no birth date: the night finds
 people by their ids, and the declarations are read to check the register's date
 against, so the register's must not travel with them (Szymon, 2026-10-29).

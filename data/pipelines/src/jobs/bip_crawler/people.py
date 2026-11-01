@@ -1,7 +1,8 @@
 """People mode: find named people's oświadczenia majątkowe on their units' BIPs.
 
 ``koryta_scrape_bip crawl --people-of-interest`` reads ``BipPeopleOfInterest``
-(one row per won local candidacy) and, unit by unit, searches the BIP of the
+(one row per won local candidacy), as the night built it last
+(``people_list``), and, unit by unit, searches the BIP of the
 office that serves the council: the gov.pl registry's address where it has
 one, else the office's website from the dane.gov.pl catalogue and the "BIP"
 link on it (``scrapers.bip.units``). Instead of the blind crawl's breadth-first
@@ -13,7 +14,8 @@ as the blind crawl's, so ``BipDocumentsParsed`` reads them too.
 
 Every candidacy ends the run found (a file that a link names them in came
 down), unconfirmed (only files that name nobody did: the OCR step decides), or
-not_found with a reason, in ``bip_poi`` (``stores.bip_people``):
+not_found with a reason, in ``bip_poi`` (``stores.bip_people``), which keeps
+nothing of the candidacy but that, by its key:
 
 - ``no_seed``: neither list has an office for the unit;
 - ``unreachable``: no page of the unit's BIP answered (retried by default);
@@ -56,19 +58,24 @@ import time
 import zlib
 from collections import Counter, defaultdict
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urljoin, urlsplit
 
-from analysis.bip_people_of_interest import BipPeopleOfInterest
 from conductor import setup_context
-from entities.bip import BipPersonOfInterest
 from jobs.bip_crawler import finn, sisco, softres, wrota, zeto
 from jobs.bip_crawler import render as rendering
 from jobs.bip_crawler.identity import Agents
 from jobs.bip_crawler.madkom import Madkom
+from jobs.bip_crawler.people_list import (
+    list_policy,
+    outcomes,
+    outcomes_by_year,
+    read_list,
+    to_search,
+)
 from scrapers.bip.classify import (
     filename_from_url,
     host_of,
@@ -105,8 +112,8 @@ from scrapers.stores import (
     BipQueue,
     PersonDocRow,
     PersonRow,
-    ProcessPolicy,
     UnitRow,
+    with_outcomes,
 )
 from stores.bip_bundles import LocalBundleStore
 from stores.bip_people import PostgresBipPeopleStore
@@ -171,18 +178,6 @@ class PeopleOptions:
     max_per_server: int = 2
 
 
-def person_row(person: BipPersonOfInterest) -> PersonRow:
-    return PersonRow(
-        key=person.key,
-        unit=person.teryt,
-        priority=person.priority,
-        election_year=person.election_year,
-        first_name=person.first_name,
-        last_name=person.last_name,
-        person=asdict(person),
-    )
-
-
 @dataclass
 class UnitSearch:
     """What one unit's walk found."""
@@ -240,16 +235,6 @@ DECLARATIONS_BONUS = 6.0
 #: hour of silence. Read as a page with no links, it left their candidacies
 #: no_declarations.
 _REFUSAL = re.compile(r"zbyt duzo jednoczesnych polaczen")
-#: Read as they are on disk, else restored from the shared cache: the night
-#: builds the list, the crawler never rebuilds it. Unpinned, a workspace with
-#: the list but not every tree under its inputs took it for stale: the second
-#: run rebuilt the list, the third PeopleMerged as well, and each went up to
-#: the shared cache.
-PINNED = frozenset({"BipPeopleOfInterest", "PeopleMerged"})
-
-
-def list_policy() -> ProcessPolicy:
-    return ProcessPolicy(set(), exclude_refresh=set(PINNED))
 
 
 @dataclass
@@ -1319,11 +1304,13 @@ def run_people_mode(
     )
 
     ctx, _ = setup_context(policy=list_policy())
-    people = list(BipPeopleOfInterest().read_or_process_list(ctx))
+    people = read_list(ctx)
     store = PostgresBipPeopleStore(pg)
-    new = store.upsert_people([person_row(p) for p in people])
+    rows = with_outcomes(people, store.searched())
+    pending = sum(r.status == "pending" for r in rows)
     retry = frozenset(r.strip() for r in args.poi_retry.split(",") if r.strip())
-    todo = store.people_to_search(
+    todo = to_search(
+        rows,
         refresh=args.poi_refresh,
         max_priority=args.poi_max_priority,
         limit=args.poi_limit,
@@ -1333,7 +1320,7 @@ def run_people_mode(
     if args.poi_units is not None:
         todo = [r for r in todo if r.unit in args.poi_units]
     print(
-        f"people of interest: {len(people):,} candidacies ({new:,} new); "
+        f"people of interest: {len(people):,} candidacies ({pending:,} pending); "
         f"{len(todo):,} to search in {len({r.unit for r in todo}):,} units",
         flush=True,
     )
@@ -1388,7 +1375,7 @@ def run_people_mode(
         robots_unreachable=robots_unreachable,
         known=known,
         render=renderer.render if renderer else None,
-        unit_sizes=Counter(p.teryt for p in people),
+        unit_sizes=Counter(p.unit for p in people),
         first_names=frozenset(
             stem(p.first_name, min_a=4) for p in people if p.first_name
         ),
@@ -1400,11 +1387,12 @@ def run_people_mode(
     finally:
         if renderer:
             renderer.close()
+    now = with_outcomes(people, store.searched())
     summary = {
         "this_run": counts,
-        "all_candidacies": store.outcomes(),
+        "all_candidacies": outcomes(now),
         # 2014's declarations are mostly past BIP's six years: this shows how many
-        "by_election_year": store.outcomes_by_year(),
+        "by_election_year": outcomes_by_year(now),
     }
     print(json.dumps(summary, indent=2))
     return EXIT_TRY_LATER if search.timed_out else 0

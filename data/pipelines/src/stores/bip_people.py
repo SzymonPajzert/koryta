@@ -1,15 +1,22 @@
-"""What the BIP crawler's people mode knows about each candidacy it looks for.
+"""What the BIP crawler's people mode found for each candidacy it looks for.
 
 Three tables beside the crawl queue's, created on first use like theirs:
 
-- ``bip_poi``: one row per ``BipPersonOfInterest`` candidacy - pending, found
-  (at least one file downloaded that a link names them in) or not_found, with
-  the reason (``no_seed``, ``unreachable``, ``robots``, ``no_declarations``,
-  ``not_listed``, ``download_failed``).
+- ``bip_poi``: what the search made of each ``BipPersonOfInterest`` candidacy,
+  by its key - found (at least one file downloaded that a link names them in),
+  unconfirmed or not_found, with the reason (``no_seed``, ``unreachable``,
+  ``robots``, ``no_declarations``, ``not_listed``, ``download_failed``). A
+  candidacy with no row is pending.
 - ``bip_poi_docs``: every file tried for a candidacy, with the link's label and
   context, and where it is stored (``sha256`` in ``bip_docs`` and its bundle).
 - ``bip_units``: each unit searched, where the search started and how many
   pages it read.
+
+Only what the crawl itself found: who a candidacy is, whether the site has a
+page for them and how much it wants them come from the night's list, read
+afresh each run (`jobs.bip_crawler.people_list`). Until 11-01 ``bip_poi`` held
+a copy of the list too, which only a crawl ever rewrote, from the copy on its
+own disk, so on 11-01 the upload still ranked the site of 10-29.
 
 A later run picks up the pending candidacies only, so new people of interest
 (a new election, a wider list) are searched without redoing the found ones;
@@ -22,26 +29,18 @@ import json
 from datetime import datetime, timezone
 
 from scrapers.common.pg import PostgresClient
-from scrapers.stores import BipPeopleStore, PersonDocRow, PersonRow, UnitRow
+from scrapers.stores import BipPeopleStore, PersonDocRow, PersonOutcome, UnitRow
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS bip_poi (
-  key           text PRIMARY KEY,
-  unit          text NOT NULL,
-  priority      int  NOT NULL DEFAULT 9,
-  election_year int  NOT NULL DEFAULT 0,
-  first_name    text NOT NULL DEFAULT '',
-  last_name     text NOT NULL DEFAULT '',
-  person        jsonb NOT NULL DEFAULT '{}',
-  status        text NOT NULL DEFAULT 'pending',
-  reason        text NOT NULL DEFAULT '',
-  docs          int  NOT NULL DEFAULT 0,
-  run_id        text NOT NULL DEFAULT '',
-  first_seen    timestamptz NOT NULL DEFAULT now(),
-  checked_at    timestamptz
+  key        text PRIMARY KEY,
+  status     text NOT NULL DEFAULT 'pending',
+  reason     text NOT NULL DEFAULT '',
+  docs       int  NOT NULL DEFAULT 0,
+  run_id     text NOT NULL DEFAULT '',
+  first_seen timestamptz NOT NULL DEFAULT now(),
+  checked_at timestamptz
 );
-CREATE INDEX IF NOT EXISTS bip_poi_status_idx
-  ON bip_poi (status, priority, election_year);
 CREATE TABLE IF NOT EXISTS bip_poi_docs (
   key        text NOT NULL,
   url        text NOT NULL,
@@ -69,19 +68,16 @@ CREATE TABLE IF NOT EXISTS bip_units (
 )
 """
 
-_PERSON_COLUMNS = (
-    "key, unit, priority, election_year, first_name, last_name, person, "
-    "status, reason, docs"
-)
 
-
-def _person(row: tuple) -> PersonRow:
-    key, unit, priority, year, first, last, person, status, reason, docs = row
-    if isinstance(person, str):
-        person = json.loads(person)
-    return PersonRow(
-        key, unit, priority, year, first, last, person or {}, status, reason, docs
-    )
+def read_searched(pg: PostgresClient) -> dict[str, PersonOutcome]:
+    """What each candidacy searched so far came to, by key: ``bip_poi`` read
+    without creating anything, for the declarations job, which may run under a
+    scratch schema."""
+    rows = pg.fetchall("SELECT key, status, reason, docs, checked_at FROM bip_poi")
+    return {
+        key: PersonOutcome(status, reason, int(docs), checked_at)
+        for key, status, reason, docs, checked_at in rows
+    }
 
 
 class PostgresBipPeopleStore(BipPeopleStore):
@@ -93,73 +89,23 @@ class PostgresBipPeopleStore(BipPeopleStore):
         for statement in _SCHEMA.split(";"):
             if statement.strip():
                 self.pg.execute(statement)
-
-    def upsert_people(self, rows: list[PersonRow]) -> int:
-        if not rows:
-            return 0
-        new = 0
-        with self.pg.transaction() as cur:
-            for row in rows:
-                cur.execute(
-                    """
-                    INSERT INTO bip_poi (key, unit, priority, election_year,
-                                         first_name, last_name, person)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (key) DO UPDATE
-                       SET unit = EXCLUDED.unit,
-                           priority = EXCLUDED.priority,
-                           election_year = EXCLUDED.election_year,
-                           first_name = EXCLUDED.first_name,
-                           last_name = EXCLUDED.last_name,
-                           person = EXCLUDED.person
-                    RETURNING (xmax = 0) AS inserted
-                    """,
-                    (
-                        row.key,
-                        row.unit,
-                        row.priority,
-                        row.election_year,
-                        row.first_name,
-                        row.last_name,
-                        json.dumps(row.person, ensure_ascii=False, default=str),
-                    ),
-                )
-                inserted = cur.fetchone()
-                new += bool(inserted and inserted[0])
-        return new
-
-    def people_to_search(
-        self,
-        *,
-        refresh: bool,
-        max_priority: int | None,
-        limit: int | None,
-        retry: frozenset[str] = frozenset(),
-        retry_before: datetime | None = None,
-    ) -> list[PersonRow]:
-        rows = self.pg.fetchall(
-            f"""
-            SELECT {_PERSON_COLUMNS} FROM bip_poi
-             WHERE (%s OR status = 'pending'
-                    OR (((status = 'not_found' AND reason = ANY(%s))
-                         OR (status = 'unconfirmed' AND 'unconfirmed' = ANY(%s)))
-                        AND (%s::timestamptz IS NULL OR checked_at < %s::timestamptz)))
-               AND (%s::int IS NULL OR priority <= %s::int)
-             ORDER BY priority, election_year DESC, unit, key
-             LIMIT %s
-            """,
-            (
-                refresh,
-                sorted(retry),
-                sorted(retry),
-                retry_before,
-                retry_before,
-                max_priority,
-                max_priority,
-                limit,
-            ),
+        # A bip_poi made before 11-01 still has the list's fields (unit,
+        # priority, election_year, first_name, last_name, person). Nothing here
+        # reads them, and a row the search adds leaves them at their defaults:
+        # unit is given one so that it can. Code from before still reads and
+        # writes them, so they are dropped by hand once no runner has it.
+        old = self.pg.fetchall(
+            """
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = current_schema() AND table_name = 'bip_poi'
+               AND column_name = 'unit' AND column_default IS NULL
+            """
         )
-        return [_person(r) for r in rows]
+        if old:
+            self.pg.execute("ALTER TABLE bip_poi ALTER COLUMN unit SET DEFAULT ''")
+
+    def searched(self) -> dict[str, PersonOutcome]:
+        return read_searched(self.pg)
 
     def record_unit(self, row: UnitRow, run_id: str) -> None:
         self.pg.execute(
@@ -189,13 +135,15 @@ class PostgresBipPeopleStore(BipPeopleStore):
     ) -> None:
         self.pg.execute(
             """
-            UPDATE bip_poi
-               SET status = %s, reason = %s, docs = %s, run_id = %s, checked_at = now()
-             WHERE key = %s
-               -- A search that finds nothing again does not undo an earlier find.
-               AND (status <> 'found' OR %s = 'found')
+            INSERT INTO bip_poi (key, status, reason, docs, run_id, checked_at)
+            VALUES (%s, %s, %s, %s, %s, now())
+            ON CONFLICT (key) DO UPDATE
+               SET status = EXCLUDED.status, reason = EXCLUDED.reason,
+                   docs = EXCLUDED.docs, run_id = EXCLUDED.run_id, checked_at = now()
+             -- A search that finds nothing again does not undo an earlier find.
+             WHERE bip_poi.status <> 'found' OR EXCLUDED.status = 'found'
             """,
-            (status, reason, docs, run_id, key, status),
+            (key, status, reason, docs, run_id),
         )
 
     def record_person_docs(self, rows: list[PersonDocRow], run_id: str) -> None:
@@ -245,112 +193,20 @@ class PostgresBipPeopleStore(BipPeopleStore):
         )
         return [PersonDocRow(*r) for r in rows]
 
-    def outcomes_by_year(self) -> dict[int, dict[str, int]]:
-        rows = self.pg.fetchall(
-            """
-            SELECT election_year,
-                   CASE WHEN status = 'not_found' THEN status || ':' || reason
-                        ELSE status END,
-                   count(*)
-              FROM bip_poi GROUP BY 1, 2 ORDER BY 1, 2
-            """
-        )
-        by_year: dict[int, dict[str, int]] = {}
-        for year, label, count in rows:
-            by_year.setdefault(int(year), {})[str(label)] = int(count)
-        return by_year
-
-    def outcomes(self) -> dict[str, int]:
-        rows = self.pg.fetchall(
-            """
-            SELECT CASE WHEN status = 'not_found' THEN status || ':' || reason
-                        ELSE status END,
-                   count(*)
-              FROM bip_poi GROUP BY 1 ORDER BY 1
-            """
-        )
-        return {str(k): int(v) for k, v in rows}
-
-    def found(self) -> list[PersonRow]:
-        rows = self.pg.fetchall(
-            f"""
-            SELECT {_PERSON_COLUMNS} FROM bip_poi WHERE status = 'found'
-             ORDER BY priority, election_year DESC, unit, key
-            """
-        )
-        return [_person(r) for r in rows]
-
 
 class MemoryBipPeopleStore(BipPeopleStore):
     """The same in memory: for tests, and for a run that should leave nothing behind."""
 
     def __init__(self) -> None:
-        self.people: dict[str, PersonRow] = {}
+        self.outcomes: dict[str, PersonOutcome] = {}
         self.docs: dict[tuple[str, str], PersonDocRow] = {}
         self.units: dict[str, UnitRow] = {}
-        #: When each candidacy was last searched (``checked_at``).
-        self.checked: dict[str, datetime] = {}
 
     def ensure_schema(self) -> None:
         return None
 
-    def upsert_people(self, rows: list[PersonRow]) -> int:
-        new = 0
-        for row in rows:
-            known = self.people.get(row.key)
-            if known is None:
-                self.people[row.key] = row
-                new += 1
-            else:
-                self.people[row.key] = PersonRow(
-                    row.key,
-                    row.unit,
-                    row.priority,
-                    row.election_year,
-                    row.first_name,
-                    row.last_name,
-                    row.person,
-                    known.status,
-                    known.reason,
-                    known.docs,
-                )
-        return new
-
-    def people_to_search(
-        self,
-        *,
-        refresh: bool,
-        max_priority: int | None,
-        limit: int | None,
-        retry: frozenset[str] = frozenset(),
-        retry_before: datetime | None = None,
-    ) -> list[PersonRow]:
-        def old(r: PersonRow) -> bool:
-            checked = self.checked.get(r.key)
-            return retry_before is None or (
-                checked is not None and checked < retry_before
-            )
-
-        def due(r: PersonRow) -> bool:
-            return (
-                refresh
-                or r.status == "pending"
-                or (
-                    (
-                        (r.status == "not_found" and r.reason in retry)
-                        or (r.status == "unconfirmed" and "unconfirmed" in retry)
-                    )
-                    and old(r)
-                )
-            )
-
-        rows = [
-            r
-            for r in self.people.values()
-            if due(r) and (max_priority is None or r.priority <= max_priority)
-        ]
-        rows.sort(key=lambda r: (r.priority, -r.election_year, r.unit, r.key))
-        return rows[:limit] if limit else rows
+    def searched(self) -> dict[str, PersonOutcome]:
+        return dict(self.outcomes)
 
     def record_unit(self, row: UnitRow, run_id: str) -> None:
         self.units[row.unit] = row
@@ -358,21 +214,11 @@ class MemoryBipPeopleStore(BipPeopleStore):
     def record_person(
         self, key: str, status: str, reason: str, docs: int, run_id: str
     ) -> None:
-        r = self.people[key]
-        if r.status == "found" and status != "found":
+        known = self.outcomes.get(key)
+        if known is not None and known.status == "found" and status != "found":
             return
-        self.checked[key] = datetime.now(timezone.utc)
-        self.people[key] = PersonRow(
-            r.key,
-            r.unit,
-            r.priority,
-            r.election_year,
-            r.first_name,
-            r.last_name,
-            r.person,
-            status,
-            reason,
-            docs,
+        self.outcomes[key] = PersonOutcome(
+            status, reason, docs, datetime.now(timezone.utc)
         )
 
     def record_person_docs(self, rows: list[PersonDocRow], run_id: str) -> None:
@@ -386,23 +232,3 @@ class MemoryBipPeopleStore(BipPeopleStore):
             (d for (k, _), d in self.docs.items() if k == key),
             key=lambda d: (-d.score, d.url),
         )
-
-    def outcomes_by_year(self) -> dict[int, dict[str, int]]:
-        by_year: dict[int, dict[str, int]] = {}
-        for r in self.people.values():
-            label = f"{r.status}:{r.reason}" if r.status == "not_found" else r.status
-            year = by_year.setdefault(r.election_year, {})
-            year[label] = year.get(label, 0) + 1
-        return {y: dict(sorted(c.items())) for y, c in sorted(by_year.items())}
-
-    def outcomes(self) -> dict[str, int]:
-        counts: dict[str, int] = {}
-        for r in self.people.values():
-            label = f"{r.status}:{r.reason}" if r.status == "not_found" else r.status
-            counts[label] = counts.get(label, 0) + 1
-        return dict(sorted(counts.items()))
-
-    def found(self) -> list[PersonRow]:
-        rows = [r for r in self.people.values() if r.status == "found"]
-        rows.sort(key=lambda r: (r.priority, -r.election_year, r.unit, r.key))
-        return rows

@@ -63,10 +63,10 @@ def test_a_page_its_breadcrumb_alone_calls_declarations_names_its_files(
         [row("g", "u1", "Wojciech", "Gruszka"), row("n", "u1", "Jan", "Nowak")],
         sitemaps=False,
     )
-    assert store.people["g"].status == "found"
+    assert store.outcomes["g"].status == "found"
     # The title says nothing of declarations: Kowalska's file is nobody's
     # to hand to Nowak.
-    assert store.people["n"].status == "not_found"
+    assert store.outcomes["n"].status == "not_found"
     assert f"{FILES}/A_Kowalska_za_2025.pdf" not in web.calls
 
 
@@ -88,7 +88,7 @@ def test_an_attachment_comes_down_as_the_file_it_is(tmp_path) -> None:
     _, store, _, _ = search(
         tmp_path, sites, [row("b", "u1", "Jan", "Borek")], sitemaps=False
     )
-    assert store.people["b"].status == "found"
+    assert store.outcomes["b"].status == "found"
 
 
 def test_a_breadcrumb_of_property_for_sale_makes_no_declarations(tmp_path) -> None:
@@ -104,4 +104,4 @@ def test_a_breadcrumb_of_property_for_sale_makes_no_declarations(tmp_path) -> No
     _, store, _, _ = search(
         tmp_path, sites, [row("n", "u1", "Jan", "Nowak")], sitemaps=False
     )
-    assert store.people["n"].status == "not_found"
+    assert store.outcomes["n"].status == "not_found"

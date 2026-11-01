@@ -346,7 +346,7 @@ def test_the_walk_finds_a_councillor_in_the_register_its_page_embeds(tmp_path) -
         post=app.post,
         sitemaps=False,
     )
-    assert store.people["wala"].status == "found"
+    assert store.outcomes["wala"].status == "found"
     (doc,) = store.person_docs("wala")
     assert doc.status == "ok"
     assert doc.url == f"{APP}/server/pobierz_rejestry_zalacznik/1230681"
@@ -386,7 +386,7 @@ def test_an_app_that_says_not_now_is_asked_again(tmp_path) -> None:
         post=busy.post,
         sitemaps=False,
     )
-    assert store.people["wala"].status == "found"
+    assert store.outcomes["wala"].status == "found"
     assert [route for route, _ in busy.calls] == [-1, 0, 1, 2]
 
 
@@ -402,7 +402,7 @@ def test_robots_txt_is_asked_about_the_apps_calls(tmp_path) -> None:
         sitemaps=False,
     )
     assert app.calls == []
-    assert store.people["wala"].status == "not_found"
+    assert store.outcomes["wala"].status == "not_found"
 
 
 def test_no_register_is_read_while_robots_txt_keeps_the_crawler_from_the_files(
@@ -420,7 +420,7 @@ def test_no_register_is_read_while_robots_txt_keeps_the_crawler_from_the_files(
         sitemaps=False,
     )
     assert app.calls == []
-    assert store.people["wala"].status == "not_found"
+    assert store.outcomes["wala"].status == "not_found"
     said = [r for r in caplog.records if "e-Urząd's files" in r.getMessage()]
     assert len(said) == 1
     assert FILES.startswith("https://res.finn.pl/")

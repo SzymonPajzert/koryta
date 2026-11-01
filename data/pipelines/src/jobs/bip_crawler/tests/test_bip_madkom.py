@@ -313,7 +313,7 @@ def test_the_walk_reads_a_madkom_bip_through_its_api(tmp_path: Path) -> None:
         render=render,
         sitemaps=False,
     )
-    assert store.people["lis"].status == "found"
+    assert store.outcomes["lis"].status == "found"
     (doc,) = [d for d in store.person_docs("lis") if d.status == "ok"]
     assert doc.url == "https://bip.m.pl/api/files/501"
     assert doc.page_url == "https://bip.m.pl/ugx,a,101,ewa-lis.html"
@@ -333,7 +333,7 @@ def test_a_walk_whose_madkom_api_says_not_now_is_left_for_later(tmp_path) -> Non
         scopes={"u1": "bip.m.pl/ugx"},
         sitemaps=False,
     )
-    assert store.people["lis"].reason == "throttled"
+    assert store.outcomes["lis"].reason == "throttled"
 
 
 def test_madkom_and_the_walk_agree_on_robots() -> None:
@@ -435,7 +435,7 @@ def test_files_named_by_the_councillor_alone_come_down_under_a_separator(
         scopes={"u1": "bip.r.pl"},
         sitemaps=False,
     )
-    assert store.people["dom"].status == "found"
+    assert store.outcomes["dom"].status == "found"
 
 
 def test_a_listing_that_fails_keeps_the_menu() -> None:
