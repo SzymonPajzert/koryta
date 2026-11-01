@@ -383,7 +383,7 @@ describe("api/declarations/found", () => {
 describe("api/declarations/claim", () => {
   beforeEach(() => {
     mocks.body = { readerId: READER.toUpperCase() };
-    mocks.claimAnswers.mockResolvedValue({ claimed: 0, settled: [] });
+    mocks.claimAnswers.mockResolvedValue({ claimed: 0, settled: [], left: 0 });
   });
 
   it("refuses a claim without a token", async () => {
@@ -422,6 +422,7 @@ describe("api/declarations/claim", () => {
         },
         { extractId: "unreadable", settlement: { status: "unreadable" } },
       ],
+      left: 0,
     });
 
     expect(await claim({} as never)).toEqual({ claimed: 3, settled: 3 });
@@ -443,11 +444,25 @@ describe("api/declarations/claim", () => {
         extractId: `day-${i}`,
         settlement: ON_A_DAY,
       })),
+      left: 0,
     });
 
     await claim({} as never);
 
     expect(mocks.matchAndDrain.mock.calls[0]![1]).toHaveLength(10);
+  });
+
+  it("fails a claim that left answers under the browser's id, so the page keeps it, once the crops it settled are compared", async () => {
+    mocks.claimAnswers.mockResolvedValue({
+      claimed: 19,
+      settled: [{ extractId: "day", settlement: ON_A_DAY }],
+      left: 8,
+    });
+
+    await expect(claim({} as never)).rejects.toMatchObject({
+      statusCode: 503,
+    });
+    expect(mocks.matchAndDrain.mock.calls[0]![1]).toEqual(["day"]);
   });
 
   /** A database that answers every query with `docs` and has nothing else:
