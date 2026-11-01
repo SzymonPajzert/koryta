@@ -47,6 +47,11 @@ BLANK_FORM = re.compile(
     r"klauzul|przetwarzan\w* danych|lustrac|de minimis|pomoc\w* publiczn|"
     r"konflikt\w* interes|latw\w* do czytania|dostepnosc|cookie|polityk\w* prywatn"
 )
+#: A page or a row of blank forms, folded: "Wzory oświadczeń majątkowych",
+#: "Druki do pobrania", "Formularz - oświadczenie majątkowe radnego". Narrower
+#: than BLANK_FORM, whose "informacja" or "ustawa" a declarations page's own
+#: heading can say; and not "druku", as any page's "wersja do druku" says.
+FORMS = re.compile(r"(?:^| )(?:wzor(?:y|u|ow|em)?|formularz\w*|druk(?:i|ow)?)(?= |$)")
 YEAR = re.compile(r"(?<!\d)(20[12]\d)(?!\d)")
 
 
@@ -738,6 +743,12 @@ def candidates(
     # file that names nobody.
     address = url_words(page_url)
     filed_under = bool(DECLARATION.search(address) and ASSETS.search(address))
+    # A page of blank forms names nobody, and its files are nobody's either
+    # (11-01: Wielkopolska's "Formularze oświadczeń majątkowych", Grudziądz's
+    # /artykul/wzor-oswiadczenia-majatkowego-dla-radnego, ~250 candidacies
+    # left unconfirmed with nothing but forms).
+    page_path = _DIGITS.sub(" ", fold(decode_url(path_of(page_url))))
+    forms_page = bool(FORMS.search(title) or FORMS.search(page_path))
     # A page about one person nobody seeks ("... - B. Kułacz - Stan majątkowy na
     # 31.12.2025 r."): its files are theirs, whatever the labels say. Unless a
     # seeker could be that person in a form named_in misses ("J. Kaczmarka").
@@ -819,6 +830,8 @@ def candidates(
             not named
             and not somebody_else
             and not title_somebody
+            and not forms_page
+            and not FORMS.search(fold(link.row) + " " + fold(link.heading))
             and page_declarations
             and bool(ASSETS.search(around) or ASSETS.search(title))
             and is_file_link(link.url)
