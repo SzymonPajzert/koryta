@@ -3,7 +3,7 @@ for the few that keep public declarations from the crawler's name."""
 
 from __future__ import annotations
 
-from jobs.bip_crawler.identity import BROWSER_AGENT, Agents
+from jobs.bip_crawler.identity import BROWSER_AGENT, HOSTS, Agents
 from jobs.bip_crawler.tests.test_people_mode_review import PDF, Web, html, row, search
 from scrapers.common.fetch import HttpResult
 
@@ -81,3 +81,10 @@ def test_the_walk_asks_an_exceptions_pages_and_files_as_a_browser(tmp_path) -> N
     people.post = post
     people._post("https://u1.pl/api", {"id": 1})
     assert posted == [BROWSER_AGENT]
+
+
+def test_each_host_says_whose_bip_it_is() -> None:
+    for host, whose in HOSTS.items():
+        assert host == host.lower() and not host.startswith("www."), host
+        assert whose, host
+    assert Agents(OWN)("www.bip.przemysl.pl") == BROWSER_AGENT
