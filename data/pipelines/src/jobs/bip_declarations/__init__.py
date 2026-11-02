@@ -5,7 +5,8 @@ send the crops to the site's readers.
     koryta_bip_declarations cut --out ... --limit 20      # twenty files, to look at
     koryta_bip_declarations upload --dry-run              # what would go; nothing sent
     koryta_bip_declarations upload                        # send what is new or changed
-    koryta_bip_declarations status                        # what is cut and sent
+    koryta_bip_declarations status                        # where the declarations stand
+    koryta_bip_declarations status --units-csv units.csv  # and every unit with no file
 
 The crawler's people mode (`koryta_scrape_bip crawl --people-of-interest`)
 downloads the oświadczenia majątkowe of every won local candidacy it finds, into
@@ -24,10 +25,17 @@ a PDF's text layer inside the candidacy's PKW window settles without them.
 `upload --priority 1 --sample 100` is a test run: a hundred crops not sent yet
 of drafts whose page has a birth date, and only the candidacies they serve.
 
+`status` says where the declarations stand (`stats`): the candidacies found,
+their files downloaded, cut, cropped and sent, by priority, and the units
+(TERYT) where nothing came down for anybody. It only reads, so it runs beside
+a cut or a crawl. On predator `cut` and `status` run through `cut.sh` and
+`stats.sh` next to this file, which bring the crawl's Postgres, the
+credentials for the night's list, and the cut's logs.
+
 Who the candidacies are - their page, whether it shows a birth date, the
 priority - is the night's newest list (`jobs.bip_crawler.people_list`), read
-by `cut` and `upload` each run, so a draft the night dated is priority 1 the
-morning after.
+by `cut`, `upload` and `status` each run, so a draft the night dated is
+priority 1 the morning after.
 
 Exit codes: 0 when the work is done; 75 when a run stopped with work left (its
 time ran out, the site did not answer) - the next run carries on; 1 when the
@@ -52,6 +60,7 @@ from conductor import setup_context
 from jobs.bip_crawler import DEFAULT_OUT
 from jobs.bip_crawler.people_list import list_policy, read_list
 from jobs.bip_declarations.cutter import FileCut, Ocr, cut_file
+from jobs.bip_declarations.stats import report, write_units_csv
 from jobs.bip_declarations.upload import (
     DEFAULT_ENDPOINT,
     Site,
@@ -266,15 +275,11 @@ def cmd_upload(args: argparse.Namespace) -> int:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
-    store = PostgresBipDeclarationStore(PostgresClient.from_env(max_size=2))
-    cuts = store.cuts()
-    crops = store.crops()
-    print(f"files cut: {len(cuts)} {dict(Counter(c.status for c in cuts.values()))}")
-    print(f"crops: {len(crops)} {dict(Counter(c.sort for c in crops))}")
-    for kind in ("candidacy", "extract"):
-        sent = store.sent(kind).values()
-        answers = Counter(s.reason or s.result for s in sent)
-        print(f"{kind} sent: {len(sent)} {dict(answers)}")
+    lines, empty = report(store_with_list(), version=CUT_VERSION, units=args.units)
+    print("\n".join(lines))
+    if args.units_csv:
+        write_units_csv(args.units_csv, empty)
+        print(f"\nwrote {len(empty):,} units to {args.units_csv}")
     return 0
 
 
@@ -324,7 +329,19 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
         help="a test run: N crops not sent yet, and only the candidacies they serve",
     )
     send.set_defaults(func=cmd_upload)
-    status = sub.add_parser("status", help="what is cut and sent")
+    status = sub.add_parser(
+        "status", help="where the declarations stand: found, downloaded, cut, sent"
+    )
+    status.add_argument(
+        "--units",
+        type=int,
+        default=20,
+        help="list this many of the biggest units nothing was downloaded in "
+        "(default: 20)",
+    )
+    status.add_argument(
+        "--units-csv", type=Path, help="write every such unit to this CSV file"
+    )
     status.set_defaults(func=cmd_status)
     return parser.parse_args(argv)
 

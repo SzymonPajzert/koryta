@@ -26,8 +26,13 @@
    /oswiadczenia. `--dry-run` says what would go and sends nothing. `--priority 1` keeps the candidacies the people
    mode ranked drafts with a birth date (0 drafts without one, 3 published pages), and `--sample 100` makes it a test
    run: a hundred crops not sent yet and only the candidacies they serve
+1. `status`: where the declarations stand over the night's list: candidacies found, their files downloaded, cut,
+   cropped and sent, by priority, and the units (TERYT) where nothing was downloaded for anybody (`--units 50`,
+   `--units-csv`). It only reads, so it runs beside a cut or a crawl
 1. Not part of the nightly yet: run it by hand on predator, beside the crawler. It signs in as the people import does
-   (`KORYTA_PIPELINE_UID=pipeline-declarations`)
+   (`KORYTA_PIPELINE_UID=pipeline-declarations`). `cut.sh` and `stats.sh` beside the code run `cut` and `status` with
+   the crawl's Postgres, the credentials for the night's list and the cut's logs, from the checkout they sit in
+   (`~/koryta-bip-declarations` on predator)
 
 ## krs_scrape_bulletin
 1. Reads KRS bulletin for updates on dates we haven't scraped yet

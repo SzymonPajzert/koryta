@@ -256,6 +256,11 @@ def extract_records(
                 yield extract
 
 
+def extract_id(sha256: str, page: int) -> str:
+    """The id the site keeps an extract under: the file and the 0-based page."""
+    return f"{sha256}-p{page}"
+
+
 def _crop_extract(
     file: _File,
     crop: DeclarationCropRow,
@@ -272,14 +277,14 @@ def _crop_extract(
     machine = _machine(crop, [people[k] for k in keys], name_match)
     if crop.sort == "blank":
         record.update(outcome="failed", reason="blank_field", machine=machine)
-        return Extract(f"{file.sha256}-p{crop.page}", record, digest(record))
+        return Extract(extract_id(file.sha256, crop.page), record, digest(record))
     if not crop.date_png_hash:
         record.update(outcome="failed", reason="no_date_line", machine=machine)
-        return Extract(f"{file.sha256}-p{crop.page}", record, digest(record))
+        return Extract(extract_id(file.sha256, crop.page), record, digest(record))
     settles = machine["confidence"] == "high" and len(crop.birth_date) == 10
     record.update(outcome="read" if settles else "crop", machine=machine)
     return Extract(
-        f"{file.sha256}-p{crop.page}",
+        extract_id(file.sha256, crop.page),
         record,
         digest(record, crop.date_png_hash, crop.name_png_hash),
         crop=(crop.sha256, crop.page),
@@ -298,7 +303,7 @@ def _failed_extract(
         return None
     record = _base(file, keys, 0, True)
     record.update(outcome="failed", reason=cut.status)
-    return Extract(f"{file.sha256}-p0", record, digest(record))
+    return Extract(extract_id(file.sha256, 0), record, digest(record))
 
 
 def due(records: Iterable[tuple[str, str]], sent: dict[str, SentRow]) -> set[str]:
