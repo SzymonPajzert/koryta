@@ -188,6 +188,20 @@ koryta_scrape_bip found --dry-run   # count; write nothing
 koryta_scrape_bip found
 ```
 
+### On predator: `run_chunk.sh`
+
+The people mode runs in chunks from `run_chunk.sh` beside this file: a crawl
+of `--max-minutes` (95), the found list after it, and a stop when / falls under
+5 GB free. It brings the crawl's Postgres (`BIP_POSTGRES_ENV`), its directory
+(`BIP_CRAWL_OUT`, `~/.cache/koryta/bip-people-crawl`: bundles, registry, CA
+bundle, `runs/` logs) and `--known-urls` (`BIP_KNOWN_URLS`), and runs the code
+of the checkout it sits in.
+
+```bash
+run_chunk.sh                       # 95 minutes, 20 units at once
+run_chunk.sh 95 20 --poi-retry unreachable --poi-retry-before 2026-11-02T08:00Z
+```
+
 ### `stats`
 
 Print queue counters and the last-hour throughput.
