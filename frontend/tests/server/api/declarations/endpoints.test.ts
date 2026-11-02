@@ -603,7 +603,7 @@ describe("the daily limit, as the endpoints read it", () => {
     const path = existsSync(resolve(process.cwd(), "nuxt.config.ts"))
       ? resolve(process.cwd(), "nuxt.config.ts")
       : resolve(process.cwd(), "frontend", "nuxt.config.ts");
-    expect(DAILY_AUTO_PUBLISH_LIMIT).toBe(50);
+    expect(DAILY_AUTO_PUBLISH_LIMIT).toBe(100);
     expect(readFileSync(path, "utf8")).toMatch(
       new RegExp(
         `^\\s+declarationsDailyPublishLimit: ${DAILY_AUTO_PUBLISH_LIMIT},$`,
