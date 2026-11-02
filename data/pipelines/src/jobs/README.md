@@ -9,7 +9,7 @@
 1. Not part of the nightly yet: run it by hand.
 1. `--people-of-interest`: looks up the oświadczenia majątkowe of the people in
    `BipPeopleOfInterest` unit by unit instead, and records for each candidacy
-   whether a file came down or why not (`bip_poi`); by hand on predator.
+   whether a file came down or why not (`bip_poi`); by hand on predator, in chunks of `run_chunk.sh`.
 1. `found`: writes the candidacies it found a declaration for to the shared
    cache, where the night's declaration groups read them (`stores.bip_found`).
 
