@@ -98,7 +98,7 @@ export default defineNuxtConfig({
     // shared/declarations.ts. NUXT_DECLARATIONS_DAILY_PUBLISH_LIMIT overrides
     // it, and 0 switches the automatic publication off; the readings and the
     // queue build up either way.
-    declarationsDailyPublishLimit: 50,
+    declarationsDailyPublishLimit: 100,
     public: {
       isLocal,
       /** The published extension's id, so `/rozszerzenie` knows who to hand a
