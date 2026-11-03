@@ -36,7 +36,7 @@ export const DISPUTED_AFTER = 6;
  * which the endpoints read (`publishLimitOf`) and
  * NUXT_DECLARATIONS_DAILY_PUBLISH_LIMIT overrides; 0 switches the automatic
  * publication off. A test keeps the two equal. */
-export const DAILY_AUTO_PUBLISH_LIMIT = 100;
+export const DAILY_AUTO_PUBLISH_LIMIT = 200;
 
 /** The uid the automatic publication writes under. It contains "pipeline", so
  * `isAutomatedUid` keeps it out of the contributors' stats and the activity
