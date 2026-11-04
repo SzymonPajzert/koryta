@@ -23,9 +23,38 @@ function snapshot(path: string) {
   };
 }
 
+/** `where(...).where(...).get()` over `stored`, for the employment lookup the
+ * reader queue's order needs (`pagesWithAPublicPost`): equality and `in`, on
+ * one collection, which is all of Firestore this endpoint asks for. */
+function query(
+  collection: string,
+  filters: { field: string; op: string; value: unknown }[] = [],
+) {
+  return {
+    where: (field: string, op: string, value: unknown) =>
+      query(collection, [...filters, { field, op, value }]),
+    get: async () => {
+      const docs = Object.entries(stored)
+        .filter(([path]) => path.startsWith(`${collection}/`))
+        .filter(([, data]) =>
+          filters.every(({ field, op, value }) => {
+            const held = (data ?? {})[field];
+            return op === "in"
+              ? (value as unknown[]).includes(held)
+              : held === value;
+          }),
+        )
+        .map(([path]) => snapshot(path));
+      return { docs, empty: docs.length === 0 };
+    },
+  };
+}
+
 const mockDb = {
   collection: vi.fn((collection: string) => ({
     doc: vi.fn((id: string) => docRef(collection, id)),
+    where: (field: string, op: string, value: unknown) =>
+      query(collection).where(field, op, value),
   })),
   getAll: vi.fn(async (...refs: { path: string }[]) =>
     refs.map((ref) => snapshot(ref.path)),
@@ -220,19 +249,110 @@ describe("api/ingest/declarations", () => {
     expect(stored[IMAGES]!.date).toBeInstanceOf(Buffer);
   });
 
-  it("puts drafts first, a dated one before an undated one, and published pages last", async () => {
-    const priorityOf = async (node: Record<string, unknown>) => {
+  describe("the order readers are sent the crops in", () => {
+    /** Her page, and a seat on the board of a company the gmina owns. */
+    const priorityOf = async (
+      node: Record<string, unknown>,
+      world: Record<string, Record<string, unknown>> = {},
+    ) => {
       stored = {
         "nodes/kowalska": { type: "person", name: "Anna Kowalska", ...node },
+        "nodes/wodociagi": {
+          type: "place",
+          name: "Wodociągi Strzelin",
+          isPublic: true,
+        },
+        "edges/kowalska-job": {
+          type: "employed",
+          name: "Rada Nadzorcza",
+          source: "kowalska",
+          target: "wodociagi",
+          start_date: "2020-03-01",
+        },
+        ...world,
       };
       await send({ candidacies: [candidacy()], extracts: [extract()] });
       return stored[EXTRACT]!.priority;
     };
-    expect(await priorityOf({ birthDate: "1979-07-15" })).toBe(0);
-    expect(await priorityOf({})).toBe(1);
-    expect(await priorityOf({ published: true, birthDate: "1979-07-15" })).toBe(
-      3,
-    );
+
+    it("puts drafts first, a dated one before an undated one, and published pages last", async () => {
+      expect(await priorityOf({ birthDate: "1979-07-15" })).toBe(0);
+      expect(await priorityOf({})).toBe(1);
+      expect(
+        await priorityOf({ published: true, birthDate: "1979-07-15" }),
+      ).toBe(3);
+    });
+
+    it("puts a draft with no paid public post behind both", async () => {
+      // Nobody could show who owns her only employer, which is not evidence
+      // that it is private - and not a post the automation publishes for.
+      expect(
+        await priorityOf(
+          { birthDate: "1979-07-15" },
+          { "nodes/wodociagi": { type: "place", name: "Spółka X" } },
+        ),
+      ).toBe(2);
+      // No employment on the page at all.
+      expect(
+        await priorityOf(
+          { birthDate: "1979-07-15" },
+          { "edges/kowalska-job": {} },
+        ),
+      ).toBe(2);
+    });
+
+    it("counts a seat nobody is paid for as no post", async () => {
+      // An SPZOZ hospital's rada społeczna, stored - as every supervisory
+      // seat is - under the name „Rada Nadzorcza”.
+      expect(
+        await priorityOf(
+          { birthDate: "1979-07-15" },
+          {
+            "nodes/wodociagi": {
+              type: "place",
+              name: "Szpital w Strzelinie",
+              isPublic: true,
+              supervisoryBody: "rada-spoleczna",
+            },
+          },
+        ),
+      ).toBe(2);
+    });
+
+    it("counts a post that has ended, and a company still in draft", async () => {
+      expect(
+        await priorityOf(
+          { birthDate: "1979-07-15" },
+          {
+            "edges/kowalska-job": {
+              type: "employed",
+              name: "Zarząd",
+              source: "kowalska",
+              target: "wodociagi",
+              start_date: "2015-01-01",
+              end_date: "2019-12-31",
+            },
+          },
+        ),
+      ).toBe(0);
+    });
+
+    it("leaves a page whose post somebody removed behind", async () => {
+      expect(
+        await priorityOf(
+          { birthDate: "1979-07-15" },
+          {
+            "edges/kowalska-job": {
+              type: "employed",
+              name: "Rada Nadzorcza",
+              source: "kowalska",
+              target: "wodociagi",
+              deleted: true,
+            },
+          },
+        ),
+      ).toBe(2);
+    });
   });
 
   it("does not write the same picture twice", async () => {

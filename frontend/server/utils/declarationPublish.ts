@@ -64,7 +64,7 @@ import {
   latestPublishableRevision,
   normalizeUpdateTime,
 } from "~~/shared/revisions";
-import { isAutomatedUid } from "~~/shared/stats";
+import { isAutomatedUid, isPublicEmployment } from "~~/shared/stats";
 import { placeClashes } from "~~/shared/twoPlaces";
 import { recordAudit } from "./audit";
 import {
@@ -905,6 +905,15 @@ async function publicPages(
  *   (`name_differs`);
  * - no settled crop that names the page, or that this automation flagged on
  *   it, was read as another birth date (`conflicting_reading`);
+ * - somebody is paid for a public post on it (`no_public_post`): a live
+ *   `employed` edge, drafts included, at a company the register shows the
+ *   public sector owns, and not a seat on an organ nobody is paid to sit on -
+ *   the site's own employment rule (`publicEmployment` in shared/stats.ts,
+ *   `paidPublicPost` here). Every councillor files a declaration, so without
+ *   this the queue publishes people whose page says nothing koryta.pl is for.
+ *   A post that has ended counts: what the site records is that the money was
+ *   public, not that it still is. Asked ahead of the candidacies, since a page
+ *   this holds is one no candidacy would put up either;
  * - it has the candidacy the declaration was filed for - same year, the
  *   powiat or województwo the election edges point at, the office or a bare
  *   local one - and one only for each election (`no_candidacy_on_page`,
@@ -999,6 +1008,30 @@ export async function publishPage(
   const edges = (
     await db.collection("edges").where("source", "==", pageId).get()
   ).docs.map((doc) => ({ id: doc.id, data: doc.data() as Edge }));
+
+  const jobs = edges.filter(
+    (edge) => edge.data.type === "employed" && edge.data.deleted !== true,
+  );
+  // Read whole, not just for whether each is public: the rule below asks who
+  // owns the place and what supervises it.
+  const companyNodes = await readNodes(
+    db,
+    jobs.map((job) => job.data.target),
+  );
+  // Nobody is paid for a public post on this page, so the site does not
+  // publish it. Asked before the candidacies, which say nothing about whether
+  // the page is one koryta.pl publishes at all; a draft job counts, since the
+  // page goes up with its jobs and a company still in draft only holds the
+  // relation (`company_draft`).
+  if (
+    !resumed &&
+    !jobs.some((job) =>
+      isPublicEmployment(job.data, companyNodes.get(job.data.target)),
+    )
+  ) {
+    return held("no_public_post");
+  }
+
   const elections = edges.filter(
     (edge) => edge.data.type === "election" && edge.data.deleted !== true,
   );
@@ -1011,13 +1044,7 @@ export async function publishPage(
   const chosen = "chosen" in choice ? choice.chosen : [];
   if (!resumed && "reason" in choice) return held(choice.reason);
 
-  const jobs = edges.filter(
-    (edge) => edge.data.type === "employed" && edge.data.deleted !== true,
-  );
-  const companies = await publicNodes(
-    db,
-    jobs.map((job) => job.data.target),
-  );
+  const companies = publicAmong(companyNodes);
   const heldEdges: { id: string; reason: PublicationEdgeHold }[] = [];
   const waitingJobs = jobs.filter((job) => {
     const settled = settledEdgeRefusal(job.data as DocumentData);
@@ -1503,24 +1530,39 @@ function regionOf(unit: Unit): string {
   return `teryt${unit.teryt.slice(0, digits)}`;
 }
 
-/** The ids among these whose node is public. */
-async function publicNodes(
+/** These ids' nodes, those that exist, read in chunks of 100. */
+async function readNodes(
   db: Firestore,
   ids: readonly string[],
-): Promise<Set<string>> {
+): Promise<Map<string, DocumentData>> {
   const wanted = unique(ids.filter((id) => typeof id === "string" && id));
-  const found = new Set<string>();
+  const found = new Map<string, DocumentData>();
   for (let i = 0; i < wanted.length; i += 100) {
     const snapshots = await db.getAll(
       ...wanted.slice(i, i + 100).map((id) => db.collection("nodes").doc(id)),
     );
     for (const snapshot of snapshots) {
-      if (snapshot.exists && pageIsPublic(snapshot.data() ?? {})) {
-        found.add(snapshot.id);
-      }
+      if (snapshot.exists) found.set(snapshot.id, snapshot.data() ?? {});
     }
   }
   return found;
+}
+
+/** The ids among these nodes whose page is public. */
+function publicAmong(nodes: ReadonlyMap<string, DocumentData>): Set<string> {
+  const found = new Set<string>();
+  for (const [id, data] of nodes) {
+    if (pageIsPublic(data)) found.add(id);
+  }
+  return found;
+}
+
+/** The ids among these whose node is public. */
+async function publicNodes(
+  db: Firestore,
+  ids: readonly string[],
+): Promise<Set<string>> {
+  return publicAmong(await readNodes(db, ids));
 }
 
 type StoredEdge = { id: string; data: Edge };

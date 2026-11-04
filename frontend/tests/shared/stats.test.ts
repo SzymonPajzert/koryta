@@ -5,6 +5,7 @@ import {
   computeEdgeStats,
   computeNodeStats,
   isCurrentPost,
+  isPublicEmployment,
 } from "~~/shared/stats";
 import type { Edge, VoteDocument, Note } from "~~/shared/model";
 
@@ -455,6 +456,53 @@ describe("shared/stats.ts", () => {
         const stats = computeEdgeStats([councilSeat], new Set(["szpital"]));
 
         expect(stats.all.latestEmploymentStart).toBe("2024-01-01");
+      });
+
+      // `isPublicEmployment` is the same rule for one edge and the company's
+      // node, for a caller asking whether a page has any such post at all
+      // (the declarations automation, and the order its readers' queue is in).
+      // Checked side by side with `computeEdgeStats`, since two expressions of
+      // one rule are two things that can drift apart.
+      describe("the same rule, one edge at a time", () => {
+        const szpital = { isPublic: true, supervisoryBody: "rada-spoleczna" };
+
+        it("agrees that the seat is no post and the job at it is", () => {
+          expect(isPublicEmployment(councilSeat, szpital)).toBe(false);
+          expect(
+            isPublicEmployment({ ...councilSeat, name: "Zarząd" }, szpital),
+          ).toBe(true);
+          expect(
+            computeEdgeStats(
+              [councilSeat],
+              new Set(["szpital"]),
+              {},
+              new Set(["szpital"]),
+            ).all.latestEmploymentStart,
+          ).toBe(null);
+        });
+
+        it("counts the seat where nobody worked the organ out", () => {
+          expect(isPublicEmployment(councilSeat, { isPublic: true })).toBe(
+            true,
+          );
+        });
+
+        it("asks for a company somebody has shown to be public", () => {
+          expect(isPublicEmployment(councilSeat, { isPublic: false })).toBe(
+            false,
+          );
+          expect(isPublicEmployment(councilSeat, {})).toBe(false);
+          expect(isPublicEmployment(councilSeat, undefined)).toBe(false);
+        });
+
+        it("is about employment and nothing else on the page", () => {
+          expect(
+            isPublicEmployment(
+              { ...councilSeat, type: "election", name: "kandydatura" },
+              { isPublic: true },
+            ),
+          ).toBe(false);
+        });
       });
     });
 

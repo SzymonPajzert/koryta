@@ -506,12 +506,21 @@ beforeEach(() => {
   ]) {
     put(`nodes/${id}`, { type: "region", name, published: true });
   }
+  // The gmina's own water company: the register names the gmina as its
+  // shareholder, so a seat on its board is the paid public post every page
+  // the automation publishes has to have (`no_public_post`).
   put("nodes/wodociagi", {
     type: "place",
     name: "Wodociągi Strzelin",
     published: true,
+    isPublic: true,
   });
-  put("nodes/draftco", { type: "place", name: "Spółka X", published: false });
+  put("nodes/draftco", {
+    type: "place",
+    name: "Spółka X",
+    published: false,
+    isPublic: true,
+  });
 });
 
 // Every approval and publication says so in the log.
@@ -1470,6 +1479,38 @@ describe("publishing a queued page", () => {
       await holds("name_differs");
     });
 
+    it("with nobody paying for a public post on it", async () => {
+      await queued();
+      // Her only employer is a place nobody could show the public sector
+      // owns, which `isPublic: false` says rather than denies.
+      edit("nodes/wodociagi", { isPublic: false });
+      await holds("no_public_post");
+    });
+
+    it("whose only public post somebody took off the graph", async () => {
+      await queued();
+      edit("edges/kowalska-job", { deleted: true });
+      await holds("no_public_post");
+    });
+
+    it("whose only public seat is one nobody is paid to sit on", async () => {
+      await queued();
+      // As an SPZOZ hospital's rada społeczna is: its members are the
+      // founding authority's delegates, and the seat is stored under the
+      // "Rada Nadzorcza" every supervisory edge carries.
+      edit("nodes/wodociagi", { supervisoryBody: "rada-spoleczna" });
+      await holds("no_public_post");
+    });
+
+    it("holds it ahead of asking about the candidacies", async () => {
+      await queued();
+      edit("nodes/wodociagi", { isPublic: false });
+      // Two candidacies that could be the declaration's: a page with no
+      // public post would be held whichever of them was chosen.
+      candidacy("kowalska-run-2", "kowalska", { position: "Samorząd" });
+      await holds("no_public_post");
+    });
+
     it("without the candidacy the declaration was filed for", async () => {
       await queued();
       edit("edges/kowalska-run", { start_date: "2018-01-01" });
@@ -1608,6 +1649,87 @@ describe("publishing a queued page", () => {
     expect(result.published).toEqual(["kowalska"]);
     expect(read("edges/kowalska-run")!.published).toBe(true);
     expect(read("edges/kowalska-namesake")!.published).toBe(false);
+  });
+
+  describe("the paid public post it needs on the page", () => {
+    /** Her page, queued, with her board seat replaced by `fields`. */
+    async function withJob(fields: Data, company: Data = {}) {
+      await queued();
+      put("nodes/wodociagi", { ...read("nodes/wodociagi")!, ...company });
+      put("edges/kowalska-job", { ...read("edges/kowalska-job")!, ...fields });
+    }
+
+    it("counts a post that has ended", async () => {
+      await withJob({ start_date: "2015-01-01", end_date: "2019-12-31" });
+
+      const result = await drain();
+
+      expect(result.published).toEqual(["kowalska"]);
+    });
+
+    it("counts a post with no dates on record", async () => {
+      await withJob({ start_date: null });
+
+      const result = await drain();
+
+      expect(result.published).toEqual(["kowalska"]);
+    });
+
+    it("counts a job at a place supervised by an unpaid organ", async () => {
+      // The hospital's salaried kierownik, not a seat on its rada społeczna:
+      // the organ is unpaid, the role is not a seat on it.
+      await withJob({ name: "Zarząd" }, { supervisoryBody: "rada-spoleczna" });
+
+      const result = await drain();
+
+      expect(result.published).toEqual(["kowalska"]);
+    });
+
+    it("counts a post at a public company the site has not published", async () => {
+      await queued();
+      // Her only public post is at a company still in draft: the page goes
+      // up, and the relation waits for the company's page.
+      put("edges/kowalska-job", {
+        ...read("edges/kowalska-job")!,
+        deleted: true,
+      });
+      job("kowalska-draft-job", "kowalska", "draftco");
+
+      const result = await drain();
+
+      expect(result.published).toEqual(["kowalska"]);
+      expect(read("edges/kowalska-draft-job")!.published).toBe(false);
+      expect(read("declarationPublications/kowalska")).toMatchObject({
+        edges: {
+          published: ["kowalska-run"],
+          held: [{ id: "kowalska-draft-job", reason: "company_draft" }],
+        },
+      });
+    });
+
+    it("does not hold a page that is public already", async () => {
+      // A pass cut short after the page went up finishes its relations; the
+      // rule is about publishing a draft, and the page is not one.
+      await queued();
+      put("nodes/wodociagi", { ...read("nodes/wodociagi")!, isPublic: false });
+      await drain();
+      expect(read("declarationPublications/kowalska")).toMatchObject({
+        status: "held",
+        reason: "no_public_post",
+      });
+
+      // Somebody publishes her by hand, and the automation meets her again.
+      put("nodes/kowalska", { ...read("nodes/kowalska")!, published: true });
+      put("declarationPublications/kowalska", {
+        ...read("declarationPublications/kowalska")!,
+        status: "queued",
+      });
+
+      const result = await drain(3, LATER);
+
+      expect(result.held).toEqual([]);
+      expect(result.confirmed).toEqual(["kowalska"]);
+    });
   });
 
   describe("her jobs, by where her birth date came from", () => {
