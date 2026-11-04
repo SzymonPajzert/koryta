@@ -2,6 +2,16 @@ import { defineVitestConfig } from "@nuxt/test-utils/config";
 import { fileURLToPath } from "node:url";
 
 export default defineVitestConfig({
+  // `functions/` installs its own dependencies, so `firebase-functions` is on
+  // disk twice - 7.3.2 here and 7.3.0 under functions/node_modules - and a
+  // module imported by `functions/src/*.ts` resolved to the copy beside it.
+  // `vi.mock("firebase-functions/v2/firestore")` in a test under tests/
+  // resolves to the one here, so the two ids never met and the mock was
+  // silently not applied: the real `onDocumentWritten` wrapped the handler
+  // and refused the plain object the test hands it ("Cannot determine payload
+  // type"). Deduping makes both sides one module, which is also what the
+  // deployed function gets - there is only ever one copy in its bundle.
+  resolve: { dedupe: ["firebase-functions"] },
   test: {
     environment: "nuxt",
     // Booting the Nuxt environment costs well over vitest's 10s default; the
