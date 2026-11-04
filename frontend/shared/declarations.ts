@@ -16,6 +16,7 @@
  */
 import { z } from "zod";
 import { isoDay } from "./dates";
+import { pageIsPublic } from "./model";
 import { normalizePersonName } from "./names";
 import { isAutomatedUid } from "./stats";
 
@@ -681,6 +682,41 @@ export type DeclarationFinds = {
   total: number;
 };
 
+/** How soon readers should be shown a person page's crops, lowest first - the
+ * `priority` /api/ingest/declarations writes on a crop and
+ * /api/declarations/next orders the readers' queue by.
+ *
+ * The interest is in drafts nobody has verified yet, and among them in the
+ * ones a reading could actually publish:
+ *
+ * - 0: a draft with a birth date and a paid public post. Only a date already
+ *   on the page can confirm a settled crop, publish the person and count in
+ *   the reader's „Znaleziono”.
+ * - 1: the same without a birth date. The reading records one, and the
+ *   pipelines' join may propose it for the page.
+ * - 2: a draft with no paid public post on it. A reading that settles its date
+ *   publishes nobody - the automation holds such a page (`no_public_post`) -
+ *   so it goes behind both, though still ahead of a page that is public, since
+ *   the draft may yet gain the post the pipelines have not recorded.
+ * - 3: a page that is public already, verified by whoever published it. Its
+ *   crop is still worth a reading: a settled one is linked on the page.
+ *
+ * The crawl orders drafts the other way round, as it looks for the dates the
+ * pages lack. Only whether a page has a date is read here, never the date.
+ *
+ * `hasPublicPost` is `isPublicEmployment` over the page's own employment
+ * edges, which only a caller with the graph can answer
+ * (`pagesWithAPublicPost` in server/utils/publicPosts.ts).
+ */
+export function readingPriority(
+  page: { published?: unknown; deleted?: unknown; birthDate?: unknown },
+  hasPublicPost: boolean,
+): 0 | 1 | 2 | 3 {
+  if (pageIsPublic(page)) return 3;
+  if (!hasPublicPost) return 2;
+  return page.birthDate ? 0 : 1;
+}
+
 /** Why a page whose date matches was not published automatically. Each is
  * somebody's decision the automation must not overrule, or a doubt it cannot
  * settle itself.
@@ -700,7 +736,16 @@ export type DeclarationFinds = {
  * candidacy the declaration is for, or a person's own is waiting on it;
  * `revision_rejected`, a reviewer turned down a revision of the page itself;
  * `conflicting_reading`, another settled declaration that names the page was
- * read as another birth date. */
+ * read as another birth date.
+ *
+ * `no_public_post` is the one reason that is about the person rather than
+ * about the reading or anybody's decision: nothing on the page is a paid post
+ * at an institution the public sector is known to own, which is what the site
+ * exists to record. A declaration is filed by every councillor, so a mandate
+ * alone brings a page no closer to being one koryta.pl publishes. The rule is
+ * the site's own employment rule, `publicEmployment` in shared/stats.ts, and
+ * the post may be a past one. Checked as the page is published, so a job
+ * added while the page waited counts. */
 export const publicationHoldReasons = [
   "two_pages",
   "admin_decision",
@@ -708,6 +753,7 @@ export const publicationHoldReasons = [
   "kept_hidden",
   "pending_proposal",
   "name_differs",
+  "no_public_post",
   "no_candidacy_on_page",
   "ambiguous_candidacy",
   "two_places",

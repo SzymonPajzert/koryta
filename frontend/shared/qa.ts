@@ -59,6 +59,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "automat-publikuje-tylko-z-platna-posada",
+    title:
+      "Automat publikuje z oświadczeń tylko osoby na płatnej posadzie publicznej",
+    description:
+      "Strona sama publikuje osobę z odczytanego oświadczenia tylko wtedy, gdy ma na stronie pracę albo funkcję w firmie, o której wiadomo, że należy do sektora publicznego, i za którą ktoś płaci. Sama kandydatura nie wystarcza: oświadczenie składa każdy radny. Z tego samego powodu czytelnicy dostają teraz do odczytania najpierw wycinki tych osób, które taką posadę mają.",
+    steps: [
+      "Wejdź na /admin/oswiadczenia i rozwiń listę wstrzymanych: osoby bez takiej posady mają powód „brak płatnego stanowiska w instytucji publicznej”, w bursztynowym kolorze, bo posada może być tylko niezapisana.",
+      "Rozwiń taki wiersz: notatka mówi, co zrobić, jeśli posada jednak jest (dodać ją i opublikować stronę ręcznie).",
+      "Naciśnij „Opublikuj z kolejki”: taka osoba nie wychodzi, zostaje na liście wstrzymanych.",
+      "Otwórz stronę takiej osoby i opublikuj ją ręcznie: to działa jak dotąd, automat nikomu nie blokuje publikacji.",
+    ],
+    link: "/admin/oswiadczenia",
+    area: "admin",
+  },
+  {
     id: "dzialaj-z-nami-na-telefonie",
     title: "„Działaj z nami” wraca na stronę główną na telefonie",
     description:

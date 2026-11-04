@@ -1,6 +1,6 @@
 import type { NodeStats, VoteDocument, Note, Edge } from "./model";
 import { pageIsPublic } from "./model";
-import { namesASupervisorySeat } from "./companyBodies";
+import { bodyIsPaidPost, namesASupervisorySeat } from "./companyBodies";
 import {
   candidacyElection,
   electionResultKey,
@@ -268,6 +268,31 @@ function publicEmployment(
       e.type === "employed" &&
       publicPlaceIds.has(e.target) &&
       !(unpaidSeatPlaceIds.has(e.target) && namesASupervisorySeat(e.name)),
+  );
+}
+
+/** The same rule as `publicEmployment`, for one edge and the company it points
+ * at rather than for sets of ids: whether this is employment the site counts.
+ *
+ * For a caller that has the company's node in hand and asks about a single
+ * relation - whether a page has any such post at all - instead of counting a
+ * person's whole graph. `isPublic === true` and nothing weaker, as
+ * /api/stats/computeNodes reads it: false and absent both mean nobody could
+ * establish who owns the place (see `Company.isPublic`), and the unknown is
+ * not counted as public anywhere on the site.
+ *
+ * Both halves of the unpaid-seat claim have to hold, as above: what supervises
+ * the institution (`Company.supervisoryBody`), and a role that names a seat on
+ * that organ rather than a job at the place.
+ */
+export function isPublicEmployment(
+  edge: Pick<Edge, "type" | "target" | "name">,
+  company: { isPublic?: boolean; supervisoryBody?: string } | undefined | null,
+): boolean {
+  if (edge.type !== "employed") return false;
+  if (company?.isPublic !== true) return false;
+  return !(
+    !bodyIsPaidPost(company.supervisoryBody) && namesASupervisorySeat(edge.name)
   );
 }
 

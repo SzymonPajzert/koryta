@@ -4,6 +4,7 @@ import { getApp } from "firebase-admin/app";
 import { getUser, requireDatascience } from "~~/server/utils/auth";
 import { matchAndDrain } from "~~/server/utils/declarationPublish";
 import { resolveMergedNode } from "~~/server/utils/merge";
+import { pagesWithAPublicPost } from "~~/server/utils/publicPosts";
 import { pageIsPublic } from "~~/shared/model";
 import {
   declarationIngestSchema,
@@ -14,6 +15,7 @@ import {
   MAX_REQUEST_IMAGE_BYTES,
   pngSize,
   publishLimitOf,
+  readingPriority,
   type DeclarationCandidacyInput,
   type DeclarationExtractInput,
   type DeclarationIngestResult,
@@ -158,6 +160,10 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // Every page this request names is known by now, so the order readers are
+  // shown their crops in can be settled once for all of them.
+  const order = await readingOrder(db, pages);
+
   const extractRefs = body.extracts.map((extract) =>
     db
       .collection("declarationExtracts")
@@ -233,7 +239,7 @@ export default defineEventHandler(async (event) => {
         ]),
         personIds: nextPersonIds,
         priority: Math.min(
-          ...personIds.map((pageId) => pages.get(pageId)?.priority ?? 3),
+          ...personIds.map((pageId) => order.get(pageId) ?? 3),
         ),
         units: nextUnits,
         linkNamed: extract.linkNamed ?? null,
@@ -313,16 +319,40 @@ type StoredCandidacy = {
   files: number;
 };
 
-/** A live person page and how soon readers should see its crops.
+/** A live person page, as far as the order readers are shown its crops in
+ * depends on it (`readingPriority`). Whether a draft also has a paid public
+ * post takes the graph, so it is asked of every page at once, once they are
+ * all known (`readingOrder`). */
+type LivePage = { id: string; published: boolean; birthDate: unknown };
+
+/** How soon readers should be shown each of these pages' crops.
  *
- * The interest is in drafts nobody has verified yet, so those come first,
- * and among them the ones with a birth date (0): only a date already on the
- * page can confirm a settled crop, publish the person and count in the
- * reader's „Znaleziono”. A draft without one comes next (1), and a published
- * page, verified already, last (3). The crawl goes the other way round for
- * drafts, as it looks for the dates the pages lack. Only whether a page has a
- * date is read, never the date. */
-type LivePage = { id: string; priority: 0 | 1 | 3 };
+ * One pass, after the candidacies have named every page this request is for
+ * and before the first crop is written: a crop takes the lowest of its pages'
+ * numbers, as the `priority` it is written with above. The employment lookup
+ * is what has to be batched - one query per 30 pages rather than one per page
+ * - and a published page needs none of it, since its crops come last either
+ * way.
+ */
+async function readingOrder(
+  db: FirebaseFirestore.Firestore,
+  pages: Map<string, LivePage>,
+): Promise<Map<string, 0 | 1 | 2 | 3>> {
+  const drafts = [...pages.values()].filter((page) => !page.published);
+  const paid =
+    drafts.length > 0
+      ? await pagesWithAPublicPost(
+          db,
+          drafts.map((page) => page.id),
+        )
+      : new Set<string>();
+  return new Map(
+    [...pages.values()].map((page) => [
+      page.id,
+      readingPriority(page, paid.has(page.id)),
+    ]),
+  );
+}
 
 /** Each kid's live person page, followed through merges: a page that is gone,
  * deleted or not a person maps to nothing. Every page found is also put in
@@ -349,7 +379,8 @@ async function livePeople(
     if (live) {
       pages.set(page!.id, {
         id: page!.id,
-        priority: pageIsPublic(data) ? 3 : data.birthDate ? 0 : 1,
+        published: pageIsPublic(data),
+        birthDate: data.birthDate,
       });
     }
   }

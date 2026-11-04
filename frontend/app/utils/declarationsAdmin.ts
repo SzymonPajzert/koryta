@@ -50,6 +50,7 @@ export const declarationHoldLabels: Record<PublicationHoldReason, string> = {
   kept_hidden: "administrator zostawił stronę ukrytą",
   pending_proposal: "czeka propozycja zmiany od osoby",
   name_differs: "odczytane nazwisko się nie zgadza",
+  no_public_post: "brak płatnego stanowiska w instytucji publicznej",
   no_candidacy_on_page: "na stronie brak tej kandydatury",
   ambiguous_candidacy: "dwie pasujące kandydatury w powiecie",
   two_places: "kandydatura w dwóch miejscach naraz",
@@ -73,6 +74,8 @@ export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
     "Na stronie czeka propozycja zmiany. Rozpatrz ją, zanim strona wyjdzie.",
   name_differs:
     "Czytelnicy odczytali z oświadczenia inne imię albo nazwisko niż na stronie.",
+  no_public_post:
+    "Na stronie nie ma pracy ani funkcji, za którą ktoś płaci ze środków publicznych. Sama kandydatura nie wystarcza: oświadczenie składa każdy radny. Jeśli takie stanowisko jest, dodaj je i opublikuj stronę ręcznie.",
   no_candidacy_on_page:
     "Strona nie ma kandydatury, dla której znaleziono oświadczenie.",
   ambiguous_candidacy:
@@ -117,7 +120,11 @@ export function declarationHoldNote(
 /** Blue for a hold that is somebody's decision, which the automation only
  * respects; amber for a doubt somebody has to clear up. An admin's date is
  * amber on a draft, which waits for somebody to check it and publish it by
- * hand, and blue on a page that is public already, where it asks nothing. */
+ * hand, and blue on a page that is public already, where it asks nothing.
+ *
+ * A page with no paid public post is amber, with the rest: nobody decided it,
+ * and it is a doubt somebody can clear up, since the post may be one the
+ * pipelines have not recorded rather than one the person never held. */
 export function declarationHoldTone(
   reason: PublicationHoldReason | null,
   pagePublic = false,

@@ -284,7 +284,9 @@ export function taskOf(
 
 /** The crops this reader should read next, most useful first.
  *
- * Drafts before published pages (`priority`), and within a
+ * Drafts the automation could publish first, then the drafts it could not,
+ * then published pages (`priority`, written by /api/ingest/declarations - see
+ * `LivePage` there for the four tiers), and within a
  * tier the crops one reader already answered: a second reading is what
  * settles a crop, so readers are sent where one is missing before they start
  * new ones. Only answers that vote count here (`answerCount`), as only they
