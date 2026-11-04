@@ -81,6 +81,10 @@ IGNORE_FAILURES: list[str] = [
     "Agnieszka Winnik-Kalemba",
     "Aleksander Michał Tarkowski",
     "Andrzej Radziwinowicz",
+    # Andrzej Piotr Szaciłło to KRS, Andrzej Ryszard to his article - his all the
+    # same: born 1955-01-30 by both, on Mazowiecka Wspólnota Samorządowa's board
+    # in 2005-2013, which the article says he led in Otwock.
+    "Andrzej Ryszard Szaciłło",
     "Andrzej Styn",
     "Aneta Maria Ćwiklińska",
     "Anna Halicka",
