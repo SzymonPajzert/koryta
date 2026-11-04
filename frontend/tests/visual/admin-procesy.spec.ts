@@ -14,7 +14,30 @@ import { expectFitsThePhone } from "./phoneWidth";
  * jobs are read off production buckets, so the overview is answered from
  * ./fixtures/opsJobs.ts. The page is rendered in the browser only (`ssr:
  * false` on /admin/**), which is what lets a route handler answer it, and it
- * counts every age against the frozen clock. */
+ * counts every age against the frozen clock.
+ *
+ * **Its baseline is the only one that cannot be taken on a developer's
+ * machine**, and `npm run test:visual:update` skips it for that reason
+ * (`--grep-invert '@page:admin/procesy'`). The task links here are `<code>`,
+ * so they render in the system monospace - DejaVu Sans Mono on predator,
+ * something else on a GitHub runner - and each line lands about a pixel apart.
+ * The rows under each link add it up: 5px of drift down the desktop shot and
+ * 9px down the phone one, which is a failure of 134k and 143k pixels. Every
+ * other shot on the page is Roboto and matches exactly.
+ *
+ * So this one is taken from CI's own render, which has twice been clobbered by
+ * a whole-suite retake here (2026-10-06 fixed, 2026-10-23 and 2026-11-03
+ * overwritten again). To retake it deliberately, pull the artifact of a
+ * `visual` job that failed on it:
+ *
+ *   gh api repos/SzymonPajzert/koryta/actions/runs/<run>/artifacts
+ *   gh api repos/SzymonPajzert/koryta/actions/artifacts/<id>/zip > r.zip
+ *   python3 -c "import zipfile; zipfile.ZipFile('r.zip').extractall('r')"
+ *   cp r/test-results/visual-admin-procesy-procesy-visual-desktop/procesy-actual.png \
+ *      tests/visual/__screenshots__/linux/visual-desktop/procesy.png
+ *
+ * Compare the three attempts first - they should be byte-identical - and look
+ * at the image before committing it, so a broken render is not adopted. */
 
 const PROCESY = { tag: pageTag("admin/procesy") };
 
