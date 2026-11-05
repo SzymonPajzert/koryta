@@ -18,6 +18,25 @@ _DOC_PATTERNS = [
     re.compile(r"/attachments?/\d+/download", re.IGNORECASE),
     re.compile(r"/attachments/download/\d+", re.IGNORECASE),
     re.compile(r"/api/attachments/\d+(?:$|[?#])", re.IGNORECASE),
+    # Zabrze's document files (`jobs.bip_crawler.doclist`), /attachment/101871,
+    # and gov.pl's, /attachment/ce72e032-b641-4a15-95cc-9190a4bc1532.
+    re.compile(
+        r"/attachment/(?:\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+        r"(?:$|[?#])",
+        re.IGNORECASE,
+    ),
+    # Olsztyn's: /attachment/informacja/23871/<sha1>.html, a PDF (11-05).
+    re.compile(r"/attachment/[a-z_-]+/\d+/[0-9a-f]{40}\.html(?:$|[?#])", re.IGNORECASE),
+    # Strzegom's: /public/get_file.php?id=592024, /public/getFile?id=625335.
+    re.compile(r"/get_?file(?:\.php)?(?:$|[?#])", re.IGNORECASE),
+    # Powiat chełmiński's: bip_download.php?id=12052 (11-05).
+    re.compile(r"/\w+_download\.php(?:$|[?#])", re.IGNORECASE),
+    # Powiat przeworski's: /downloadFile/16799 (11-05).
+    re.compile(r"/downloadFile/\d+(?:$|[?#/])", re.IGNORECASE),
+    # Tychy's: index.php?action=PobierzPlik&id=514193 (&d=1 to download).
+    re.compile(r"[?&]action=PobierzPlik(?:&|$)", re.IGNORECASE),
+    # Poznań's: /public/bip/zalaczniki.html?co=show&lz_id=12017.
+    re.compile(r"/zalaczniki\.html\?(?:[^#]*&)?lz_id=\d+", re.IGNORECASE),
     re.compile(r"/download/attachment/\d+/", re.IGNORECASE),
     re.compile(r"/api/files/\d+", re.IGNORECASE),
     re.compile(r"/fobjects/download/", re.IGNORECASE),
@@ -93,7 +112,18 @@ _AMP_PREFIX_RE = re.compile(r"^(?:amp;)+", re.IGNORECASE)
 # ZETO-RZESZÓW's &printtype=pdf is the page printed, ?font_size= a 302 back to
 # it with bigger letters.
 _NOISE_QUERY_PARAMS = frozenset(
-    {"x", "y", "fontsize", "font_size", "print", "printtype", "pokaz_rejestr_zmian"}
+    {
+        "x",
+        "y",
+        "fontsize",
+        "font_size",
+        "print",
+        "printtype",
+        "pokaz_rejestr_zmian",
+        # The high-contrast view of the same page (um.bip.klodzko.pl, 11-05:
+        # every menu page read three times over, the councillors never).
+        "tryb_widoku",
+    }
 )
 _NOISE_QUERY_PREFIXES = ("switch_",)
 # A way back, not a page: Liferay's ?redirect= holds the page linking, and

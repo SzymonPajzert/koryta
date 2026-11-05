@@ -28,6 +28,11 @@ from scrapers.common.links import LinkContext
 # On folded text: lower case, ASCII, words separated by single spaces.
 DECLARATION = re.compile(r"oswiadcz")
 ASSETS = re.compile(r"majatk")
+#: A file's own label dating it the way a declaration is dated, "wg stanu na
+#: 31.12.2025 r.": Tarnów's person base files each councillor's as "Grażyna
+#: Barwacz - wg stanu na 31.12.2025 r." under "Baza osób", nothing around them
+#: saying declaration (11-05). Only beside the seeker's name in that label.
+STATED_AS_OF = re.compile(r"(?:^| )(?:wg|wedlug) stanu na")
 OFFICE = re.compile(
     r"(?:^| )(?:rad[ay]|radn\w*|sejmik\w*|wojt\w*|burmistrz\w*|prezydent\w*|starost\w*|"
     r"zarzad\w*|marszal\w*|kadencj\w*)"
@@ -423,6 +428,16 @@ def declarants(link: LinkContext, seekers: list[Seeker]) -> set[tuple[str, str]]
     }
 
 
+def named_by_label(link: LinkContext, seekers: list[Seeker]) -> set[tuple[str, str]]:
+    """The seekers a link's label names, first name and all, when the label is
+    a name and nothing more (two to four words, no digits)."""
+    label = fold(link.anchor)
+    words = label.split()
+    if not 2 <= len(words) <= 4 or any(c.isdigit() for c in label):
+        return set()
+    return {s.name for s in seekers if all(s.named_in(label))}
+
+
 def says_declarations(link: LinkContext) -> bool:
     """Whether a link says it leads to declarations: its label or address, or
     the menu sections and heading above a label that is no tender's."""
@@ -761,6 +776,7 @@ def candidates(
     *,
     first_names: frozenset[str] = frozenset(),
     lender: tuple[str, str] | None = None,
+    declared: bool = False,
 ) -> list[Candidate]:
     """Document links on one page that name one of the seekers, or that name nobody.
 
@@ -780,7 +796,9 @@ def candidates(
     page_people = (
         [s for s in seekers if s.name in title_names] if len(title_names) == 1 else []
     )
-    page_declarations = bool(DECLARATION.search(title) or ASSETS.search(title))
+    # ``declared``: the walk came here through a declarations section
+    # (`_Frontier.declared`), whatever the title says.
+    titled = bool(DECLARATION.search(title) or ASSETS.search(title))
     # An address can say what a title does not: Podkarpackie's councillors
     # stand on /oswiadczenia-majatkowe/2025/radni-wojewodztwa, titled "Radni
     # Województwa", each file labelled with a name alone (11-01: 39 named, none
@@ -820,7 +838,13 @@ def candidates(
         path = decode_url(path_of(link.url))
         address = _DIGITS.sub(" ", fold(path))
         label = fold(link.anchor) + " " + address
-        if BLANK_FORM.search(label):
+        # The label and the file's own name, not the folders above it: Olsztyn
+        # keeps every file under /attachment/informacja/ (11-05), and
+        # "informacj" there made each councillor's declaration a blank form.
+        named_as = (
+            fold(link.anchor) + " " + _DIGITS.sub(" ", fold(path.rsplit("/", 1)[-1]))
+        )
+        if BLANK_FORM.search(named_as):
             continue
         around = " ".join(fold(x) for x in (link.anchor, link.row, link.heading))
         around += " " + address
@@ -856,8 +880,12 @@ def candidates(
         declaration_like = bool(
             DECLARATION.search(around)
             or ASSETS.search(around)
-            or page_declarations
+            or titled
+            # Reached through the section, not titled so: its files alone,
+            # not each "?id=" menu link (Strzegom's "Wybory 2025 Prezydent").
+            or (declared and is_file_link(link.url))
             or filed_under
+            or STATED_AS_OF.search(fold(link.anchor))
         )
         years = _years(around)
         base: float = (3 if declaration_like else 0) + (
@@ -885,7 +913,7 @@ def candidates(
             and not title_somebody
             and not forms_page
             and not FORMS.search(fold(link.row) + " " + fold(link.heading))
-            and page_declarations
+            and (declared or titled)
             and bool(ASSETS.search(around) or ASSETS.search(title))
             and is_file_link(link.url)
         )

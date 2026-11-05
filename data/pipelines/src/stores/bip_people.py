@@ -80,6 +80,24 @@ def read_searched(pg: PostgresClient) -> dict[str, PersonOutcome]:
     }
 
 
+def read_units(pg: PostgresClient) -> dict[str, UnitRow]:
+    """Each unit searched so far, as its newest walk left it: ``bip_units``
+    read without creating anything."""
+    rows = pg.fetchall(
+        "SELECT unit, status, roots, pages, declaration_pages FROM bip_units"
+    )
+    return {
+        unit: UnitRow(
+            unit,
+            status,
+            list(roots if isinstance(roots, list) else json.loads(roots or "[]")),
+            int(pages),
+            int(declaration_pages),
+        )
+        for unit, status, roots, pages, declaration_pages in rows
+    }
+
+
 class PostgresBipPeopleStore(BipPeopleStore):
     def __init__(self, pg: PostgresClient) -> None:
         self.pg = pg
