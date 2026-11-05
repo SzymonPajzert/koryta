@@ -15,6 +15,7 @@ from jobs.bip_declarations.upload import (
     MAX_EXTRACTS_PER_REQUEST,
     SWEEP,
     Extract,
+    ListTooOld,
     Site,
     SiteError,
     SiteUnavailable,
@@ -322,6 +323,34 @@ def test_priority_leaves_a_councils_file_a_councils(store):
 
     assert [e.id for e in extracts] == [f"{SHA_COUNCIL}-p0"]
     assert extracts[0].record["candidacies"] == [ANNA.key]
+
+
+def with_public_post(row: PersonRow, value: bool | None) -> PersonRow:
+    return replace(row, person={**row.person, "public_post": value})
+
+
+def test_public_post_keeps_the_people_the_site_would_publish(store):
+    # Anna held a paid post at a public company; Jan and Ewa never did.
+    store.people = [with_public_post(p, p.key == ANNA.key) for p in store.people]
+
+    candidacies, extracts = plan(store, public_post=True)
+
+    assert [r["key"] for r, _ in candidacies] == [ANNA.key]
+    assert [e.id for e in extracts] == [f"{SHA_COUNCIL}-p0"]
+    assert extracts[0].record["candidacies"] == [ANNA.key]
+
+
+def test_public_post_refuses_a_list_that_does_not_say(store):
+    with pytest.raises(ListTooOld):
+        plan(store, public_post=True)
+    # and nothing changes without the flag
+    candidacies, _ = plan(store)
+    assert {r["key"] for r, _ in candidacies} == {
+        JAN_2024.key,
+        JAN_2018.key,
+        ANNA.key,
+        EWA.key,
+    }
 
 
 def test_a_sample_is_that_many_crops_and_the_candidacies_they_serve(store):
