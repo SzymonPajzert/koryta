@@ -90,6 +90,8 @@ SITES: dict[str, str] = {
     "bip.powiatbrzozow.pl": "powiat brzozowski: search engines only, 35 candidacies",
     "bip.starostwo.lezajsk.pl": "powiat leżajski: Disallow: / to all, 35 candidacies",
     "bip.chorzow.eu": "Chorzów: Disallow: / to all, 34 candidacies",
+    # Its councillors' files are named links, Szymon found by hand on 11-05.
+    "bip.stalowawola.pl": "Stalowa Wola: Disallow: / to all, 43 candidacies",
     "umz.zgierz.pl": "Zgierz: forbids /bip/, 32 candidacies",
     "bip.gliwice.eu": "Gliwice: Disallow: / to all, 31 candidacies",
     "bip.powiatprzeworsk.pl": "powiat przeworski: search engines only, 30 candidacies",
@@ -159,6 +161,15 @@ SITES: dict[str, str] = {
         "Stoczek Łukowski: search engines only, 5 candidacies"
     ),
     "zlotnikikuj.ires.pl": "Złotniki Kujawskie: Disallow: / to all, 5 candidacies",
+    # Its declarations page Szymon found by hand on 11-05.
+    "umig-zagorz.ires.pl": "Zagórz: Disallow: / to all, 35 candidacies",
+    "chmielnik.ires.pl": "Chmielnik: Disallow: / to all, 7 candidacies",
+    # e-zeto.eu's BIPs let in search engines alone (11-05).
+    "spswidnica.bip.e-zeto.eu": "powiat świdnicki: search engines only, 70 candidacies",
+    "ugsiennicarozana.bip.e-zeto.eu": (
+        "Siennica Różana: search engines only, 4 candidacies"
+    ),
+    "ugtrzcinica.bip.e-zeto.eu": "Trzcinica: search engines only, 1 candidacy",
     "bip.wiazownica.com": "Wiązownica: search engines only, 5 candidacies",
     "bip.strzelce.pl": "Strzelce Krajeńskie: Disallow: / to all, 5 candidacies",
     "bip3.wokiss.pl": "Babiak and 1 more: Disallow: / to all, 5 candidacies",

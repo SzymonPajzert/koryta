@@ -330,6 +330,9 @@ class UnitSeed:
     #: "host" or "host/prefix": the pages that belong to this unit.
     scopes: list[str] = field(default_factory=list)
     names: list[str] = field(default_factory=list)
+    #: Starts somebody checked are declarations pages (``unit_starts.csv``'s
+    #: declarations_url): the walk counts them as such whatever they say.
+    declarations: list[str] = field(default_factory=list)
 
 
 def _with_scheme(url: str) -> str:
