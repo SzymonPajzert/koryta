@@ -32,6 +32,12 @@ class BipPersonOfInterest:
     orders the crawl, drafts first as they are what nobody has verified yet: 0 a
     draft page with no birth date, 1 a draft with one, 2 a person not on the site
     yet, 3 a published page.
+
+    ``public_post`` says whether one of the candidacy's pages holds a paid post,
+    current or ended, at a company the site counts as public: the rule by which
+    the site publishes a page from its declaration at all
+    (`frontend/server/utils/publicPosts.ts`). None on a list built before the
+    field existed.
     """
 
     key: str
@@ -54,6 +60,7 @@ class BipPersonOfInterest:
     page_has_birth_date: bool = False
     koryta_ids: list[str] = field(default_factory=list)
     rejestrio_ids: list[str] = field(default_factory=list)
+    public_post: bool | None = None
 
 
 @dataclass

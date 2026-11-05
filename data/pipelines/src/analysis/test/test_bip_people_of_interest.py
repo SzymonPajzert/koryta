@@ -5,6 +5,8 @@ import pytest
 from analysis.bip_people_of_interest import (
     BipPeopleOfInterest,
     candidacy_key,
+    names_a_supervisory_seat,
+    pages_with_a_public_post,
     people_of_interest,
     priority,
     unit_level,
@@ -12,7 +14,7 @@ from analysis.bip_people_of_interest import (
 from analysis.people import PeopleMerged
 from entities.bip import BipPersonOfInterest
 from scrapers.bip.units import terc_index
-from scrapers.koryta.download import KorytaPeople
+from scrapers.koryta.download import KorytaEdges, KorytaNodes, KorytaPeople
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import _annotated_classes, iterate_pipeline
 
@@ -248,6 +250,8 @@ def test_sources_are_declared_so_the_runner_builds_them():
     assert sources["people"] is PeopleMerged
     assert sources["pkw"] is PeoplePKW
     assert sources["koryta"] is KorytaPeople
+    assert sources["nodes"] is KorytaNodes
+    assert sources["edges"] is KorytaEdges
 
 
 def test_double_surname_joins_whatever_the_separator(frames):
@@ -376,3 +380,93 @@ def test_a_draft_comes_before_a_person_with_no_page(frames):
     order = list(out.last_name)
     assert order.index("Kowalski") < order.index("Żak")
     assert out[out.last_name == "Kowalski"].priority.iloc[0] == 0
+
+
+def site_nodes():
+    return pd.DataFrame(
+        [
+            {
+                "id": "spolka",
+                "type": "place",
+                "isPublic": True,
+                "supervisoryBody": None,
+            },
+            {
+                "id": "prywatna",
+                "type": "place",
+                "isPublic": None,
+                "supervisoryBody": None,
+            },
+            {
+                "id": "nieznana",
+                "type": "place",
+                "isPublic": False,
+                "supervisoryBody": None,
+            },
+            {
+                "id": "szpital",
+                "type": "place",
+                "isPublic": True,
+                "supervisoryBody": "rada-spoleczna",
+            },
+        ]
+    )
+
+
+def job(source, target, name="Prezes Zarządu", deleted=None, type="employed"):
+    return {
+        "source": source,
+        "target": target,
+        "type": type,
+        "name": name,
+        "deleted": deleted,
+    }
+
+
+def test_a_public_post_is_a_paid_one_at_a_public_company():
+    edges = pd.DataFrame(
+        [
+            job("ended", "spolka"),  # ended posts count: no dates are read
+            job("private", "prywatna"),
+            job("unknown", "nieznana"),  # isPublic false: nobody knows the owner
+            job("removed", "spolka", deleted=True),
+            job("unpaid", "szpital", name="Członek Rady Społecznej"),
+            job("director", "szpital", name="Dyrektor"),
+            job("supervisor", "spolka", name="Rada Nadzorcza"),
+            job("candidate", "spolka", type="election"),
+        ]
+    )
+    assert pages_with_a_public_post(site_nodes(), edges) == {
+        "ended",
+        "director",
+        "supervisor",
+    }
+
+
+def test_flags_read_off_disk_as_numbers_and_text():
+    nodes = site_nodes().astype({"isPublic": object})
+    nodes.loc[nodes.id == "spolka", "isPublic"] = "True"
+    edges = pd.DataFrame(
+        [job("a", "spolka", deleted=0.0), job("b", "spolka", deleted=1.0)]
+    )
+    assert pages_with_a_public_post(nodes, edges) == {"a"}
+
+
+def test_a_supervisory_seat_in_any_spelling():
+    assert names_a_supervisory_seat("Przewodniczący Rady Społecznej")
+    assert names_a_supervisory_seat("rada nadzorcza")
+    assert not names_a_supervisory_seat("Zarząd")
+    assert not names_a_supervisory_seat("radny dzielnicy")
+    assert not names_a_supervisory_seat(None)
+
+
+def test_rows_say_whether_a_page_has_a_public_post(frames):
+    out = people_of_interest(
+        duckdb.connect(), *frames, since=2018, public_posts={"k1"}
+    ).set_index(["last_name", "election_year"])
+    assert out.loc[("Kowalski", 2024)].public_post == True  # noqa: E712
+    assert out.loc[("Żak", 2024)].public_post == False  # noqa: E712 - no page
+    unasked = people_of_interest(duckdb.connect(), *frames, since=2018)
+    assert unasked.public_post.isna().all()
+    rows = list(iterate_pipeline(unasked, BipPersonOfInterest))
+    assert {r.public_post for r in rows} == {None}

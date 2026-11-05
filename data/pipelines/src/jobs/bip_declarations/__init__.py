@@ -24,6 +24,8 @@ Readers on /oswiadczenia then type the dates in; a typed date the job read from
 a PDF's text layer inside the candidacy's PKW window settles without them.
 `upload --priority 1 --sample 100` is a test run: a hundred crops not sent yet
 of drafts whose page has a birth date, and only the candidacies they serve.
+`upload --public-post` sends only the people the site would publish from a
+declaration: those with a paid post, current or ended, at a public company.
 
 `status` says where the declarations stand (`stats`): the candidacies found,
 their files downloaded, cut, cropped and sent, by priority, and the units
@@ -63,6 +65,7 @@ from jobs.bip_declarations.cutter import FileCut, Ocr, cut_file
 from jobs.bip_declarations.stats import report, write_units_csv
 from jobs.bip_declarations.upload import (
     DEFAULT_ENDPOINT,
+    ListTooOld,
     Site,
     SiteError,
     SiteUnavailable,
@@ -239,7 +242,16 @@ def cmd_upload(args: argparse.Namespace) -> int:
     store = store_with_list()
     priorities = set(args.priority) if args.priority else None
     if args.dry_run:
-        candidacies, extracts = plan(store, priorities=priorities, sample=args.sample)
+        try:
+            candidacies, extracts = plan(
+                store,
+                priorities=priorities,
+                sample=args.sample,
+                public_post=args.public_post,
+            )
+        except ListTooOld as exc:
+            print(f"cannot filter by public post: {exc}", file=sys.stderr)
+            return 1
         outcomes = Counter(e.record["outcome"] for e in extracts)
         print(
             f"would send {len(candidacies)} candidacies and {len(extracts)} extracts "
@@ -257,7 +269,11 @@ def cmd_upload(args: argparse.Namespace) -> int:
             max_requests=args.max_requests,
             priorities=priorities,
             sample=args.sample,
+            public_post=args.public_post,
         )
+    except ListTooOld as exc:
+        print(f"cannot filter by public post: {exc}", file=sys.stderr)
+        return 1
     except SiteUnavailable as exc:
         print(f"the site did not answer: {exc}", file=sys.stderr)
         return EXIT_TRY_LATER
@@ -327,6 +343,12 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
         type=int,
         metavar="N",
         help="a test run: N crops not sent yet, and only the candidacies they serve",
+    )
+    send.add_argument(
+        "--public-post",
+        action="store_true",
+        help="only the people whose page holds a paid post, current or ended, at "
+        "a public company: the ones the site would publish from a declaration",
     )
     send.set_defaults(func=cmd_upload)
     status = sub.add_parser(
