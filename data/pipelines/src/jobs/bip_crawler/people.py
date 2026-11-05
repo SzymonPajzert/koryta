@@ -49,6 +49,7 @@ import functools
 import gzip
 import hashlib
 import heapq
+import html
 import json
 import logging
 import re
@@ -61,14 +62,23 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
-from urllib.parse import urljoin, urlsplit
+from typing import Any, Callable
+from urllib.parse import parse_qsl, urljoin, urlsplit
 
 from conductor import setup_context
-from jobs.bip_crawler import finn, sisco, softres, wrota, zeto
+from jobs.bip_crawler import (
+    accordion,
+    doclist,
+    finn,
+    person_page,
+    sisco,
+    softres,
+    wrota,
+    zeto,
+)
 from jobs.bip_crawler import render as rendering
 from jobs.bip_crawler.identity import Agents
-from jobs.bip_crawler.madkom import Madkom
+from jobs.bip_crawler.madkom import Madkom, search_base, search_url
 from jobs.bip_crawler.people_list import (
     list_policy,
     outcomes,
@@ -95,6 +105,7 @@ from scrapers.bip.people import (
     fold,
     is_file_link,
     link_score,
+    named_by_label,
     office_terms,
     same_file,
     satisfied,
@@ -310,9 +321,84 @@ class _Frontier:
             if score > -3:
                 if says_declarations(link):
                     self.declared.add(target)
-                if len(owners := declarants(link, seekers)) == 1:
+                owners = declarants(link, seekers)
+                # On a declarations page a link that is one seeker's full name
+                # opens their page (Kłodzko: "BRYŁA PIOTR" in "Oświadczenia
+                # majątkowe Radni - IX kadencja" to a page titled "Informacja
+                # publiczna - szczegóły", whose files say only "za rok 2025"),
+                # and one to a term or a year its next level (Strzegom:
+                # "Oświadczenia majątkowe" > "Kadencja 2024-2029" > "Michał
+                # CZAPLA" > files "2024", "2025"): declarations pages both.
+                if not owners and bonus:
+                    owners = named_by_label(link, seekers)
+                    if owners or _TERM.search(fold(link.anchor)):
+                        self.declared.add(target)
+                if len(owners) == 1:
                     self.lenders[target] = owners.pop()
                 self.add(target, score + bonus, depth, link.url)
+
+
+#: A link to a term's or a year's part of a declarations section.
+_TERM = re.compile(r"^\W*(?:(?:[ivx]+ )?kadencj\w*|rok|za)?\W*(?:19|20)\d\d\b|kadencj")
+
+_FRAME = re.compile(rb"<frame\b[^>]*?\bsrc\s*=\s*[\"']?([^\"' >]+)", re.I)
+
+
+def _frames(content: bytes, url: str) -> list[str]:
+    """The pages a frameset's frames show, as absolute addresses."""
+    if b"<frameset" not in content[:5000].lower():
+        return []
+    found = (m.group(1).decode("utf-8", "replace") for m in _FRAME.finditer(content))
+    return [
+        absolute
+        for absolute in (urljoin(url, html.unescape(f.strip())) for f in found)
+        if absolute.startswith(("http://", "https://"))
+    ]
+
+
+def _file_behind(page: HttpResult, url: str) -> str:
+    """The one file a page offers in place of the file its link promised: the
+    only file link on the page's host, or the only one that carries the
+    link's number; "" when there is no such one."""
+    if not page.ok:
+        return ""
+    _, links = extract_link_contexts(page.content, page.url, page.content_type)
+    host = host_of(page.url)
+    files = list(
+        dict.fromkeys(
+            x.url
+            for x in links
+            if is_file_link(x.url) and host_of(x.url) == host and x.url != url
+        )
+    )
+    if len(files) == 1:
+        return files[0]
+    numbers = re.findall(r"\d{2,}", urlsplit(url).path + "?" + urlsplit(url).query)
+    if not numbers:
+        return ""
+    own = [f for f in files if re.search(rf"(?<!\d){numbers[-1]}(?!\d)", f)]
+    return own[0] if len(own) == 1 else ""
+
+
+def _as_linked(frontier: _Frontier, url: str) -> str:
+    """The address to ask for a queued page: as it was linked when normalize_url
+    only sorted its query or took its final slash, which some servers read as
+    another page. bip.poznan.pl/bip/radni/<name>,<id> without its slash is the
+    councillors' list; um.bip.klodzko.pl's index.php?menu=690&n=i is the
+    office's front page, ?n=i&menu=690 its councillors' declarations (11-05).
+    Not when it dropped a parameter (`tryb_widoku`, `font_size`): that is the
+    same page."""
+    linked = frontier.linked.get(url, "")
+    if not linked:
+        return url
+    a, b = urlsplit(linked), urlsplit(url)
+    same = (
+        (a.scheme, a.netloc.lower()) == (b.scheme, b.netloc.lower())
+        and a.path.rstrip("/") == b.path.rstrip("/")
+        and sorted(parse_qsl(a.query, keep_blank_values=True))
+        == sorted(parse_qsl(b.query, keep_blank_values=True))
+    )
+    return linked if same else url
 
 
 def _under(path: str, prefix: str) -> bool:
@@ -360,7 +446,9 @@ def _declaration_like(url: str) -> bool:
 
 #: BIP addresses checked by hand or by a verified search for units whose start
 #: is missing or dead in both lists (the gov.pl registry, the catalogue): one row
-#: a unit, ``unit,bip_url,declarations_url,checked,source,note``.
+#: a unit, ``unit,bip_url,declarations_url,checked,source,note``. A BIP whose
+#: declarations pages link nothing between them (Tychy's years, a form's
+#: choice) gives them all, space-separated, in ``declarations_url``.
 UNIT_STARTS = Path(__file__).with_name("unit_starts.csv")
 
 
@@ -382,13 +470,15 @@ def apply_unit_starts(seeds: dict[str, UnitSeed], starts: list[dict[str, str]]) 
     } | {"samorzad.gov.pl"}
     for row in starts:
         urls = [
-            u.strip() for u in (row.get("declarations_url"), row.get("bip_url")) if u
+            *(row.get("declarations_url") or "").split(),
+            (row.get("bip_url") or "").strip(),
         ]
         urls = [u for u in dict.fromkeys(urls) if u]
         if not urls:
             continue
         seed = seeds.setdefault(row["unit"], UnitSeed(row["unit"]))
         seed.bip_urls = urls
+        seed.declarations = (row.get("declarations_url") or "").split()
         seed.scopes = sorted({scope_of(u, shared) for u in urls})
     return len(starts)
 
@@ -746,6 +836,8 @@ class PeopleSearch:
         frontier = _Frontier(scopes)
         for root in roots:
             frontier.add(normalize_url(root), 100.0, 0, root)
+            if root in seed.declarations:
+                frontier.declared.add(normalize_url(root))
         self._seed_known(out, frontier, roots, seekers, prefer)
         budget = self._budget(max(len(seekers), self.unit_sizes.get(unit, 0)))
         self._walk(out, frontier, seekers, prefer, budget, started)
@@ -790,7 +882,7 @@ class PeopleSearch:
                 blocked += no == ROBOTS
                 down += no == UNREACHABLE
                 continue
-            result = self._get_page(url)
+            result = self._get_page(_as_linked(frontier, url))
             if isinstance(result, str):
                 if result == REFUSED:
                     out.status = REFUSED
@@ -870,11 +962,39 @@ class PeopleSearch:
         if depth == 0:
             # A start page that redirected elsewhere brings its host into scope.
             frontier.adopt(host_of(result.url))
+        # A frameset is a redirect too: Świdnica's BIP, www.bip.um.swidnica.pl,
+        # is one <frame> of bip.swidnica.nv.pl (11-05: one page read, nothing).
+        for frame in _frames(result.content, result.url):
+            frontier.adopt(host_of(frame))
+            frontier.add(normalize_url(frame), 100.0, depth, frame)
         title, links = extract_link_contexts(
             result.content, result.url, result.content_type
         )
+        # A person's page that names them in a field alone (`person_page`).
+        if who := person_page.name(result.content):
+            title = f"{who} | {title}"
         # Files offered as form buttons, under the position's name (`softres`).
         links = links + softres.files(result.content, result.url)
+        # Documents a Vue component draws from JSON, under the subject (`doclist`).
+        links = links + doclist.links(result.content, result.url, self._get)
+        # A Madkom list too long to read: its search box, asked for each seeker.
+        if base := search_base(result.content):
+            links = links + [
+                LinkContext(search_url(base, s.last), f"{s.first} {s.last}")
+                for s in seekers
+                if s.last
+            ]
+        # A person a <details>, the files inside under their name (`accordion`).
+        if owners := accordion.persons(result.content, result.url):
+            links = [
+                replace(x, row=owners[x.url]) if x.url in owners else x for x in links
+            ]
+        # A document's file cards: each file under its card's label (`doclist`).
+        if cards := doclist.attachments(result.content, result.url):
+            links = [
+                replace(x, row=cards[x.url]) if x.url in cards and not x.row else x
+                for x in links
+            ]
         # A persons list's files, each under its person (`wrota.persons`).
         if owners := wrota.persons(result.content, result.url):
             links = [
@@ -931,6 +1051,7 @@ class PeopleSearch:
                 seekers,
                 first_names=self.first_names,
                 lender=lender,
+                declared=led,
             )
         )
         self._read_eurzad(out, result, seekers, prefer)
@@ -1077,7 +1198,18 @@ class PeopleSearch:
         if len(result.content) > self.options.max_doc_bytes:
             return "too_large", "", ""
         if not result.content or self._is_page(result):
-            return "html", "", ""
+            # A page between the link and its file (Polanów: "Pobierz
+            # oświadczenie" opens /oswiadczenia/pobierz/898/, which offers
+            # pobierz.php?d=osw&id=898): one hop to the file it offers.
+            behind = _file_behind(result, url) if fetched is None else ""
+            if not behind:
+                return "html", "", ""
+            result = self._get(behind, tries)
+            if isinstance(result, str) or not result.ok:
+                return "html", "", ""
+            if not result.content or self._is_page(result):
+                return "html", "", ""
+            url = behind
         digest = hashlib.sha256(result.content).hexdigest()
         with self._write_lock:
             known = self.bip_queue.doc_bundle(digest)
@@ -1331,6 +1463,23 @@ def _outcome(
     return "not_found", "not_listed", 0
 
 
+def load_seeds(
+    ctx: Any, xml_cache: Path, refresh: bool = False
+) -> tuple[dict[str, UnitSeed], str, int]:
+    """Each unit's start addresses: the gov.pl registry's and the public bodies
+    catalogue's, the checked ones (`UNIT_STARTS`) in their place; where the
+    registry came from, and how many units the checked ones changed."""
+    from jobs.bip_crawler import registry_xml  # noqa: PLC0415
+
+    xml, source = registry_xml(xml_cache, refresh=refresh)
+    seeds = unit_seeds(
+        parse_subjects_xml(xml),
+        read_public_bodies_catalogue(ctx),
+        terc_index(read_terc(ctx)),
+    )
+    return seeds, source, apply_unit_starts(seeds, read_unit_starts())
+
+
 def run_people_mode(
     args,  # the crawl command's argparse.Namespace
     pg,  # PostgresClient
@@ -1345,7 +1494,6 @@ def run_people_mode(
     from jobs.bip_crawler import (  # noqa: PLC0415
         EXIT_TRY_LATER,
         USER_AGENT,
-        registry_xml,
     )
 
     ctx, _ = setup_context(policy=list_policy())
@@ -1369,13 +1517,7 @@ def run_people_mode(
         f"{len(todo):,} to search in {len({r.unit for r in todo}):,} units",
         flush=True,
     )
-    xml, source = registry_xml(args.xml_cache, refresh=args.refresh_registry)
-    seeds = unit_seeds(
-        parse_subjects_xml(xml),
-        read_public_bodies_catalogue(ctx),
-        terc_index(read_terc(ctx)),
-    )
-    checked = apply_unit_starts(seeds, read_unit_starts())
+    seeds, source, checked = load_seeds(ctx, args.xml_cache, args.refresh_registry)
     print(
         f"unit starts: {len(seeds):,} units (registry from {source}; "
         f"{checked:,} from {UNIT_STARTS.name})",

@@ -444,8 +444,20 @@ def test_checked_starts_replace_what_the_lists_had():
             "bip_url": "https://samorzad.gov.pl/web/gmina-skolyszyn",
             "declarations_url": "",
         },
+        {
+            # Tychy: a year a page, chosen in a form, none linking the next.
+            "unit": "247701",
+            "bip_url": "https://bip.umtychy.pl/",
+            "declarations_url": "https://bip.umtychy.pl/om/2026 "
+            "https://bip.umtychy.pl/om/2025",
+        },
     ]
-    assert apply_unit_starts(seeds, starts) == 3
+    assert apply_unit_starts(seeds, starts) == 4
+    assert seeds["247701"].bip_urls == [
+        "https://bip.umtychy.pl/om/2026",
+        "https://bip.umtychy.pl/om/2025",
+        "https://bip.umtychy.pl/",
+    ]
     assert seeds["020101"].bip_urls == [
         "https://bip.um.boleslawiec.pl/oswiadczenia-majatkowe",
         "https://bip.um.boleslawiec.pl/",
@@ -461,6 +473,8 @@ def test_the_checked_in_starts_parse(tmp_path):
     for start in read_unit_starts():
         assert len(start["unit"]) == 6 and start["unit"].isdigit()
         assert start["bip_url"].startswith(("http://", "https://"))
+        for url in start["declarations_url"].split():
+            assert url.startswith(("http://", "https://")), start["unit"]
     assert read_unit_starts(tmp_path / "missing.csv") == []
 
 

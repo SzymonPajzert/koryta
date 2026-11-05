@@ -90,6 +90,8 @@ class Route:
     kind: str = ""
     id: str = ""
     page: int = 1
+    #: A section's search box (``?form-cs-s=``): its articles that match.
+    search: str = ""
 
     @property
     def prefix(self) -> str:
@@ -102,7 +104,8 @@ def route(url: str) -> Route | None:
     not draw (its scripts and styles, the server's own pages)."""
     parts = urlsplit(url)
     path = unquote(parts.path).strip("/")
-    page = parse_qs(parts.query).get("page", ["1"])[0]
+    query = parse_qs(parts.query)
+    page = query.get("page", ["1"])[0]
     number = int(page) if page.isdigit() and int(page) > 0 else 1
     if not path:
         return Route("default", page=number)
@@ -134,7 +137,33 @@ def route(url: str) -> Route | None:
     if kind not in _TYPES:
         return None
     context = "default" if pieces[0] in _TYPES else pieces[0]
-    return Route(context, kind, ident, number)
+    search = query.get(SEARCH, [""])[0].strip() if kind == "m" else ""
+    return Route(context, kind, ident, number, search)
+
+
+#: A section's search box as its address takes it (Tarnów's "Baza osób":
+#: umtarnow,m,261089,baza-osob-wyszukiwanie.html?form-cs-s=Barwacz). The API
+#: takes the same parameter and matches part of a word, diacritics or not:
+#: "barwac" finds "Barwacz Grażyna", "Wnek" "Wnęk Magdalena".
+SEARCH = "form-cs-s"
+_SEARCH_MARK = "koryta-madkom-search"
+_SEARCH_FORM = re.compile(
+    rb'<form class="' + _SEARCH_MARK.encode() + rb'" action="([^"]+)">'
+)
+
+
+def search_base(content: bytes) -> str:
+    """The section a drawn page says can be searched, "" when none: Tarnów's
+    998 people stand 100 a page, newest first, and the walk ranked "Następna
+    strona" below every news item (11-05: 840 pages, Grażyna Barwacz not among
+    them)."""
+    found = _SEARCH_FORM.search(content)
+    return html.unescape(found.group(1).decode()) if found else ""
+
+
+def search_url(base: str, term: str) -> str:
+    """``base``'s articles that match ``term``."""
+    return f"{base}?{SEARCH}={quote(term)}"
 
 
 def _slug(url: str) -> str:
@@ -445,6 +474,8 @@ class Madkom:
             query = f"limit={LIMIT}&offset={offset}" + (
                 "&archived=true" if archive else ""
             )
+            if where.search:
+                query += f"&{SEARCH}={quote(where.search)}"
             try:
                 listing = self._json(
                     f"{site.api}menu/{quote(where.id)}/articles?{query}"
@@ -517,6 +548,18 @@ class Madkom:
         older = listing.get("outdatedListLink")
         if listing.get("hasArchived") and older and not archive:
             more += _a(urljoin(site.origin + "/", str(older)), "Archiwum")
+        # A list past one page with a search box: the walk asks it for the
+        # people it seeks rather than reading every page (`search_base`).
+        boxes = {str(f.get("name")) for f in listing.get("searchFields") or [] if f}
+        if (
+            not where.search
+            and not archive
+            and "cs-s" in boxes
+            and isinstance(total, int)
+            and total > shown
+        ):
+            base = html.escape(url.split("?", 1)[0])
+            more += f'<form class="{_SEARCH_MARK}" action="{base}"></form>'
         return f"<ul>{''.join(rows)}</ul>{more}"
 
     def _article(self, site: _Site, where: Route, url: str) -> HttpResult:

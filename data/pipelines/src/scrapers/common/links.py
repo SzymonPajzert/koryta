@@ -7,6 +7,7 @@ one flag.
 
 from __future__ import annotations
 
+import codecs
 import re
 from dataclasses import dataclass
 from urllib.parse import urljoin
@@ -58,8 +59,8 @@ def extract_link_pairs(
             seen.setdefault(absolute.rstrip("/") or absolute, text)
             continue
         parsed = NormalizedParse.parse(absolute)
-        clean = (
-            f"{parsed.scheme}://{parsed.hostname_normalized}{parsed.path}".rstrip("/")
+        clean = f"{parsed.scheme}://{parsed.hostname_normalized}{parsed.path}".rstrip(
+            "/"
         )
         seen.setdefault(clean, text)
     return list(seen.items())
@@ -194,6 +195,33 @@ def _row_text(anchor: Tag, block: Tag, rows: _Rows | None = None) -> str:
     return " ".join(" ".join(parts).split())
 
 
+def _cp1250_bytes(error: UnicodeError) -> tuple[str, int]:
+    """A byte UTF-8 cannot read, read as windows-1250 (`decode_html`)."""
+    assert isinstance(error, UnicodeDecodeError)
+    bad = error.object[error.start : error.end]
+    return bytes(bad).decode("cp1250", "replace"), error.end
+
+
+codecs.register_error("koryta-cp1250", _cp1250_bytes)
+
+_META_CHARSET = re.compile(rb"<meta[^>]+charset=[\"']?([\w.:-]+)", re.I)
+
+
+def _meta_charset(content: bytes) -> str:
+    """The charset the page's own ``<meta>`` declares, "" when none does."""
+    found = _META_CHARSET.search(content[:4096])
+    return found.group(1).decode("ascii", "replace") if found else ""
+
+
+def _bold_span(node: Tag) -> bool:
+    """A span styled bold, a heading as much as a <strong>: powiat chełmiński
+    names each councillor so over their "pobierz oświadczenie" (11-05)."""
+    if node.name != "span":
+        return False
+    style = str(node.get("style") or "").replace(" ", "").lower()
+    return "font-weight:bold" in style or "font-weight:700" in style
+
+
 def decode_html(content: bytes | str, content_type: str = "") -> str:
     """A page's text, in the charset its header or ``<meta>`` declares.
 
@@ -204,6 +232,20 @@ def decode_html(content: bytes | str, content_type: str = "") -> str:
         return content
     declared = re.search(r"charset=[\"']?([\w.:-]+)", content_type or "", re.I)
     known = [declared.group(1)] if declared else []
+    # A page that says UTF-8 and is, but for its template's few strings in
+    # windows-1250 (gmina Sanok, 11-05: 25 bytes of "Przejdź do treści" among
+    # 218 Polish letters in UTF-8): UnicodeDammit gave the whole page up for
+    # mac_latin2, and its "Oświadczenia majątkowe" read "OŇõwiadczenia". Read
+    # as written: UTF-8, any byte that is not as windows-1250.
+    said = (declared.group(1) if declared else "") or _meta_charset(content)
+    if said.lower().replace("-", "").replace("_", "") == "utf8":
+        text = content.decode("utf-8", "koryta-cp1250")
+        strays = content.decode("utf-8", "replace").count("\ufffd")
+        letters = sum(1 for c in text if ord(c) > 127) - strays
+        # A page in windows-1250 throughout has hardly a letter that reads
+        # as UTF-8.
+        if letters >= 2 * strays:
+            return text
     dammit = UnicodeDammit(content, known, is_html=True)
     return dammit.unicode_markup or content.decode("utf-8", "replace")
 
@@ -237,7 +279,7 @@ def extract_link_contexts(
     last: Tag | None = None
     for node in soup.descendants:
         if isinstance(node, Tag):
-            if node.name in _HEADINGS:
+            if node.name in _HEADINGS or _bold_span(node):
                 last = node
             elif node.name == "a" and last is not None:
                 headings[id(node)] = last

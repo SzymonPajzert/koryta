@@ -188,10 +188,36 @@ koryta_scrape_bip found --dry-run   # count; write nothing
 koryta_scrape_bip found
 ```
 
+### `state` and `problems`
+
+The people mode's state, for whoever has no access to its Postgres on predator:
+`state` writes a part to the shared cache,
+`jobs/bip_crawler/state/date=<UTC day>/<UTC stamp>.jsonl.gz`, with a line a
+unit (its walk, its candidacies' outcomes, how its start addresses answered)
+and a line a candidacy (key, unit, outcome; no name or birth date). Before
+writing it asks the starts of each unit nobody was found in whose walk did not
+get in (or read two pages at most), once as the crawler and once as a browser,
+and keeps the answers in `bip_unit_probes`. Each such unit gets a kind:
+`no_answer` (neither agent got an answer from predator), `refused` (both 403 or
+5xx), `app_shell` (the page is drawn by a script), `browser_only` (a browser
+got in: a candidate for `identity.HOSTS`), `robots`, `no_address` or `open`.
+
+`problems` lists the stuck units from the newest part, by kind; it needs only
+read access to the shared cache.
+
+```bash
+koryta_scrape_bip state                  # probe, then write (run_chunk.sh does)
+koryta_scrape_bip state --no-probe       # write with the probes on record
+koryta_scrape_bip state --dry-run        # probe and count; write nothing
+koryta_scrape_bip problems               # no_answer, refused, app_shell, browser_only
+koryta_scrape_bip problems --kind no_answer --csv blocked.csv
+koryta_scrape_bip problems --part state.jsonl.gz   # a part on disk
+```
+
 ### On predator: `run_chunk.sh`
 
 The people mode runs in chunks from `run_chunk.sh` beside this file: a crawl
-of `--max-minutes` (95), the found list after it, and a stop when / falls under
+of `--max-minutes` (95), the found list and the state after it, and a stop when / falls under
 5 GB free. It brings the crawl's Postgres (`BIP_POSTGRES_ENV`), its directory
 (`BIP_CRAWL_OUT`, `~/.cache/koryta/bip-people-crawl`: bundles, registry, CA
 bundle, `runs/` logs) and `--known-urls` (`BIP_KNOWN_URLS`), and runs the code

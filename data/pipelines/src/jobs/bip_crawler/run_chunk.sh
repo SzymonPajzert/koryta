@@ -2,7 +2,7 @@
 # One chunk of the BIP people-mode crawl (`koryta_scrape_bip crawl
 # --people-of-interest`). Resumes where the last chunk stopped, stops the
 # crawler itself if / falls under 5 GB free, and writes the found list the
-# night reads once the chunk is over.
+# night reads and the state (`state.py`) once the chunk is over.
 #
 #   run_chunk.sh                  95 minutes, 20 units at once
 #   run_chunk.sh 60 10            60 minutes, 10 units
@@ -59,6 +59,12 @@ echo "exit $code" >> "$LOG"
 # cache after every chunk, ~200 KB. Reads Postgres only.
 .venv/bin/dotenv -f "$ENV_FILE" run -- \
   .venv/bin/koryta_scrape_bip found >> "$LOG" 2>&1 || echo "found list: not written" >> "$LOG"
+# The state, for those without this Postgres: the units nobody was found in
+# probed as the crawler and as a browser, then a part in the shared cache
+# (`koryta_scrape_bip problems` lists the stuck ones from it). A few minutes.
+.venv/bin/dotenv -f "$ENV_FILE" run -- \
+  .venv/bin/koryta_scrape_bip state --xml-cache "$OUT/registry/subjects.xml" \
+  --ca-bundle "$OUT/tls/ca-bundle.pem" >> "$LOG" 2>&1 || echo "state: not written" >> "$LOG"
 df -h / | tail -1 >> "$LOG"
 echo "$LOG"
 tail -48 "$LOG"
