@@ -126,4 +126,31 @@ test.describe("OmniSearch", () => {
     await expect(input).toHaveValue("");
     await expect(selection).toHaveCount(0);
   });
+
+  test("shows everybody when the list is picked on a filtered table", async ({
+    page,
+  }) => {
+    // The entry leads to the page already open and asks for nothing narrower,
+    // and it kept the filters: a reader looking at „Brak danych” picked it and
+    // went on looking at „Brak danych”, with nothing left in the box to say the
+    // pick had been heard.
+    await page.goto("/eksploruj/tabela?party=Konfederacja", {
+      waitUntil: "domcontentloaded",
+    });
+    const chip = page.locator(".tabela-query-bar__rail .v-chip", {
+      hasText: "Konfederacja",
+    });
+    const list = page.locator(".v-overlay--active .v-list-item", {
+      hasText: "Lista wszystkich osób",
+    });
+    await expect(chip).toBeVisible();
+
+    await openOmniSearch(page, list);
+    await list.click();
+
+    await expect(page).toHaveURL(/\/eksploruj\/tabela$/);
+    await expect(chip).toHaveCount(0);
+    // Not in the party, so only the whole list has him.
+    await expect(page.locator(".table-card")).toContainText("Jan Kowalski");
+  });
 });

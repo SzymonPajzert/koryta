@@ -43,16 +43,20 @@ export function omniSearchTarget(
   pick: OmniSearchPick,
 ): { path: string; query: LocationQueryRaw } {
   const path = pick.path ?? current.path;
-  // The filters in the url only survive a pick that keeps us on the same page -
+  // The filters in the url only survive a pick that narrows the page it is on -
   // picking a party while the table is open. Carrying them across meant the
   // `revisionId` of a profile opened from the revision queue followed a search
   // to the next profile, which then rendered the previous person's proposal on
-  // top of it, so the search looked like it had not navigated at all.
-  const staysOnPage = !pick.path || pick.path === current.path;
+  // top of it, so the search looked like it had not navigated at all. An entry
+  // that names the page open and adds nothing to it narrows nothing, and opens
+  // it as from anywhere else: on a filtered table „Lista wszystkich osób” kept
+  // the filters, so a reader looking at „Brak danych” went on looking at it.
+  const narrowsPage =
+    !pick.path || (pick.path === current.path && !!pick.query);
 
   return {
     path: isAllowedPath(path) ? path : "/eksploruj/tabela",
-    query: staysOnPage
+    query: narrowsPage
       ? { ...current.query, ...pick.query }
       : { ...pick.query },
   };

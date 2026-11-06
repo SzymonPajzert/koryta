@@ -27,6 +27,30 @@ describe("omniSearchTarget", () => {
     });
   });
 
+  // „Lista wszystkich osób” leads to the table and asks for nothing narrower, so
+  // on a filtered table the filters are what stands between the reader and the
+  // list it promises. They stayed, and on a table showing „Brak danych” the pick
+  // changed nothing a reader could see.
+  it("drops the filters of the page open for an entry with no query of its own", () => {
+    expect(
+      omniSearchTarget(
+        { path: "/eksploruj/tabela", query: { party: "PO", teryt: "1661" } },
+        { path: "/eksploruj/tabela" },
+      ),
+    ).toEqual({ path: "/eksploruj/tabela", query: {} });
+  });
+
+  // The same rule for a hit on the person whose page is open: what was asked for
+  // is their page, not the proposal a link from the revision queue laid over it.
+  it("opens the page afresh when the pick is the page open", () => {
+    expect(
+      omniSearchTarget(
+        { path: "/osoba/jan-kowalski-1", query: { revisionId: "rev1" } },
+        { path: "/osoba/jan-kowalski-1" },
+      ),
+    ).toEqual({ path: "/osoba/jan-kowalski-1", query: {} });
+  });
+
   it("stays put, filters and all, for a pick with no path of its own", () => {
     expect(
       omniSearchTarget(
