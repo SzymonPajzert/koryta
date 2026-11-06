@@ -412,6 +412,42 @@ def test_a_page_a_script_draws_is_read_once_rendered(tmp_path):
     ]
 
 
+KATOWICE_MENU = '<a href="/menu/uchwala.pdf">Rewitalizacja - uchwała</a>' + "".join(
+    f'<a href="/m{i}">Menu {i}</a>' for i in range(8)
+)
+KATOWICE_PERSON = (
+    "<h2>Ewa Lis</h2>"
+    '<div class="col-md-12 osw5343" style="margin-bottom: 30px;">{box}</div>'
+    + KATOWICE_MENU
+)
+KATOWICE_URL = "https://u1.pl/oswiadczeniamajatkowe/osw_osoba.aspx?OsobaID=5343"
+KATOWICE = {
+    "https://u1.pl": html(
+        "Oświadczenia majątkowe",
+        f'<a href="{KATOWICE_URL}">Ewa Lis</a>',
+    ),
+    KATOWICE_URL: html("Strona podstawowa", KATOWICE_PERSON.format(box="")),
+    "https://u1.pl/files/1.pdf": (200, "application/pdf", PDF + b"1"),
+    "https://u1.pl/menu/uchwala.pdf": (200, "application/pdf", PDF + b"2"),
+}
+
+
+def test_a_box_a_script_fills_gives_the_person_its_files_not_the_menus(tmp_path):
+    drawn: list[str] = []
+
+    def render(url: str) -> tuple[HttpResult, int]:
+        drawn.append(url)
+        box = '<ul><li><a href="/files/1.pdf">Oświadczenie za 2025</a></li></ul>'
+        page = html("Strona podstawowa", KATOWICE_PERSON.format(box=box))
+        return HttpResult(url, *page[:1], "text/html", page[2]), 0
+
+    rows = [row("lis", "u1", "Ewa", "Lis")]
+    _, store, _ = search(tmp_path, KATOWICE, rows, render=render, sitemaps=False)
+    assert drawn == [KATOWICE_URL]
+    assert store.outcomes["lis"].status == "found"
+    assert {url for _, url in store.docs} == {"https://u1.pl/files/1.pdf"}
+
+
 def test_unrendered_a_script_drawn_bip_shows_nothing(tmp_path):
     rows = [row("lis", "u1", "Ewa", "Lis")]
     _, store, _ = search(tmp_path, JS_SITE, rows, sitemaps=False)

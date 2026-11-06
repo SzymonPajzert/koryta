@@ -65,6 +65,8 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qsl, urljoin, urlsplit
 
+from bs4 import BeautifulSoup
+
 from conductor import setup_context
 from jobs.bip_crawler import (
     accordion,
@@ -116,7 +118,7 @@ from scrapers.bip.people import (
 from scrapers.bip.registry import parse_subjects_xml
 from scrapers.bip.units import UnitSeed, scope_of, terc_index, unit_seeds
 from scrapers.common.fetch import HttpResult, Payload, http_get, http_post
-from scrapers.common.links import LinkContext, extract_link_contexts
+from scrapers.common.links import LinkContext, decode_html, extract_link_contexts
 from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.krs.data import read_public_bodies_catalogue
 from scrapers.map.teryt import read_terc
@@ -437,6 +439,28 @@ def _app_shell(content: bytes, links: list[LinkContext]) -> bool:
 
     Madkom's shell has two (Home, Calculators), bip.malopolska.pl's none."""
     return len(links) <= 5 and b"<script" in content[:200_000].lower()
+
+
+#: Katowice's person page (SharePoint): a full menu around ``<div class="col-md-12
+#: osw5343">``, left empty for a script that fills it from the Oswiadczenia list.
+_EMPTY_DECLARATIONS = re.compile(
+    rb"""<div class="[^"]*\bosw\d+\b[^"]*"[^>]*>\s*</div>"""
+)
+
+
+def _empty_declarations(content: bytes) -> bool:
+    """Whether a page with links of its own leaves its declarations to a script."""
+    return _EMPTY_DECLARATIONS.search(content) is not None
+
+
+def _declarations_box(drawn: HttpResult) -> list[LinkContext]:
+    """The links a script drew into the box `_empty_declarations` saw. Only these
+    are the person's: the page's address says oświadczenia, so the menu's own
+    files ("Rewitalizacja - uchwała", 33 MB) would be taken for theirs too."""
+    soup = BeautifulSoup(decode_html(drawn.content, drawn.content_type), "lxml")
+    boxes = soup.find_all("div", class_=re.compile(r"^osw\d+$"))
+    fragment = "".join(str(box) for box in boxes)
+    return extract_link_contexts(fragment, drawn.url, drawn.content_type)[1]
 
 
 def _declaration_like(url: str) -> bool:
@@ -1016,7 +1040,9 @@ class PeopleSearch:
             # nothing a render would show.
             and not self.madkom.knows(result.url)
             and host_of(result.url) not in self._render_off
-            and _app_shell(result.content, links)
+            and (
+                _app_shell(result.content, links) or _empty_declarations(result.content)
+            )
         ):
             drawn = self._drawn(result.url)
             if drawn.ok and self._is_page(drawn):
@@ -1028,6 +1054,8 @@ class PeopleSearch:
                     shown = {link.url for link in drawn_links}
                     links = drawn_links + [x for x in links if x.url not in shown]
                     title, follow = drawn_title or title, links
+                    if _empty_declarations(result.content):
+                        links = _declarations_box(drawn)
                 else:
                     # The script went elsewhere: what it drew counts there.
                     out.found.extend(
