@@ -25,6 +25,8 @@ _DOC_PATTERNS = [
         r"(?:$|[?#])",
         re.IGNORECASE,
     ),
+    # Lesko's: /zalacznik/9565, the file's name only in its label (11-06).
+    re.compile(r"/zalacznik/\d+(?:$|[/?#])", re.IGNORECASE),
     # Olsztyn's: /attachment/informacja/23871/<sha1>.html, a PDF (11-05).
     re.compile(r"/attachment/[a-z_-]+/\d+/[0-9a-f]{40}\.html(?:$|[?#])", re.IGNORECASE),
     # Strzegom's: /public/get_file.php?id=592024, /public/getFile?id=625335.
