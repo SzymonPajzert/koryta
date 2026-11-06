@@ -391,8 +391,12 @@ async function performSearch(searchTerm: string) {
     // latest query it would be reported as a search they left, and its rows
     // would replace the next search's: with Jan Kowalski on the menu, the
     // answer to an earlier query took him off it and left only „Dodaj nową
-    // osobę”, which is what `createName` is there to prevent.
-    if (thisQuery <= queriesDone) return;
+    // osobę”, which is what `createName` is there to prevent. What it can still
+    // do is say what a pick that got here first was a search for.
+    if (thisQuery <= queriesDone) {
+      report(searchSession.lateAnswer(searchTerm, response.length, unverified));
+      return;
+    }
     queriesDone = thisQuery;
     searchData.value = response;
     report(searchSession.results(searchTerm, response.length, unverified));
@@ -496,6 +500,9 @@ watch(nodeGroupPicked, (value) => {
     searchSession.pick(
       value.analyticsKind ?? "place",
       value.unverified === true,
+      // `debouncedSearch`, because `search` holds the title by now: `select()`
+      // wrote it over what was typed.
+      loading.value ? debouncedSearch.value : undefined,
     ),
   );
   // Before navigating, so the page it opens can tell it was searched for.
