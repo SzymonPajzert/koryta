@@ -1080,6 +1080,9 @@ export const publicationHoldReasons = [
 ] as const;
 export type PublicationHoldReason = (typeof publicationHoldReasons)[number];
 
+/** The hold that is the rule itself rather than a doubt anybody can settle. */
+export const RULED_OUT: PublicationHoldReason = "no_public_post";
+
 /** The daily limit as the runtime config gives it: a whole number, 0 for
  * anything else. An environment override arrives as whatever `destr` made of
  * the string, so it is not trusted to be a number. Here rather than beside
@@ -1119,17 +1122,21 @@ export const PEOPLE_IMPORT_WINDOW = { from: 3, to: 9 } as const;
 export const PRESS_BATCH = 25;
 
 /** Where a page's publication stands, as `declarationPublications` stores
- * it. `confirmed` is a page that was public already when its date matched:
- * nothing to publish, but the declaration is linked on it. `publishing` is a
- * page a pass has taken up - the automation under a slot of the day, an
- * admin's press without one - and whose writes are under way, or were cut
- * short; one left there for long is tried again. */
+ * it. `confirmed` is a page that was public already when its date matched, or
+ * was published by hand while it was held: nothing to publish, but the
+ * declaration is linked on it. `publishing` is a page a pass has taken up - the
+ * automation under a slot of the day, an admin's press without one - and whose
+ * writes are under way, or were cut short; one left there for long is tried
+ * again. `declined` is a held page an admin said will not be published: it
+ * keeps the reason it was held for, no later reading takes it up again, and
+ * only an admin puts it back, or publishes it by hand. */
 export const publicationStatuses = [
   "queued",
   "publishing",
   "published",
   "held",
   "confirmed",
+  "declined",
 ] as const;
 export type PublicationStatus = (typeof publicationStatuses)[number];
 
@@ -1215,6 +1222,15 @@ export type SweepResult = {
   drain: DrainResult;
 };
 
+/** What an admin's „Sprawdź ponownie” on a held page did: it went up, it was
+ * public already, something still holds it (the reason may be a new one), or
+ * it was not looked at, for the reasons no pass runs (`DrainResult.skipped`). */
+export type RecheckResult =
+  | { outcome: "published" }
+  | { outcome: "confirmed" }
+  | { outcome: "held"; reason: PublicationHoldReason }
+  | { outcome: "skipped"; skipped: "night" | "import" };
+
 /** Who settled a crop's date (`agreed.by`): readers who agreed on it blind,
  * the job at upload (`machineSettles`: off a typed form, or by OCR when the
  * date is already the page's; `machine.method` says which), or an admin on
@@ -1252,16 +1268,22 @@ export type DeclarationReviewRow = {
   updatedAt: string;
 };
 
-/** A person published from the queue, waiting in it or held: by the
+/** A person published from the queue, waiting in it, held or declined: by the
  * automation, or at an admin's press of „Opublikuj z kolejki”. */
 export type DeclarationPublicationRow = {
   personId: string;
   name: string;
-  status: "queued" | "published" | "held";
+  status: "queued" | "published" | "held" | "declined";
+  /** What the page was held for when it was last looked at, which can be out
+   * of date: read `paidPost` for the one thing that decides what becomes of
+   * it. */
   reason: PublicationHoldReason | null;
   /** Whether the page is public now. A held one can be: published by hand
    * while it waited, or public already when a second page held it. */
   pagePublic: boolean;
+  /** Of a held page: whether somebody is paid for a public post on it now,
+   * read off the page rather than the record (`pagesWithAPublicPost`). */
+  paidPost?: boolean;
   at: string;
   unit: string;
   documentUrl: string;
@@ -1271,6 +1293,30 @@ export type DeclarationPublicationRow = {
    * automation on its own. */
   pressed: boolean;
 };
+
+/**
+ * Whether a person is one the site will not publish, and so not on the list of
+ * what waits for an admin: an admin said so, or the page has no paid public
+ * post, which is what the automation publishes nobody without.
+ *
+ * Asked of the page as it is now, and whatever the page was held for. A hold
+ * records the first reason that applied when it was last looked at, and the
+ * reasons are asked in an order, so a stored reason says nothing about the
+ * ones after it: 21 of the 142 pages held for something else on 2026-11-06 had
+ * no such post either, and resolving their candidacies would have been work on
+ * people nobody publishes. It also lets a page come back by itself the day it
+ * gains a post, where a stored reason would keep it out for good.
+ *
+ * A page that is public is neither: its row has a hold left to close.
+ */
+export function publicationSetAside(
+  row: Pick<DeclarationPublicationRow, "status" | "pagePublic" | "paidPost">,
+): boolean {
+  return (
+    row.status === "declined" ||
+    (row.status === "held" && !row.pagePublic && row.paidPost === false)
+  );
+}
 
 /** Everything /admin/oswiadczenia shows, counted when asked. */
 export type DeclarationOverview = {
@@ -1306,16 +1352,21 @@ export type DeclarationOverview = {
   publications: {
     queued: number;
     published: number;
+    /** Held and waiting for an admin: `lists.held`. */
     held: number;
+    /** Who will not be published (`publicationSetAside`). */
+    setAside: number;
     /** Published by the automation today (Warsaw), against `dailyLimit`. An
      * admin's press takes no place of it, so its pages are not counted. */
     today: number;
+    /** `held` by reason. */
     heldBy: { reason: PublicationHoldReason; count: number }[];
   };
   lists: {
     disputed: DeclarationReviewRow[];
     different: DeclarationReviewRow[];
     held: DeclarationPublicationRow[];
+    setAside: DeclarationPublicationRow[];
     recent: DeclarationPublicationRow[];
   };
   /** Uploads, newest first. */

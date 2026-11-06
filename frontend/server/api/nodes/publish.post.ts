@@ -3,6 +3,10 @@ import type { DocumentReference } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
 import { recordAudit } from "~~/server/utils/audit";
+import {
+  closeHoldOnPublication,
+  OVERVIEW_CACHE_BASE,
+} from "~~/server/utils/declarationDecisions";
 import { cascadeUnpublishEdges } from "~~/server/utils/edgePublication";
 import {
   applyRevision,
@@ -110,6 +114,23 @@ export default defineEventHandler(async (event) => {
   // `s-maxage` the cached handler sent, which is why the endpoints a reviewer
   // needs fresh are `editorFresh` as well.
   await useStorage("cache").clear("nitro:handlers");
+
+  // A page held on /admin/oswiadczenia that is public now has nothing left to
+  // wait for. Whichever screen the page went up from, and after the commit,
+  // like the message below: a hold left open costs a row on an admin's list,
+  // and a publication refused for it would be worse.
+  if (body.published && nodeDoc.data()?.type === "person") {
+    try {
+      if (await closeHoldOnPublication(db, body.node_id, user.uid)) {
+        await useStorage("cache").clear(OVERVIEW_CACHE_BASE);
+      }
+    } catch (error) {
+      console.error(
+        `[declarations] cannot close the hold of ${body.node_id}`,
+        error,
+      );
+    }
+  }
 
   // After the commit, and never allowed to fail it: the same order and the
   // same reasoning as `/api/revisions/approve`, whose notification this is.

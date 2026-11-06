@@ -1,5 +1,5 @@
 import type { DocumentData, Firestore } from "firebase-admin/firestore";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { readingKind, type ExtractStatus } from "~~/shared/declarations";
 import {
   dataUrl,
@@ -7,6 +7,7 @@ import {
   EXTRACTS,
   PUBLICATIONS,
 } from "./declarations";
+import type { StoredPublication } from "./declarationPublish";
 
 /**
  * The decisions /admin/oswiadczenia offers on a crop the readers left to an
@@ -38,6 +39,11 @@ import {
  * (`confirmedDeclarations` reads the crop, and takes neither an admin's date
  * nor a crop that is not agreed), which `linkedOnAPage` tells the endpoints,
  * so they drop the pages' cached answers.
+ *
+ * The decisions on a held page are here too: saying it will not be published,
+ * taking that back, and what a publication by hand does to a hold. Asking a
+ * hold again is a publication, and lives with them in declarationPublish.ts
+ * (`recheckPublication`).
  */
 
 /** The name overview.get.ts caches the overview under. A decision, and a
@@ -187,6 +193,116 @@ export async function decideExtract(
       updatedAt: at,
     });
     return { id: args.extractId, status, compare: kind === "date" };
+  });
+}
+
+/** Reads a page's record in a transaction, refusing a page with none and one
+ * not in the state a decision on it starts from: two admins, or two tabs,
+ * deciding one page at once cannot both have their way. */
+async function decideRecord(
+  db: Firestore,
+  pageId: string,
+  from: StoredPublication["status"],
+  refusal: string,
+  write: (record: StoredPublication) => Partial<Record<string, unknown>>,
+): Promise<void> {
+  const ref = db.collection(PUBLICATIONS).doc(pageId);
+  await db.runTransaction(async (tx) => {
+    const record = (await tx.get(ref)).data() as StoredPublication | undefined;
+    if (!record) {
+      throw createError({
+        statusCode: 404,
+        message: "Nie ma takiej publikacji.",
+      });
+    }
+    if (record.status !== from) {
+      throw createError({ statusCode: 409, message: refusal });
+    }
+    tx.update(ref, write(record));
+  });
+}
+
+/**
+ * An admin's „Nie publikuj” on a held page. The page leaves what waits for an
+ * admin and goes with the people who will not be published; no later reading
+ * takes it up again (`nextPublication`), and it keeps the reason it was held
+ * for, which is what it goes back with (`restorePublication`). Nothing on the
+ * page changes: it is still a draft, and whoever publishes it by hand may.
+ */
+export async function declinePublication(
+  db: Firestore,
+  pageId: string,
+  uid: string,
+  now: Date = new Date(),
+): Promise<void> {
+  const at = Timestamp.fromDate(now);
+  await decideRecord(
+    db,
+    pageId,
+    "held",
+    "Ta publikacja nie jest już wstrzymana.",
+    () => ({
+      status: "declined",
+      declinedBy: uid,
+      declinedAt: at,
+      updatedAt: at,
+    }),
+  );
+}
+
+/** Takes a „Nie publikuj” back: the page is held again, for what it was held
+ * for. */
+export async function restorePublication(
+  db: Firestore,
+  pageId: string,
+  now: Date = new Date(),
+): Promise<void> {
+  await decideRecord(
+    db,
+    pageId,
+    "declined",
+    "Tej publikacji nikt już nie odkłada.",
+    () => ({
+      status: "held",
+      declinedBy: FieldValue.delete(),
+      declinedAt: FieldValue.delete(),
+      updatedAt: Timestamp.fromDate(now),
+    }),
+  );
+}
+
+/**
+ * Closes the hold of a page somebody has just published by hand: /api/nodes/publish
+ * calls it, whichever screen the admin pressed on. The page is public, so
+ * there is nothing left to hold or to decline: the record becomes `confirmed`,
+ * as it does when a page goes public while it waits (`publishPage`), and the
+ * person leaves the admin's lists. What it was held for stays on the record.
+ *
+ * Whether a declaration then shows on the page is still read off the crops
+ * (`confirmedDeclarations`): one an admin's date settled shows nothing.
+ *
+ * Returns whether a hold was closed, for the overview's cached answer.
+ */
+export async function closeHoldOnPublication(
+  db: Firestore,
+  pageId: string,
+  uid: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const ref = db.collection(PUBLICATIONS).doc(pageId);
+  return db.runTransaction(async (tx) => {
+    const record = (await tx.get(ref)).data() as StoredPublication | undefined;
+    if (record?.status !== "held" && record?.status !== "declined") {
+      return false;
+    }
+    const at = Timestamp.fromDate(now);
+    tx.update(ref, {
+      status: "confirmed",
+      reason: null,
+      handPublished: { uid, at, held: record.reason ?? null },
+      updatedAt: at,
+    });
+    return true;
   });
 }
 

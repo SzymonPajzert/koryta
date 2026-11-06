@@ -10,6 +10,7 @@ import {
   candidacyStatuses,
   extractStatuses,
   publicationHoldReasons,
+  publicationSetAside,
   settledBy,
   type DeclarationOverview,
   type DeclarationPublicationRow,
@@ -18,6 +19,7 @@ import {
   type PublicationHoldReason,
   type SettledBy,
 } from "~~/shared/declarations";
+import { pagesWithAPublicPost } from "./publicPosts";
 
 /** Why a search found nothing, in the crawler's words
  * (jobs/bip_crawler/people.py). Counted one by one so an unknown code still
@@ -46,6 +48,15 @@ const FAILED_REASONS = [
 
 const LIST_SIZE = 20;
 const DAYS = 30;
+
+/** Held pages listed of each reason, and declined pages. The other lists show
+ * the newest and leave the rest to the counts, but these are what an admin
+ * works through, one reason at a time: 247 of the 267 holds of 2026-11-06 were
+ * out of reach at `LIST_SIZE`, and 17 of the 20 in reach were people nobody
+ * publishes. Each reason is read on its own for that reason: pages with no paid
+ * public post grow with every upload, and read together they would push the
+ * others off the list. */
+const HELD_SIZE = 300;
 
 async function count(query: Query): Promise<number> {
   return (await query.count().get()).data().count;
@@ -101,7 +112,6 @@ export async function countEverything(
     answerTotal,
     pageCounts,
     publicationCounts,
-    heldBy,
     todayDoc,
   ] = await Promise.all([
     count(candidacies),
@@ -123,19 +133,16 @@ export async function countEverything(
       ),
     ),
     Promise.all(
-      (["queued", "published", "held", "confirmed", "publishing"] as const).map(
-        (status) => count(publications.where("status", "==", status)),
-      ),
-    ),
-    Promise.all(
-      publicationHoldReasons.map(async (reason) => ({
-        reason,
-        count: await count(
-          publications
-            .where("status", "==", "held")
-            .where("reason", "==", reason),
-        ),
-      })),
+      (
+        [
+          "queued",
+          "published",
+          "held",
+          "confirmed",
+          "publishing",
+          "declined",
+        ] as const
+      ).map((status) => count(publications.where("status", "==", status))),
     ),
     db.collection("declarationPublishLimits").doc(today).get(),
   ]);
@@ -193,13 +200,19 @@ export async function countEverything(
       queued: (publicationCounts[0] ?? 0) + (publicationCounts[4] ?? 0),
       // Every page that went up, the automation's and an admin's press's.
       published: publicationCounts[1] ?? 0,
-      held: publicationCounts[2] ?? 0,
+      // What waits is read off the page, row by row, so it is the list that
+      // says; the rest of what is held or declined will not be published.
+      // Aggregations a moment apart from the list, so never less than nothing.
+      held: lists.held.length,
+      setAside: Math.max(
+        0,
+        (publicationCounts[2] ?? 0) +
+          (publicationCounts[5] ?? 0) -
+          lists.held.length,
+      ),
       // The automation's slots: a press takes none.
       today: (todayDoc.get("count") as number | undefined) ?? 0,
-      heldBy: heldBy.filter((row) => row.count > 0) as {
-        reason: PublicationHoldReason;
-        count: number;
-      }[],
+      heldBy: countByReason(lists.held),
     },
     lists,
     runs,
@@ -283,7 +296,7 @@ type PersonFacts = {
   birthDate: string | null;
 };
 
-async function peopleById(
+export async function peopleById(
   db: Firestore,
   ids: readonly string[],
 ): Promise<Map<string, PersonFacts>> {
@@ -320,7 +333,7 @@ function settledByOf(value: unknown): SettledBy | null {
     : null;
 }
 
-function reviewRow(
+export function reviewRow(
   doc: DocumentSnapshot,
   people: Map<string, PersonFacts>,
 ): DeclarationReviewRow {
@@ -357,9 +370,11 @@ function reviewRow(
   };
 }
 
+/** `paid` is for a held page: the pages with a paid public post on them. */
 function publicationRow(
   doc: DocumentSnapshot,
   people: Map<string, PersonFacts>,
+  paid?: ReadonlySet<string>,
 ): DeclarationPublicationRow {
   const data = doc.data() ?? {};
   const first = Array.isArray(data.declarations) ? data.declarations[0] : {};
@@ -369,7 +384,10 @@ function publicationRow(
     status: data.status,
     reason: (data.reason as PublicationHoldReason | undefined) ?? null,
     pagePublic: people.get(doc.id)?.published ?? false,
-    at: isoOf(data.publishedAt ?? data.heldAt ?? data.queuedAt),
+    ...(paid ? { paidPost: paid.has(doc.id) } : {}),
+    at: isoOf(
+      data.declinedAt ?? data.publishedAt ?? data.heldAt ?? data.queuedAt,
+    ),
     unit: String(first?.unit ?? ""),
     documentUrl: String(first?.url ?? ""),
     edges: {
@@ -382,43 +400,82 @@ function publicationRow(
   };
 }
 
+/** What the rows are held for, most first. */
+function countByReason(
+  rows: readonly DeclarationPublicationRow[],
+): DeclarationOverview["publications"]["heldBy"] {
+  const counts = new Map<PublicationHoldReason, number>();
+  for (const { reason } of rows) {
+    if (reason) counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
 async function reviewLists(
   db: Firestore,
 ): Promise<DeclarationOverview["lists"]> {
   const extracts = db.collection("declarationExtracts");
   const publications = db.collection("declarationPublications");
-  const [disputed, different, held, recent] = await Promise.all([
-    extracts
-      .where("status", "==", "disputed")
-      .orderBy("updatedAt", "desc")
-      .limit(LIST_SIZE)
-      .get(),
-    extracts
-      .where("pageMatch", "==", "different")
-      .orderBy("updatedAt", "desc")
-      .limit(LIST_SIZE)
-      .get(),
-    publications
-      .where("status", "==", "held")
-      .orderBy("queuedAt", "desc")
-      .limit(LIST_SIZE)
-      .get(),
-    publications
-      .where("status", "==", "published")
-      .orderBy("publishedAt", "desc")
-      .limit(LIST_SIZE)
-      .get(),
-  ]);
-  const people = await peopleById(db, [
-    ...[...disputed.docs, ...different.docs].flatMap(
-      (doc) => (doc.get("personIds") as string[] | undefined) ?? [],
+  const [disputed, different, heldByReason, declined, recent] =
+    await Promise.all([
+      extracts
+        .where("status", "==", "disputed")
+        .orderBy("updatedAt", "desc")
+        .limit(LIST_SIZE)
+        .get(),
+      extracts
+        .where("pageMatch", "==", "different")
+        .orderBy("updatedAt", "desc")
+        .limit(LIST_SIZE)
+        .get(),
+      // Equalities alone, the way the counts ask them, which no composite
+      // index has to serve; the order is put on below.
+      Promise.all(
+        publicationHoldReasons.map((reason) =>
+          publications
+            .where("status", "==", "held")
+            .where("reason", "==", reason)
+            .limit(HELD_SIZE)
+            .get(),
+        ),
+      ),
+      publications
+        .where("status", "==", "declined")
+        .orderBy("queuedAt", "desc")
+        .limit(HELD_SIZE)
+        .get(),
+      publications
+        .where("status", "==", "published")
+        .orderBy("publishedAt", "desc")
+        .limit(LIST_SIZE)
+        .get(),
+    ]);
+  const heldDocs = heldByReason.flatMap((snapshot) => snapshot.docs);
+  const [people, paid] = await Promise.all([
+    peopleById(db, [
+      ...[...disputed.docs, ...different.docs].flatMap(
+        (doc) => (doc.get("personIds") as string[] | undefined) ?? [],
+      ),
+      ...[...heldDocs, ...declined.docs, ...recent.docs].map((doc) => doc.id),
+    ]),
+    pagesWithAPublicPost(
+      db,
+      heldDocs.map((doc) => doc.id),
     ),
-    ...[...held.docs, ...recent.docs].map((doc) => doc.id),
   ]);
+  const newestFirst = (rows: DeclarationPublicationRow[]) =>
+    rows.sort((a, b) => b.at.localeCompare(a.at));
+  const heldRows = heldDocs.map((doc) => publicationRow(doc, people, paid));
   return {
     disputed: disputed.docs.map((doc) => reviewRow(doc, people)),
     different: different.docs.map((doc) => reviewRow(doc, people)),
-    held: held.docs.map((doc) => publicationRow(doc, people)),
+    held: newestFirst(heldRows.filter((row) => !publicationSetAside(row))),
+    setAside: newestFirst([
+      ...heldRows.filter(publicationSetAside),
+      ...declined.docs.map((doc) => publicationRow(doc, people)),
+    ]),
     recent: recent.docs.map((doc) => publicationRow(doc, people)),
   };
 }

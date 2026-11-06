@@ -7,12 +7,17 @@ import {
   matchAndDrain,
   matchPages,
   publishPage,
+  readingsOfAnotherDay,
+  recheckPublication,
   sweepDeclarations,
   STUCK_PUBLISHING_MS,
 } from "../../../server/utils/declarationPublish";
 import {
+  closeHoldOnPublication,
   decideExtract,
+  declinePublication,
   linkedOnAPage,
+  restorePublication,
   waitsForAdmin,
 } from "../../../server/utils/declarationDecisions";
 import {
@@ -2835,6 +2840,443 @@ describe("a publication a stale write undid", () => {
 
     expect(result.reverted).toEqual({ restored: [], held: [] });
     expect(state()).toBe(before);
+  });
+});
+
+describe("what an admin does about a held page", () => {
+  const edit = (path: string, fields: Data) =>
+    put(path, { ...read(path)!, ...fields });
+  const record = (id = "kowalska") => read(`declarationPublications/${id}`)!;
+  const recheck = (id = "kowalska", now = NOON) =>
+    recheckPublication(firestore, id, ADMIN, now);
+  /** What a call threw, for the cases that must throw. */
+  async function failure(call: Promise<unknown>) {
+    try {
+      await call;
+    } catch (error) {
+      return error as { statusCode?: number; message: string };
+    }
+    throw new Error("expected the call to throw");
+  }
+
+  /** Her page, held because nobody is paid for a public post on it. */
+  async function heldForNoPost() {
+    await queued();
+    edit("nodes/wodociagi", { isPublic: false });
+    await drain();
+    expect(record()).toMatchObject({
+      status: "held",
+      reason: "no_public_post",
+    });
+  }
+
+  /** Her page, held because another of her declarations reads another day. */
+  async function heldForAnotherReading() {
+    await queued();
+    extract("kowalska-crop-2", {
+      agreed: { value: "1981-02-03", kind: "date", by: "readers" },
+      declarationYear: 2022,
+    });
+    await matchPages(firestore, "kowalska-crop-2", NOON);
+    await drain();
+    expect(record()).toMatchObject({
+      status: "held",
+      reason: "conflicting_reading",
+    });
+  }
+
+  /** Her draft, held on a date an admin settled. */
+  async function heldOnAnAdminsDate() {
+    kowalska();
+    edit("declarationExtracts/kowalska-crop", {
+      agreed: { value: BORN, kind: "date", by: "admin" },
+    });
+    await matchPages(firestore, "kowalska-crop", NOON);
+    expect(record()).toMatchObject({
+      status: "held",
+      reason: "admin_decision",
+    });
+  }
+
+  describe("recheckPublication", () => {
+    it("publishes a page once what held it is gone, in the admin's name and in no place of the day", async () => {
+      await heldForNoPost();
+      // Somebody established the owner.
+      edit("nodes/wodociagi", { isPublic: true });
+
+      await expect(recheck()).resolves.toEqual({ outcome: "published" });
+
+      expect(read("nodes/kowalska")!.published).toBe(true);
+      expect(read("edges/kowalska-run")!.published).toBe(true);
+      expect(read("edges/kowalska-job")!.published).toBe(true);
+      expect(record()).toMatchObject({
+        status: "published",
+        reason: null,
+        pressedBy: ADMIN,
+        autoPublished: false,
+      });
+      expect(record().day).toBeUndefined();
+      expect(read(`declarationPublishLimits/${DAY}`)).toMatchObject({
+        count: 0,
+      });
+      expect(pagePublications()).toEqual([
+        { user: DECLARATION_ACTOR, pressedBy: ADMIN },
+      ]);
+    });
+
+    it("publishes past a limit of 0: asking is an admin's decision, like a press", async () => {
+      await heldForNoPost();
+      edit("nodes/wodociagi", { isPublic: true });
+      put(`declarationPublishLimits/${DAY}`, { day: DAY, count: 99 });
+
+      await expect(recheck()).resolves.toEqual({ outcome: "published" });
+
+      expect(read(`declarationPublishLimits/${DAY}`)).toMatchObject({
+        count: 99,
+      });
+    });
+
+    it("holds the page again, for what stops it now", async () => {
+      await heldForNoPost();
+      edit("nodes/kowalska", {
+        needs_split: { reason: "dwie osoby", at: "", user: "admin" },
+      });
+
+      await expect(recheck()).resolves.toEqual({
+        outcome: "held",
+        reason: "needs_split",
+      });
+
+      expect(read("nodes/kowalska")!.published).toBe(false);
+      expect(record()).toMatchObject({
+        status: "held",
+        reason: "needs_split",
+      });
+    });
+
+    it("says so when nothing has changed", async () => {
+      await heldForNoPost();
+      const reason = "no_public_post";
+
+      await expect(recheck()).resolves.toEqual({ outcome: "held", reason });
+
+      expect(record()).toMatchObject({ status: "held", reason });
+      expect(read("edges/kowalska-run")!.published).toBe(false);
+    });
+
+    it("lets a page up once the crop that read another day is withdrawn", async () => {
+      await heldForAnotherReading();
+      await decideExtract(firestore, {
+        extractId: "kowalska-crop-2",
+        uid: ADMIN,
+        decision: { verdict: "withdraw" },
+        now: NOON,
+      });
+
+      await expect(recheck()).resolves.toEqual({ outcome: "published" });
+
+      expect(read("nodes/kowalska")!.published).toBe(true);
+    });
+
+    it("asks two pages again rather than take the record's word for it", async () => {
+      kowalska();
+      person("kowalska-2");
+      edit("declarationExtracts/kowalska-crop", {
+        personIds: ["kowalska", "kowalska-2"],
+      });
+      await matchPages(firestore, "kowalska-crop", NOON);
+      expect(record()).toMatchObject({ reason: "two_pages" });
+
+      // Still two pages: the same answer.
+      await expect(recheck()).resolves.toEqual({
+        outcome: "held",
+        reason: "two_pages",
+      });
+
+      // Merged, which is what the row asks for.
+      edit("nodes/kowalska-2", { merged_into: "kowalska" });
+      await expect(recheck()).resolves.toEqual({ outcome: "published" });
+    });
+
+    it("refuses a draft only an admin's date holds: that is published by hand", async () => {
+      await heldOnAnAdminsDate();
+      const before = state();
+
+      expect((await failure(recheck())).statusCode).toBe(409);
+
+      expect(state()).toBe(before);
+    });
+
+    it("closes the hold of a page that is public by now, an admin's date too", async () => {
+      await heldOnAnAdminsDate();
+      edit("nodes/kowalska", { published: true });
+
+      await expect(recheck()).resolves.toEqual({ outcome: "confirmed" });
+
+      expect(record()).toMatchObject({ status: "confirmed", reason: null });
+    });
+
+    it("refuses a page that is not held, and one with no record", async () => {
+      await queued();
+      const before = state();
+
+      expect((await failure(recheck())).statusCode).toBe(409);
+      expect((await failure(recheck("nobody"))).statusCode).toBe(404);
+
+      expect(state()).toBe(before);
+    });
+
+    it("refuses a page an admin declined: that is put back first", async () => {
+      await heldForNoPost();
+      await declinePublication(firestore, "kowalska", ADMIN, NOON);
+
+      expect((await failure(recheck())).statusCode).toBe(409);
+    });
+
+    it("touches nothing inside the people import's night window", async () => {
+      await heldForNoPost();
+      edit("nodes/wodociagi", { isPublic: true });
+      const before = state();
+
+      await expect(
+        recheck("kowalska", new Date("2026-10-29T02:00:00Z")),
+      ).resolves.toEqual({ outcome: "skipped", skipped: "night" });
+
+      expect(state()).toBe(before);
+    });
+
+    it("touches nothing while a people import runs", async () => {
+      await heldForNoPost();
+      edit("nodes/wodociagi", { isPublic: true });
+      importRunning.mockResolvedValue(true);
+      const before = state();
+
+      await expect(recheck()).resolves.toEqual({
+        outcome: "skipped",
+        skipped: "import",
+      });
+
+      expect(state()).toBe(before);
+    });
+
+    it("leaves a page it could not finish for the next pass to take up", async () => {
+      await heldForNoPost();
+      edit("nodes/wodociagi", { isPublic: true });
+      const broken = vi
+        .spyOn(firestore, "getAll")
+        .mockRejectedValueOnce(new Error("unavailable"));
+
+      await expect(recheck()).rejects.toThrow("unavailable");
+      broken.mockRestore();
+
+      expect(record()).toMatchObject({
+        status: "publishing",
+        pressedBy: ADMIN,
+      });
+      // The press it was claimed under is finished by the next press.
+      const later = new Date(NOON.getTime() + STUCK_PUBLISHING_MS + 60_000);
+      expect((await press(0, later)).published).toEqual(["kowalska"]);
+    });
+  });
+
+  describe("declinePublication and restorePublication", () => {
+    it("sets the page aside with the reason it was held for, and nothing else", async () => {
+      await heldForAnotherReading();
+      const page = JSON.stringify(read("nodes/kowalska"));
+
+      await declinePublication(firestore, "kowalska", ADMIN, NOON);
+
+      expect(record()).toMatchObject({
+        status: "declined",
+        reason: "conflicting_reading",
+        declinedBy: ADMIN,
+        declinedAt: FakeTimestamp.fromDate(NOON),
+      });
+      expect(JSON.stringify(read("nodes/kowalska"))).toBe(page);
+    });
+
+    it("is taken up by nothing: not a later reading, not a press, not a sweep", async () => {
+      await heldForNoPost();
+      edit("nodes/wodociagi", { isPublic: true });
+      await declinePublication(firestore, "kowalska", ADMIN, NOON);
+      extract("kowalska-crop-2", { declarationYear: 2022 });
+
+      await matchPages(firestore, "kowalska-crop-2", LATER);
+      await sweepDeclarations(firestore, LATER, 3);
+      await press(0, LATER);
+
+      expect(record()).toMatchObject({
+        status: "declined",
+        reason: "no_public_post",
+        extractIds: ["kowalska-crop", "kowalska-crop-2"],
+      });
+      expect(read("nodes/kowalska")!.published).toBe(false);
+    });
+
+    it("stays declined when a second page or an admin's date would hold it", async () => {
+      await heldForNoPost();
+      await declinePublication(firestore, "kowalska", ADMIN, NOON);
+      person("kowalska-2");
+      extract("kowalska-crop-2", {
+        personIds: ["kowalska", "kowalska-2"],
+        declarationYear: 2022,
+      });
+      extract("kowalska-crop-3", {
+        agreed: { value: BORN, kind: "date", by: "admin" },
+        declarationYear: 2021,
+      });
+
+      await matchPages(firestore, "kowalska-crop-2", LATER);
+      await matchPages(firestore, "kowalska-crop-3", LATER);
+
+      expect(record()).toMatchObject({
+        status: "declined",
+        reason: "no_public_post",
+      });
+    });
+
+    it("gives way to a page that went public all the same", async () => {
+      await heldForNoPost();
+      await declinePublication(firestore, "kowalska", ADMIN, NOON);
+      edit("nodes/kowalska", { published: true });
+      extract("kowalska-crop-2", { declarationYear: 2022 });
+
+      await matchPages(firestore, "kowalska-crop-2", LATER);
+
+      expect(record()).toMatchObject({ status: "confirmed", reason: null });
+    });
+
+    it("puts the page back on hold for what it was held for", async () => {
+      await heldForAnotherReading();
+      await declinePublication(firestore, "kowalska", ADMIN, NOON);
+
+      await restorePublication(firestore, "kowalska", LATER);
+
+      expect(record()).toMatchObject({
+        status: "held",
+        reason: "conflicting_reading",
+      });
+      expect(record().declinedBy).toBeUndefined();
+      expect(record().declinedAt).toBeUndefined();
+      await expect(recheck()).resolves.toEqual({
+        outcome: "held",
+        reason: "conflicting_reading",
+      });
+    });
+
+    it("refuses what no longer stands in the state it was decided from", async () => {
+      await queued();
+
+      for (const decide of [
+        declinePublication(firestore, "kowalska", ADMIN, NOON),
+        restorePublication(firestore, "kowalska", NOON),
+      ]) {
+        expect((await failure(decide)).statusCode).toBe(409);
+      }
+      expect(
+        (await failure(declinePublication(firestore, "nobody", ADMIN)))
+          .statusCode,
+      ).toBe(404);
+      expect(
+        (await failure(restorePublication(firestore, "nobody"))).statusCode,
+      ).toBe(404);
+    });
+  });
+
+  describe("closeHoldOnPublication", () => {
+    it("closes a held page, and keeps what it was held for", async () => {
+      await heldForNoPost();
+
+      await expect(
+        closeHoldOnPublication(firestore, "kowalska", ADMIN, LATER),
+      ).resolves.toBe(true);
+
+      expect(record()).toMatchObject({
+        status: "confirmed",
+        reason: null,
+        handPublished: {
+          uid: ADMIN,
+          at: FakeTimestamp.fromDate(LATER),
+          held: "no_public_post",
+        },
+      });
+    });
+
+    it("closes a page somebody declined: whoever publishes it may", async () => {
+      await heldForNoPost();
+      await declinePublication(firestore, "kowalska", ADMIN, NOON);
+
+      await expect(
+        closeHoldOnPublication(firestore, "kowalska", ADMIN, LATER),
+      ).resolves.toBe(true);
+
+      expect(record()).toMatchObject({ status: "confirmed", reason: null });
+    });
+
+    it("leaves every other record alone, and a page with none", async () => {
+      await queued();
+      const before = state();
+
+      await expect(
+        closeHoldOnPublication(firestore, "kowalska", ADMIN, LATER),
+      ).resolves.toBe(false);
+      await expect(
+        closeHoldOnPublication(firestore, "nobody", ADMIN, LATER),
+      ).resolves.toBe(false);
+
+      expect(state()).toBe(before);
+    });
+
+    it("links a reading's declaration on the page it leaves public", async () => {
+      await heldForNoPost();
+      edit("nodes/kowalska", { published: true });
+
+      await closeHoldOnPublication(firestore, "kowalska", ADMIN, LATER);
+
+      const shown = await confirmedDeclarations(
+        firestore,
+        record(),
+        read("nodes/kowalska")!,
+      );
+      expect(shown.map((declaration) => declaration.url)).toEqual([
+        "https://bip.strzelin.pl/download/kowalska-crop",
+      ]);
+    });
+  });
+
+  describe("readingsOfAnotherDay", () => {
+    it("is what the page was held for: a crop named on it, or flagged on it", async () => {
+      await heldForAnotherReading();
+      // Flagged on her page, and no longer naming it.
+      extract("flagged", {
+        agreed: { value: "1990-01-01", kind: "date", by: "readers" },
+        personIds: ["nowak"],
+      });
+      put(`notes/kowalska_${DECLARATION_ACTOR}`, {
+        sources: [{ declarationExtractId: "flagged" }],
+      });
+
+      const crops = await readingsOfAnotherDay(firestore, "kowalska", BORN);
+
+      expect(crops.map((crop) => crop.id).sort()).toEqual([
+        "flagged",
+        "kowalska-crop-2",
+      ]);
+    });
+
+    it("leaves out a crop with the page's date, and one no longer settled", async () => {
+      await heldForAnotherReading();
+      await decideExtract(firestore, {
+        extractId: "kowalska-crop-2",
+        uid: ADMIN,
+        decision: { verdict: "withdraw" },
+        now: NOON,
+      });
+
+      await expect(
+        readingsOfAnotherDay(firestore, "kowalska", BORN),
+      ).resolves.toEqual([]);
+    });
   });
 });
 
