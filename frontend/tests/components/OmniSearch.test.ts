@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { registerEndpoint } from "@nuxt/test-utils/runtime";
 import OmniSearch from "../../app/components/OmniSearch.vue";
@@ -7,10 +7,15 @@ import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import { createRouter, createMemoryHistory } from "vue-router";
-import { readBody } from "h3";
+import { getQuery, readBody } from "h3";
 import { trackGoal } from "~/composables/analytics";
+import { noteSearchPick } from "~/composables/teaserJourney";
 
 vi.mock("~/composables/analytics", () => ({ trackGoal: vi.fn() }));
+vi.mock("~/composables/teaserJourney", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/composables/teaserJourney")>()),
+  noteSearchPick: vi.fn(),
+}));
 
 /** Who is reading: nobody unless a test signs somebody in. Read at the moment
  * the box reports, so a plain holder is enough. */
@@ -31,8 +36,14 @@ let searched: {
   name: string;
   type: string;
   published?: boolean;
+  query?: Record<string, string>;
 }[] = [];
-registerEndpoint("/api/search", () => searched);
+/** What the box asked the server, in order. */
+let asked: string[] = [];
+registerEndpoint("/api/search", (event) => {
+  asked.push(String(getQuery(event).q));
+  return searched;
+});
 
 /** What the box sent to the site's own log, in order, and the token each went
  * with - the server works out from it whether somebody was signed in. Read
@@ -105,9 +116,11 @@ describe("OmniSearch", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     searched = [];
+    asked = [];
     logged = [];
     reader.value = null;
     vi.mocked(trackGoal).mockClear();
+    vi.mocked(noteSearchPick).mockClear();
   });
 
   // Setup Router
@@ -462,6 +475,165 @@ describe("OmniSearch", () => {
     ]);
 
     wrapper.unmount();
+  });
+
+  describe("after a pick", () => {
+    /** Nuxt's router, the one the box reaches for, rather than the one mounted
+     * above. Answered without moving, so that every pick here behaves like
+     * „Lista wszystkich osób” on the table, which goes nowhere: a reset that
+     * waited for the route to change would never come. */
+    let push: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      push = vi.spyOn(useRouter(), "push").mockResolvedValue(undefined);
+    });
+    afterEach(() => {
+      push.mockRestore();
+    });
+
+    /** Clicks a row the way a reader does. Through VAutocomplete's own
+     * `select()`, because that is what writes the title into the field, and
+     * emitting `update:modelValue` at it would skip the half under test. */
+    const pick = async (title: string) => {
+      const row = rows().find(
+        (el) =>
+          el.querySelector(".v-list-item-title")?.textContent.trim() === title,
+      );
+      expect(row, `no row for ${title}`).toBeDefined();
+      row!.click();
+      await flushPromises();
+    };
+
+    /** Past the debounce of `search` and the timer behind it, both of which
+     * could still answer the pick with a search or a report of their own. */
+    const settle = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      await flushPromises();
+    };
+
+    const expectEmptyBox = (wrapper: ReturnType<typeof mountSearch>) => {
+      const autocomplete = wrapper.findComponent({ name: "VAutocomplete" });
+      expect(wrapper.find("input").element.value).toBe("");
+      expect(autocomplete.props("modelValue")).toBeNull();
+      expect(autocomplete.props("search")).toBeFalsy();
+      // The label VAutocomplete draws for a selection, beside the input.
+      expect(wrapper.find(".v-autocomplete__selection-text").exists()).toBe(
+        false,
+      );
+    };
+
+    /** The search:pick events sent so far. */
+    const picks = () =>
+      vi
+        .mocked(trackGoal)
+        .mock.calls.filter(([goal]) => goal === "search:pick")
+        .map(([, props]) => props);
+
+    it.each([
+      {
+        entry: "the list of everybody",
+        typed: "lista",
+        title: "Lista wszystkich osób",
+        kind: "list",
+        target: { path: "/eksploruj/tabela", query: {} },
+      },
+      {
+        entry: "a party",
+        typed: "konfederacja",
+        title: "Konfederacja",
+        kind: "party",
+        target: { path: "/eksploruj/tabela", query: { party: "Konfederacja" } },
+      },
+      {
+        entry: "a region",
+        typed: "opole",
+        title: "Opole",
+        kind: "region",
+        target: { path: "/eksploruj/tabela", query: { teryt: "1661" } },
+      },
+    ])(
+      "empties the box after $entry, and does each thing a pick does once",
+      async ({ typed, title, kind, target }) => {
+        // On the table none of these replaces the box, and the first of them
+        // does not even change the url. The label stayed in the field and the
+        // next click turned it into text, so a reader looking for somebody
+        // typed into it: „Lista wszystkich ospaób”, and nothing was found.
+        searched = [
+          {
+            id: "teryt1661",
+            name: "Opole",
+            type: "region",
+            query: { teryt: "1661" },
+          },
+        ];
+        const wrapper = mountSearch();
+        await flushPromises();
+        await searchFor(wrapper, typed);
+
+        await pick(title);
+        expectEmptyBox(wrapper);
+
+        await settle();
+        expectEmptyBox(wrapper);
+        expect(picks()).toEqual([{ kind }]);
+        expect(push).toHaveBeenCalledTimes(1);
+        expect(push).toHaveBeenCalledWith(target);
+        expect(noteSearchPick).toHaveBeenCalledTimes(1);
+        // The title never gets as far as the server, and neither the emptied
+        // box nor its debounce settles the search a second time.
+        expect(asked).toEqual([typed]);
+        expect(logged.map(({ body }) => body.outcome)).toEqual(["pick"]);
+        expect(settled()).toHaveLength(1);
+
+        wrapper.unmount();
+      },
+    );
+
+    it("takes a name typed straight after a pick as a new search", async () => {
+      searched = [{ id: "anna", name: "Anna Nowak", type: "person" }];
+      const wrapper = mountSearch();
+      await flushPromises();
+      await searchFor(wrapper, "lista");
+      await pick("Lista wszystkich osób");
+
+      await searchFor(wrapper, "anna");
+
+      expect(wrapper.find("input").element.value).toBe("anna");
+      expect(asked).toEqual(["lista", "anna"]);
+      expect(rows().some((el) => el.textContent.includes("Anna Nowak"))).toBe(
+        true,
+      );
+      // Its own search, not thrown away with the answers the pick ended.
+      await searchFor(wrapper, "");
+      expect(logged.map(({ body }) => [body.query, body.outcome])).toEqual([
+        ["lista", "pick"],
+        ["anna", "abandon"],
+      ]);
+
+      wrapper.unmount();
+    });
+
+    it("counts picking the same entry again as another pick", async () => {
+      // VAutocomplete does not report a value it already holds, so as long as
+      // the pick stayed in the box the second one did nothing at all.
+      const wrapper = mountSearch();
+      await flushPromises();
+
+      await searchFor(wrapper, "lista");
+      await pick("Lista wszystkich osób");
+      await wrapper.find("input").trigger("keydown", { key: "ArrowDown" });
+      await flushPromises();
+      await pick("Lista wszystkich osób");
+      await settle();
+
+      expect(picks()).toHaveLength(2);
+      expect(push).toHaveBeenCalledTimes(2);
+      expect(noteSearchPick).toHaveBeenCalledTimes(2);
+      // One search, however many times it was acted on.
+      expect(logged).toHaveLength(1);
+      expectEmptyBox(wrapper);
+
+      wrapper.unmount();
+    });
   });
 
   it.skip("redirects to place for 'rect' nodes", async () => {
