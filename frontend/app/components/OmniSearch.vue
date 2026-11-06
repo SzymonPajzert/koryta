@@ -80,7 +80,7 @@
       :create-type="createType"
       :initial-name="pendingCreateName"
       hide-activator
-      @created="onNodeCreated"
+      @created="resetBox"
     />
   </div>
 </template>
@@ -204,8 +204,13 @@ const openCreate = async (type: CreatableFromSearch) => {
   createDialog.value?.open();
 };
 
-const onNodeCreated = () => {
-  // The dialog redirects to the new page, just reset the search box behind it
+/** Back to a box with nothing in it, ready for the next search.
+ *
+ * Opening a page does not do this. The box in the app bar outlives the page and
+ * is only replaced on the way out of /, whose box is its own, and of a page on
+ * the `gray` layout. From anywhere else a pick stayed in the field until the
+ * reader clicked somewhere else, which is what VAutocomplete itself clears on. */
+const resetBox = () => {
   search.value = null;
   nodeGroupPicked.value = null;
   autocompleteFocus.value = false;
@@ -470,7 +475,14 @@ watch(nodeGroupPicked, (value) => {
   // Before navigating, so the page it opens can tell it was searched for.
   noteSearchPick(value.nodeId);
   push(omniSearchTarget(currentRoute.value, value));
-  autocompleteFocus.value = false;
+  // VAutocomplete is a select: it keeps the pick and leaves its title in the
+  // field as text, so what is typed next lands inside it. On /eksploruj/tabela,
+  // where „Lista wszystkich osób” opens the page already open, two readers went
+  // on to type a name at the caret, „Lista wszystkich ospaób”, and found nobody.
+  // Emptied here, after `select()` has written the title and before the box
+  // renders, so that `search` never reaches the debounce holding it and picking
+  // the same entry again is a change this watcher can see.
+  resetBox();
 });
 </script>
 
