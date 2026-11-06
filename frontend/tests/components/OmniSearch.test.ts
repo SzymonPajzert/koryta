@@ -720,6 +720,38 @@ describe("OmniSearch", () => {
       wrapper.unmount();
     });
 
+    it("takes a second Enter on a closing menu for the same pick", async () => {
+      // The row keeps the keyboard's focus while the menu leaves, and with the
+      // box emptied VAutocomplete reports it again: a key pressed twice, or held
+      // down, was two picks on Plausible for one reader opening one page.
+      const wrapper = mountSearch();
+      await flushPromises();
+      await searchFor(wrapper, "lista");
+
+      const row = rows().find((el) =>
+        el.textContent.includes("Lista wszystkich osób"),
+      );
+      const enter = () =>
+        row!.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+        );
+      enter();
+      // One tick is where `select()` has shut the menu and the row is still
+      // there: the stubbed transition takes it away on the next.
+      await nextTick();
+      enter();
+      await settle();
+
+      expect(picks()).toEqual([{ kind: "list" }]);
+      expect(push).toHaveBeenCalledTimes(1);
+      expect(noteSearchPick).toHaveBeenCalledTimes(1);
+      expect(logged).toHaveLength(1);
+      // The second Enter wrote the title into the field all the same.
+      expectEmptyBox(wrapper);
+
+      wrapper.unmount();
+    });
+
     it("keeps to one report when the pick beats the server's answer", async () => {
       // The parties are on the menu before the server has said anything, so a
       // quick reader picks with a query still out. Its answer used to wait for
