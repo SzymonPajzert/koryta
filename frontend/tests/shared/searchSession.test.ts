@@ -73,6 +73,70 @@ describe("SearchSession", () => {
   it("has nothing to report before any answer came back", () => {
     expect(new SearchSession().pick("party", false)).toBeUndefined();
   });
+
+  describe("when a pick beats the answer", () => {
+    it("settles the search once the answer is in", () => {
+      // A party is on the menu before anything has come back. With no answer
+      // for the pick to settle, the search used to go on no record at all.
+      const session = new SearchSession();
+      expect(session.pick("party", false, "Konfederacja")).toBeUndefined();
+
+      expect(session.lateAnswer("konfederacja", 3, 1)).toEqual({
+        query: "konfederacja",
+        results: 3,
+        unverified: 1,
+        outcome: "pick",
+        picked: "party",
+        pickedUnverified: false,
+      });
+      // Settled: nothing more to report for it.
+      expect(session.lateAnswer("konfederacja", 3, 1)).toBeUndefined();
+      expect(session.abandon()).toBeUndefined();
+    });
+
+    it("waits as well when all that came back was too short to report", () => {
+      const session = new SearchSession();
+      session.results("ko", 30, 10);
+      expect(session.pick("party", false, "kon")).toBeUndefined();
+      expect(session.lateAnswer("kon", 8, 0)?.query).toBe("kon");
+    });
+
+    it("does not wait when an earlier answer gave it a search to settle", () => {
+      const session = new SearchSession();
+      session.results("kon", 8, 0);
+      expect(session.pick("party", false, "konfederacja")?.query).toBe("kon");
+      expect(session.lateAnswer("konfederacja", 1, 0)).toBeUndefined();
+    });
+
+    it("takes only the answer it beat", () => {
+      const session = new SearchSession();
+      session.pick("party", false, "konfederacja");
+      expect(session.lateAnswer("kon", 8, 0)).toBeUndefined();
+      expect(session.lateAnswer("konfederacja", 1, 0)?.outcome).toBe("pick");
+    });
+
+    it("leaves the search typed after it alone", () => {
+      const session = new SearchSession();
+      session.pick("party", false, "konfederacja");
+      expect(session.results("anna", 1, 0)).toBeUndefined();
+      expect(session.lateAnswer("konfederacja", 1, 0)?.query).toBe(
+        "konfederacja",
+      );
+      expect(session.abandon()?.query).toBe("anna");
+    });
+  });
+
+  it("has no use for a late answer no pick is waiting for", () => {
+    // The answer to a query typed over, or a pick made from an empty box with
+    // nothing out: neither may turn into a search.
+    const session = new SearchSession();
+    session.pick("list", false);
+    expect(session.lateAnswer("jan", 2, 2)).toBeUndefined();
+
+    session.results("jan kowalski", 1, 1);
+    expect(session.lateAnswer("jan", 2, 2)).toBeUndefined();
+    expect(session.abandon()?.query).toBe("jan kowalski");
+  });
 });
 
 describe("settledSearchProps", () => {

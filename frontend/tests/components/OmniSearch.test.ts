@@ -746,6 +746,71 @@ describe("OmniSearch", () => {
       wrapper.unmount();
     });
 
+    it("reports the search a pick ended before its only answer was back", async () => {
+      // Nothing had come back for the pick to settle, so the answer found its
+      // search over and it went on neither record: the reader got what they
+      // wanted, and the site never heard what they had typed.
+      searched = [
+        { id: "klub", name: "Klub Konfederacji", type: "place" },
+        {
+          id: "anna",
+          name: "Anna Konfederat",
+          type: "person",
+          published: false,
+        },
+      ];
+      const wrapper = mountSearch();
+      await flushPromises();
+      const answer = holdAnswer("Konfederacja");
+      await searchFor(wrapper, "Konfederacja");
+      await pick("Konfederacja");
+      expect(logged).toEqual([]);
+
+      answer();
+      await settle();
+
+      expectEmptyBox(wrapper);
+      expect(picks()).toEqual([{ kind: "party" }]);
+      expect(logged.map(({ body }) => body)).toEqual([
+        {
+          query: "konfederacja",
+          results: 2,
+          unverified: 1,
+          outcome: "pick",
+          picked: "party",
+          pickedUnverified: false,
+        },
+      ]);
+      expect(settled()).toEqual([
+        {
+          query: "konfederacja",
+          results: "1-4",
+          unverified: "some",
+          outcome: "pick",
+        },
+      ]);
+
+      wrapper.unmount();
+    });
+
+    it("reports that search even when the pick took the box off the page", async () => {
+      // On the way out of / a pick takes the box with it, and the answer still
+      // has somewhere to go.
+      const wrapper = mountSearch();
+      await flushPromises();
+      const answer = holdAnswer("lista");
+      await searchFor(wrapper, "lista");
+      await pick("Lista wszystkich osób");
+      wrapper.unmount();
+
+      answer();
+      await settle();
+
+      expect(logged.map(({ body }) => [body.query, body.outcome])).toEqual([
+        ["lista", "pick"],
+      ]);
+    });
+
     it.each([
       { ending: "an answer", failed: [] },
       { ending: "an error", failed: ["konfederacja"] },

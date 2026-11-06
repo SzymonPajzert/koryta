@@ -85,10 +85,14 @@ function sameSearch(previous: string, next: string): boolean {
 
 type Pending = Pick<SettledSearch, "query" | "results" | "unverified">;
 
+type Picked = Pick<SettledSearch, "picked" | "pickedUnverified">;
+
 /** The search box's searches, settled one at a time. Each method returns the
  * search to report, if what happened settled one. */
 export class SearchSession {
   private pending: Pending | undefined;
+  /** A pick that had nothing to settle, waiting for the answer it beat. */
+  private pickAhead: { query: string; picked: Picked } | undefined;
 
   /** The answer to `query` arrived. Settles the previous search as left when
    * this is a different one. */
@@ -105,9 +109,37 @@ export class SearchSession {
   }
 
   /** The reader opened a result. `kind` is what it was; `unverified` whether it
-   * was an unpublished person. */
-  pick(kind: SearchPickKind, unverified: boolean): SettledSearch | undefined {
-    return this.settle("pick", { picked: kind, pickedUnverified: unverified });
+   * was an unpublished person. `queryOut` is the query the box is still waiting
+   * on, if any: the parties and „Lista wszystkich osób” are on the menu before
+   * the server has said anything, so a pick can find no answer to settle. Its
+   * search is on no record until that answer says what it found, so the pick
+   * waits for `lateAnswer`. */
+  pick(
+    kind: SearchPickKind,
+    unverified: boolean,
+    queryOut?: string,
+  ): SettledSearch | undefined {
+    const picked = { picked: kind, pickedUnverified: unverified };
+    const search = this.settle("pick", picked);
+    if (!search && queryOut) {
+      this.pickAhead = { query: normaliseQuery(queryOut), picked };
+    }
+    return search;
+  }
+
+  /** An answer the box had moved past when it came back, typed over or ended by
+   * a pick. That is no search of its own, and it stays out of what `results`
+   * keeps, but it can be the one a pick was waiting for. */
+  lateAnswer(
+    query: string,
+    results: number,
+    unverified: number,
+  ): SettledSearch | undefined {
+    const normalised = normaliseQuery(query);
+    if (this.pickAhead?.query !== normalised) return undefined;
+    const { picked } = this.pickAhead;
+    this.pickAhead = undefined;
+    return settled({ query: normalised, results, unverified }, "pick", picked);
   }
 
   /** The reader offered to add what the search did not find. */
@@ -123,7 +155,7 @@ export class SearchSession {
 
   private settle(
     outcome: SearchOutcome,
-    picked: Pick<SettledSearch, "picked" | "pickedUnverified"> = {},
+    picked: Picked = {},
   ): SettledSearch | undefined {
     const pending = this.pending;
     this.pending = undefined;
@@ -134,7 +166,7 @@ export class SearchSession {
 function settled(
   pending: Pending,
   outcome: SearchOutcome,
-  picked: Pick<SettledSearch, "picked" | "pickedUnverified"> = {},
+  picked: Picked = {},
 ): SettledSearch | undefined {
   if (pending.query.length < MIN_QUERY_LENGTH) return undefined;
   return { ...pending, outcome, ...picked };
