@@ -24,6 +24,7 @@
       single-line
       variant="solo-filled"
       :menu-props="menuProps"
+      @update:menu="menuOpen = $event"
       @click:clear="nodeGroupPicked = null"
     >
       <!-- The name is written as a child element rather than handed over as
@@ -145,6 +146,11 @@ const loading = ref(false);
 const search = ref();
 const nodeGroupPicked = ref<ListItem | null>(null);
 const autocompleteFocus = ref(false);
+/** Whether the menu is open, which it stops being as soon as a pick shuts it,
+ * while its rows are still on screen on their way out. Listened to rather than
+ * bound with `v-model:menu`: a bound `menu` reads the prop, a render behind what
+ * VAutocomplete has just written. */
+const menuOpen = ref(false);
 const debouncedSearch = refDebounced(search, 300);
 const createDialog = ref<{ open: () => void } | null>(null);
 
@@ -486,6 +492,17 @@ const items = computed<ListItem[]>(() => {
 
 watch(nodeGroupPicked, (value) => {
   if (!value) {
+    return;
+  }
+
+  // A leaving menu takes no clicks, but for the 130 ms or so it takes to go its
+  // row keeps the keyboard's focus, and a second Enter there runs `select()`
+  // again. With the box emptied below that reads as a new pick, so a key pressed
+  // twice or held down was two search:pick events for one page opened. It is the
+  // same pick: nothing is counted or opened, but `select()` has put the title
+  // back in the field.
+  if (!menuOpen.value) {
+    resetBox();
     return;
   }
 
