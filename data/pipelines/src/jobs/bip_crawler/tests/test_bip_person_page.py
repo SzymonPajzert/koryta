@@ -59,6 +59,21 @@ def test_poznans_attachment_is_a_file() -> None:
     assert not is_file_link(f"{HOST}/public/bip/zalaczniki.html?co=list")
 
 
+def test_lesko_attachment_under_its_label_is_the_persons_file() -> None:
+    url = f"{HOST}/zalacznik/9565"
+    assert is_file_link(url)
+    assert not is_file_link(f"{HOST}/zalacznik/lista")
+    seeker = Seeker.of("k", "Łukasz", "Podkalicki")
+    link = LinkContext(url, "ośw_maj_koniec_kadencji_2024_Podkalicki Ł.pdf", "", "")
+    found = candidates(
+        f"{HOST}/oswiadczenie-majatkowe-podkalicki-lukasz",
+        "Oświadczenie majątkowe - Podkalicki Łukasz",
+        [link],
+        [seeker],
+    )
+    assert [(c.key, c.url) for c in found] == [("k", url)]
+
+
 def test_the_walk_takes_a_councillors_files_from_his_page(tmp_path) -> None:
     person = f"{HOST}/bip/radni/przemyslaw-alexandrowicz,20273/"
     other = f"{HOST}/bip/radni/anna-nowak,20274/"
