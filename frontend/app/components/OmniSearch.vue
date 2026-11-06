@@ -204,9 +204,15 @@ const openCreate = async (type: CreatableFromSearch) => {
   createDialog.value?.open();
 };
 
-/** How many times the box has been reset, which is how an answer that comes
- * back afterwards can tell that its search is over. */
-let resets = 0;
+/** Queries sent to the server so far, each known by its place in this count. */
+let queriesSent = 0;
+
+/** The last of those the box is done with: its answer is in, or a reset ended
+ * its search. What comes back for it, or for anything sent before it, is out of
+ * date. An older answer that comes first is not, which is why this is not simply
+ * "the latest query": over a slow connection a reader typing on is shown each
+ * answer as it lands, and can stop at the name instead of waiting for the end. */
+let queriesDone = 0;
 
 /** Back to a box with nothing in it, ready for the next search.
  *
@@ -215,7 +221,7 @@ let resets = 0;
  * the `gray` layout. From anywhere else a pick stayed in the field until the
  * reader clicked somewhere else, which is what VAutocomplete itself clears on. */
 const resetBox = () => {
-  resets += 1;
+  queriesDone = queriesSent;
   search.value = null;
   nodeGroupPicked.value = null;
   autocompleteFocus.value = false;
@@ -353,7 +359,8 @@ const searchData = ref<
 
 async function performSearch(searchTerm: string) {
   loading.value = true;
-  const resetsWhenAsked = resets;
+  queriesSent += 1;
+  const thisQuery = queriesSent;
   try {
     // Drafts for a signed in reader, beside the token that allows them. The
     // flag went out for everybody, so the search box offered every name in
@@ -367,7 +374,6 @@ async function performSearch(searchTerm: string) {
       },
       headers: await authHeaders(user.value),
     });
-    searchData.value = response;
     const unverified = response.filter(isUnverifiedPerson).length;
     // Counted here rather than on every keystroke: `debouncedSearch` is what
     // reaches the server, so this is one event per query a reader actually
@@ -380,16 +386,25 @@ async function performSearch(searchTerm: string) {
     });
     // A pick ends the search whether or not the answer is back: a party or
     // „Lista wszystkich osób” is on the menu before the server has said
-    // anything. Kept as the latest query, this answer would be reported as a
-    // search the reader left, on top of the pick that ended it.
-    if (resets !== resetsWhenAsked) return;
+    // anything. And a slow answer can land after the one to the query typed
+    // since. Either way it is not what the reader is looking at. Taken as the
+    // latest query it would be reported as a search they left, and its rows
+    // would replace the next search's: with Jan Kowalski on the menu, the
+    // answer to an earlier query took him off it and left only „Dodaj nową
+    // osobę”, which is what `createName` is there to prevent.
+    if (thisQuery <= queriesDone) return;
+    queriesDone = thisQuery;
+    searchData.value = response;
     report(searchSession.results(searchTerm, response.length, unverified));
   } catch (error) {
-    // A search that fails should offer nothing rather than spin forever.
+    // A search that fails should offer nothing rather than spin forever. One
+    // the box has moved past has nothing left to take off the menu.
     console.error("Search failed", error);
-    searchData.value = [];
+    if (thisQuery > queriesDone) searchData.value = [];
   } finally {
-    loading.value = false;
+    // Only the latest: the box is still waiting for that one, and `createName`
+    // reads an idle box as one whose results are in.
+    if (thisQuery === queriesSent) loading.value = false;
   }
 }
 
