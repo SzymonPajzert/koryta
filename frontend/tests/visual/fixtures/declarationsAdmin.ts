@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
+import type { NodeRelations } from "../../../server/api/edges/byNode.get";
 import type { NodeMentions } from "../../../server/api/nodes/[id]/mentions.get";
 import {
   DAILY_AUTO_PUBLISH_LIMIT,
+  RULED_OUT,
   type DeclarationOverview,
   type DeclarationPublicationRow,
   type DeclarationReviewRow,
@@ -311,33 +313,162 @@ function differentRows(n: number): DeclarationReviewRow[] {
   });
 }
 
-/** DERIVED: why the 11 held pages are held. */
+/** REAL, on 2026-11-06: why the 111 pages that wait for an admin are held. */
 const HELD_BY: { reason: PublicationHoldReason; count: number }[] = [
-  { reason: "pending_proposal", count: 4 },
-  { reason: "kept_hidden", count: 3 },
-  { reason: "two_pages", count: 2 },
-  { reason: "name_differs", count: 1 },
-  { reason: "ambiguous_candidacy", count: 1 },
+  { reason: "two_places", count: 50 },
+  { reason: "pending_proposal", count: 20 },
+  { reason: "ambiguous_candidacy", count: 17 },
+  { reason: "conflicting_reading", count: 15 },
+  { reason: "no_candidacy_on_page", count: 7 },
+  { reason: "admin_decision", count: 1 },
+  { reason: "kept_hidden", count: 1 },
 ];
+const HELD_TOTAL = HELD_BY.reduce((sum, { count }) => sum + count, 0);
 
+/** REAL, on 2026-11-06: what the 156 pages with no paid public post are held
+ * for, which is not always that. */
+const NO_POST_BY: { reason: PublicationHoldReason; count: number }[] = [
+  { reason: RULED_OUT, count: 125 },
+  { reason: "two_places", count: 15 },
+  { reason: "ambiguous_candidacy", count: 6 },
+  { reason: "conflicting_reading", count: 5 },
+  { reason: "kept_hidden", count: 3 },
+  { reason: "pending_proposal", count: 1 },
+  { reason: "admin_decision", count: 1 },
+];
+/** DERIVED: three an admin has declined, which production has none of yet. */
+const DECLINED_REASONS: PublicationHoldReason[] = [
+  "two_places",
+  "conflicting_reading",
+  "ambiguous_candidacy",
+];
+const SET_ASIDE_TOTAL =
+  NO_POST_BY.reduce((sum, { count }) => sum + count, 0) +
+  DECLINED_REASONS.length;
+
+function heldRow(
+  reason: PublicationHoldReason,
+  i: number,
+  hours: number,
+): DeclarationPublicationRow {
+  const place = unitAt(i + 5);
+  return {
+    personId: fakeId(800 + i),
+    name: fakeName(800 + i),
+    status: "held",
+    reason,
+    pagePublic: false,
+    paidPost: true,
+    at: hoursAgo(hours),
+    unit: place.unit,
+    documentUrl: documentUrl(place.year, 800 + i),
+    edges: { published: 0, held: 1 + (i % 4) },
+    pressed: false,
+  };
+}
+
+/** The held rows the newest first, the reasons mixed as a day's uploads mix
+ * them rather than one after another. */
 function heldRows(): DeclarationPublicationRow[] {
-  return HELD_BY.flatMap(({ reason, count }) =>
+  const rows = HELD_BY.flatMap(({ reason, count }) =>
     Array<PublicationHoldReason>(count).fill(reason),
-  ).map((reason, i) => {
-    const place = unitAt(i + 5);
-    return {
-      personId: fakeId(800 + i),
-      name: fakeName(800 + i),
-      status: "held",
-      reason,
-      pagePublic: false,
-      at: hoursAgo(2.5 + i * 6.1),
-      unit: place.unit,
-      documentUrl: documentUrl(place.year, 800 + i),
-      edges: { published: 0, held: 1 + (i % 4) },
-      pressed: false,
-    };
+  )
+    .map((reason, i) =>
+      heldRow(reason, i, 2.5 + ((i * 41) % HELD_TOTAL) * 1.3),
+    )
+    .sort((a, b) => b.at.localeCompare(a.at));
+  // REAL: four rows of 2026-11-06 were published by hand while they waited.
+  // One of them here, to close.
+  const byHand = rows.find((row) => row.reason === "no_candidacy_on_page")!;
+  byHand.pagePublic = true;
+  return rows;
+}
+
+/** The rule's rows and the admin's, the newest first: an admin's no is the
+ * freshest thing here, and it is what the section shows first. */
+function setAsideRows(): DeclarationPublicationRow[] {
+  const declined = DECLINED_REASONS.map(
+    (reason, i): DeclarationPublicationRow => ({
+      ...heldRow(reason, 200 + i, 1 + i * 4.5),
+      status: "declined",
+    }),
+  );
+  const noPost = NO_POST_BY.flatMap(({ reason, count }) =>
+    Array<PublicationHoldReason>(count).fill(reason),
+  ).map(
+    (reason, i): DeclarationPublicationRow => ({
+      ...heldRow(reason, 300 + i, 14 + ((i * 41) % 156) * 1.1),
+      paidPost: false,
+    }),
+  );
+  return [...declined, ...noPost].sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** `GET /api/declarations/publications/<id>/crops`: the crop that gives a page
+ * held for a conflicting reading another day, for any row. */
+export function heldCrops(
+  row: DeclarationPublicationRow,
+): DeclarationReviewRow[] {
+  const [crop] = differentRows(1);
+  return [
+    {
+      ...crop!,
+      unit: row.unit,
+      documentUrl: row.documentUrl,
+      people: crop!.people.map((person) => ({
+        ...person,
+        id: row.personId,
+        name: row.name,
+        published: row.pagePublic,
+      })),
+    },
+  ];
+}
+
+/** `GET /api/edges/byNode` of a page held for standing in two places: the two
+ * runs of one election, the person's other run in one of the places, and a
+ * job. What „Opublikuj ręcznie” opens on. */
+export function heldRelations(personId: string): NodeRelations {
+  const relation = {
+    direction: "outgoing",
+    otherPublished: true,
+    published: false,
+    revisionToApprove: null,
+    hasPendingRevision: true,
+    publishable: true,
+  } as const;
+  const candidacy = (
+    id: string,
+    otherId: string,
+    otherName: string,
+    startDate: string,
+  ) => ({
+    ...relation,
+    id,
+    type: "election" as const,
+    name: "kandydatura",
+    otherId,
+    otherName,
+    startDate,
+    position: "Rada gminy",
   });
+  return {
+    relations: [
+      candidacy(`${personId}-run1`, "teryt1465", "Powiat grójecki", "2024-04-07"),
+      candidacy(`${personId}-run2`, "teryt0217", "Powiat strzeliński", "2024-04-07"),
+      candidacy(`${personId}-run3`, "teryt1465", "Powiat grójecki", "2018-10-21"),
+      {
+        ...relation,
+        id: `${personId}-job`,
+        type: "employed",
+        name: "Zarząd",
+        otherId: "fxcompany",
+        otherName: "Przedsiębiorstwo Wodociągów Przykładowych sp. z o.o.",
+        startDate: "2021-03-01",
+        position: null,
+      },
+    ],
+  } as NodeRelations;
 }
 
 /** DERIVED: the seven pages the automation published today, by the frozen
@@ -388,7 +519,10 @@ function recentRows(daysBack = 0): DeclarationPublicationRow[] {
  *     1,530 winners' drafts), 116 the same (22 of them already public), 20
  *     different
  *   publications: 74 published over 11 days at no more than 10 a day, 7 of
- *     them today; 9 queued; 11 held
+ *     them today; 9 queued
+ * REAL, on 2026-11-06, for the lists an admin works through
+ *   111 held with a paid post, by reason; 156 with none, with 3 declined
+ *   beside them
  */
 export const declarationOverview: DeclarationOverview = {
   at: hoursAgo(5 / 60),
@@ -439,7 +573,8 @@ export const declarationOverview: DeclarationOverview = {
   publications: {
     queued: 9,
     published: 74,
-    held: 11,
+    held: HELD_TOTAL,
+    setAside: SET_ASIDE_TOTAL,
     today: 7,
     heldBy: HELD_BY,
   },
@@ -447,6 +582,7 @@ export const declarationOverview: DeclarationOverview = {
     disputed: disputedRows(14),
     different: differentRows(20),
     held: heldRows(),
+    setAside: setAsideRows(),
     recent: recentRows(),
   },
   runs: [
@@ -510,8 +646,15 @@ export const declarationOverviewEmpty: DeclarationOverview = {
     days: days(TODAY, 30).map((day) => ({ day, answers: 0, settled: 0 })),
   },
   pages: { same: 0, different: 0, noDate: 0, confirmed: 0 },
-  publications: { queued: 0, published: 0, held: 0, today: 0, heldBy: [] },
-  lists: { disputed: [], different: [], held: [], recent: [] },
+  publications: {
+    queued: 0,
+    published: 0,
+    held: 0,
+    setAside: 0,
+    today: 0,
+    heldBy: [],
+  },
+  lists: { disputed: [], different: [], held: [], setAside: [], recent: [] },
   runs: [],
 };
 

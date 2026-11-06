@@ -14,8 +14,9 @@ const IN_PARALLEL = 8;
  *
  * The one question the declarations flow asks of a whole batch of pages:
  * which crops readers should be shown first (/api/ingest/declarations), who
- * the people snapshot counts (server/utils/declarationPeopleCount.ts), and -
- * for a single page, which asks the predicate directly with the edges it has
+ * the people snapshot counts (server/utils/declarationPeopleCount.ts), who
+ * among the held waits for an admin at all (/admin/oswiadczenia), and - for a
+ * single page, which asks the predicate directly with the edges it has
  * already read - which pages the automation may publish at all
  * (`publishPage`).
  *

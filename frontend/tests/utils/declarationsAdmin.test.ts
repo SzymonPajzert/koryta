@@ -6,6 +6,8 @@ import {
   declarationDifferenceLabels,
   declarationDifferenceTone,
   declarationDrainText,
+  declarationHoldActions,
+  declarationHoldLabel,
   declarationHoldLabels,
   declarationHoldNote,
   declarationHoldNotes,
@@ -13,6 +15,7 @@ import {
   declarationPeopleAccusative,
   declarationQueueDays,
   declarationReasonLabel,
+  declarationRecheckText,
   declarationSettledByLabels,
   declarationStages,
   declarationStatusLabels,
@@ -21,9 +24,12 @@ import {
 import {
   extractStatuses,
   publicationHoldReasons,
+  publicationSetAside,
   settledBy,
   type DeclarationOverview,
+  type DeclarationPublicationRow,
   type DrainResult,
+  type PublicationHoldReason,
 } from "~~/shared/declarations";
 
 /** An overview with nothing in it but the counts a test sets. */
@@ -67,12 +73,34 @@ function overview(
       queued: 0,
       published: 0,
       held: 0,
+      setAside: 0,
       today: 0,
       heldBy: [],
       ...over.publications,
     },
-    lists: { disputed: [], different: [], held: [], recent: [] },
+    lists: { disputed: [], different: [], held: [], setAside: [], recent: [] },
     runs: [],
+  };
+}
+
+/** A draft with a paid post on it, held for `reason`. */
+function heldRow(
+  reason: PublicationHoldReason | null,
+  over: Partial<DeclarationPublicationRow> = {},
+): DeclarationPublicationRow {
+  return {
+    personId: "kowalska",
+    name: "Anna Kowalska",
+    status: "held",
+    reason,
+    pagePublic: false,
+    paidPost: true,
+    at: "2026-10-29T12:00:00.000Z",
+    unit: "Strzelin",
+    documentUrl: "https://bip.example.pl/1",
+    edges: { published: 0, held: 0 },
+    pressed: false,
+    ...over,
   };
 }
 
@@ -103,25 +131,64 @@ describe("the words for the job's codes", () => {
       "datę ustalił administrator",
     );
     expect(declarationHoldNotes.admin_decision).toBe(
-      "Opublikuj ręcznie ze strony osoby, jeśli się zgadza.",
+      "Opublikuj ręcznie, jeśli się zgadza.",
     );
-    expect(declarationHoldNote("admin_decision", false)).toBe(
-      "Opublikuj ręcznie ze strony osoby, jeśli się zgadza.",
+    expect(declarationHoldNote(heldRow("admin_decision"))).toBe(
+      "Opublikuj ręcznie, jeśli się zgadza.",
     );
   });
 
-  it("asks nobody to publish a page an admin's date held that is public by now", () => {
-    // Published by hand while it waited: a hold is never cleared.
-    expect(declarationHoldNote("admin_decision", true)).toBe(
-      "Strona jest już publiczna. Oświadczenia na niej nie podpięto, bo datę ustalił administrator.",
-    );
-    // The other reasons keep their own words.
+  it("asks nobody to publish a page that is public by now", () => {
+    // From before a publication by hand closed the hold.
     for (const reason of publicationHoldReasons) {
-      if (reason === "admin_decision") continue;
-      expect(declarationHoldNote(reason, true), reason).toBe(
-        declarationHoldNotes[reason],
+      if (reason === "two_pages") continue;
+      const row = heldRow(reason, { pagePublic: true });
+      expect(declarationHoldNote(row), reason).toBe(
+        "Strona jest już publiczna, więc nie ma czego publikować.",
+      );
+      expect(declarationHoldLabel(row), reason).toBe("strona już publiczna");
+    }
+  });
+
+  it("still asks about two pages with one date, one of them public", () => {
+    const row = heldRow("two_pages", { pagePublic: true });
+
+    expect(declarationHoldNote(row)).toBe(declarationHoldNotes.two_pages);
+    expect(declarationHoldLabel(row)).toBe(declarationHoldLabels.two_pages);
+  });
+
+  it("says why a page will not be published, whatever it was held for", () => {
+    for (const reason of ["two_places", "no_public_post"] as const) {
+      const row = heldRow(reason, { paidPost: false });
+
+      expect(declarationHoldLabel(row), reason).toBe(
+        "brak płatnego stanowiska",
+      );
+      expect(declarationHoldNote(row), reason).toBe(
+        declarationHoldNotes.no_public_post,
       );
     }
+  });
+
+  it("says a page held for having no post has one now", () => {
+    const row = heldRow("no_public_post");
+
+    expect(declarationHoldLabel(row)).toBe("płatne stanowisko już jest");
+    expect(declarationHoldNote(row)).toBe(
+      "Na stronie jest już płatne stanowisko, którego wcześniej nie było. Sprawdź stronę ponownie.",
+    );
+  });
+
+  it("says an admin decided, and what the page was held for", () => {
+    const row = heldRow("two_places", { status: "declined" });
+
+    expect(declarationHoldLabel(row)).toBe("decyzja administratora");
+    expect(declarationHoldNote(row)).toBe(
+      "Administrator zdecydował, że ta strona nie wyjdzie. Była wstrzymana: kandydatura w dwóch miejscach naraz.",
+    );
+    expect(declarationHoldNote({ ...row, reason: null })).toBe(
+      "Administrator zdecydował, że ta strona nie wyjdzie.",
+    );
   });
 
   it("names every state a crop can be in", () => {
@@ -142,13 +209,19 @@ describe("the words for the job's codes", () => {
     ];
     for (const reason of publicationHoldReasons) {
       if (reason === "admin_decision") continue;
-      for (const pagePublic of [false, true]) {
-        expect(declarationHoldTone(reason, pagePublic), reason).toBe(
-          decisions.includes(reason) ? "info" : "warning",
-        );
-      }
+      expect(declarationHoldTone(reason), reason).toBe(
+        decisions.includes(reason) ? "info" : "warning",
+      );
     }
     expect(declarationHoldTone(null)).toBe("warning");
+  });
+
+  it("puts any hold on a public page in blue, where it asks nothing, but two pages", () => {
+    for (const reason of publicationHoldReasons) {
+      expect(declarationHoldTone(reason, true), reason).toBe(
+        reason === "two_pages" ? "warning" : "info",
+      );
+    }
   });
 
   it("puts an admin's date in amber on a draft, which waits for a check, and in blue on a public page", () => {
@@ -157,6 +230,102 @@ describe("the words for the job's codes", () => {
     expect(declarationHoldTone("admin_decision")).toBe("warning");
     expect(declarationHoldTone("admin_decision", false)).toBe("warning");
     expect(declarationHoldTone("admin_decision", true)).toBe("info");
+  });
+
+  describe("declarationHoldActions", () => {
+    it("offers a page that waits all three ways out", () => {
+      expect(declarationHoldActions(heldRow("two_places"))).toEqual({
+        publish: true,
+        recheck: true,
+        decline: true,
+        restore: false,
+      });
+    });
+
+    it("does not offer to check a draft only an admin's date holds", () => {
+      expect(declarationHoldActions(heldRow("admin_decision"))).toEqual({
+        publish: true,
+        recheck: false,
+        decline: true,
+        restore: false,
+      });
+    });
+
+    it("offers nothing on a page with no paid post: the post brings it back", () => {
+      for (const reason of ["no_public_post", "two_places"] as const) {
+        expect(
+          declarationHoldActions(heldRow(reason, { paidPost: false })),
+          reason,
+        ).toEqual({
+          publish: false,
+          recheck: false,
+          decline: false,
+          restore: false,
+        });
+      }
+    });
+
+    it("offers only to close the hold of a page that is public", () => {
+      for (const reason of ["two_places", "admin_decision"] as const) {
+        expect(
+          declarationHoldActions(heldRow(reason, { pagePublic: true })),
+          reason,
+        ).toEqual({
+          publish: false,
+          recheck: true,
+          decline: false,
+          restore: false,
+        });
+      }
+    });
+
+    it("offers to take an admin's no back, and nothing else", () => {
+      expect(
+        declarationHoldActions(heldRow("two_places", { status: "declined" })),
+      ).toEqual({
+        publish: false,
+        recheck: false,
+        decline: false,
+        restore: true,
+      });
+    });
+
+    it("offers nothing on a row that is not held", () => {
+      expect(
+        declarationHoldActions(heldRow(null, { status: "published" })),
+      ).toEqual({
+        publish: false,
+        recheck: false,
+        decline: false,
+        restore: false,
+      });
+    });
+  });
+
+  describe("publicationSetAside", () => {
+    it("is who an admin declined, and a draft with no paid post", () => {
+      expect(publicationSetAside(heldRow("two_places"))).toBe(false);
+      expect(
+        publicationSetAside(heldRow("two_places", { paidPost: false })),
+      ).toBe(true);
+      expect(
+        publicationSetAside(heldRow("two_places", { status: "declined" })),
+      ).toBe(true);
+    });
+
+    it("leaves a public page with its hold to close", () => {
+      expect(
+        publicationSetAside(
+          heldRow("two_places", { paidPost: false, pagePublic: true }),
+        ),
+      ).toBe(false);
+    });
+
+    it("asks nothing of a row whose post nobody looked for", () => {
+      expect(
+        publicationSetAside(heldRow(null, { status: "published", paidPost: undefined })),
+      ).toBe(false);
+    });
   });
 
   it("names whoever can settle a crop's date", () => {
@@ -290,7 +459,7 @@ describe("declarationStages", () => {
           },
         },
         pages: { same: 94, different: 20, noDate: 178, confirmed: 22 },
-        publications: { published: 74, queued: 9, held: 11 },
+        publications: { published: 74, queued: 9, held: 11, setAside: 6 },
       }),
     );
     expect(stages).toEqual({
@@ -301,7 +470,7 @@ describe("declarationStages", () => {
       agreed: 320,
       compared: 94 + 20 + 178 + 22,
       same: 94,
-      decided: 74 + 9 + 11,
+      decided: 74 + 9 + 11 + 6,
       published: 74,
     });
   });
@@ -406,6 +575,34 @@ describe("declarationPeopleAccusative", () => {
   });
 });
 
+describe("declarationRecheckText", () => {
+  it("says what came of asking a page again", () => {
+    expect(declarationRecheckText({ outcome: "published" })).toBe(
+      "Opublikowano: strona przeszła sprawdzenia.",
+    );
+    expect(declarationRecheckText({ outcome: "confirmed" })).toBe(
+      "Strona jest już publiczna, wiersz zamknięty.",
+    );
+  });
+
+  it("names what holds a page now, which may not be what held it", () => {
+    expect(
+      declarationRecheckText({ outcome: "held", reason: "two_places" }),
+    ).toBe("Nadal wstrzymana: kandydatura w dwóch miejscach naraz.");
+  });
+
+  it("says why nobody looked, in the words of the queue", () => {
+    expect(
+      declarationRecheckText({ outcome: "skipped", skipped: "night" }),
+    ).toBe(
+      "Nie sprawdzono: od 3:00 do 9:00 trwa nocny import osób, który mógłby cofnąć publikację.",
+    );
+    expect(
+      declarationRecheckText({ outcome: "skipped", skipped: "import" }),
+    ).toBe("Nie sprawdzono: trwa import osób albo nie da się sprawdzić, czy trwa.");
+  });
+});
+
 describe("declarationDrainText", () => {
   /** A press, as publish-queued answers it: past the limit, with what is
    * left in the queue counted. */
@@ -473,7 +670,7 @@ describe("declarationDrainText", () => {
         }),
       ),
     ).toBe(
-      "Opublikowano z kolejki jedną osobę. Wstrzymano 2 osoby; powody są na liście „Wstrzymane publikacje”. Części publikacji nie udało się dokończyć: poczekają na kolejną próbę. W kolejce czeka jeszcze jedna osoba.",
+      "Opublikowano z kolejki jedną osobę. Wstrzymano 2 osoby; powody są na listach „Wstrzymane publikacje” i „Nie do publikacji”. Części publikacji nie udało się dokończyć: poczekają na kolejną próbę. W kolejce czeka jeszcze jedna osoba.",
     );
   });
 

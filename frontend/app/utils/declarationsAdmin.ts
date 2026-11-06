@@ -1,9 +1,16 @@
-import { PEOPLE_IMPORT_WINDOW, readingKind } from "~~/shared/declarations";
+import {
+  PEOPLE_IMPORT_WINDOW,
+  publicationSetAside,
+  readingKind,
+  RULED_OUT,
+} from "~~/shared/declarations";
 import type {
   DeclarationOverview,
+  DeclarationPublicationRow,
   DrainResult,
   ExtractStatus,
   PublicationHoldReason,
+  RecheckResult,
   SettledBy,
 } from "~~/shared/declarations";
 import { shortDate, warsawDate } from "~~/shared/dates";
@@ -50,7 +57,7 @@ export const declarationHoldLabels: Record<PublicationHoldReason, string> = {
   kept_hidden: "administrator zostawił stronę ukrytą",
   pending_proposal: "czeka propozycja zmiany od osoby",
   name_differs: "odczytane nazwisko się nie zgadza",
-  no_public_post: "brak płatnego stanowiska w instytucji publicznej",
+  no_public_post: "brak płatnego stanowiska",
   no_candidacy_on_page: "na stronie brak tej kandydatury",
   ambiguous_candidacy: "dwie pasujące kandydatury w powiecie",
   two_places: "kandydatura w dwóch miejscach naraz",
@@ -64,24 +71,24 @@ export const declarationHoldLabels: Record<PublicationHoldReason, string> = {
 /** What an admin can do about a hold, for the open row. */
 export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
   two_pages:
-    "Ta osoba ma w serwisie dwie strony. Połącz je albo opublikuj właściwą ręcznie.",
-  admin_decision: "Opublikuj ręcznie ze strony osoby, jeśli się zgadza.",
+    "Ta osoba ma w serwisie dwie strony. Połącz je i sprawdź ponownie albo opublikuj właściwą ręcznie.",
+  admin_decision: "Opublikuj ręcznie, jeśli się zgadza.",
   needs_split:
-    "Strona jest oznaczona do rozdzielenia. Najpierw ją rozdziel, potem publikuj.",
+    "Strona jest oznaczona do rozdzielenia. Najpierw ją rozdziel, potem sprawdź ponownie.",
   kept_hidden:
-    "Ktoś z administratorów zostawił tę stronę ukrytą. Automat tej decyzji nie zmienia.",
+    "Ktoś z administratorów zostawił tę stronę ukrytą. Automat tej decyzji nie zmienia, więc wyjdzie tylko opublikowana ręcznie.",
   pending_proposal:
-    "Na stronie czeka propozycja zmiany. Rozpatrz ją, zanim strona wyjdzie.",
+    "Na stronie czeka propozycja zmiany. Rozpatrz ją, zanim strona wyjdzie. Automat nie publikuje strony, o której zdecydował człowiek, więc potem opublikuj ją ręcznie.",
   name_differs:
     "Czytelnicy odczytali z oświadczenia inne imię albo nazwisko niż na stronie.",
   no_public_post:
-    "Na stronie nie ma pracy ani funkcji, za którą ktoś płaci ze środków publicznych. Sama kandydatura nie wystarcza: oświadczenie składa każdy radny. Jeśli takie stanowisko jest, dodaj je i opublikuj stronę ręcznie.",
+    "Na stronie nie ma pracy ani funkcji, za którą ktoś płaci ze środków publicznych. Sama kandydatura nie wystarcza: oświadczenie składa każdy radny. Jeśli takie stanowisko jest, dodaj je na stronie, a osoba sama wróci na listę wstrzymanych.",
   no_candidacy_on_page:
     "Strona nie ma kandydatury, dla której znaleziono oświadczenie.",
   ambiguous_candidacy:
-    "W powiecie z oświadczenia pasują dwie kandydatury tej osoby. Nie wiadomo, którą opublikować.",
+    "W powiecie z oświadczenia pasują dwie kandydatury tej osoby. Nie wiadomo, którą opublikować: właściwą zaznaczysz przy publikacji ręcznej.",
   two_places:
-    "Ta sama kandydatura wypada w dwóch miejscach naraz. Sprawdź, czy to na pewno jedna osoba.",
+    "Ta sama kandydatura wypada w dwóch miejscach naraz. Sprawdź, czy to na pewno jedna osoba: właściwą zaznaczysz przy publikacji ręcznej.",
   no_revision:
     "Strona nie pokazuje ostatniej wersji z importu albo nie ma żadnej. Automat publikuje tylko to, co sprawdził.",
   no_longer_matches:
@@ -91,45 +98,87 @@ export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
   revision_rejected:
     "Ktoś z recenzentów odrzucił wersję tej strony. Automat tej decyzji nie zmienia.",
   conflicting_reading:
-    "Inny odczytany wycinek tej osoby podaje inną datę. Sprawdź oba oświadczenia.",
+    "Inny odczytany wycinek tej osoby podaje inną datę. Wycofaj ten, który nie jest tej osoby, i sprawdź ponownie.",
 };
 
-/** What the open row says instead when the page is public now. An admin's
- * date gives a public page no record (`matchPages`), but a hold is never
- * cleared, so a draft held for one and then published by hand stays on the
- * list, where „Opublikuj ręcznie” would ask for what cannot be done. */
-const declarationPublicHoldNotes: Partial<
-  Record<PublicationHoldReason, string>
-> = {
-  admin_decision:
-    "Strona jest już publiczna. Oświadczenia na niej nie podpięto, bo datę ustalił administrator.",
-};
+type HeldRow = Pick<
+  DeclarationPublicationRow,
+  "status" | "reason" | "pagePublic" | "paidPost"
+>;
 
-/** The note of a held row: what an admin can do about it, or, on a page that
- * is public now and has nothing left to publish, what stands. */
-export function declarationHoldNote(
-  reason: PublicationHoldReason,
-  pagePublic: boolean,
-): string {
-  return (
-    (pagePublic ? declarationPublicHoldNotes[reason] : undefined) ??
-    declarationHoldNotes[reason]
-  );
+/** A page held for having no paid public post that has one now: what held it
+ * is gone, which only asking it again can say for the rest. */
+function postFound(row: HeldRow): boolean {
+  return row.reason === RULED_OUT && row.paidPost === true;
+}
+
+/** A page public now has nothing left to publish: a publication by hand closes
+ * the hold (`closeHoldOnPublication`), so such a row is one from before that.
+ * Two pages with one date, one of them up already, are still a question. */
+function holdIsOver(row: Pick<HeldRow, "reason" | "pagePublic">): boolean {
+  return row.pagePublic && row.reason !== "two_pages";
+}
+
+/** What a page in the held rows is held for, as its tag and the reason filter
+ * say it: the stored reason, unless that is not what stands now. */
+export function declarationHoldLabel(row: HeldRow): string {
+  if (row.status === "declined") return "decyzja administratora";
+  if (holdIsOver(row)) return "strona już publiczna";
+  if (postFound(row)) return "płatne stanowisko już jest";
+  if (publicationSetAside(row)) return declarationHoldLabels[RULED_OUT];
+  return row.reason ? declarationHoldLabels[row.reason] : "wstrzymana";
+}
+
+/** The note of a held row: what an admin can do about it. */
+export function declarationHoldNote(row: HeldRow): string | null {
+  if (row.status === "declined") {
+    const held = row.reason
+      ? ` Była wstrzymana: ${declarationHoldLabels[row.reason]}.`
+      : "";
+    return `Administrator zdecydował, że ta strona nie wyjdzie.${held}`;
+  }
+  if (!row.reason) return null;
+  if (holdIsOver(row)) {
+    return "Strona jest już publiczna, więc nie ma czego publikować.";
+  }
+  if (postFound(row)) {
+    return "Na stronie jest już płatne stanowisko, którego wcześniej nie było. Sprawdź stronę ponownie.";
+  }
+  return publicationSetAside(row)
+    ? declarationHoldNotes[RULED_OUT]
+    : declarationHoldNotes[row.reason];
+}
+
+/** What an admin can do about a row of the held lists, and what its open row
+ * offers. A page that is public has only its hold to close, and that is all
+ * „Sprawdź ponownie” does to it. A draft held on an admin's date cannot pass a
+ * check by design. A page with no paid public post asks for nothing: what
+ * clears it is the post, which brings it back by itself, and the person's own
+ * page still publishes it by hand. */
+export function declarationHoldActions(row: DeclarationPublicationRow) {
+  const held = row.status === "held";
+  const waiting = held && !row.pagePublic && !publicationSetAside(row);
+  return {
+    publish: waiting,
+    recheck:
+      (held && row.pagePublic) ||
+      (waiting && row.reason !== "admin_decision"),
+    decline: waiting,
+    restore: row.status === "declined",
+  };
 }
 
 /** Blue for a hold that is somebody's decision, which the automation only
  * respects; amber for a doubt somebody has to clear up. An admin's date is
  * amber on a draft, which waits for somebody to check it and publish it by
- * hand, and blue on a page that is public already, where it asks nothing.
- *
- * A page with no paid public post is amber, with the rest: nobody decided it,
- * and it is a doubt somebody can clear up, since the post may be one the
- * pipelines have not recorded rather than one the person never held. */
+ * hand, and any hold is blue on a page that is public already, where it asks
+ * nothing. */
 export function declarationHoldTone(
   reason: PublicationHoldReason | null,
   pagePublic = false,
 ): RowTone {
-  if (reason === "admin_decision") return pagePublic ? "info" : "warning";
+  if (holdIsOver({ reason, pagePublic })) return "info";
+  if (reason === "admin_decision") return "warning";
   return reason === "kept_hidden" ||
     reason === "pending_proposal" ||
     reason === "revision_rejected" ||
@@ -267,7 +316,11 @@ export function declarationStages(overview: DeclarationOverview) {
     agreed: extracts.byStatus.agreed,
     compared: pages.same + pages.different + pages.noDate + pages.confirmed,
     same: pages.same,
-    decided: publications.published + publications.queued + publications.held,
+    decided:
+      publications.published +
+      publications.queued +
+      publications.held +
+      publications.setAside,
     published: publications.published,
   };
 }
@@ -297,13 +350,7 @@ export function declarationPeopleAccusative(count: number): string {
  * "nobody" is an answer it can give. */
 export function declarationDrainText(result: DrainResult): string {
   const published = result.published.length;
-  const { from, to } = PEOPLE_IMPORT_WINDOW;
-  const why =
-    result.skipped === "night"
-      ? `od ${from}:00 do ${to}:00 trwa nocny import osób, który mógłby cofnąć publikację`
-      : result.skipped === "import"
-        ? "trwa import osób albo nie da się sprawdzić, czy trwa"
-        : null;
+  const why = whyNothingWentUp(result.skipped);
   const lines = [
     published > 0
       ? `Opublikowano z kolejki ${declarationPeopleAccusative(published)}.`
@@ -313,7 +360,7 @@ export function declarationDrainText(result: DrainResult): string {
   ];
   if (result.held.length > 0) {
     lines.push(
-      `Wstrzymano ${declarationPeopleAccusative(result.held.length)}; powody są na liście „Wstrzymane publikacje”.`,
+      `Wstrzymano ${declarationPeopleAccusative(result.held.length)}; powody są na listach „Wstrzymane publikacje” i „Nie do publikacji”.`,
     );
   }
   if (result.failed.length > 0) {
@@ -325,6 +372,33 @@ export function declarationDrainText(result: DrainResult): string {
     lines.push(declarationWaitingText(result.waiting));
   }
   return lines.join(" ");
+}
+
+/** Why a pass or a press took nobody up, where the page can say. */
+function whyNothingWentUp(skipped: DrainResult["skipped"]): string | null {
+  const { from, to } = PEOPLE_IMPORT_WINDOW;
+  if (skipped === "night") {
+    return `od ${from}:00 do ${to}:00 trwa nocny import osób, który mógłby cofnąć publikację`;
+  }
+  return skipped === "import"
+    ? "trwa import osób albo nie da się sprawdzić, czy trwa"
+    : null;
+}
+
+/** What a press of „Sprawdź ponownie” did, from the server's own account of
+ * it. A page still held says what holds it now, which can be another reason
+ * than the one the admin was looking at. */
+export function declarationRecheckText(result: RecheckResult): string {
+  switch (result.outcome) {
+    case "published":
+      return "Opublikowano: strona przeszła sprawdzenia.";
+    case "confirmed":
+      return "Strona jest już publiczna, wiersz zamknięty.";
+    case "held":
+      return `Nadal wstrzymana: ${declarationHoldLabels[result.reason]}.`;
+    case "skipped":
+      return `Nie sprawdzono: ${whyNothingWentUp(result.skipped)}.`;
+  }
 }
 
 /** „W kolejce czekają jeszcze 2 osoby.” What a press left in the queue; the

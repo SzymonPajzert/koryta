@@ -59,6 +59,22 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "wstrzymane-publikacje-decyzje",
+    title:
+      "Wstrzymane publikacje: opublikuj ręcznie, sprawdź ponownie albo odłóż",
+    description:
+      "Sekcja „Wstrzymane publikacje” na /admin/oswiadczenia pokazuje wszystkie wstrzymane osoby, nie 20 najnowszych, z filtrem powodu, a wiersze mają przyciski decyzji. Osoby bez płatnego stanowiska i odłożone są w nowej sekcji „Nie do publikacji”. Strona opublikowana ręcznie znika z listy i pokazuje oświadczenie.",
+    steps: [
+      "Wejdź na /admin/oswiadczenia. Przy „Wstrzymane publikacje” jest liczba wszystkich wstrzymanych i pole „Powód”. Wybierz powód: lista się zawęża.",
+      "Rozwiń wiersz z powodem „kandydatura w dwóch miejscach naraz” i kliknij „Opublikuj ręcznie”: otwiera się okno publikacji tej osoby. Zaznacz jedną kandydaturę i opublikuj. Wiersz od razu znika, a strona osoby jest publiczna i ma notkę z oświadczeniem.",
+      "Kliknij „Sprawdź ponownie” w innym wierszu: komunikat mówi, czy strona wyszła, czy nadal jest wstrzymana i dlaczego.",
+      "Kliknij „Nie publikuj”: osoba od razu przechodzi na górę sekcji „Nie do publikacji”. Kliknij tam „Przywróć”: wraca na górę wstrzymanych.",
+      "Rozwiń wiersz w „Nie do publikacji” z powodem „brak płatnego stanowiska”: ma tylko „Opublikuj ręcznie”.",
+    ],
+    link: "/admin/oswiadczenia",
+    area: "admin",
+  },
+  {
     id: "dwa-miejsca-wedlug-wyborow",
     title: "„Dwa miejsca” także przy różnych urzędach w jednych wyborach",
     description:
@@ -435,9 +451,9 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Strona sama publikuje osobę z odczytanego oświadczenia tylko wtedy, gdy ma na stronie pracę albo funkcję w firmie, o której wiadomo, że należy do sektora publicznego, i za którą ktoś płaci. Sama kandydatura nie wystarcza: oświadczenie składa każdy radny. Z tego samego powodu czytelnicy dostają teraz do odczytania najpierw wycinki tych osób, które taką posadę mają.",
     steps: [
-      "Wejdź na /admin/oswiadczenia i rozwiń listę wstrzymanych: osoby bez takiej posady mają powód „brak płatnego stanowiska w instytucji publicznej”, w bursztynowym kolorze, bo posada może być tylko niezapisana.",
-      "Rozwiń taki wiersz: notatka mówi, co zrobić, jeśli posada jednak jest (dodać ją i opublikować stronę ręcznie).",
-      "Naciśnij „Opublikuj z kolejki”: taka osoba nie wychodzi, zostaje na liście wstrzymanych.",
+      "Wejdź na /admin/oswiadczenia i rozwiń sekcję „Nie do publikacji”: osoby bez takiej posady mają powód „brak płatnego stanowiska”.",
+      "Rozwiń taki wiersz: notatka mówi, że po dodaniu posady osoba wróci do wstrzymanych, a „Opublikuj ręcznie” publikuje ją od razu.",
+      "Naciśnij „Opublikuj z kolejki”: taka osoba nie wychodzi, zostaje w „Nie do publikacji”.",
       "Otwórz stronę takiej osoby i opublikuj ją ręcznie: to działa jak dotąd, automat nikomu nie blokuje publikacji.",
     ],
     link: "/admin/oswiadczenia",

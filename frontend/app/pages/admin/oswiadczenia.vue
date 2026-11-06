@@ -147,23 +147,105 @@
         <section id="wstrzymane" class="dsection">
           <AdminSectionHead
             title="Wstrzymane publikacje"
-            :count="overview.lists.held.length"
-            info="Osoby z tą samą datą, których stron nie opublikowano ani automatycznie, ani przyciskiem „Opublikuj z kolejki”, bo ktoś już o nich zdecydował albo coś budzi wątpliwość. Niebieskie to cudza decyzja, bursztynowe czekają na wyjaśnienie. Szkic można opublikować ręcznie z jego strony. Wiersz zostaje wtedy na liście, ze stroną oznaczoną jako publiczna."
-          />
+            :count="
+              formatCount(
+                heldView === 'aside'
+                  ? overview.publications.setAside
+                  : overview.publications.held,
+              )
+            "
+            :info="heldInfo"
+          >
+            <!-- TEMP(wariant): B holds both lists in one section. -->
+            <v-btn-toggle
+              v-if="wariant === 'b'"
+              v-model="heldView"
+              mandatory
+              density="compact"
+              variant="outlined"
+              divided
+              class="dheld__view"
+              data-held-view
+            >
+              <v-btn value="waiting" size="small">
+                Do decyzji ({{ overview.publications.held }})
+              </v-btn>
+              <v-btn value="aside" size="small">
+                Nie do publikacji ({{ overview.publications.setAside }})
+              </v-btn>
+            </v-btn-toggle>
+            <v-select
+              v-if="reasonOptions.length > 2 && heldView === 'waiting'"
+              v-model="heldReason"
+              :items="reasonOptions"
+              label="Powód"
+              density="compact"
+              variant="outlined"
+              hide-details
+              class="dheld__reason"
+              data-held-reason
+            />
+            <AdminDeclarationsShowAll
+              v-model="showAllHeld"
+              :total="heldRows.length"
+              :limit="HELD_LIMIT"
+            />
+          </AdminSectionHead>
           <div data-testid="declarations-held">
-            <AdminRowList v-if="overview.lists.held.length">
+            <AdminRowList v-if="heldShown.length">
               <AdminDeclarationsPublicationRow
-                v-for="row in overview.lists.held"
+                v-for="row in heldShown"
                 :key="row.personId"
                 :row="row"
                 :now="now"
+                :busy="holdBusy.get(row.personId) ?? null"
+                :crop-busy="(id: string) => busy.get(id) ?? null"
                 :expanded="openRows.has(`held:${row.personId}`)"
                 @update:expanded="
                   (open: boolean) => setOpen(`held:${row.personId}`, open)
                 "
+                @publish="openPublish(row)"
+                @recheck="decideHold(row, 'recheck')"
+                @decline="decideHold(row, 'decline')"
+                @restore="decideHold(row, 'restore')"
+                @crop="decide"
               />
             </AdminRowList>
             <p v-else class="dsection__empty">Nic nie jest wstrzymane.</p>
+          </div>
+        </section>
+
+        <!-- TEMP(wariant): A gives them a section of their own. -->
+        <section v-if="wariant === 'a'" id="nie-do-publikacji" class="dsection">
+          <AdminSectionHead
+            title="Nie do publikacji"
+            :count="formatCount(overview.publications.setAside)"
+            info="Te osoby nie wyjdą i nic tu nie czeka na decyzję. Na ich stronach nie ma płatnego stanowiska w instytucji publicznej, a bez niego automat nikogo nie publikuje, albo administrator zdecydował, że ich nie publikujemy. To, czy stanowisko jest, czytamy ze strony przy każdym otwarciu: gdy się pojawi, osoba sama wraca na listę wstrzymanych."
+          >
+            <AdminDeclarationsShowAll
+              v-model="showAllAside"
+              :total="overview.lists.setAside.length"
+              :limit="ASIDE_LIMIT"
+            />
+          </AdminSectionHead>
+          <div data-testid="declarations-set-aside">
+            <AdminRowList v-if="asideShown.length">
+              <AdminDeclarationsPublicationRow
+                v-for="row in asideShown"
+                :key="row.personId"
+                :row="row"
+                :now="now"
+                :busy="holdBusy.get(row.personId) ?? null"
+                :expanded="openRows.has(`aside:${row.personId}`)"
+                @update:expanded="
+                  (open: boolean) => setOpen(`aside:${row.personId}`, open)
+                "
+                @restore="decideHold(row, 'restore')"
+              />
+            </AdminRowList>
+            <p v-else class="dsection__empty">
+              Każda wstrzymana osoba ma jeszcze szansę na publikację.
+            </p>
           </div>
         </section>
 
@@ -173,19 +255,11 @@
             :count="overview.lists.recent.length"
             info="Strony, które opublikował automat albo administrator przyciskiem „Opublikuj z kolejki”, razem z zatrudnieniami w KRS i wyborami w regionie z oświadczenia; kto, widać w otwartym wierszu. Każda ma na sobie notkę z linkiem do oświadczenia, dopóki jego odczyt potwierdza datę urodzenia na stronie."
           >
-            <v-btn
-              v-if="overview.lists.recent.length > RECENT_LIMIT"
-              variant="text"
-              size="small"
-              :append-icon="showAllRecent ? mdiChevronUp : mdiChevronDown"
-              @click="showAllRecent = !showAllRecent"
-            >
-              {{
-                showAllRecent
-                  ? "Zwiń"
-                  : `Pokaż wszystkie (${overview.lists.recent.length})`
-              }}
-            </v-btn>
+            <AdminDeclarationsShowAll
+              v-model="showAllRecent"
+              :total="overview.lists.recent.length"
+              :limit="RECENT_LIMIT"
+            />
           </AdminSectionHead>
           <div data-testid="declarations-recent">
             <AdminRowList v-if="recentShown.length">
@@ -243,6 +317,17 @@
       </template>
     </template>
 
+    <!-- One for the page, not one a row: it reads the relations when it opens,
+         which is the same dialog the person's own page offers. -->
+    <AdminPublishNodeDialog
+      v-if="publishing"
+      v-model="publishOpen"
+      :node-id="publishing.personId"
+      :node-name="publishing.name"
+      @published="onPublished"
+      @failed="onPublishFailed"
+    />
+
     <v-snackbar
       v-model="snackbar"
       :timeout="4000"
@@ -254,13 +339,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
-import { mdiChevronDown, mdiChevronUp, mdiRefresh } from "@mdi/js";
+import { computed, nextTick, onMounted, reactive, ref } from "vue";
+import { mdiRefresh } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { polishCounting, polishCountingGenitive } from "~/composables/polish";
+import { formatCount } from "~/utils/chartTheme";
 import {
   declarationDateText,
   declarationDrainText,
+  declarationHoldLabel,
+  declarationRecheckText,
   groupDeclarationRuns,
 } from "~/utils/declarationsAdmin";
 import {
@@ -270,8 +358,11 @@ import {
   READERS_TO_AGREE,
   type DeclarationOverview,
   type DeclarationPeople,
+  type DeclarationPublicationRow,
   type DeclarationReviewRow,
   type DrainResult,
+  type PublicationHoldReason,
+  type RecheckResult,
 } from "~~/shared/declarations";
 import { shortWarsawTime } from "~~/shared/jobs";
 
@@ -392,6 +483,68 @@ const recentShown = computed(() => {
   return showAllRecent.value ? recent : recent.slice(0, RECENT_LIMIT);
 });
 
+/** A hundred held rows would push everything under them off the page. */
+const HELD_LIMIT = 20;
+const showAllHeld = ref(false);
+const pickedReason = ref<PublicationHoldReason | null>(null);
+/** What the held rows are narrowed to, null for all of them. A reason whose
+ * last row has just been decided is no longer among the select's items, and
+ * the list goes back to everything rather than to nothing. */
+const heldReason = computed({
+  get: () =>
+    overview.value?.publications.heldBy.some(
+      ({ reason }) => reason === pickedReason.value,
+    )
+      ? pickedReason.value
+      : null,
+  set: (reason) => {
+    pickedReason.value = reason;
+  },
+});
+
+// TEMP(wariant): which of the two structures the round shows.
+const route = useRoute();
+const wariant = computed(() =>
+  route.query.wariant === "b" ? ("b" as const) : ("a" as const),
+);
+const heldView = ref<"waiting" | "aside">("waiting");
+
+const heldRows = computed(() => {
+  const lists = overview.value?.lists;
+  if (!lists) return [];
+  if (heldView.value === "aside") return lists.setAside;
+  const reason = heldReason.value;
+  return reason ? lists.held.filter((row) => row.reason === reason) : lists.held;
+});
+const heldShown = computed(() =>
+  showAllHeld.value ? heldRows.value : heldRows.value.slice(0, HELD_LIMIT),
+);
+
+/** Every reason something is held for now, by how many it holds. */
+const reasonOptions = computed(() => {
+  const publications = overview.value?.publications;
+  if (!publications) return [];
+  return [
+    { title: `Wszystkie (${formatCount(publications.held)})`, value: null },
+    ...publications.heldBy.map(({ reason, count }) => ({
+      title: `${declarationHoldLabel({ status: "held", reason, pagePublic: false, paidPost: true })} (${formatCount(count)})`,
+      value: reason,
+    })),
+  ];
+});
+
+const heldInfo =
+  "Osoby z tą samą datą i z płatnym stanowiskiem na stronie, których stron nie opublikowano ani automatycznie, ani przyciskiem „Opublikuj z kolejki”, bo ktoś już o nich zdecydował albo coś budzi wątpliwość. Niebieskie to cudza decyzja, bursztynowe czekają na wyjaśnienie. W otwartym wierszu są trzy wyjścia. „Sprawdź ponownie” przepuszcza stronę przez wszystkie sprawdzenia publikacji automatycznej, gdy to, co ją wstrzymało, już zniknęło, i publikuje ją razem z powiązaniami. „Opublikuj ręcznie” pomija sprawdzenia: sam wybierasz powiązania, które wyjdą ze stroną. „Nie publikuj” przenosi osobę do sekcji „Nie do publikacji”, skąd można ją przywrócić. Strona opublikowana ręcznie znika z listy, skądkolwiek ją opublikowano.";
+
+/** Who will not be published is the record, not the work: a few rows, the
+ * newest first, so that a „Nie publikuj” shows up here to be taken back. */
+const ASIDE_LIMIT = 5;
+const showAllAside = ref(false);
+const asideShown = computed(() => {
+  const aside = overview.value?.lists.setAside ?? [];
+  return showAllAside.value ? aside : aside.slice(0, ASIDE_LIMIT);
+});
+
 /** Open rows, kept here so a reload after a decision keeps the others open.
  * Keyed by list too: a person can be in two of them. */
 const openRows = reactive(new Set<string>());
@@ -450,6 +603,87 @@ async function decide(
   } finally {
     busy.delete(row.id);
   }
+}
+
+type HoldDecision = "recheck" | "decline" | "restore";
+
+/** The decision on each held page being sent, by person. */
+const holdBusy = reactive(new Map<string, HoldDecision>());
+
+const holdDone: Record<Exclude<HoldDecision, "recheck">, string> = {
+  decline: "Przeniesiono do sekcji „Nie do publikacji”.",
+  restore: "Przywrócono do wstrzymanych.",
+};
+
+async function decideHold(
+  row: DeclarationPublicationRow,
+  decision: HoldDecision,
+) {
+  if (holdBusy.has(row.personId)) return;
+  holdBusy.set(row.personId, decision);
+  const url = `/api/declarations/publications/${encodeURIComponent(row.personId)}/${decision}`;
+  try {
+    const result = await authRequest<RecheckResult>(url, { method: "POST" });
+    notify(
+      decision === "recheck" ? declarationRecheckText(result) : holdDone[decision],
+    );
+    // The row leaves its list with most of these; if it stays, it is the
+    // admin's to read what changed.
+    if (decision !== "recheck" || result.outcome !== "held") {
+      openRows.delete(`held:${row.personId}`);
+      openRows.delete(`aside:${row.personId}`);
+    }
+    await load();
+  } catch (err) {
+    notify(errorText(err, "Nie udało się zapisać decyzji."), true);
+  } finally {
+    holdBusy.delete(row.personId);
+  }
+}
+
+/** The held page „Opublikuj ręcznie” was pressed on. */
+const publishing = ref<DeclarationPublicationRow | null>(null);
+const publishOpen = ref(false);
+
+/** The dialog reads what it shows when it opens, so it has to be up with this
+ * person's id before it is told to. */
+async function openPublish(row: DeclarationPublicationRow) {
+  publishing.value = row;
+  await nextTick();
+  publishOpen.value = true;
+}
+
+/** The server closes the hold with the publication, wherever it is pressed. */
+async function onPublished({ relations }: { relations: number }) {
+  const row = publishing.value;
+  if (row) {
+    openRows.delete(`held:${row.personId}`);
+    openRows.delete(`aside:${row.personId}`);
+  }
+  notify(
+    relations > 0
+      ? `Opublikowano stronę z ${polishCountingGenitive(relations, "powiązaniem", "powiązaniami")}.`
+      : "Opublikowano stronę.",
+  );
+  await load();
+}
+
+/** The page half and the relations half are two calls: with the page up, the
+ * dialog stays open to say so, and the list has to catch up behind it. */
+async function onPublishFailed({
+  error: err,
+  nodePublished,
+}: {
+  error: unknown;
+  nodePublished: boolean;
+}) {
+  notify(
+    nodePublished
+      ? "Strona wyszła, ale jej powiązania nie."
+      : errorText(err, "Nie udało się opublikować strony."),
+    true,
+  );
+  if (nodePublished) await load();
 }
 
 /** The cap's button: an admin's press, past the daily limit. What the
@@ -550,6 +784,13 @@ async function publishQueued(): Promise<boolean> {
   margin: 0;
   font-size: 0.875rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+/* Wide enough for the longest reason, which is a whole sentence's worth. */
+.dheld__reason {
+  width: 300px;
+  max-width: 100%;
+  flex: 0 1 300px;
 }
 
 @media (max-width: 599.98px) {

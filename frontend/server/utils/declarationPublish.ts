@@ -43,6 +43,7 @@
 import type {
   DocumentData,
   DocumentReference,
+  DocumentSnapshot,
   Firestore,
   WriteBatch,
 } from "firebase-admin/firestore";
@@ -61,6 +62,7 @@ import {
   type PublicationEdgeHold,
   type PublicationHoldReason,
   type PublicationStatus,
+  type RecheckResult,
   type SweepResult,
 } from "~~/shared/declarations";
 import { registerEntry } from "~~/shared/identifiers";
@@ -165,6 +167,13 @@ export type StoredPublication = {
   /** When a sweep found the page a draft again after this automation had put
    * it up, and nobody on record had taken it down. */
   revertedAt?: Timestamp;
+  /** Who said the page will not be published, and when (`declinePublication`).
+   * Gone again once it is put back. */
+  declinedBy?: string;
+  declinedAt?: Timestamp;
+  /** The hold a publication by hand closed (`closeHoldOnPublication`): who
+   * published the page, when, and what it was held for. */
+  handPublished?: { uid: string; at: Timestamp; held: PublicationHoldReason | null };
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 };
@@ -532,7 +541,9 @@ async function recordPublication(
  *
  * Published and publishing stay what they are: the page is up, or going up.
  * A hold outlasts a later match - it is a doubt nobody has settled - unless
- * the page has become public since, which settles it. Two pages with the
+ * the page has become public since, which settles it. So does an admin's no,
+ * which keeps the reason it was held for: another crop with the page's date is
+ * no answer to it. Two pages with the
  * crop's date hold the page whatever it was waiting for; on a page being
  * published that is left as the reason for the pass that holds its slot,
  * which holds the page and gives the slot back (`publishPage`): taking the
@@ -564,16 +575,20 @@ function nextPublication(
   const status: PublicationStatus =
     was === "published" || was === "publishing"
       ? was
-      : args.outcome === "queued" && was === "held"
-        ? "held"
-        : args.outcome;
+      : was === "declined" && args.outcome !== "confirmed"
+        ? was
+        : args.outcome === "queued" && was === "held"
+          ? "held"
+          : args.outcome;
   const reason: PublicationHoldReason | null =
     status === "held"
       ? (before?.reason ?? (args.byAdmin ? "admin_decision" : "two_pages"))
-      : status === "publishing" &&
-          (args.outcome === "held" || before?.reason === "two_pages")
-        ? "two_pages"
-        : null;
+      : status === "declined"
+        ? (before?.reason ?? null)
+        : status === "publishing" &&
+            (args.outcome === "held" || before?.reason === "two_pages")
+          ? "two_pages"
+          : null;
   const knownIds = before?.extractIds ?? [];
   const known = before?.declarations ?? [];
   const extractIds = unique([...knownIds, args.extractId]);
@@ -887,6 +902,102 @@ async function publicPages(
 ): Promise<string[]> {
   const found = await publicNodes(db, ids);
   return ids.filter((id) => found.has(id));
+}
+
+// ---------------------------------------------------------------------------
+// A held page, looked at again
+// ---------------------------------------------------------------------------
+
+/**
+ * An admin's „Sprawdź ponownie” on /admin/oswiadczenia: the one way a hold is
+ * asked again. Nothing else reads a held page, since a hold outlasts a later
+ * match (`nextPublication`), so without it a page stays held after whatever
+ * held it has gone - a crop withdrawn, a post added, a page split.
+ *
+ * The page goes through `publishPage` the way an admin's press takes it up,
+ * past the daily limit and in no slot, and the night window and a running
+ * import stop it as they stop every pass: nothing is claimed then, and the
+ * page stays as it was. A page that passes goes up with its relations. One
+ * that does not is held again, for what stops it now, which can be another
+ * reason than the one the admin looked at. A page found public already is
+ * `confirmed`, which is how a hold left behind by a publication nobody closed
+ * leaves the list.
+ *
+ * Throws a 404 for a page with no record and a 409 for one that is not held,
+ * or that only a person can publish (`claimHeld`).
+ */
+export async function recheckPublication(
+  db: Firestore,
+  pageId: string,
+  pressedBy: string,
+  now: Date = new Date(),
+): Promise<RecheckResult> {
+  if (inPeopleImportWindow(now)) {
+    return { outcome: "skipped", skipped: "night" };
+  }
+  if (await peopleImportBusy(now)) {
+    return { outcome: "skipped", skipped: "import" };
+  }
+  const claim = await claimHeld(db, pageId, now, pressedBy);
+  const outcome = await publishPage(db, pageId, now);
+  if (outcome.status === "published") return { outcome: "published" };
+  await releaseClaim(db, pageId, claim, outcome, now);
+  return outcome.status === "held"
+    ? { outcome: "held", reason: outcome.reason }
+    : { outcome: "confirmed" };
+}
+
+/** Claims a held page for the admin who asked, the way a press claims a queued
+ * one. The reason goes with it: `pageCheck` takes a `two_pages` on the record
+ * at its word, and this is the one claim that asks it again, which is what
+ * lets a page go up once its two pages are merged.
+ *
+ * Only a date of an admin's holds a draft for good: `agreedExtracts` leaves
+ * such a crop out, so the page would come back as no longer matching, which it
+ * does. The admin publishes it by hand, or not at all. */
+async function claimHeld(
+  db: Firestore,
+  pageId: string,
+  now: Date,
+  pressedBy: string,
+): Promise<Claim> {
+  const ref = db.collection(PUBLICATIONS).doc(pageId);
+  const nodeRef = db.collection("nodes").doc(pageId);
+  return db.runTransaction(async (tx) => {
+    const publication = (await tx.get(ref)).data() as
+      StoredPublication | undefined;
+    if (!publication) {
+      throw createError({
+        statusCode: 404,
+        message: "Nie ma takiej publikacji.",
+      });
+    }
+    if (publication.status !== "held") {
+      throw createError({
+        statusCode: 409,
+        message: "Ta publikacja nie jest już wstrzymana.",
+      });
+    }
+    if (
+      publication.reason === "admin_decision" &&
+      !pageIsPublic((await tx.get(nodeRef)).data() ?? {})
+    ) {
+      throw createError({
+        statusCode: 409,
+        message: "Datę ustalił administrator: tę stronę publikuje się ręcznie.",
+      });
+    }
+    const at = Timestamp.fromDate(now);
+    tx.update(ref, {
+      status: "publishing",
+      reason: null,
+      claimedAt: at,
+      pressedBy,
+      day: FieldValue.delete(),
+      updatedAt: at,
+    });
+    return { day: null, claimedAt: at };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1313,9 +1424,8 @@ async function pageCheck(
       !nameFitsPage(extract.agreedName, String(page.name ?? "")),
   );
   if (misnamed) return { reason: "name_differs" };
-  if (await anotherReading(db, pageId, birthDateOf(page))) {
-    return { reason: "conflicting_reading" };
-  }
+  const other = await readingsOfAnotherDay(db, pageId, birthDateOf(page));
+  if (other.length > 0) return { reason: "conflicting_reading" };
   return {
     approve: approvedRevisionId(page.revision_id) === newest.id ? null : newest,
   };
@@ -1391,17 +1501,19 @@ async function anotherPageBornThatDay(
   return false;
 }
 
-/** Whether a settled crop the page is named on, or that this automation
- * flagged on it, was read as a date the page does not have. A declaration of
- * the same person that disagrees is a doubt the matching one does not settle,
- * and the note the automation filed about it is still waiting for somebody.
- * The flagged ones are read again rather than counted, so a page whose date a
- * reviewer has since corrected to the reading is not held for it. */
-async function anotherReading(
+/** The settled crops the page is named on, or that this automation flagged on
+ * it, that were read as a date the page does not have: what
+ * `conflicting_reading` holds a page for, and what /admin/oswiadczenia shows on
+ * its row. A declaration of the same person that disagrees is a doubt the
+ * matching one does not settle, and the note the automation filed about it is
+ * still waiting for somebody. The flagged ones are read again rather than
+ * counted, so a page whose date a reviewer has since corrected to the reading
+ * is not held for it. */
+export async function readingsOfAnotherDay(
   db: Firestore,
   pageId: string,
   born: string,
-): Promise<boolean> {
+): Promise<DocumentSnapshot[]> {
   const [note, named] = await Promise.all([
     db.collection("notes").doc(`${pageId}_${DECLARATION_ACTOR}`).get(),
     db
@@ -1410,8 +1522,8 @@ async function anotherReading(
       .limit(READINGS_PER_PAGE)
       .get(),
   ]);
-  const crops = new Map<string, DocumentData>(
-    named.docs.map((doc) => [doc.id, doc.data()]),
+  const crops = new Map<string, DocumentSnapshot>(
+    named.docs.map((doc) => [doc.id, doc]),
   );
   const flagged = unique(
     ((note.data() as Note | undefined)?.sources ?? [])
@@ -1423,12 +1535,11 @@ async function anotherReading(
       ...flagged.map((id) => db.collection(EXTRACTS).doc(id)),
     );
     for (const snapshot of snapshots) {
-      const data = snapshot.data();
-      if (data) crops.set(snapshot.id, data);
+      if (snapshot.data()) crops.set(snapshot.id, snapshot);
     }
   }
-  return [...crops.values()].some((crop) => {
-    const day = agreedDay(crop);
+  return [...crops.values()].filter((crop) => {
+    const day = agreedDay(crop.data());
     return day !== null && day !== born;
   });
 }
