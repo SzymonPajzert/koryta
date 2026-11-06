@@ -596,12 +596,18 @@ describe("OmniSearch", () => {
       searched = [{ id: "anna", name: "Anna Nowak", type: "person" }];
       const wrapper = mountSearch();
       await flushPromises();
+      const input = wrapper.find("input");
+      input.element.focus();
       await searchFor(wrapper, "lista");
       await pick("Lista wszystkich osób");
 
-      await searchFor(wrapper, "anna");
+      // The keys have to find the field, and they land on what it holds:
+      // `searchFor` replaces the whole value, so „anna” on its own would pass
+      // with the label still in the box.
+      expect(document.activeElement).toBe(input.element);
+      await searchFor(wrapper, `${input.element.value}anna`);
 
-      expect(wrapper.find("input").element.value).toBe("anna");
+      expect(input.element.value).toBe("anna");
       expect(asked).toEqual(["lista", "anna"]);
       expect(rows().some((el) => el.textContent.includes("Anna Nowak"))).toBe(
         true,
