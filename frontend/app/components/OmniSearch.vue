@@ -204,6 +204,10 @@ const openCreate = async (type: CreatableFromSearch) => {
   createDialog.value?.open();
 };
 
+/** How many times the box has been reset, which is how an answer that comes
+ * back afterwards can tell that its search is over. */
+let resets = 0;
+
 /** Back to a box with nothing in it, ready for the next search.
  *
  * Opening a page does not do this. The box in the app bar outlives the page and
@@ -211,6 +215,7 @@ const openCreate = async (type: CreatableFromSearch) => {
  * the `gray` layout. From anywhere else a pick stayed in the field until the
  * reader clicked somewhere else, which is what VAutocomplete itself clears on. */
 const resetBox = () => {
+  resets += 1;
   search.value = null;
   nodeGroupPicked.value = null;
   autocompleteFocus.value = false;
@@ -348,6 +353,7 @@ const searchData = ref<
 
 async function performSearch(searchTerm: string) {
   loading.value = true;
+  const resetsWhenAsked = resets;
   try {
     // Drafts for a signed in reader, beside the token that allows them. The
     // flag went out for everybody, so the search box offered every name in
@@ -372,6 +378,11 @@ async function performSearch(searchTerm: string) {
       results: resultBucket(response.length),
       unverified: unverifiedShare(response.length, unverified),
     });
+    // A pick ends the search whether or not the answer is back: a party or
+    // „Lista wszystkich osób” is on the menu before the server has said
+    // anything. Kept as the latest query, this answer would be reported as a
+    // search the reader left, on top of the pick that ended it.
+    if (resets !== resetsWhenAsked) return;
     report(searchSession.results(searchTerm, response.length, unverified));
   } catch (error) {
     // A search that fails should offer nothing rather than spin forever.

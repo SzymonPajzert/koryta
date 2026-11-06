@@ -40,8 +40,11 @@ let searched: {
 }[] = [];
 /** What the box asked the server, in order. */
 let asked: string[] = [];
-registerEndpoint("/api/search", (event) => {
+/** Holds the answers back while a test has it set. */
+let answerHeld: Promise<void> | undefined;
+registerEndpoint("/api/search", async (event) => {
   asked.push(String(getQuery(event).q));
+  await answerHeld;
   return searched;
 });
 
@@ -117,6 +120,7 @@ describe("OmniSearch", () => {
     document.body.innerHTML = "";
     searched = [];
     asked = [];
+    answerHeld = undefined;
     logged = [];
     reader.value = null;
     vi.mocked(trackGoal).mockClear();
@@ -631,6 +635,33 @@ describe("OmniSearch", () => {
       // One search, however many times it was acted on.
       expect(logged).toHaveLength(1);
       expectEmptyBox(wrapper);
+
+      wrapper.unmount();
+    });
+
+    it("keeps to one report when the pick beats the server's answer", async () => {
+      // The parties are on the menu before the server has said anything, so a
+      // quick reader picks with a query still out. Its answer used to wait for
+      // the next thing to settle it and went out as a search nobody took
+      // anything from, on top of the pick.
+      const wrapper = mountSearch();
+      await flushPromises();
+      await searchFor(wrapper, "kon");
+
+      let answer = () => {};
+      answerHeld = new Promise((resolve) => (answer = resolve));
+      await searchFor(wrapper, "konfederacja");
+      expect(asked).toEqual(["kon", "konfederacja"]);
+
+      await pick("Konfederacja");
+      answer();
+      await settle();
+
+      expectEmptyBox(wrapper);
+      expect(logged.map(({ body }) => [body.query, body.outcome])).toEqual([
+        ["kon", "pick"],
+      ]);
+      expect(settled()).toHaveLength(1);
 
       wrapper.unmount();
     });
