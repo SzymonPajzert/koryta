@@ -116,9 +116,10 @@ test.describe("OmniSearch", () => {
     await expect(selection).toHaveCount(0);
 
     // Typed key by key, because `fill` replaces whatever the field holds, and
-    // what went wrong was keys landing in the middle of what it held.
-    await input.click();
-    await input.pressSequentially("Jan Kowal");
+    // what went wrong was keys landing in the middle of what it held. Sent to
+    // the page rather than to the input, which would focus it first: these
+    // keys have to find the field as the pick left it.
+    await page.keyboard.type("Jan Kowal");
     await expect(input).toHaveValue("Jan Kowal");
     await row("Jan Kowalski").first().click();
     await expect(page).toHaveURL(/\/osoba\/jan-kowalski/);
