@@ -9,6 +9,14 @@ import { expect, type Locator, type Page } from "@playwright/test";
  * whole interaction rides that out: once the field is live the first keystroke
  * triggers the request and the result appears.
  *
+ * The click lost that way still focuses the input, and a field that has the
+ * focus fires no focus event for the next click, so Vuetify goes on taking it
+ * for unfocused. Such a field searches as it is typed into and leaves its menu
+ * alone: a shut menu stays shut and an open one stays unfiltered, which on the
+ * dev server, where the first click comes too early, left a query that found
+ * nobody listing all twelve fixed rows. Blurred first, every click here is a
+ * reader's first click.
+ *
  * Retyping also re-issues the query, which is what a caller waiting on
  * something that is still being written wants: the menu only searches when the
  * search term changes, so waiting longer on a menu that already answered would
@@ -22,9 +30,10 @@ export async function omniSearchFor(
   const input = page.locator("input#omni-search");
 
   await expect(async () => {
+    await input.blur();
+    await input.click();
     // Clear first - re-filling the value the DOM already holds emits no input
     // event, so a lost pre-hydration fill would never be retried.
-    await input.click();
     await input.fill("");
     await input.fill(query);
     await expect(expected).toBeVisible({ timeout: 1000 });
@@ -38,12 +47,17 @@ export async function omniSearchFor(
  * retried. Waiting for `networkidle` instead does not work - the page keeps
  * Firestore listeners open for as long as it is on screen, so the network
  * never goes quiet. Clicking a live autocomplete toggles its menu, so a retry
- * only clicks again while the menu is still shut. */
+ * only clicks again while the menu is still shut. It blurs first for the reason
+ * given there: the menu opens for the click either way, but keys typed after a
+ * pick on a field Vuetify takes for unfocused never brought up a row. */
 export async function openOmniSearch(page: Page, menu: Locator) {
   const input = page.locator("input#omni-search");
 
   await expect(async () => {
-    if (!(await menu.isVisible())) await input.click();
+    if (!(await menu.isVisible())) {
+      await input.blur();
+      await input.click();
+    }
     await expect(menu).toBeVisible({ timeout: 2000 });
   }).toPass({ timeout: 30_000 });
 }
