@@ -40,11 +40,24 @@ let searched: {
 }[] = [];
 /** What the box asked the server, in order. */
 let asked: string[] = [];
-/** Holds the answers back while a test has it set. */
-let answerHeld: Promise<void> | undefined;
+/** The answers being held back, by query. */
+let held: Record<string, Promise<void>> = {};
+/** Holds back the answer to `query` until the function this returns is called.
+ * An answer reads `searched` as it leaves rather than as it was asked for. */
+const holdAnswer = (query: string) => {
+  let answer = () => {};
+  held[query] = new Promise((resolve) => (answer = resolve));
+  return answer;
+};
+/** The queries the server fails on. By query, because `$fetch` asks a second
+ * time after a 500, and an error that only held for the first try would come
+ * back as an answer. */
+let failing: string[] = [];
 registerEndpoint("/api/search", async (event) => {
-  asked.push(String(getQuery(event).q));
-  await answerHeld;
+  const query = String(getQuery(event).q);
+  asked.push(query);
+  await held[query];
+  if (failing.includes(query)) throw new Error("the search failed");
   return searched;
 });
 
@@ -120,7 +133,8 @@ describe("OmniSearch", () => {
     document.body.innerHTML = "";
     searched = [];
     asked = [];
-    answerHeld = undefined;
+    held = {};
+    failing = [];
     logged = [];
     reader.value = null;
     vi.mocked(trackGoal).mockClear();
@@ -280,8 +294,18 @@ describe("OmniSearch", () => {
     await wrapper.vm.$nextTick();
   };
 
+  /** Past the debounce of `search` and the timer behind it, both of which could
+   * still answer what just happened with a search or a report of their own. */
+  const settle = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    await flushPromises();
+  };
+
   const rows = () =>
     Array.from(document.querySelectorAll<HTMLElement>(".v-list-item"));
+
+  const hasRow = (title: string) =>
+    rows().some((el) => el.textContent.includes(title));
 
   it("shows a long name in full instead of clipping it", async () => {
     // Vuetify clips `.v-list-item-title` to one line with an ellipsis, and the
@@ -481,6 +505,66 @@ describe("OmniSearch", () => {
     wrapper.unmount();
   });
 
+  describe("with answers out of step with the box", () => {
+    const offerToAdd = () =>
+      document.querySelector('[data-testid="omni-search-add-person"]');
+
+    it("keeps the latest query's rows when an older answer comes last", async () => {
+      // With nothing on the menu but „Dodaj nową osobę”, a reader is told the
+      // person they just saw is not in the base. It takes a slow first answer,
+      // and it went on the log as well: the search still being read, as left.
+      const wrapper = mountSearch();
+      await flushPromises();
+      const answer = holdAnswer("anna");
+      await searchFor(wrapper, "anna");
+
+      searched = [{ id: "jan", name: "Jan Kowalski", type: "person" }];
+      await searchFor(wrapper, "jan kow");
+      expect(hasRow("Jan Kowalski")).toBe(true);
+
+      searched = [];
+      answer();
+      await settle();
+
+      expect(hasRow("Jan Kowalski")).toBe(true);
+      expect(logged).toEqual([]);
+      await searchFor(wrapper, "");
+      expect(logged.map(({ body }) => [body.query, body.outcome])).toEqual([
+        ["jan kow", "abandon"],
+      ]);
+
+      wrapper.unmount();
+    });
+
+    it("shows an older answer that comes first, and goes on waiting for the latest", async () => {
+      // A reader typing on over a slow connection reads each answer as it
+      // lands, so holding them all back for the last query would leave the menu
+      // empty until they stopped. But the latest is still out: nothing has said
+      // the person is missing, so nothing offers to add them yet.
+      const wrapper = mountSearch();
+      await flushPromises();
+      const first = holdAnswer("anna");
+      const latest = holdAnswer("anna now");
+      await searchFor(wrapper, "anna");
+      await searchFor(wrapper, "anna now");
+
+      searched = [{ id: "anna", name: "Anna Nowak", type: "person" }];
+      first();
+      await settle();
+
+      expect(hasRow("Anna Nowak")).toBe(true);
+      expect(offerToAdd()).toBeNull();
+
+      latest();
+      await settle();
+
+      expect(hasRow("Anna Nowak")).toBe(true);
+      expect(offerToAdd()).not.toBeNull();
+
+      wrapper.unmount();
+    });
+  });
+
   describe("after a pick", () => {
     /** Nuxt's router, the one the box reaches for, rather than the one mounted
      * above. Answered without moving, so that every pick here behaves like
@@ -504,13 +588,6 @@ describe("OmniSearch", () => {
       );
       expect(row, `no row for ${title}`).toBeDefined();
       row!.click();
-      await flushPromises();
-    };
-
-    /** Past the debounce of `search` and the timer behind it, both of which
-     * could still answer the pick with a search or a report of their own. */
-    const settle = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 750));
       await flushPromises();
     };
 
@@ -609,9 +686,7 @@ describe("OmniSearch", () => {
 
       expect(input.element.value).toBe("anna");
       expect(asked).toEqual(["lista", "anna"]);
-      expect(rows().some((el) => el.textContent.includes("Anna Nowak"))).toBe(
-        true,
-      );
+      expect(hasRow("Anna Nowak")).toBe(true);
       // Its own search, not thrown away with the answers the pick ended.
       await searchFor(wrapper, "");
       expect(logged.map(({ body }) => [body.query, body.outcome])).toEqual([
@@ -654,8 +729,7 @@ describe("OmniSearch", () => {
       await flushPromises();
       await searchFor(wrapper, "kon");
 
-      let answer = () => {};
-      answerHeld = new Promise((resolve) => (answer = resolve));
+      const answer = holdAnswer("konfederacja");
       await searchFor(wrapper, "konfederacja");
       expect(asked).toEqual(["kon", "konfederacja"]);
 
@@ -671,6 +745,39 @@ describe("OmniSearch", () => {
 
       wrapper.unmount();
     });
+
+    it.each([
+      { ending: "an answer", failed: [] },
+      { ending: "an error", failed: ["konfederacja"] },
+    ])(
+      "keeps the next search's rows when the search a pick ended comes back with $ending",
+      async ({ failed }) => {
+        // The pick is over, but a bad connection can hold what comes back past
+        // the typing and the next answer. A failure went the same way as a late
+        // answer: an empty menu for a reader who had just been shown the row.
+        const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+        const wrapper = mountSearch();
+        await flushPromises();
+        const comeBack = holdAnswer("konfederacja");
+        await searchFor(wrapper, "konfederacja");
+        await pick("Konfederacja");
+
+        searched = [{ id: "anna", name: "Anna Nowak", type: "person" }];
+        await searchFor(wrapper, "anna");
+        expect(hasRow("Anna Nowak")).toBe(true);
+
+        searched = [];
+        failing = failed;
+        comeBack();
+        await settle();
+
+        expect(wrapper.find("input").element.value).toBe("anna");
+        expect(hasRow("Anna Nowak")).toBe(true);
+
+        quiet.mockRestore();
+        wrapper.unmount();
+      },
+    );
   });
 
   it.skip("redirects to place for 'rect' nodes", async () => {
