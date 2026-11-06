@@ -76,6 +76,20 @@ FILES: dict[str, str] = {
     "bip.wola-krzysztoporska.pl": "Wola Krzysztoporska: forbids its files, 1 candidacy",
     "bip.frysztak.pl": "Frysztak: forbids /download/, 1 candidacy",
     "bip.nowiny.com.pl": "Nowiny: forbids its files, 1 candidacy",
+    # 11-06: unfound people whose named declarations these hosts' robots.txt kept
+    # out, each checked: page allowed, file forbidden, labels are declarations.
+    # Not listed: bip.police.pl and bip.um.swinoujscie.pl (phone lists), the
+    # "spakowane pliki" zips, www.bip.tarnogorski.pl (two files on one page).
+    "bip.czerwonak.pl": "Czerwonak: forbids /api/download/*, 8 candidacies",
+    "bip.ug.lubin.pl": "gmina Lubin: forbids /api/download/*, 8 candidacies",
+    "bip.milowka.com.pl": "Milówka: forbids /api/download/*, 4 candidacies",
+    "bip.porabka.pl": "Porąbka: forbids /api/download/*, 4 candidacies",
+    "bip.psary.pl": "Psary: forbids /api/download/*, 3 candidacies",
+    "bip.redziny.pl": "Rędziny: forbids /upload/, 3 candidacies",
+    "bip.brok.pl": "Brok: forbids /uploads/, 3 candidacies",
+    "bip.lututowgmina.pl": "Lututów: forbids /container/, 3 candidacies",
+    "bip.czerwin.pl": "Czerwin: forbids /pliki/, 2 candidacies",
+    "bip.tworog.pl": "Tworóg: forbids /api/download/*, 2 candidacies",
 }
 #: Hosts whose robots.txt keeps out every crawler but search engines, or all: (b).
 SITES: dict[str, str] = {
