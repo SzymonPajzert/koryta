@@ -65,7 +65,8 @@ export const QA_ITEMS: QaItem[] = [
       "24 października skrypt dat przypisał każdej stronie w /sitemap.xml tę samą chwilę, 14:08:20, choć opisy zmieniły się o 15:20 i tylko na części stron. " +
       "Po poprawce (skrypt correct-10-24-stamp) każda z nich ma datę tego, co naprawdę się na niej zmieniło, a ponowne przeliczenie dat już tej chwili nie przywraca.",
     steps: [
-      "Po uruchomieniu poprawki i wygaśnięciu cache mapy (do siedmiu godzin, krócej po wdrożeniu) otwórz /sitemap.xml i wyszukaj „2026-10-24T14:08:20”: nie ma żadnego wyniku.",
+      "Po uruchomieniu poprawki i wygaśnięciu cache mapy (do siedmiu godzin, krócej po wdrożeniu) otwórz /sitemap.xml, a jeśli jest spisem kilku map, każdą z nich, i wyszukaj „2026-10-24T14:08:20”: nie ma żadnego wyniku.",
+      "Artykuł dodany przed 24 października i od tamtej pory niezmieniany ma datę sprzed tego dnia: 24 października nic się na nim nie zmieniło.",
     ],
     link: "/sitemap.xml",
     area: "admin",
@@ -454,7 +455,7 @@ export const QA_ITEMS: QaItem[] = [
       "Data ostatniej zmiany w /sitemap.xml ruszała się tylko wtedy, gdy ktoś zmienił samą stronę albo opublikowane powiązanie. " +
       "Teraz rusza się też, gdy zmiana całej witryny dotarła do strony (poprawione adresy i opisy z 24 października, obecny skład spółek z osobami bez opublikowanej strony), i gdy w obecnym składzie spółki ktoś dochodzi, odchodzi albo zmienia funkcję - także osoba bez opublikowanej strony.",
     steps: [
-      "Po przeliczeniu dat (skrypt stamp-site-changes) otwórz /sitemap.xml: strony osób, artykułów i spółek mają datę nie starszą niż 24 października 2026.",
+      "Po przeliczeniu dat (skrypty stamp-site-changes i correct-10-24-stamp) otwórz /sitemap.xml, a jeśli jest spisem kilku map, mapę instytucji: spółki, których obecny skład wymienia osobę bez opublikowanej strony, mają datę nie starszą niż 24 października 2026, 21:46. Strony, do których zmiany z 24 października nie dotarły, zachowują wcześniejszą datę.",
       "Po wdrożeniu funkcji dodaj w spółce nowe zatrudnienie osoby bez opublikowanej strony: po kilku minutach data przy tej spółce jest dzisiejsza (w samej mapie po wygaśnięciu jej cache, do sześciu godzin).",
     ],
     link: "/sitemap.xml",
