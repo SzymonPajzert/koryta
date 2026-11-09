@@ -20,10 +20,12 @@ export type SitemapEntry = { loc: string; lastmod?: string };
  * type. The Firestore bill is the same or lower: a crawler that fetches every
  * child reads each type once per cache miss, as the single source did, and one
  * that fetches only the people's file no longer pays for 10,000 companies. The
- * timeout is the reason that matters. A source that misses the module's 5 s
- * yields an *empty* sitemap, served 200 and cached for the module's ten
- * minutes; one source for everything took as long as the slowest type, and
- * failed every file at once. Now each child waits only on its own read.
+ * failure mode is the reason that matters. A source whose read fails yields an
+ * *empty* sitemap, served 200 and cached for the module's ten minutes. A slow
+ * one is only slow: the module's 5 s abort does not reach an internal source,
+ * which it calls through Nitro's local fetch (measured on a build with no
+ * Firestore: 91 s, then an empty urlset). One source for everything failed
+ * every file at once; now a failed read empties only its own child.
  *
  * Six hours because this reads every node of a type - every person and every
  * article was 4,919 documents a call, measured - and it is crawlers that ask
