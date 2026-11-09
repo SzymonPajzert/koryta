@@ -10,12 +10,14 @@ export type SitemapSource = NodeType | "blog";
  * One file per page type rather than one for the whole site, for two reasons.
  * Google decides per sitemap file whether its `<lastmod>` values are worth
  * believing (John Mueller, Search Off the Record 114, 2026-10-01), and the
- * dates here are not equally good: a person's moves when the page is
- * published or a relation on it is, while a company's also moves with every
- * change to its board, and on 2026-11-09 3,356 companies still shared a single
- * stamp. In one file the noisy dates cost the accurate ones their credit. The
- * second reason is Search Console: its Page indexing report can be filtered by
- * sitemap, which is the only place it gives indexed counts per page type.
+ * dates here do not move alike: a person's moves when the page is published or
+ * a relation on it is, while a company's also moves with every change to its
+ * board - about 550 companies a day in early November, 99.7% of them changes a
+ * reader can see - and on 2026-11-09 3,356 companies still shared a single
+ * stamp. Kept apart, what Google makes of one file does not decide the others.
+ * The second reason is Search Console: its Page indexing report can be
+ * filtered by sitemap, which is the only place it gives indexed counts per
+ * page type.
  *
  * - `sitemap-osoby`: /osoba/... - published people (2,345 on 2026-11-09).
  * - `sitemap-instytucje`: /instytucja/... - published companies and
