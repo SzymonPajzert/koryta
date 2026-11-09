@@ -20,8 +20,9 @@ import { withHttpScheme } from "./url";
  */
 
 /** Whether `name` is an address rather than a title. A real title does not
- * start with a scheme, and every url-named article in the database does - bar
- * the two typed by hand, which start with `www.`. */
+ * start with a scheme, and every url-named article in the database does (the
+ * 2026-11-09 export had none starting with a bare `www.`; that branch is a
+ * guard for an address typed without its scheme). */
 export function isUrlShapedName(name: string | null | undefined): boolean {
   return !!name && /^\s*(?:https?:\/\/|www\.)/i.test(name);
 }

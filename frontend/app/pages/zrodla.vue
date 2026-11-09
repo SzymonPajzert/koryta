@@ -394,7 +394,8 @@ async function addArticle() {
     } else {
       // Added by hand, so the title is worth insisting on: whoever pasted the
       // url is here to fix it. A source promoted out of a note has nobody
-      // watching and goes in under its address instead.
+      // watching, so the server names it after who it is filed under and its
+      // site (shared/articleTitle.ts) instead.
       alertMessage.value = "Nie udało się pobrać tytułu artykułu.";
       alertType.value = "warning";
     }
