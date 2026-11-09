@@ -212,6 +212,55 @@ describe("POST /api/ingest/article", () => {
     expect(articleWrites()[0]?.data.sourceURL).toBe("https://example.pl/a");
   });
 
+  describe("an article whose page gave no title", () => {
+    const PDF =
+      "https://bip.karczew.pl/fls/bip_pliki/2024_10/Roslonek_Tomasz_zanonimi.pdf";
+
+    beforeEach(() => {
+      stored["nodes/person-live"] = {
+        type: "person",
+        name: "Tomasz Rosłonek",
+        published: true,
+      };
+    });
+
+    it("is titled after who it is filed under, not after its address", async () => {
+      // 161 of the 167 url-named articles on 2026-11-09 came from a note's
+      // source, which the editor sent with its url for a name.
+      body = { url: PDF, mentions: ["person-live"] };
+      await handler({} as never);
+
+      expect(articleWrites()[0]?.data.name).toBe(
+        "Tomasz Rosłonek: dokument z bip.karczew.pl",
+      );
+    });
+
+    it("reads an address sent as the name as no name at all", async () => {
+      // What a client loaded before the fix still sends.
+      body = { url: PDF, name: PDF, mentions: ["person-live"] };
+      await handler({} as never);
+
+      expect(articleWrites()[0]?.data.name).toBe(
+        "Tomasz Rosłonek: dokument z bip.karczew.pl",
+      );
+    });
+
+    it("does not name a person whose page is still a draft", async () => {
+      // The article page is public; Anna Nowak's is not.
+      body = { url: "https://www.linkedin.com/in/a/", mentions: ["person-1"] };
+      await handler({} as never);
+
+      expect(articleWrites()[0]?.data.name).toBe("Strona z linkedin.com");
+    });
+
+    it("keeps a title the page did give", async () => {
+      body = { url: PDF, name: "Oświadczenie", mentions: ["person-live"] };
+      await handler({} as never);
+
+      expect(articleWrites()[0]?.data.name).toBe("Oświadczenie");
+    });
+  });
+
   it("refuses something that is not an address at all", async () => {
     body = { url: "nie ma tu adresu", name: "T" };
     await expect(handler({} as never)).rejects.toThrow();

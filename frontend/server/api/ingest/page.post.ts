@@ -142,8 +142,9 @@ export default defineEventHandler(async (event) => {
   const { nodeId, created } = await ensureArticleNode(db, batch, user, {
     url,
     // Titles come from the page's own `<title>`/ld+json; a page that reached
-    // here with neither still deserves a node, named after the url.
-    name: body.title?.trim() || url,
+    // here with neither still deserves a node, named after the site it is on
+    // (`ensureArticleNode`) rather than after its url.
+    name: body.title?.trim() || undefined,
     publishedDate: body.publishedDate,
     meta: body.meta,
   });

@@ -18,7 +18,10 @@ const articleRequestSchema = z.object({
     .min(1)
     .transform(withHttpScheme)
     .refine((url) => URL.canParse(url), "Nie wygląda na adres strony."),
-  name: z.string().min(1),
+  /** The page's own title. Left out where the page gave none - a PDF, a
+   * sign-in wall - and the article is then titled after `mentions` and the
+   * site it is on; see `ensureArticleNode`. */
+  name: z.string().trim().min(1).optional(),
   publishedDate: z.string().optional(),
   meta: z.any().optional(),
   /** Nodes this article names, recorded in the same commit as the article.
@@ -39,7 +42,10 @@ export default defineEventHandler(async (event) => {
   const db = getFirestore(getApp(), "koryta-pl");
 
   const batch = db.batch();
-  const { nodeId, created } = await ensureArticleNode(db, batch, user, body);
+  const { nodeId, created } = await ensureArticleNode(db, batch, user, {
+    ...body,
+    about: body.mentions,
+  });
   // On the same batch as the article, so a reader never ends up with a page
   // joined to nobody because a second request failed. Read-then-write, so it
   // has to happen before the commit rather than after it.

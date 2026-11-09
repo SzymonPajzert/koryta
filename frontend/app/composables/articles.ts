@@ -51,8 +51,9 @@ function deepSearch(
  *
  * `name` is absent where the fetch failed or the page has no title - a
  * paywall, a dead link, a PDF. The caller decides what that is worth: adding an
- * article by hand refuses it and says so, promoting a note's source falls back
- * to the url, since the source is worth keeping either way.
+ * article by hand refuses it and says so, promoting a note's source sends it
+ * without a name and the server composes one, since the source is worth
+ * keeping either way.
  *
  * The url comes back too, because ld+json often names a canonical address that
  * differs from the one that was pasted.
@@ -80,9 +81,12 @@ export async function articlePayloadFor(url: string): Promise<ArticlePayload> {
  * `mentions` names the nodes it says the article is about, and comes back as
  * the ones a relation was actually written for - an id already joined to the
  * article, or one that is not a person or a company, is left out.
+ *
+ * Without a `name` the article is titled after `mentions` and the site it is
+ * on (`ensureArticleNode` in server/utils/articles.ts).
  */
 export async function ensureArticle(
-  payload: ArticlePayload & { name: string },
+  payload: ArticlePayload,
 ): Promise<{ nodeId: string; created: boolean; mentions: string[] }> {
   return await authRequest<{
     nodeId: string;
