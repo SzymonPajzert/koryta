@@ -85,7 +85,13 @@ import { reportRemaining } from "./remaining";
  *
  * The cause is fixed alongside: `SITE_CHANGES` in `stamp-site-changes.ts`
  * marks the entry superseded, so a full rerun of that script skips it rather
- * than raising these pages back to 14:08:20.
+ * than raising these pages back to 14:08:20. Never run `stamp-site-changes.ts`
+ * from a checkout older than that commit once this has run: there the entry is
+ * live and would put 2,341 corrected pages back on the stamp.
+ *
+ * Archiving: move `correct-10-24-stamp/` together with this file, or the
+ * archived dry run fails on the missing plan; then fix the relative imports in
+ * both, `build-plan.ts`'s `../stamp-site-changes` included.
  *
  * After a production run the sitemap still answers from cache for up to ~7 h
  * (the handler's 6 h cache with swr, the CDN's 600 s + 1 h swr, up to 10
@@ -97,6 +103,9 @@ import { reportRemaining } from "./remaining";
  * Against production:
  *   npx tsx scripts/migrate/correct-10-24-stamp.ts --prod           # dry run
  *   npx tsx scripts/migrate/correct-10-24-stamp.ts --prod --commit
+ * On a Mac where gRPC fails over IPv6 (EHOSTUNREACH), prefix both with
+ * `FIRESTORE_PREFER_REST=true NODE_OPTIONS=--dns-result-order=ipv4first`; the
+ * transaction and getAll go over REST too.
  * `--plan <file>` reads another plan than the one beside it.
  */
 
