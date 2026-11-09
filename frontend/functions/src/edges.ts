@@ -171,9 +171,9 @@ export const onEdgeWritten = onDocumentWritten(
  * No reads beyond the marker query itself: the marker's id is the node and its
  * `at` is when the edge was written, so the date stored is an instant that was
  * recorded rather than the minute the sweep happened to run. That is what lets
- * /api/_sitemap-urls answer with no query of its own - the alternative, working
- * each page's date out from the edges at request time, is a 49,583-document
- * sweep per cache miss.
+ * /api/_sitemap-urls/<type> answer with no query of its own - the alternative,
+ * working each page's date out from the edges at request time, is a
+ * 49,583-document sweep per cache miss.
  *
  * Returns how many nodes were dated, for the log line.
  */
