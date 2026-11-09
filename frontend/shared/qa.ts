@@ -67,7 +67,7 @@ export const QA_ITEMS: QaItem[] = [
       "Google ocenia, czy wierzyć datom ostatniej zmiany, osobno dla każdego pliku, więc dokładne daty osób nie tracą już przez daty instytucji, które zmieniają się częściej. W Search Console widać też, ile stron każdego typu jest w indeksie.",
     steps: [
       "Otwórz /sitemap.xml: zamiast listy stron są cztery linki, do /sitemap-osoby.xml, /sitemap-instytucje.xml, /sitemap-artykuly.xml i /sitemap-strony.xml.",
-      "Otwórz każdy z nich: w pierwszym są tylko adresy /osoba/, w drugim /instytucja/, w trzecim /artykul/, a w czwartym strona główna, pozostałe stałe strony i wpisy bloga. Daty przy adresach są takie jak wcześniej w jednym pliku.",
+      "Otwórz każdy z nich: w pierwszym są tylko adresy /osoba/, w drugim /instytucja/, w trzecim /artykul/, a w czwartym strona główna, pozostałe stałe strony i wpisy bloga. Przy adresach osób, instytucji i artykułów stoi „lastmod” z datą.",
       "Otwórz /robots.txt: na końcu stoi „Sitemap: https://koryta.pl/sitemap.xml”.",
     ],
     link: "/sitemap.xml",
@@ -508,7 +508,7 @@ export const QA_ITEMS: QaItem[] = [
       "brak, bo Google przestaje wtedy wierzyć całej witrynie. Dla " +
       "czytelnika nic się nie zmienia.",
     steps: [
-      "Otwórz /sitemap.xml i sprawdź, że pod „loc” stoi teraz „lastmod” z datą, i że różne strony mają różne daty.",
+      "Otwórz /sitemap.xml, a jeśli jest spisem kilku map, jedną z nich (np. /sitemap-osoby.xml), i sprawdź, że pod „loc” stoi „lastmod” z datą, i że różne strony mają różne daty.",
       "Opublikuj jako admin powiązanie osoby z instytucją w /admin/krawedzie. Po minucie data przy obu stronach ma być dzisiejsza - w samej mapie zobaczysz to, gdy wygaśnie jej cache, czyli do sześciu godzin.",
       "Zagłosuj na dowolną osobę i sprawdź, że data przy jej adresie się nie ruszyła - ocena to nie zmiana treści.",
     ],
