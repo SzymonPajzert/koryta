@@ -3,6 +3,7 @@ import {
   generateNodeUrl,
   mangledIdKey,
   mayBeMangledId,
+  parseEntityUrlSlug,
   slugRedirectCode,
 } from "../../shared/slugs";
 import type { Node } from "../../shared/model";
@@ -47,6 +48,33 @@ describe("generateNodeUrl", () => {
         name: "1,7 mln dla młodego lekarza",
       } as unknown as Node),
     ).toBe("/artykul/1-7-mln-dla-mlodego-lekarza-DRf5LYAdf5TwXKDZYMcP");
+  });
+
+  it("moves an article's address with its name, and keeps its id in both", () => {
+    // retitle-url-named-articles.ts renames the articles named after their
+    // own url. The old address still carries the id, which is what
+    // [seoType]/[slug].vue resolves before it sends the reader on - with a
+    // 301, as e2e/article_propose.spec.ts checks for a stale article slug.
+    const id = "OxjwBd9r9vn4NGw9mzjW";
+    const before = generateNodeUrl({
+      type: "article",
+      id,
+      name: "https://bip.karczew.pl/fls/bip_pliki/2024_10/BIPF6237D18C822F5Z/Roslonek_Tomasz_zanonimi.pdf",
+    } as unknown as Node)!;
+    const after = generateNodeUrl({
+      type: "article",
+      id,
+      name: "Tomasz Rosłonek: dokument z bip.karczew.pl",
+    } as unknown as Node)!;
+
+    expect(before).toBe(
+      `/artykul/https-bip-karczew-pl-fls-bip-pliki-2024-10-bipf6237d18c822f5z-roslonek-tomasz-zanonimi-pdf-${id}`,
+    );
+    expect(after).toBe(
+      `/artykul/tomasz-roslonek-dokument-z-bip-karczew-pl-${id}`,
+    );
+    expect(parseEntityUrlSlug(before.split("/")[2]!).id).toBe(id);
+    expect(slugRedirectCode(after)).toBe(301);
   });
 
   it("keeps the id's case, which the document id depends on", () => {
