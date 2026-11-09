@@ -36,6 +36,12 @@ import { reportRemaining } from "./remaining";
  * earlier than the change would tell a crawler that came between the two that
  * nothing has changed since.
  *
+ * A change found wrong after it was stamped stays in the list, marked
+ * `supersededBy` the script that put its pages right, and is skipped from then
+ * on: rerun as it was, it would raise those pages straight back. The first
+ * entry is one - dated to a rollout that changed no page, over every page
+ * where 44% changed - and correct-10-24-stamp.ts replaced it (2026-11-09).
+ *
  * Meant to be run again: add a change to `SITE_CHANGES` once it is live, then
  * dry-run and apply as below. A clean run writes nothing.
  *
@@ -63,12 +69,21 @@ export type SiteChange = {
   /** What changed on the pages, for whoever reads this list next. */
   what: string;
   scope: SiteChangeScope;
+  /** The script that replaced this stamp with dates measured page by page,
+   * where one did. A superseded change is never stamped again: rerun, it
+   * would raise every page that script dated earlier back to `at`. Kept in
+   * the list, with its instant, as the record of what was once written. */
+  supersededBy?: string;
 };
 
 export const SITE_CHANGES: readonly SiteChange[] = [
   {
     id: "canonical-and-snippets-2026-10-24",
     // rollout-2026-10-24-001, build 76c88044 (11d4087), DONE 14:08:20 UTC.
+    // Wrong on both counts: 001 changed no entity page, and the descriptions
+    // went live with 002 (15:20:13) on about 44% of the pages, not all.
+    // Stamped on 10-24 ~21:33 UTC; correct-10-24-stamp.ts dates the pages it
+    // reached by what really changed on each.
     at: "2026-10-24T14:08:20Z",
     what:
       "seo-old-urls, sitemap-lastmod and search-snippets: old urls answer " +
@@ -76,6 +91,7 @@ export const SITE_CHANGES: readonly SiteChange[] = [
       "rewritten. Search Console still held pages from before the 08-08 " +
       "canonical fix with nothing telling Google to look again.",
     scope: "sitemap-pages",
+    supersededBy: "scripts/migrate/correct-10-24-stamp.ts",
   },
   {
     id: "company-boards-unpublished-holders",
@@ -87,6 +103,39 @@ export const SITE_CHANGES: readonly SiteChange[] = [
     scope: "boards-with-unpublished-holders",
   },
 ];
+
+/** Which of `changes` a run stamps, and why it passes over the rest. `asked`
+ * is the id `--change` names, if any; a superseded or undated change is
+ * skipped even when asked for by name. */
+export function changesToStamp(
+  changes: readonly SiteChange[],
+  asked?: string,
+): {
+  stamp: (SiteChange & { at: string })[];
+  skip: { id: string; why: string }[];
+} {
+  const chosen = changes.filter((change) => !asked || change.id === asked);
+  if (asked && chosen.length === 0) {
+    throw new Error(
+      `No site change "${asked}". Known: ${changes.map((c) => c.id).join(", ")}`,
+    );
+  }
+  const stamp: (SiteChange & { at: string })[] = [];
+  const skip: { id: string; why: string }[] = [];
+  for (const change of chosen) {
+    if (change.supersededBy) {
+      skip.push({
+        id: change.id,
+        why: `superseded by ${change.supersededBy}, never stamped again`,
+      });
+    } else if (!change.at) {
+      skip.push({ id: change.id, why: "not live yet, no instant to stamp" });
+    } else {
+      stamp.push({ ...change, at: change.at });
+    }
+  }
+  return { stamp, skip };
+}
 
 /** A node, as much of it as this reads. */
 export type NodeRow = {
@@ -257,12 +306,7 @@ async function main() {
       (commit ? "" : " (dry run - pass --commit to apply)"),
   );
 
-  const changes = SITE_CHANGES.filter((c) => !asked || c.id === asked);
-  if (asked && changes.length === 0) {
-    throw new Error(
-      `No site change "${asked}". Known: ${SITE_CHANGES.map((c) => c.id).join(", ")}`,
-    );
-  }
+  const { stamp: changes, skip } = changesToStamp(SITE_CHANGES, asked);
 
   const nodesSnap = await db
     .collection("nodes")
@@ -281,14 +325,11 @@ async function main() {
   console.log(`Read ${nodes.size} node(s).`);
 
   const remaining: Record<string, number> = {};
+  for (const { id, why } of skip) {
+    console.log(`\n${id}: ${why} - skipped.`);
+    remaining[id] = 0;
+  }
   for (const change of changes) {
-    if (!change.at) {
-      console.log(
-        `\n${change.id}: not live yet, no instant to stamp - skipped.`,
-      );
-      remaining[change.id] = 0;
-      continue;
-    }
     console.log(`\n${change.id} (${change.at}): ${change.what}`);
     const pages = await pagesOf(db, change.scope, nodes);
     const { write, unchanged } = stampPlan(pages, nodes, change.at);
