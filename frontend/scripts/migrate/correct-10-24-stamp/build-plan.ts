@@ -60,8 +60,10 @@ import {
  *
  * Not floored, so at worst a page is dated earlier than a change it did get
  * (which costs a recrawl, never trust): rollout 10-07's roleless-spell and
- * owner de-duplication, 09-25's „Wybrany” chip and 10-10's Wikipedia link,
- * none of which has been measured per page.
+ * owner de-duplication, 09-25's „Wybrany” chip, 10-10's Wikipedia link, and
+ * 09-09's articles section on person and company pages (21 planned person
+ * pages dated before it had a live mention), none of which has been measured
+ * per page.
  *
  * Rerun, from the repository root (about 10 minutes, ~700 MB of exports and
  * dumps; reading the bucket is all it does with production):
