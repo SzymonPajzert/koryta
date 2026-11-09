@@ -62,9 +62,16 @@ import { reportRemaining } from "./remaining";
  * same reason: `name` is revision-carried data, and a bare field write would
  * leave the node disagreeing with its approved revision. The slug follows the
  * name, and the article's old address answers with a 301 to the new one
- * (`[seoType]/[slug].vue`). Signed-in readers see the new names at once;
- * anonymous ones are served `/api/nodes/[id]/mentions` from Nitro's cache for
- * up to 6 hours.
+ * (`[seoType]/[slug].vue`). Signed-in readers see the new names at once.
+ * Anonymous readers and crawlers are served `/api/nodes/[id]` (and
+ * `/api/nodes/[id]/mentions`) from Nitro's cache for up to 6 hours, so for that
+ * long the new address can answer 301 back to the old one, computed from the
+ * cached old name; it settles by itself when the cache expires, with no loop.
+ *
+ * Archiving: besides the `../` on the imports, the runtime path in
+ * `loadCheerio` (`../../functions/package.json`) needs one more `../`.
+ * Typecheck does not see it, and a dry run with nothing to retitle never loads
+ * cheerio.
  *
  * Reads titles with cheerio, the parser `getPageMeta` uses, which is a
  * dependency of `functions/` and not of the app: run `npm ci` in functions/
@@ -76,7 +83,10 @@ import { reportRemaining } from "./remaining";
  *   npx tsx scripts/migrate/retitle-url-named-articles.ts --commit
  * Against production:
  *   npx tsx scripts/migrate/retitle-url-named-articles.ts --prod --csv proposals.csv
- *   npx tsx scripts/migrate/retitle-url-named-articles.ts --prod --commit
+ *   npx tsx scripts/migrate/retitle-url-named-articles.ts --prod --commit --csv committed.csv
+ * --commit fetches every page again, so its own --csv is the record of what
+ * was written, which can differ from the dry run's where a site answers
+ * differently the second time.
  *
  * `--commit` fetches the pages again rather than trusting a dry run's file, so
  * what it writes is what the pages say that day.
