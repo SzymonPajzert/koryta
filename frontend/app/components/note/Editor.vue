@@ -329,13 +329,14 @@ const mentionedNodes = computed(() =>
 /** The article node for a url, made if this is the first time anyone cites it.
  *
  * A page that will not give up its title is still worth having, so it goes in
- * under its own address - the same thing the article list does with the pieces
- * that reached us without one. */
+ * without one, and the server titles it after the node this note hangs off and
+ * the site it is on - "Tomasz Rosłonek: dokument z bip.karczew.pl". It used to
+ * go in under its own address, and 161 articles were named like that by
+ * 2026-11-09. */
 const articleIdFor = async (url: string) => {
   const payload = await articlePayloadFor(url);
   const { nodeId } = await ensureArticle({
     ...payload,
-    name: payload.name || payload.url,
     mentions: mentionedNodes.value,
   });
   return nodeId;

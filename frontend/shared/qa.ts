@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "zrodla-bez-tytulu-nie-nazywaja-sie-adresem",
+    title: "Źródło bez tytułu nie nazywa się już swoim adresem",
+    description:
+      "Źródło dodane w notatce, którego strona nie podała tytułu (PDF, LinkedIn), dostawało za tytuł swój adres. Teraz dostaje tytuł z osoby, pod którą je dodano, i strony, z której jest, np. „Tomasz Rosłonek: dokument z bip.karczew.pl”; osoby bez opublikowanej strony nie są w nim wymieniane.",
+    steps: [
+      "Na stronie opublikowanej osoby dodaj w notatce źródło będące plikiem PDF i zapisz: na /zrodla pojawia się jako „<osoba>: dokument z <strona>”, a nie jako adres.",
+    ],
+    link: "/zrodla",
+    area: "contributor",
+  },
+  {
     id: "mapa-strony-osobno-dla-kazdego-typu",
     title:
       "Mapa strony ma osobny plik dla osób, instytucji, artykułów i reszty",
