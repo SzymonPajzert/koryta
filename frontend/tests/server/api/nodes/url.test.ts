@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import handler from "../../../../server/api/nodes/[id]/url.get";
 
-/** What `/api/_sitemap-urls` lists: the public pages, at their addresses. */
+/** What the sitemap's sources list together: the public pages, at their
+ * addresses. Each `/api/_sitemap-urls/<type>` answers with its own type's. */
 let sitemap: { loc: string }[] = [];
 let id: string | undefined;
 
@@ -12,11 +13,18 @@ vi.hoisted(() => {
   globalThis.defineEventHandler = (fn: any) => fn;
 });
 
+const pathOfType: Record<string, string> = {
+  person: "/osoba/",
+  place: "/instytucja/",
+  article: "/artykul/",
+};
+
 /** The internal fetch Nitro hangs on every event, which is how the handler
- * reaches the sitemap's cached list. */
+ * reaches the sitemap's cached lists. */
 const $fetch = vi.fn(async (url: string) => {
-  expect(url).toBe("/api/_sitemap-urls");
-  return sitemap;
+  const type = url.replace("/api/_sitemap-urls/", "");
+  expect(Object.keys(pathOfType)).toContain(type);
+  return sitemap.filter(({ loc }) => loc.startsWith(pathOfType[type]!));
 });
 
 const call = () =>
@@ -24,6 +32,7 @@ const call = () =>
 
 describe("GET /api/nodes/[id]/url", () => {
   beforeEach(() => {
+    $fetch.mockClear();
     sitemap = [
       { loc: "/osoba/adam-niedzialek-SVb31mmNOMmlOy1BsPhH" },
       { loc: "/instytucja/amw-invest-warszawa-aRhVbgfIke5i6PqDBZY5" },
@@ -58,6 +67,18 @@ describe("GET /api/nodes/[id]/url", () => {
     sitemap.push({ loc: "/osoba/adam-niedzialek-svb31mmNOMmlOy1BsPhH" });
     id = "svb31mmnommloy1bsphh";
     await expect(call()).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("searches the list of every page type, and only those", async () => {
+    id = "DRf5LYAdf5TwXKDZYMcP";
+    expect(await call()).toEqual({
+      url: "/artykul/1-7-mln-dla-mlodego-lekarza-DRf5LYAdf5TwXKDZYMcP",
+    });
+    expect($fetch.mock.calls.map(([url]) => url).sort()).toEqual([
+      "/api/_sitemap-urls/article",
+      "/api/_sitemap-urls/person",
+      "/api/_sitemap-urls/place",
+    ]);
   });
 
   it("refuses an id that is nothing but punctuation", async () => {

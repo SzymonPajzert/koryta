@@ -1,5 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { bundleSharpBinaries } from "./build/sharp-binaries";
+import { serveSitemapIndexAtSitemapXml, sitemapOptions } from "./build/sitemap";
 import { themeColors } from "./shared/colors";
 
 // Force IPv4 for emulators to avoid Node 17+ IPv6 issues
@@ -139,9 +140,10 @@ export default defineNuxtConfig({
     defaultLocale: "pl",
   },
 
-  sitemap: {
-    sources: ["/api/_sitemap-urls"],
-  },
+  // A sitemap index at /sitemap.xml with one child per page type; see
+  // build/sitemap.ts for the files, and the `nitro:config` hook below for why
+  // the index is served at /sitemap.xml rather than redirected to.
+  sitemap: sitemapOptions(),
 
   seo: {
     // nuxt-seo-utils lowercases the canonical by default, which is fine for a
@@ -361,6 +363,11 @@ export default defineNuxtConfig({
     // build/sharp-binaries.ts for what this does and why.
     "nitro:init"(nitro) {
       bundleSharpBinaries(nitro);
+    },
+    // A hook for the same reason. It runs after every module has registered
+    // its routes, which is what lets it undo @nuxtjs/sitemap's redirect.
+    "nitro:config"(nitroConfig) {
+      serveSitemapIndexAtSitemapXml(nitroConfig);
     },
   },
 
