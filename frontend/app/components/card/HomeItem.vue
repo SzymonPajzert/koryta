@@ -6,11 +6,10 @@
       :to="props.router ? props.router : undefined"
       :prepend-icon="props.icon"
       rel="noopener noreferrer"
-      rounded="lg"
       variant="tonal"
     >
       <template #title>
-        <h2 class="text-h5 font-weight-bold">
+        <h2 class="text-h5">
           <slot name="header" />
         </h2>
       </template>

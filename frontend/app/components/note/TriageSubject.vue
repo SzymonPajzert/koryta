@@ -1,28 +1,28 @@
 <template>
   <!-- Nothing at all rather than an empty frame. A note can hang off a node
        that resolves to no document - a proposal nobody kept - and a company
-       with no relations would repeat only the name the card above gives. -->
-  <section
+       with no relations would repeat only the name the card above gives.
+
+       The site's section shell, as on the entity pages this record comes
+       from: its head is a section head under the page's 40px title, where the
+       hand-copied one here was 16/500 - quieter than the card text under
+       it. -->
+  <PageSection
     v-if="subject && (person || relations.length)"
-    class="triage-subject"
+    :title="person ? 'Kogo dotyczy notatka' : 'Czego dotyczy notatka'"
+    :icon="entityIcon(subject.type)"
     data-testid="triage-subject"
   >
-    <div class="sec-head px-2 mb-2">
-      <v-icon
-        :icon="entityIcon(subject.type)"
-        size="18"
-        class="sec-head__icon"
-      />
-      <h2 class="text-subtitle-1 font-weight-medium">
-        {{ person ? "Kogo dotyczy notatka" : "Czego dotyczy notatka" }}
-      </h2>
-    </div>
-
     <!-- The table's side panel - the one /admin/notatki opens on the same
          node - without the parts that are a job of their own: the map, the
          change proposal with its vote, and the note editor, which here would
-         only list the note being judged a second time. -->
-    <div class="k-card">
+         only list the note being judged a second time.
+
+         The card frames the record only. The relations under it are a ruled
+         list with a head and a frame of their own, and wrapped in this card
+         too they drew a second hairline a pixel inside the first, with their
+         head jammed against its edge. -->
+    <div class="k-card mt-3">
       <CardExplorePerson
         v-if="person"
         :person="person"
@@ -45,18 +45,18 @@
           </NuxtLink>
         </v-card-title>
       </v-card>
-
-      <!-- A row opens its page in a new tab, as the name on the card does:
-           leaving the queue would take its undo history with it. -->
-      <CardEmploymentHistory
-        :edges="relations"
-        :company="company"
-        :subject-published="subject.published === true"
-        new-tab
-        class="pb-2"
-      />
     </div>
-  </section>
+
+    <!-- A row opens its page in a new tab, as the name on the card does:
+         leaving the queue would take its undo history with it. -->
+    <CardEmploymentHistory
+      :edges="relations"
+      :company="company"
+      :subject-published="subject.published === true"
+      new-tab
+      class="mt-6"
+    />
+  </PageSection>
 </template>
 
 <script setup lang="ts">

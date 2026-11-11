@@ -6,17 +6,15 @@
         {{ targetName }}
       </v-card-subtitle>
       <v-card-text>
-        <p class="mb-1 text-body-2">
-          Rewizja zostaje zachowana wraz z powodem - to jedyne, co wróci do
-          osoby, która ją zgłosiła.
-        </p>
-        <p class="mb-3 text-body-2 text-medium-emphasis">
-          Autor dostanie ten powód mailem.
-        </p>
+        <!-- What happens to the reason, under the field it is typed into
+             rather than in two paragraphs above it: the place a reviewer is
+             looking while they write it. -->
         <v-textarea
           v-model="reason"
           label="Powód odrzucenia"
           placeholder="np. brak źródła, dane niezgodne z KRS"
+          hint="Rewizja zostaje zachowana razem z powodem, a autor dostaje go mailem - to jedyne, co do niego wróci."
+          persistent-hint
           rows="3"
           auto-grow
           data-testid="reject-reason"

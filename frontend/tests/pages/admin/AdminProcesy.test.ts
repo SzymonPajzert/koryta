@@ -407,9 +407,9 @@ describe("/admin/procesy", () => {
         .findAll("span")
         .map((part) => part.text())
         .join(" ");
-    expect(stat("running")).toBe("1 w toku");
-    expect(stat("ok")).toBe("3 działa");
-    expect(stat("never")).toBe("8 brak raportów");
+    expect(stat("running")).toBe("1 W toku");
+    expect(stat("ok")).toBe("3 Działa");
+    expect(stat("never")).toBe("8 Brak raportów");
     // Only the counts that happen to be non-zero beyond the three always shown.
     expect(page.find('[data-stat="stopped"]').exists()).toBe(false);
     expect(page.find('[data-stat="partial"]').exists()).toBe(false);

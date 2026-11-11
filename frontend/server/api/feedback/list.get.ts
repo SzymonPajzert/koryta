@@ -79,5 +79,8 @@ export default defineEventHandler(async (event) => {
   return {
     feedback,
     openTruncated: openSnap.docs.length > OPEN_CAP,
+    // The closed history is the newest `limit`; a full page means it may go
+    // further back, so /admin/opinie says „100+” rather than „100”.
+    settledTruncated: settledSnap.docs.length >= query.limit,
   };
 });

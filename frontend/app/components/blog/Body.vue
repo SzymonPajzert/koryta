@@ -94,7 +94,7 @@ defineProps<{ post: BlogPost }>();
 
 .blog-body > :deep(table :is(th, td)) {
   padding: 6px 12px;
-  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-bottom: 1px solid var(--k-line);
   text-align: left;
 }
 
@@ -107,7 +107,7 @@ defineProps<{ post: BlogPost }>();
 .blog-body :deep(hr) {
   margin: 2rem 0;
   border: none;
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-top: 1px solid var(--k-line);
 }
 
 .blog-body :deep(sup a) {
@@ -117,7 +117,7 @@ defineProps<{ post: BlogPost }>();
 .blog-body :deep(.footnotes) {
   margin-top: 3rem;
   padding-top: 1rem;
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-top: 1px solid var(--k-line);
   font-size: 0.9375rem;
 }
 

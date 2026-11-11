@@ -4,6 +4,7 @@
     :subtitle="subtitle"
     :loading="loading"
     hide-view-toggle-on-mobile
+    class="k-bleed-xs"
   >
     <template #chart>
       <div
@@ -21,13 +22,9 @@
       >
         <div class="d-flex align-center flex-wrap ga-2 mb-3">
           <span class="text-caption text-medium-emphasis">Podziel według</span>
-          <v-btn-toggle
+          <SegmentedToggle
             class="breakdown__dimensions"
             :model-value="dimension"
-            density="compact"
-            variant="outlined"
-            divided
-            mandatory
             @update:model-value="onDimension"
           >
             <v-btn
@@ -38,7 +35,7 @@
             >
               {{ label }}
             </v-btn>
-          </v-btn-toggle>
+          </SegmentedToggle>
         </div>
 
         <!-- Two of everything the narrow scale changes, chosen by a media
@@ -635,7 +632,7 @@ const paletteVars = computed(() => ({
 }
 
 .breakdown__label {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   color: var(--bd-secondary);
   text-align: right;
   overflow: hidden;
@@ -657,7 +654,7 @@ const paletteVars = computed(() => ({
 
 .breakdown__meta {
   display: block;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   color: var(--bd-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -665,7 +662,7 @@ const paletteVars = computed(() => ({
 }
 
 .breakdown__caption {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   color: var(--bd-muted);
   line-height: 1.15;
 }
@@ -679,7 +676,7 @@ const paletteVars = computed(() => ({
 .breakdown__tick {
   position: absolute;
   bottom: 0;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   color: var(--bd-muted);
   font-variant-numeric: tabular-nums;
   transform: translateX(-50%);
@@ -694,7 +691,7 @@ const paletteVars = computed(() => ({
   position: absolute;
   bottom: 0;
   transform: translateX(-50%);
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--bd-primary);
   background: var(--bd-surface);
@@ -733,7 +730,7 @@ const paletteVars = computed(() => ({
 }
 
 .breakdown__num {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--bd-secondary);

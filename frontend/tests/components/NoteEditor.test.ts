@@ -301,12 +301,12 @@ describe("NoteEditor", () => {
 
     const section = wrapper.get("[data-testid='note-editor']");
     expect(section.element.tagName).toBe("SECTION");
-    // The shell's own padding, and no margin of its own: the page that stacks
-    // the sections owns the gap, and `mb-4` here left 32px under the notes
-    // where their neighbours leave 16.
-    expect(section.classes()).toContain("px-2");
+    // No inset and no margin of its own: the section shares the page's left
+    // edge, and the page that stacks the sections owns the gap - `mb-4` here
+    // left 32px under the notes where their neighbours left 16.
+    expect(section.classes()).not.toContain("px-2");
     expect(section.classes()).not.toContain("mb-4");
-    expect(section.get(".sec-head h3").text()).toBe("Notatki");
+    expect(section.get(".sec-head h2").text()).toBe("Notatki");
 
     // Two entries, one under another. The two-up grid is what made the section
     // its own layout, and three of the six callers already opted out of it.

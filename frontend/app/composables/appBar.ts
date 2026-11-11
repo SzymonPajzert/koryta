@@ -2,11 +2,12 @@ import { computed, onMounted, shallowRef } from "vue";
 
 /** The height of the app bar in `layouts/default.vue`, in pixels.
  *
- * Vuetify's own default, declared here rather than left implicit because the
+ * 56, a little under Vuetify's 64: the quiet bar of the 2026-10-15 redesign.
+ * Declared here rather than left implicit because the
  * server has to know it before anything has been measured - see
  * `useSsrLayoutTop`. It is passed to `v-app-bar` as well, so the number the
  * server assumes and the number the browser lays out cannot drift apart. */
-export const APP_BAR_HEIGHT = 64;
+export const APP_BAR_HEIGHT = 56;
 
 /** A `style` binding for `v-main` that holds the page still while it hydrates.
  *

@@ -20,10 +20,12 @@
       >
         Anuluj
       </v-btn>
+      <!-- A sage fill with dark text, not sage on its own tint: sage is a fill,
+           never text (Szymon, 2026-10-23, for every control drawn in it). -->
       <v-btn
         color="primary"
         size="small"
-        variant="tonal"
+        variant="flat"
         :loading="loading"
         :disabled="!content.trim()"
         @click="submit"

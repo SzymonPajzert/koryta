@@ -42,12 +42,7 @@
          something about a stranger and have never seen the decision made. The
          row is dropped whole where no page has been published off the tier
          yet. -->
-    <v-card
-      v-if="examples.length"
-      variant="outlined"
-      rounded="lg"
-      class="pa-4 mt-4"
-    >
+    <v-card v-if="examples.length" variant="outlined" class="pa-4 mt-4">
       <div class="text-subtitle-2 font-weight-bold mb-2">
         Tak wygląda strona, którą ktoś już sprawdził
       </div>

@@ -8,7 +8,6 @@
       'milestone-card--festive': festive,
     }"
     flat
-    rounded="lg"
   >
     <!-- Confetti, drawn rather than imaged: six absolutely positioned squares
          over a warm wash. `aria-hidden` because it says nothing - the card
@@ -261,18 +260,15 @@ const company = computed<Company>(() => ({
 </script>
 
 <style scoped>
-/* Deliberately `CardEmployment`'s card, down to the accent bar and the lift on
+/* Deliberately `CardEmployment`'s card, down to the accent bar and the edge on
    hover: this feed is read the same way the home page's is, and two grids of
    near-identical rows that disagree about their border radius read as two
    half-finished features rather than as one site. */
 .milestone-card {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.16);
+  border: 1px solid var(--k-line);
   overflow: hidden;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+  transition: border-color 0.2s ease;
 }
 
 .milestone-card::before {
@@ -293,23 +289,30 @@ const company = computed<Company>(() => ({
   background: rgba(var(--v-theme-on-surface), 0.22);
 }
 
+/* The sage edge says it is a link; no lift - a shadow is for what floats. */
 .milestone-card:hover {
   border-color: rgba(var(--v-theme-primary), 0.9);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.09);
-  transform: translateY(-2px);
 }
 
 /* Vuetify's own hover overlay on top of a near-white surface is a grey wash
-   that fights the lift above. */
+   that fights the edge above. */
 .milestone-card :deep(.v-card__overlay) {
   display: none;
 }
 
+/* Above the confetti, which is positioned and so painted over anything that
+   is not: a bit sat on a letter of the person's name on most festive cards,
+   and another on the corner of the years badge. Raised, the name is drawn
+   over the bits rather than under them and the badge's own fill hides the
+   one at its corner, while the bits stay where they were thrown. The card's
+   own `z-index: 0` keeps this inside it. */
 .milestone-card__body {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 16px 16px 16px 20px;
+  position: relative;
+  z-index: 1;
 }
 
 /* Without this the flex item is free to size to its longest word, and an

@@ -31,7 +31,7 @@ export interface RevisionChange {
 
 /** Fields nobody proposes and nobody should read as a change.
  *
- * Three groups. The structural ones say what the document *is* rather than what
+ * Four groups. The structural ones say what the document *is* rather than what
  * it claims - an edge restates its own endpoints in every revision - and
  * `isPublicSource`, `categoriesSource` and `partiesSource` are
  * bookkeeping `/api/revisions/create` writes alongside `isPublic`,
@@ -39,13 +39,15 @@ export interface RevisionChange {
  * Removal is rendered as its own thing, not as `deleted: — → tak`, so both of
  * its fields are dropped too.
  *
- * The rest is `INTERNAL_FIELDS` from `server/utils/revisions.ts`: bookkeeping
- * the document owns rather than states. The stored side already has these
+ * Then `INTERNAL_FIELDS` from `server/utils/revisions.ts`: bookkeeping the
+ * document owns rather than states. The stored side already has these
  * stripped, but a revision written before the ingest started stripping them
- * still carries them inside its own `data` - `/admin/rewizje/[id]` deletes
- * `revision_id` from its key list for exactly this reason. Left in, every such
- * revision would report its counters as changes, and `revision_id` decodes to a
- * live DocumentReference that has no readable rendering at all.
+ * still carries them inside its own `data`. Left in, every such revision would
+ * report its counters as changes, and `revision_id` decodes to a live
+ * DocumentReference that has no readable rendering at all. Last, a few stamps
+ * of other kinds, explained where they are listed.
+ *
+ * `/admin/rewizje/[id]` leaves this whole set out of its comparison table too.
  *
  * `tests/server/utils/revisions.test.ts` asserts this stays a superset of
  * `INTERNAL_FIELDS`, so the two partitions cannot drift apart. (The assertion
@@ -71,6 +73,15 @@ export const skippedChangeFields = new Set([
   "needs_split",
   "nameChunksLower",
   "content_changed_at",
+  // Bookkeeping too. `nameSource` is what `/api/revisions/create` stamps on a
+  // hand-made company rename, so the ingest leaves the name alone; listed, it
+  // read as a second change beside every rename. `date` and `user` are a
+  // creation stamp (ms and a uid) an old code path wrote onto about 440 nodes;
+  // nothing reads them, and a proposal copying them showed „date: — →
+  // 1752843656679” on /profil and in the review queue.
+  "nameSource",
+  "date",
+  "user",
 ]);
 
 /** How each proposable field reads in Polish.
@@ -126,6 +137,15 @@ export const revisionFieldLabels: Record<string, string> = {
 
 export function revisionFieldLabel(field: string): string {
   return revisionFieldLabels[field] ?? field;
+}
+
+/** A label, or a list of them, at the head of a line: „Data urodzenia”,
+ * „Opis, partie”. The map above stays lowercase because the same names are
+ * also joined mid-sentence. One helper for the queue's lines, an entry's
+ * history, the diff and the comparison table's rows, so they cannot come to
+ * write the same field two ways. */
+export function capitaliseLabel(text: string): string {
+  return text.charAt(0).toLocaleUpperCase("pl-PL") + text.slice(1);
 }
 
 /** The editable fields of every proposable type, for the coverage test. */

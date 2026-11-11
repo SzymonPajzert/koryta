@@ -139,7 +139,7 @@ const panelId = computed(() => `arow-panel-${uid}`);
 }
 
 .arow + .arow {
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-top: 1px solid var(--k-line);
 }
 
 .arow__head {
@@ -162,6 +162,13 @@ const panelId = computed(() => `arow-panel-${uid}`);
   font: inherit;
   text-align: start;
   cursor: pointer;
+}
+
+/* A line with nothing after it ends a gutter in. The toggle's own 4px assumes
+ * a button after it: with the list running edge to edge on a phone, a line's
+ * last words sat 5px from the glass. */
+.arow__head > .arow__toggle:last-child {
+  padding-inline-end: var(--k-gutter);
 }
 
 .arow__toggle:hover {
@@ -211,7 +218,7 @@ const panelId = computed(() => `arow-panel-${uid}`);
   gap: 8px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-top: 1px solid var(--k-line);
 }
 
 /* Greyed rather than hidden - see opinie's `feedback-settled`. */
@@ -237,9 +244,13 @@ const panelId = computed(() => `arow-panel-${uid}`);
 
 /* ---- helpers for the summary line ---- */
 
-/* The part of the line that gives way: one line, ellipsised. */
+/* The part of the line that gives way: one line, ellipsised. It takes what
+ * the rest of the line leaves rather than sharing the shortfall with it:
+ * sized by its own text, a long title shrank in step with the identifiers
+ * beside it, and a 30-character „bez zmian” or an author came out as „bez z…”
+ * and „Szymon (l…” while the title kept forty more characters. */
 .arow-grow {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -265,8 +276,8 @@ const panelId = computed(() => `arow-panel-${uid}`);
 .arow-tag {
   flex: none;
   padding: 0 6px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  border-radius: var(--k-r-control);
+  font-size: var(--k-meta-size);
   line-height: 1.25rem;
   white-space: nowrap;
 }
@@ -279,22 +290,25 @@ const panelId = computed(() => `arow-panel-${uid}`);
   gap: 12px 24px;
   margin-bottom: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-bottom: 1px solid var(--k-line);
 }
 
 .afact {
   min-width: 0;
 }
 
+/* A label, as type.css has them: 12/600 in the quiet ink, sentence case. It
+ * was 11px tracked capitals - under the site's 12px floor, and the one place
+ * left where "Autor" read AUTOR. */
 .afact__label {
-  font-size: 0.6875rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: var(--k-meta-size);
+  font-weight: 600;
+  line-height: 1.4;
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
 }
 
 .afact__value {
-  font-size: 0.875rem;
+  font-size: var(--k-ui-size);
   font-weight: 500;
   overflow-wrap: anywhere;
 }
@@ -308,6 +322,13 @@ const panelId = computed(() => `arow-panel-${uid}`);
 
   .arow-side {
     max-width: 45%;
+  }
+
+  /* Two facts to a line: at 150px a column, a phone's ~320px fit one, and
+   * five facts stacked to ~250px before the row's own content. */
+  .arow__meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
   }
 }
 </style>

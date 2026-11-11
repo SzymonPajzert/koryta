@@ -1,9 +1,10 @@
 <template>
-  <div class="pa-4">
+  <!-- No side padding of its own: the layout's container pads the column. -->
+  <div>
     <div class="d-flex align-start flex-wrap ga-4 mb-6">
       <div class="flex-grow-1">
         <h1 class="text-h4 mb-1">Statystyki</h1>
-        <p class="text-body-2 text-medium-emphasis mb-0">
+        <p class="k-page-lead mb-0">
           Kto się tym zajmuje i co ostatnio zrobił, a niżej — ile jest w bazie i
           ile z tego ktoś już sprawdził.
         </p>
@@ -11,10 +12,15 @@
       <v-btn to="/eksploruj/szpitale" variant="tonal">
         Rady nadzorcze szpitali
       </v-btn>
+      <!-- Filled, not tonal: tonal wrote „Pomóż sprawdzać” in the sage on a
+           wash of the same sage, 1.73:1, so the page's invitation read as a
+           disabled button. Filled, Vuetify sets it in the dark ink it pairs
+           with the sage, as /eksploruj/tabela's copy of it already was
+           (Szymon, 2026-10-23: sage controls become a fill now). -->
       <v-btn
         to="/eksploruj/nowe"
         color="primary"
-        variant="tonal"
+        variant="flat"
         :prepend-icon="mdiArrowRight"
       >
         Pomóż sprawdzać
@@ -31,13 +37,7 @@
       <v-spacer />
       <!-- One filter row, above everything it scopes: the range below changes
            the ranking, the tiles and the timeline together. -->
-      <v-btn-toggle
-        v-model="days"
-        density="compact"
-        variant="outlined"
-        divided
-        mandatory
-      >
+      <SegmentedToggle v-model="days">
         <v-btn
           v-for="range in activityRanges"
           :key="range"
@@ -46,7 +46,7 @@
         >
           {{ range }} dni
         </v-btn>
-      </v-btn-toggle>
+      </SegmentedToggle>
     </div>
 
     <v-alert
@@ -140,7 +140,7 @@
       <v-col cols="12" md="6">
         <v-card variant="outlined" height="100%">
           <v-card-item>
-            <v-card-title class="text-subtitle-1 font-weight-medium">
+            <v-card-title class="text-subtitle-1">
               Postęp weryfikacji osób
             </v-card-title>
             <v-card-subtitle class="text-wrap">
@@ -169,7 +169,7 @@
       <v-col cols="12" md="6">
         <v-card variant="outlined" height="100%">
           <v-card-item>
-            <v-card-title class="text-subtitle-1 font-weight-medium">
+            <v-card-title class="text-subtitle-1">
               Co wiadomo o miejscach
             </v-card-title>
             <v-card-subtitle class="text-wrap">
@@ -193,7 +193,7 @@
       <v-col cols="12" md="6">
         <v-card variant="outlined" height="100%">
           <v-card-item>
-            <v-card-title class="text-subtitle-1 font-weight-medium">
+            <v-card-title class="text-subtitle-1">
               Zgłoszenia od użytkowników
             </v-card-title>
             <v-card-subtitle class="text-wrap">
@@ -222,7 +222,7 @@
       <v-col cols="12" md="6">
         <v-card variant="outlined" height="100%">
           <v-card-item>
-            <v-card-title class="text-subtitle-1 font-weight-medium">
+            <v-card-title class="text-subtitle-1">
               Kolejka administratora
             </v-card-title>
             <v-card-subtitle class="text-wrap">
@@ -243,7 +243,7 @@
       </v-col>
     </v-row>
 
-    <v-row class="mb-6">
+    <v-row>
       <v-col cols="12" md="6">
         <!-- Individual verdicts; the card beside it counts people, not votes,
              so the two titles have to say which is which. -->

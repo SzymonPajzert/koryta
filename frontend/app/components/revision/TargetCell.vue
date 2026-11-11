@@ -1,5 +1,5 @@
 <template>
-  <div class="d-flex flex-column ga-1 target-cell">
+  <div class="d-flex flex-column ga-1">
     <NuxtLink
       v-if="proposal.targetPath"
       :to="proposal.targetPath"
@@ -112,22 +112,11 @@ const chips = computed(() => {
 </script>
 
 <style scoped>
-/* A table column is as wide as its widest cell, and an article's title is the
- * widest thing a proposal can be filed against - one of them pushed every
- * other column of the review queue off the useful part of the screen. A
- * max-width on the td would be ignored under the table's auto layout, so the
- * cap lives on this div, which is the cell's only child. The title attribute
- * keeps the part that no longer fits readable. */
-.target-cell {
-  max-width: 320px;
-}
-
+/* The name in full. This lives in the open queue row, which is where the name
+ * the line above ellipsises is read whole - the 320px cap and two-line clamp
+ * it carried as a table cell cut a long company name off mid-word in a panel
+ * three times as wide, and a phone has no hover to reach the title with. */
 .target-cell__name {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
   /* Names are not always prose: an id or a url has no space to break at. */
   overflow-wrap: anywhere;
 }

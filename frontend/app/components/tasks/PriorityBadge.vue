@@ -13,8 +13,9 @@
     :data-task-priority="badge.taken ? `${badge.level}-taken` : badge.level"
   >
     <template v-if="compact">{{ badge.short }}</template>
-    <!-- On a phone a sign alone, which leaves the title the line: the words
-         are there for a screen reader. -->
+    <!-- On a phone a sign alone, which keeps the row's second line - this
+         badge, „W toku”, „czeka na”, „blokuje” and the date - to one line:
+         the words are there for a screen reader. -->
     <template v-else>
       <v-icon class="d-sm-none" :icon="SIGNS[badge.level]" size="12" />
       <span class="d-sm-none d-sr-only">{{ badge.text }}</span>
@@ -53,8 +54,8 @@ const badge = computed(() => taskPriorityBadge(props.task, props.state));
   --task-priority-on-ink: var(--v-theme-on-ink-danger);
   flex: none;
   padding: 0 6px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  border-radius: var(--k-r-control);
+  font-size: var(--k-meta-size);
   font-weight: 600;
   line-height: 1.25rem;
   white-space: nowrap;
@@ -81,12 +82,10 @@ const badge = computed(() => taskPriorityBadge(props.task, props.state));
   }
 }
 
-/* On a map card: the size of the card's head, whose words are capitals. */
+/* On a map card's top edge: the size of the card's head, the type system's
+ * 12px floor, on a shorter line than in a row. */
 .task-priority--compact {
   padding: 0 5px;
-  font-size: 0.625rem;
   line-height: 1rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 </style>

@@ -11,8 +11,8 @@
 
 <style>
 .arow-list {
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  border-radius: 10px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
   overflow: hidden;
   background: rgb(var(--v-theme-surface));
 }
