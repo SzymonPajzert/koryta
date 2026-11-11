@@ -179,7 +179,7 @@ def test_the_state_names_nobody_and_problems_reads_the_stuck_back() -> None:
         (NO_ANSWER, "u-down"),
         (APP_SHELL, "u-one-page"),
     ]
-    assert rows[0]["crawler"].startswith("no answer")
+    assert str(rows[0]["crawler"]).startswith("no answer")
     assert [r["unit"] for r in problems(back, [APP_SHELL])] == ["u-one-page"]
 
 
