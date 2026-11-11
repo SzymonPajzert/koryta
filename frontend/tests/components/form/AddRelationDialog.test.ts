@@ -423,6 +423,20 @@ describe("AddRelationDialog", () => {
       ).toBeNull();
     });
 
+    it("says nothing beside an urząd the site does not have yet", async () => {
+      // Adding it with the relation is what happens; only the exception, an
+      // urząd already there, is said (Szymon, 2026-11-11).
+      serve(null);
+      const wrapper = mountDialog();
+      await chooseOffice(wrapper);
+
+      const row = document.querySelector(
+        `[data-testid="region-workplace-office-${urzad.regon}"]`,
+      );
+      expect(row?.textContent).toContain(`REGON ${urzad.regon}`);
+      expect(row?.textContent).not.toContain("bazie");
+    });
+
     it("files the post under the urząd the site already has", async () => {
       serve({ id: "urzad-1", name: "Urząd Miejski w Wejherowie" });
       const wrapper = mountDialog();
