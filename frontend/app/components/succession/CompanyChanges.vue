@@ -95,108 +95,74 @@
                the card carries what their rows there had - the draft badge,
                and the sources, the correction and the bin for whoever may
                use them - and fixing a post stays one click. -->
-          <div
-            class="k-card k-card--accent pa-4 pl-5 h-100"
+          <SuccessionSeatCard
+            :name="seat.post.personName"
+            :url="personUrl(seat.post)"
+            :published="seat.post.published !== false"
+            :parties="seat.post.parties"
+            :party-hidden="seat.post.partyHidden"
+            :since="seat.since"
+            :tools="!!seat.tools"
             :data-testid="`current-post-${seat.post.edgeId}`"
           >
-            <div
-              class="board-card"
-              :class="{ 'board-card--tools': !!seat.tools }"
-            >
-              <SuccessionInitials
-                class="board-card__avatar"
-                :name="seat.post.personName"
-                tone="in"
+            <template #after-pill>
+              <!-- The leading spaces in this card are for a reader of
+                   the text rather than of the layout: Google's snippet
+                   ran the date into the tenure, and the predecessor's
+                   name into „wcześniej na tym stanowisku:”. Each sits at
+                   the start of a flex item, where it is never drawn. -->
+              <span
+                v-if="seat.tenure"
+                class="text-caption text-medium-emphasis"
+              >
+                {{ ` ${seat.tenure}` }} na stanowisku
+              </span>
+              <!-- Whether the relation is live, as on its history row:
+                   among what the post is, not among the buttons. -->
+              <ChipEdgeDraftStatus
+                v-if="seat.edge"
+                :edge-id="seat.edge.id"
+                :published="seat.edge.visibility"
+                :publishable="edgeIsPublishable(seat.edge, subjectPublished)"
+                @published="emit('published')"
               />
-              <div class="board-card__text">
-                <div class="d-flex align-center flex-wrap ga-2">
-                  <!-- `nofollow` to a page nobody has published: for a
-                       logged out reader, and so for a crawler, it is the
-                       teaser, which answers 404. -->
+            </template>
+
+            <template #details>
+              <div
+                v-if="seat.predecessor"
+                class="text-caption text-medium-emphasis mt-2 d-flex align-center flex-wrap ga-1"
+              >
+                <v-icon :icon="mdiSwapVertical" size="14" />
+                <span>wcześniej na tym stanowisku:</span>
+                <!-- „m.in.”, the name and its parties as one piece of the
+                     line: it moves to a line of its own whole, and breaks
+                     inside only where it is wider than the card. A phone
+                     broke the line before the chip, which stood alone on
+                     the next one, cut off from the name it belongs to. -->
+                <span
+                  class="board-card__who d-inline-flex align-center flex-wrap ga-1"
+                >
+                  <span
+                    v-if="seat.predecessor.batchSize > 1"
+                    :title="batchNote(seat.predecessor.batchSize)"
+                    >{{ " m.in." }}</span
+                  >
                   <NuxtLink
-                    :to="personUrl(seat.post)"
-                    :rel="
-                      seat.post.published === false ? 'nofollow' : undefined
-                    "
-                    class="link-plain text-subtitle-1 font-weight-bold"
-                    >{{ seat.post.personName }}</NuxtLink
+                    :to="personUrl(seat.predecessor)"
+                    class="link-plain font-weight-medium"
+                    >{{ ` ${seat.predecessor.personName}` }}</NuxtLink
                   >
                   <PartyChip
-                    v-for="party in seat.post.parties"
+                    v-for="party in seat.predecessor.parties"
                     :key="party"
                     :party
                   />
-                  <!-- The party of an unpublished holder, which a logged
-                       out reader is told is there and not what it is. -->
-                  <ChipHiddenParty v-if="seat.post.partyHidden" />
-                </div>
-
-                <div class="d-flex align-center flex-wrap ga-2 mt-2">
-                  <!-- The day as every row on the site gives it, „od
-                       14.05.2026”: the card said „od 14 maja 2026” a few
-                       hundred pixels above the history's „od 14.05.2026” for
-                       the same post. -->
-                  <span class="now-pill">
-                    <v-icon :icon="mdiCalendarBlankOutline" size="13" />
-                    {{ seat.since }}
-                  </span>
-                  <!-- The leading spaces in this card are for a reader of
-                       the text rather than of the layout: Google's snippet
-                       ran the date into the tenure, and the predecessor's
-                       name into „wcześniej na tym stanowisku:”. Each sits at
-                       the start of a flex item, where it is never drawn. -->
-                  <span
-                    v-if="seat.tenure"
-                    class="text-caption text-medium-emphasis"
-                  >
-                    {{ ` ${seat.tenure}` }} na stanowisku
-                  </span>
-                  <!-- Whether the relation is live, as on its history row:
-                       among what the post is, not among the buttons. -->
-                  <ChipEdgeDraftStatus
-                    v-if="seat.edge"
-                    :edge-id="seat.edge.id"
-                    :published="seat.edge.visibility"
-                    :publishable="
-                      edgeIsPublishable(seat.edge, subjectPublished)
-                    "
-                    @published="emit('published')"
-                  />
-                </div>
-
-                <div
-                  v-if="seat.predecessor"
-                  class="text-caption text-medium-emphasis mt-2 d-flex align-center flex-wrap ga-1"
-                >
-                  <v-icon :icon="mdiSwapVertical" size="14" />
-                  <span>wcześniej na tym stanowisku:</span>
-                  <!-- „m.in.”, the name and its parties as one piece of the
-                       line: it moves to a line of its own whole, and breaks
-                       inside only where it is wider than the card. A phone
-                       broke the line before the chip, which stood alone on
-                       the next one, cut off from the name it belongs to. -->
-                  <span
-                    class="board-card__who d-inline-flex align-center flex-wrap ga-1"
-                  >
-                    <span
-                      v-if="seat.predecessor.batchSize > 1"
-                      :title="batchNote(seat.predecessor.batchSize)"
-                      >{{ " m.in." }}</span
-                    >
-                    <NuxtLink
-                      :to="personUrl(seat.predecessor)"
-                      class="link-plain font-weight-medium"
-                      >{{ ` ${seat.predecessor.personName}` }}</NuxtLink
-                    >
-                    <PartyChip
-                      v-for="party in seat.predecessor.parties"
-                      :key="party"
-                      :party
-                    />
-                  </span>
-                </div>
+                </span>
               </div>
+            </template>
 
+            <template #tools>
               <CardHistoryRowActions
                 v-if="seat.tools"
                 class="board-card__tools"
@@ -208,8 +174,8 @@
                 @edit="emit('edit', $event)"
                 @remove="emit('remove', $event)"
               />
-            </div>
-          </div>
+            </template>
+          </SuccessionSeatCard>
         </v-col>
       </v-row>
     </div>
@@ -361,7 +327,6 @@
 <script lang="ts" setup>
 import {
   mdiAlertCircleOutline,
-  mdiCalendarBlankOutline,
   mdiChevronDown,
   mdiSwapVertical,
 } from "@mdi/js";
@@ -662,6 +627,9 @@ const currentGroups = computed(() => {
           predecessor: predecessors.get(post.edgeId) ?? null,
           edge,
           tools: edge && hasTools(edge) ? edge : null,
+          // The card's pill. The day as every row on the site gives it, „od
+          // 14.05.2026”: the card said „od 14 maja 2026” a few hundred pixels
+          // above the history's „od 14.05.2026” for the same post.
           since:
             ledgerPeriod(post.start ?? undefined, undefined, {
               today: today.value,
@@ -971,58 +939,15 @@ const absentInfo = computed<Why[]>(() => {
 
 /* ---- obecny skład ---- */
 
-/* Who, then what the post is; with an editor's tools for it at the card's
-   edge, on the name's line, where the history's rows keep theirs. On the
-   name's line rather than centred: cards of one row are as tall as the
-   tallest, so tools centred on each card's own text zigzagged across the
-   row. Only a card with tools has their column, or its empty gap would
-   still cost the text 12px. */
-.board-card {
-  align-items: start;
-  column-gap: 12px;
-  display: grid;
-  grid-template-areas: "avatar text";
-  grid-template-columns: auto minmax(0, 1fr);
-}
-
-.board-card--tools {
-  grid-template-areas: "avatar text tools";
-  grid-template-columns: auto minmax(0, 1fr) auto;
-}
-
-.board-card__avatar {
-  grid-area: avatar;
-}
-
-.board-card__text {
-  grid-area: text;
-  min-width: 0;
-}
-
-.board-card__tools {
-  align-self: start;
-  grid-area: tools;
-}
+/* The card - the grid of the initials, the text and the tools, and the pill -
+   is `succession/SeatCard.vue`'s, which a region's „Władze” draws too. What
+   this page puts in it is styled here: the line on who held the seat
+   before. */
 
 /* Free to shrink below its widest word, so a name with six party chips that
    is wider than the card breaks inside the group rather than past its edge. */
 .board-card__who {
   min-width: 0;
-}
-
-/* Sage behind ink rather than as ink: the one thing a reader scanning the
-   section is looking for is who is in the seat now. */
-.now-pill {
-  align-items: center;
-  background: rgba(var(--v-theme-primary), 0.22);
-  border-radius: var(--k-r-control);
-  color: rgba(var(--v-theme-on-surface), 0.87);
-  display: inline-flex;
-  font-size: var(--k-meta-size);
-  font-weight: 600;
-  gap: 4px;
-  padding: 2px 8px;
-  white-space: nowrap;
 }
 
 /* ---- the relay ---- */
@@ -1091,28 +1016,6 @@ const absentInfo = computed<Why[]>(() => {
 
 /* ---- phone ---- */
 @media (max-width: 599.98px) {
-  /* An editor's tools take the card's last line, at its right edge, where
-     the history's rows put theirs on a phone: beside the name they would
-     leave it about 110px. */
-  .board-card--tools {
-    grid-template-areas:
-      "avatar text"
-      ". tools";
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .board-card__tools {
-    justify-self: end;
-    margin-top: 8px;
-  }
-
-  /* Tapped here, so the count of sources is as tall as the pencil and the
-     bin beside it, as on the history's rows on a phone. It is the tools'
-     only button with a label. */
-  .board-card__tools :deep(.v-btn:not(.v-btn--icon)) {
-    --v-btn-height: 40px;
-  }
-
   .ev-sub {
     margin-left: 0;
     width: 100%;
