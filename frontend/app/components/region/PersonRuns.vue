@@ -30,11 +30,14 @@
       </div>
     </div>
 
-    <ol class="person-runs__list">
+    <!-- Focusable only where „Pokaż wszystkie starty” sends the focus: the
+         first run it opens. -->
+    <ol :id="listId" ref="list" class="person-runs__list">
       <li
-        v-for="run in shownRuns"
+        v-for="(run, place) in shownRuns"
         :key="run.edgeId"
         class="person-run"
+        :tabindex="place === RUNS_SHOWN ? -1 : undefined"
         :data-testid="`person-run-${run.edgeId}`"
       >
         <div class="person-run__text">
@@ -52,7 +55,7 @@
                 color="success"
                 variant="flat"
               >
-                Wybrany
+                Z mandatem
               </v-chip>
             </template>
           </div>
@@ -111,8 +114,10 @@
       v-if="foldedRuns > 0"
       type="button"
       class="person-runs__more"
+      aria-expanded="false"
+      :aria-controls="listId"
       data-testid="person-runs-more"
-      @click="unfolded = true"
+      @click="unfold"
     >
       Pokaż wszystkie starty ({{ runCount }})
     </button>
@@ -180,6 +185,25 @@ const shownRuns = computed(() =>
 );
 const foldedRuns = computed(() => props.runs.length - shownRuns.value.length);
 
+/** For the button to say what it opens, the same on the server and in the
+ * browser. */
+const listId = useId();
+const list = useTemplateRef<HTMLOListElement>("list");
+
+/** Opening the rest takes the focused button away, which would drop a
+ * keyboard or screen-reader user back to the top of the page. Focus goes to
+ * the first run it opened instead, as a company's „Pokaż starsze” sends it to
+ * the first card (succession/CompanyChanges.vue); `preventScroll`, because
+ * the runs open downwards from where the reader already is. */
+async function unfold() {
+  unfolded.value = true;
+  await nextTick();
+  const rows = list.value?.querySelectorAll<HTMLElement>(
+    ":scope > .person-run",
+  );
+  rows?.[RUNS_SHOWN]?.focus({ preventScroll: true });
+}
+
 const opened = ref(new Set<string>());
 
 function isOpen(edgeId: string): boolean {
@@ -244,6 +268,13 @@ function toggle(edgeId: string) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   padding: 12px 0;
+}
+
+/* Focus only lands on a run from „Pokaż wszystkie starty”, as a reading
+   position, not a control: a ring round the row would frame it like
+   something to press. */
+.person-run:focus {
+  outline: none;
 }
 
 .person-run__line {

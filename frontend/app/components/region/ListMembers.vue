@@ -1,8 +1,9 @@
 <template>
   <!-- The people on one election list, a row each: the name, what they stood
-       for, their parties and whether they won the seat - the words a
-       person's own run row uses (card/EmploymentHistory.vue), so the two
-       read alike. -->
+       for, their parties and whether they won the seat. The seat in the
+       words of the list's own count („w tym 3 z mandatem”), not
+       „Wybrany”: that would have to agree in gender with a name, and
+       nothing stores anybody's (shared/activityFeed.ts). -->
   <ul
     class="list-members"
     :class="{ 'list-members--indent': indent }"
@@ -41,7 +42,7 @@
         color="success"
         variant="flat"
       >
-        Wybrany
+        Z mandatem
       </v-chip>
     </li>
   </ul>
@@ -57,7 +58,7 @@ defineProps<{
   highlightId?: string;
   /** A step in from the left, for a list opened under its own head. */
   indent?: boolean;
-  /** Without the offices and the „Wybrany” chip: for a council's members,
+  /** Without the offices and the „Z mandatem” chip: for a council's members,
    * where every row would say the same of both. */
   plain?: boolean;
 }>();
@@ -96,11 +97,13 @@ defineProps<{
   font-weight: 600;
 }
 
-/* The person the reader came from: the sage edge a card carrying a claim
-   about somebody takes (`k-card--accent`, app.vue), on their own row - so
-   among the others on the list, they are the one already met. */
+/* The person the reader came from: a rail on their own row, so among the
+   others on the list they are the one already met. In ink, not the sage of
+   a card's accent edge: here the rail is the one thing that tells the row
+   apart, a thin indicator, and those take the ink tokens (system.md,
+   2026-10-14). */
 .list-member--self::before {
-  background: rgb(var(--v-theme-primary));
+  background: rgb(var(--v-theme-ink-sage));
   bottom: 0;
   content: "";
   left: 0;

@@ -119,9 +119,13 @@
         · nie ma jeszcze strony na koryta.pl
       </p>
 
+      <!-- The last word and the (i) as one unbreakable piece, as a
+           company's absent board has them: alone, the (i) wrapped onto a
+           line of its own. -->
       <p v-else-if="executive?.state === 'appointed'" class="k-absent mb-0">
-        Nie znamy jeszcze {{ genitive(executive.title) }}.
-        <span class="k-absent__tail">
+        Nie znamy jeszcze {{ appointedHead
+        }}<span class="k-absent__tail"
+          >{{ appointedLast }}.
           <InfoBubble :label="executive.title">
             {{
               executive.title === "Starosta"
@@ -201,7 +205,7 @@
         </div>
 
         <!-- a and c: a row each, under the committee. -->
-        <div v-else class="lists-box k-bleed-xs">
+        <div v-else :id="boxId(council.office)" class="lists-box k-bleed-xs">
           <template v-for="group in shownGroups(council)" :key="group.key">
             <div class="council-group__head">
               {{ group.committee ?? "Komitet nieznany" }}
@@ -220,7 +224,9 @@
             v-if="foldedOf(council) > 0"
             type="button"
             class="list-more"
-            @click="unfold(council.office)"
+            aria-expanded="false"
+            :aria-controls="boxId(council.office)"
+            @click="showAllMembers(council)"
           >
             Pokaż wszystkich radnych ({{ council.shown }})
           </button>
@@ -241,6 +247,7 @@ import { polishCounting } from "~/composables/polish";
 import { createSlug, generateEntityUrl } from "~~/shared/slugs";
 import { committeeKey, type ListMember } from "~~/shared/electionLists";
 import type {
+  AuthorityKind,
   CommitteeSeats,
   CouncilView,
   RegionAuthorities,
@@ -254,8 +261,9 @@ import type { CompositionSegment } from "~/components/stats/CompositionBar.vue";
 const props = defineProps<{
   authorities: RegionAuthorities;
   /** Where a place that shows nobody sends the reader: its powiat or its
-   * city, by name; the name is missing where its read failed. */
-  pointerTarget?: { name?: string; url: string };
+   * city, by name; the name is missing where its read failed. `councilOnly`
+   * for Kraków's hand-drawn page, which shows its rada and no prezydent. */
+  pointerTarget?: { name?: string; url: string; councilOnly?: boolean };
   /** The person the reader came from, whose row a council marks. */
   highlightId?: string;
   /** TEMP(wariant): a - a row each with the person's parties, b - names
@@ -297,6 +305,20 @@ function genitive(title: string): string {
   );
 }
 
+/** The appointed head after „Nie znamy jeszcze”, up to its last word, and
+ * the last word, which the template keeps on one line with the (i) - as
+ * succession/CompanyChanges.vue splits its absent line. Only the last word:
+ * „marszałka województwa.” unbroken would overflow a zoomed phone. */
+const appointedName = computed(() =>
+  executive.value?.state === "appointed" ? genitive(executive.value.title) : "",
+);
+const appointedHead = computed(() =>
+  appointedName.value.slice(0, appointedName.value.lastIndexOf(" ") + 1),
+);
+const appointedLast = computed(() =>
+  appointedName.value.slice(appointedName.value.lastIndexOf(" ") + 1),
+);
+
 /** „prezydenta miasta”: after „wybory na”. */
 function accusative(office: string): string {
   return (
@@ -305,6 +327,15 @@ function accusative(office: string): string {
     ] ?? office.toLowerCase()
   );
 }
+
+/** „tego powiatu”: after „nikogo z władz”. */
+const PLACE_GENITIVE: Record<AuthorityKind, string> = {
+  wojewodztwo: "tego województwa",
+  powiat: "tego powiatu",
+  miasto: "tego miasta",
+  gmina: "tej gminy",
+  dzielnica: "tej dzielnicy",
+};
 
 /** „z rady powiatu”, „z sejmiku”. */
 function councilGenitive(office: string): string {
@@ -363,14 +394,16 @@ const emptyLine = computed(() => {
             : undefined,
         }
       : {
-          text: "Prezydenta i radę miasta pokazujemy na stronie miasta:",
+          text: target?.councilOnly
+            ? "Radę miasta pokazujemy na stronie miasta:"
+            : "Prezydenta i radę miasta pokazujemy na stronie miasta:",
           link: target
             ? { name: target.name ?? "strona miasta", url: target.url }
             : undefined,
         };
   }
   return {
-    text: "Nie znamy jeszcze nikogo z władz tego powiatu.",
+    text: `Nie znamy jeszcze nikogo z władz ${PLACE_GENITIVE[view.kind]}.`,
     link: undefined,
   };
 });
@@ -495,6 +528,47 @@ function foldedOf(council: CouncilView): number {
     council.shown -
     shownGroups(council).reduce((sum, group) => sum + group.members.length, 0)
   );
+}
+
+/** For the button to say what it opens, the same on the server and in the
+ * browser. */
+const councilsId = useId();
+function boxId(office: string): string {
+  return `${councilsId}-${createSlug(office)}`;
+}
+
+/** Where the first member the fold held stands once the council is whole.
+ * A committee shows the start of its members, so that is the first committee
+ * cut short, after everybody before it - not the first past a count: the
+ * person the reader came from shows past the fold. */
+function firstFolded(council: CouncilView): number {
+  const shown = new Map(
+    shownGroups(council).map((group) => [group.key, group.members.length]),
+  );
+  let index = 0;
+  for (const group of council.committees) {
+    const count = shown.get(group.key) ?? 0;
+    if (count < group.members.length) return index + count;
+    index += group.members.length;
+  }
+  return index;
+}
+
+/** Opening the council takes the focused button away, which would drop a
+ * keyboard or screen-reader user back to the top of the page. Focus goes to
+ * the first member it opened instead, a link, so the next Tab carries on
+ * down the council; `preventScroll`, because the rows open downwards from
+ * where the reader already is. */
+async function showAllMembers(council: CouncilView) {
+  const index = firstFolded(council);
+  unfold(council.office);
+  await nextTick();
+  const rows = document
+    .getElementById(boxId(council.office))
+    ?.querySelectorAll<HTMLElement>(".list-member");
+  rows?.[index]
+    ?.querySelector<HTMLElement>("a")
+    ?.focus({ preventScroll: true });
 }
 </script>
 

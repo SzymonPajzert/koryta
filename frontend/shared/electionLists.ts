@@ -1,4 +1,5 @@
 import {
+  candidacyDay,
   candidacyElection,
   electionName,
   electionOptions,
@@ -140,8 +141,10 @@ const ABBREVIATIONS: readonly (readonly [string, string])[] = [
 
 /** What makes two spellings of a committee one committee: case, quotes, the
  * spacing around a hyphen, and the abbreviations above. Over the 2026-11-11
- * export this folds 10,426 spellings into 7,947, and every fold read as the
+ * export this folds 10,426 spellings into 7,941, and every fold read as the
  * same committee: „KWW Nasz Powiat”, „KOMITET WYBORCZY WYBORCÓW „NASZ POWIAT””.
+ * A quote is a break between words, not nothing: PKW also writes it with no
+ * space before it („KW„Z LUDŹMI, DLA LUDZI”” in 2024).
  *
  * Deliberately no fuzzier than that. Two committees that differ by a word are
  * two lists, and putting a person on somebody else's list is the one mistake a
@@ -149,7 +152,7 @@ const ABBREVIATIONS: readonly (readonly [string, string])[] = [
 export function committeeKey(committee: string): string {
   let key = committee
     .toLowerCase()
-    .replace(/[„”"'«»“`]/g, "")
+    .replace(/[„”"'«»“`]/g, " ")
     .replace(/\s*-\s*/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -332,9 +335,14 @@ export function personRunsIn(
     groups.flatMap((group) => group.lists.map((list) => [list.key, list])),
   );
   const rows = new Map<string, PersonRun>();
+  // Newest first by the election's day, as the person's own page dates a run
+  // (`edgeFromDB`): the stored „2024-01-01” is both April's local election
+  // and June's European one, and the lists below order them by that day.
+  const day = (run: RegionRun) =>
+    run.start ? candidacyDay(run.start, run.position, run.byElection) : "";
   const own = runs
     .filter((run) => run.personId === personId)
-    .sort((a, b) => (b.start ?? "").localeCompare(a.start ?? ""));
+    .sort((a, b) => day(b).localeCompare(day(a)));
   for (const run of own) {
     const election = candidacyElection(run.start, run.position, run.byElection);
     const list =

@@ -281,7 +281,11 @@ export function regionAuthorities(
   }
 
   // The councils. The head's own seat passed down the list when they took
-  // the office, so they are not among its members.
+  // the office, so they are not among its members. Only a head this reader
+  // is shown: while the seat is awaiting or contested nobody is named, and
+  // a winner's council seat stays (Jastrzębie-Zdrój, 2026-11-11, until its
+  // prezydent's run is checked). Marking that seat in the answer would tell
+  // a logged out reader whose hidden win it is.
   const headId = executive?.state === "held" ? executive.holder.personId : "";
   const councils = bodies.councils.map((office): CouncilView => {
     const committees = committeesOf(

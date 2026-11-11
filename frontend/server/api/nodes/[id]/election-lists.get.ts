@@ -189,9 +189,34 @@ async function electionLists(event: H3Event): Promise<RegionRuns> {
       ...hiddenWins,
     ]);
     // Only a win an import wrote or a reviewer approved: a hand-made one can
-    // neither show a mayor nor hold the seat as awaiting.
+    // neither show a mayor nor hold the seat as awaiting. Counted by person,
+    // and not at all for somebody this reader is shown winning that office:
+    // a hidden copy of a shown win is a second document, not a second
+    // claimant - a merge keeps the duplicate page's copy beside the
+    // survivor's (`merge.ts`), and the ingest writes its own beside a
+    // hand-dated one (Andrzej Kleszcz's 2024 council run, 2026-11-11).
+    // A count still, never whose: that would name the hidden run.
+    const shownWinners = new Set(
+      runs
+        .filter(
+          (run) =>
+            run.elected &&
+            candidacyElection(run.start, run.position, run.byElection) ===
+              newest,
+        )
+        .map((run) => `${run.position}\u0000${run.personId}`),
+    );
+    const counted = new Set<string>();
     for (const edge of hiddenWins) {
-      if (!shown.has(edge.id)) continue;
+      const claim = `${edge.position}\u0000${edge.source}`;
+      if (
+        !shown.has(edge.id) ||
+        shownWinners.has(claim) ||
+        counted.has(claim)
+      ) {
+        continue;
+      }
+      counted.add(claim);
       hiddenElected[edge.position!] = (hiddenElected[edge.position!] ?? 0) + 1;
     }
     for (const { edge, person } of drafts) {

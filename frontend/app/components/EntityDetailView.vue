@@ -887,16 +887,22 @@ const pointerTarget = computed(() => {
   const code = regionTeryt.value;
   if (!pointer || !code) return undefined;
   const id = `teryt${code.slice(0, 4)}`;
+  // Kraków's page is drawn by hand: its rada heads it, it has no „Władze”.
+  const handDrawn = id === "teryt1261";
   const anchor =
     pointer === "miasto" && authorities.value?.kind !== "dzielnica"
-      ? id === "teryt1261"
+      ? handDrawn
         ? ""
         : "#wladze"
       : "#listy-wyborcze";
+  const councilOnly = handDrawn && pointer === "miasto";
   const above = regionAncestors.value.find((each) => each.id === id);
   return above
-    ? { name: above.name, url: `${above.url}${anchor}` }
-    : { url: `${nodeLinkUrl({ id, type: "region", name: "" })}${anchor}` };
+    ? { name: above.name, url: `${above.url}${anchor}`, councilOnly }
+    : {
+        url: `${nodeLinkUrl({ id, type: "region", name: "" })}${anchor}`,
+        councilOnly,
+      };
 });
 
 /** TEMP(wariant) wladze: the board round's looks of „Władze” - a, a row each

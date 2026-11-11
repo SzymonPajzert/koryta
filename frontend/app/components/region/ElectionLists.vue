@@ -22,59 +22,69 @@
       </p>
     </template>
 
-    <div
-      v-for="group in shownGroups"
-      :key="group.election"
-      class="k-group"
-      :data-testid="`election-group-${group.election}`"
-    >
-      <h3 class="k-group-head">
-        {{ group.title }}
-        <span class="k-group-head__count">{{ rowsOf(group).length }}</span>
-      </h3>
-      <div class="lists-box k-bleed-xs">
-        <div
-          v-for="list in shownRows(group)"
-          :id="`lista-${list.key}`"
-          :key="list.key"
-          class="list-row"
-          :class="{ 'list-row--open': isOpen(list.key) }"
-          :data-testid="`election-list-${list.key}`"
+    <div :id="electionsId">
+      <div
+        v-for="group in shownGroups"
+        :key="group.election"
+        class="k-group"
+        :data-testid="`election-group-${group.election}`"
+      >
+        <!-- Focusable only where „Pokaż starsze wybory” sends the focus: the
+             first election it opens. -->
+        <h3
+          :id="headId(group.election)"
+          class="k-group-head election-head"
+          :tabindex="group.election === firstOlder ? -1 : undefined"
         >
-          <button
-            type="button"
-            class="list-row__head"
-            :aria-expanded="isOpen(list.key)"
-            :aria-controls="`lista-${list.key}-osoby`"
-            @click="toggle(list.key)"
+          {{ group.title }}
+          <span class="k-group-head__count">{{ rowsOf(group).length }}</span>
+        </h3>
+        <div :id="boxId(group.election)" class="lists-box k-bleed-xs">
+          <div
+            v-for="list in shownRows(group)"
+            :id="`lista-${list.key}`"
+            :key="list.key"
+            class="list-row"
+            :class="{ 'list-row--open': isOpen(list.key) }"
+            :data-testid="`election-list-${list.key}`"
           >
-            <span class="list-row__text">
-              <span class="list-row__name">{{ list.committee }}</span>
-              <span class="list-row__meta">{{ metaOf(list) }}</span>
-            </span>
-            <v-icon
-              :icon="isOpen(list.key) ? mdiChevronUp : mdiChevronDown"
-              class="list-row__chevron"
+            <button
+              type="button"
+              class="list-row__head"
+              :aria-expanded="isOpen(list.key)"
+              :aria-controls="`lista-${list.key}-osoby`"
+              @click="toggle(list.key)"
+            >
+              <span class="list-row__text">
+                <span class="list-row__name">{{ list.committee }}</span>
+                <span class="list-row__meta">{{ metaOf(list) }}</span>
+              </span>
+              <v-icon
+                :icon="isOpen(list.key) ? mdiChevronUp : mdiChevronDown"
+                class="list-row__chevron"
+              />
+            </button>
+            <RegionListMembers
+              v-if="isOpen(list.key)"
+              :id="`lista-${list.key}-osoby`"
+              class="list-row__members"
+              :members="list.members"
+              :highlight-id="highlightId"
+              indent
             />
+          </div>
+          <button
+            v-if="foldedRows(group) > 0"
+            type="button"
+            class="list-more"
+            aria-expanded="false"
+            :aria-controls="boxId(group.election)"
+            :data-testid="`election-lists-more-${group.election}`"
+            @click="showAllLists(group)"
+          >
+            Pokaż wszystkie listy ({{ rowsOf(group).length }})
           </button>
-          <RegionListMembers
-            v-if="isOpen(list.key)"
-            :id="`lista-${list.key}-osoby`"
-            class="list-row__members"
-            :members="list.members"
-            :highlight-id="highlightId"
-            indent
-          />
         </div>
-        <button
-          v-if="foldedRows(group) > 0"
-          type="button"
-          class="list-more"
-          :data-testid="`election-lists-more-${group.election}`"
-          @click="unfoldElection(group.election)"
-        >
-          Pokaż wszystkie listy ({{ rowsOf(group).length }})
-        </button>
       </div>
     </div>
 
@@ -82,8 +92,10 @@
       v-if="foldedGroups > 0"
       variant="tonal"
       class="mt-6"
+      aria-expanded="false"
+      :aria-controls="electionsId"
       data-testid="election-lists-older"
-      @click="showAllElections = true"
+      @click="showOlderElections"
     >
       Pokaż starsze wybory ({{ foldedGroups }})
     </v-btn>
@@ -221,6 +233,48 @@ function unfoldElection(election: string) {
   unfolded.value = new Set([...unfolded.value, election]);
 }
 
+/** For the buttons to say what they open, the same on the server and in the
+ * browser. An election's key („local-2024”) is fit for an id. */
+const listsId = useId();
+const electionsId = `${listsId}-wybory`;
+function boxId(election: string): string {
+  return `${listsId}-${election}`;
+}
+function headId(election: string): string {
+  return `${listsId}-${election}-naglowek`;
+}
+
+/* Opening more takes the focused button away, which would drop a keyboard or
+   screen-reader user back to the top of the page. Focus goes to the first
+   thing it opened instead, as a company's „Pokaż starsze” sends it to the
+   first card (succession/CompanyChanges.vue); `preventScroll`, because what
+   opens, opens downwards from where the reader already is. */
+
+/** The first list the election's fold held: its head is a button, so the
+ * next Tab carries on down the lists. */
+async function showAllLists(group: ElectionLists) {
+  const first = rowsOf(group)[shownRows(group).length];
+  unfoldElection(group.election);
+  await nextTick();
+  document
+    .getElementById(`lista-${first?.key}`)
+    ?.querySelector<HTMLElement>(".list-row__head")
+    ?.focus({ preventScroll: true });
+}
+
+/** The first election the fold held, by its head, which names it. */
+const firstOlder = ref<string>();
+async function showOlderElections() {
+  firstOlder.value = props.groups[shownGroups.value.length]?.election;
+  showAllElections.value = true;
+  await nextTick();
+  if (firstOlder.value) {
+    document
+      .getElementById(headId(firstOlder.value))
+      ?.focus({ preventScroll: true });
+  }
+}
+
 /** „8 osób, w tym 3 z mandatem · Rada powiatu 7, Rada miasta 2”. „Z
  * mandatem” rather than „wybranych”, which would have to agree in gender
  * with people it does not name. The offices only where the list stood for
@@ -289,9 +343,15 @@ const lockedCount = computed(
   () => people.value.filter((member) => member.partyHidden).length,
 );
 
+// Back to the page without its hash: the server never sees one, and Vue
+// keeps the server's href when it hydrates, so a link opened in a new tab
+// and a click would otherwise return to two different places.
 const loginTarget = computed(() => ({
   path: "/login",
-  query: { redirect: route.fullPath, powod: "partie-na-listach" },
+  query: {
+    redirect: route.fullPath.replace(/#.*/, ""),
+    powod: "partie-na-listach",
+  },
 }));
 const signupTarget = computed(() => ({
   path: "/login",
@@ -328,6 +388,12 @@ onBeforeUnmount(() => stopWatchingExit?.());
 </script>
 
 <style scoped>
+/* Focus only lands on an election's head from „Pokaż starsze wybory”, as a
+   reading position, not a control. */
+.election-head:focus {
+  outline: none;
+}
+
 .list-row {
   background: rgb(var(--v-theme-surface));
   /* A link from the box at the top lands here clear of the sticky bar. */

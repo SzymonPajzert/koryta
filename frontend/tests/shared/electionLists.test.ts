@@ -46,6 +46,19 @@ describe("committeeKey", () => {
     );
   });
 
+  it("reads a quote as a break between words, written with no space or not", () => {
+    // Powiat wołomiński, 1998: one AWS committee in two spellings, which had
+    // been two lists.
+    expect(committeeKey('Komitet Wyborczy"Akcja Wyborcza Solidarność"')).toBe(
+      committeeKey("Komitet Wyborczy Akcja Wyborcza Solidarność"),
+    );
+    // And the abbreviation still read when the quote follows it at once.
+    expect(committeeKey("KW„Z LUDŹMI, DLA LUDZI”")).toBe(
+      "komitet wyborczy z ludźmi, dla ludzi",
+    );
+    expect(committeeKey("Kukiz'15")).toBe(committeeKey("KUKIZ'15"));
+  });
+
   it("keeps two committees that differ by a word apart", () => {
     expect(committeeKey("KWW Nasza Gmina")).not.toBe(
       committeeKey("KWW Nasza Gmina Wąchock"),
@@ -146,6 +159,35 @@ describe("groupElectionLists", () => {
     expect(ewa[0]!.list?.committee).toBe("KW PRAWO I SPRAWIEDLIWOŚĆ");
     expect(ewa[1]!.list).toBeNull();
     expect(ewa[2]!.list).toBeNull();
+  });
+
+  it("orders two elections of one year by their day, as the lists do", () => {
+    // The ingest stores both 2024 runs as „2024-01-01”: April's local
+    // election and June's European one.
+    const both = [
+      run({
+        personId: "Anna Posłanka",
+        start: "2024-01-01",
+        position: "Sejmik",
+        committee: "KKW KOALICJA OBYWATELSKA",
+      }),
+      run({
+        personId: "Anna Posłanka",
+        start: "2024-01-01",
+        position: "Parlament Europejski",
+        committee: "KKW KOALICJA OBYWATELSKA",
+      }),
+    ];
+    for (const order of [both, [...both].reverse()]) {
+      const lists = groupElectionLists(order);
+      expect(lists.map((group) => group.title)).toEqual([
+        "Parlament Europejski 2024",
+        "Samorządowe 2024",
+      ]);
+      expect(
+        personRunsIn("Anna Posłanka", order, lists).map((each) => each.title),
+      ).toEqual(["Parlament Europejski 2024", "Samorządowe 2024"]);
+    }
   });
 
   it("gives two runs on one list one row, each office with its result", () => {
