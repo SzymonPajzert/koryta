@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import {
   gminaLabel,
   indexOffices,
+  isOfficeName,
   officeChoices,
   officeProposal,
   officesFor,
@@ -254,5 +255,31 @@ describe("the shipped table", () => {
     );
     expect(refused).toEqual([]);
     expect(offices.length).toBeGreaterThan(2800);
+  });
+});
+
+describe("isOfficeName", () => {
+  it("knows every office in the table by its name", () => {
+    // What the person page relies on to call each of them „Urząd”.
+    const table = parseOffices(
+      readFileSync(
+        resolve(
+          __dirname,
+          "../../server/assets/local_government_offices.jsonl",
+        ),
+        "utf8",
+      ),
+    );
+    expect(table.filter((office) => !isOfficeName(office.name))).toEqual([]);
+  });
+
+  it("reads whole words only", () => {
+    expect(isOfficeName("URZĄD MIASTA OPOLA")).toBe(true);
+    expect(isOfficeName("Starostwo Powiatowe w Wejherowie")).toBe(true);
+    // A unit named after the urząd it serves is not the urząd.
+    expect(isOfficeName("Centrum Usług Wspólnych Urzędu Miasta")).toBe(false);
+    expect(isOfficeName("Urzędnicza Spółdzielnia Mieszkaniowa")).toBe(false);
+    expect(isOfficeName("ENERGA SPÓŁKA AKCYJNA")).toBe(false);
+    expect(isOfficeName(undefined)).toBe(false);
   });
 });

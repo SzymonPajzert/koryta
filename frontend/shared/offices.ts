@@ -189,3 +189,15 @@ export function officeProposal(office: RegionOffice) {
     isPublic: true,
   };
 }
+
+/** Whether a place is called an urząd or a starostwo outright, which is how
+ * every office in the table is named - and how somebody adding one by hand
+ * names it too.
+ *
+ * Read from the name because nothing else tells an urząd from a public company:
+ * both are `place` nodes, public, and an urząd has no KRS entry to file it
+ * under a sector. Whole words only, so a unit named after the urząd it serves -
+ * „Centrum Usług Wspólnych Urzędu Miasta” - is not one. */
+export function isOfficeName(name: string | undefined): boolean {
+  return !!name && /(?<!\p{L})(urz[aą]d|starostwo)(?!\p{L})/iu.test(name);
+}
