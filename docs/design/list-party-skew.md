@@ -2,8 +2,8 @@
 
 Status: design, 2026-11-11, against main dfddc531. Line references drift; names are stable.
 The look: design-board round sklad-listy-r1 picked variant E (the committee heads a quiet rail
-under the row); round sklad-listy-r2 (folded by default, party colours in the opened table, a
-link to the committee's list page) waits for the owner's OK.
+under the row); the owner approved round sklad-listy-r2 (folded by default, party colours in the
+opened table, a link to the committee's list page) on 2026-11-11 at 20:18 UTC.
 
 This document names no person. Its examples are invented („KWW Przykładowa Wspólnota”,
 „gmina Przykładowo”, „Osoba A”) and match no real record. The real cases that prompted it,
@@ -39,7 +39,7 @@ Compute that skew for local lists, show it on the candidacy row, and show on the
 the person ran with someone who has a published page. He had been recording the second fact by
 hand, as connection edges („wspólna lista”).
 
-**What a reader sees** (variant E, rounds sklad-listy-r1 and -r2). A quiet rail under a local
+**What a reader sees** (variant E, rounds sklad-listy-r1 and -r2, approved). A quiet rail under a local
 candidacy row, about the committee, never about the person:
 
 1. **The committee**, in PKW's short form („KWW PRZYKŁADOWA WSPÓLNOTA ›”), on one line, linking
@@ -672,7 +672,7 @@ already holds data.
 
 What shows, when, and in which words is fixed here. The look is variant E from design-board
 rounds sklad-listy-r1 (picked) and sklad-listy-r2 (folded by default, party colours, the list-page
-link; awaiting the owner's OK).
+link; approved 2026-11-11). The approved r2 capture becomes the visual spec of the build.
 
 ### 6.1 What shows, and when
 
@@ -700,8 +700,8 @@ first uncached view, since drafts are already in the documents.
 ### 6.2 Exact copy
 
 Placeholders are in braces; plain hyphen only. Every string is built and tested in
-`frontend/shared/electionSlates.ts`. These are the strings of round sklad-listy-r2; the owner's
-OK there fixes them.
+`frontend/shared/electionSlates.ts`. These are the strings of round sklad-listy-r2, which the
+owner approved.
 
 **The rail, closed (the default):**
 
@@ -970,7 +970,7 @@ How the two fit:
 | Step | What | Visible result | Effort |
 |---|---|---|---|
 | 1a | `ElectionSlates`, `ElectionSlatePayloads`, the job, the ingest, the rules block, the read endpoint (`SLATES_PUBLIC` false) and all their tests; two runs by hand; then the night step | none: about 24,300 documents, kept current nightly | about 4 agent-days |
-| 1b | after the board's OK: the rail on the person page, nowe and the drawer; the row restructure for links; the (i); the qa.ts entry; visual baselines after the owner's OK | the rail for signed-in readers | about 2-3 agent-days |
+| 1b | the approved look (sklad-listy-r2): the rail on the person page, nowe and the drawer; the row restructure for links; the (i); the qa.ts entry; the visual spec and baselines | the rail for signed-in readers | about 2-3 agent-days |
 | 1c | the owner reads the launch set (the appendix's 364 voters'-committee rows, a sample of party-list rows, a 20-row sample on autopush); one commit flips `SLATES_PUBLIC` | public | owner, about 30 minutes |
 | 1d | four weeks later: use (opens of the table, clicks through), reports, suppressions, line changes, the „Inne”-only and no-party pages touched | a read-out that decides what step 2 builds first | half a day |
 | 2 | the list page (§9) after its decision, with the five `person_pkw` fields; region pages reading the documents; the table's tooltip; optionally national runs from 2019 by residence powiat | | 4-7 agent-days, part of it in the region session |
@@ -986,13 +986,16 @@ Each open one is a decision task with options, numbers and a recommendation.
 | decide-rows-without-a-stored-committee | show with PKW's committee named, wait, or store voters' committees on edges | show now; the edge fix as its own task | 1b |
 | decide-committee-make-up-evidence-defaults | threshold, window, later runs, „Inne”-led lists, the person in their own k; and that the line never adds a party to the person | the defaults of §4.3 | 1c |
 | decide-committee-list-page-scope | whom the list page names, `noindex`, its address, and whether it or the region page is a list's home | every candidate as PKW lists them, `noindex`, no party runs for anyone without a published page, `/lista/{slateId}` linked from the region page | 2 |
+| decide-who-the-committee-rail-names | a mate needs a published page, or also a published candidacy; naming an unpublished head candidate; the 7 hand-made list edges | page and candidacy published for logged-out readers; drafts only for signed-in readers, marked „szkic”; keep the edges | 1b |
 | decide-whether-committeeparties-and-peopleparties-retire | the old PageRank party inference in analysis/graph.py | retire both, separately | nothing |
 
-Settled on the board (sklad-listy-r1, 2026-11-11): the look (E, the committee heads a rail); the
-table in party colours; the people on party lists too, with differing chips only; no full list in
-place, a list page instead. Open on the board (sklad-listy-r2): the approval of r2, whom a row
-counts as a mate (a published page, or also a published candidacy), whether a row ever names a
-head candidate without a published page, and whether hand-made list edges stay.
+Settled on the board (sklad-listy-r1 and -r2, 2026-11-11): the look (E, the committee heads a
+rail, folded by default); the table in party colours; the people on party lists too, with
+differing chips only; no full list in place, a list page instead. Left unanswered on the board,
+now decision decide-who-the-committee-rail-names: whom a row counts as a mate (a published page,
+or also a published candidacy), whether a row ever names a head candidate without a published
+page, and whether the hand-made list edges stay. Proposed for `.interface-design/system.md`, which
+only the owner writes: task record-the-committee-rail-decisions-in-system-md.
 
 ## 16. Risks
 
