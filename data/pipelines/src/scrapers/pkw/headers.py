@@ -193,8 +193,11 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "2. Imię": SetField("middle_name"),
     "Adres": None,
     "Afiliacja": SetField("party_member"),
-    "Członek Mandat": None,
-    "Członek": None,
+    # The candidate's own party, in the 2014 mayoral workbook (whose two header
+    # rows join into „Członek Mandat”) and in the genitive in an older one
+    # („Prawa i Sprawiedliwości”).
+    "Członek Mandat": SetField("party_member"),
+    "Członek": SetField("party_member"),
     "Członek\npartii": SetField("party_member"),
     "Czy przyznano mandat": SetField("candidacy_success", parse_yes_no),
     "Czy uzyskał mandat": SetField("candidacy_success", parse_yes_no),
@@ -321,8 +324,10 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Nawisko": SetField("last_name"),
     "Nazwa \nkomitetu": SetField("party"),
     "Nazwa komitetu": SetField("party"),
-    "Nazwa partii.organizacji popierającej kandydata": SetField("party_member"),
-    "Nazwa partii/organizacji popierającej kandydata": SetField("party_member"),
+    # Who backed the candidate, not whether they belong to it: the backing goes
+    # with „Poparcie” below, membership stays in `party_member`.
+    "Nazwa partii.organizacji popierającej kandydata": SetField("supported_by"),
+    "Nazwa partii/organizacji popierającej kandydata": SetField("supported_by"),
     "nazwa": None,
     "Nazwa": None,
     "Nazwisko i imiona": SetField("pkw_name"),
@@ -372,9 +377,12 @@ CSV_HEADERS: dict[str, SetField | None] = {
     "Płec": None,
     "Płeć Mandat": SetField("sex"),
     "Płeć": SetField("sex", parse_sex),
-    "Poparcie Mandat": None,
+    "Poparcie Mandat": SetField("supported_by"),
     "Poparcie TERYT": None,
-    "Poparcie": None,
+    # The party or organisation backing a candidate, on any list: the local
+    # files of 2006-2024 record it, 27,000 times in all, mostly for candidates
+    # of a voters' committee, whose name says nothing of a party.
+    "Poparcie": SetField("supported_by"),
     "Powiat Mandat": None,
     "powiat": None,
     "Powiat": None,

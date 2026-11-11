@@ -229,3 +229,41 @@ def test_the_offices_named_are_the_ones_the_site_reads():
     read as contradicting every stored „Samorząd” and be predicted, and
     written, as a candidacy of its own."""
     assert LOCAL_OFFICES == READ_BY_THE_SITE
+
+
+def test_a_statement_on_one_rounds_row_does_not_split_the_race():
+    """Who backed a mayoral candidate may be written on one round's row only.
+    The race is still one candidacy, won, and keeps what was said."""
+    rows = witko_rows(
+        {
+            "candidacy_success": "FALSE",
+            "office": "Prezydent",
+            "election_year": "2014",
+            "supported_by": "pop. przez: Prawo i Sprawiedliwość",
+        },
+        {"candidacy_success": "TRUE", "office": "Prezydent", "election_year": "2014"},
+    )
+    ctx = typing.cast(Context, SimpleNamespace(con=duckdb.connect()))
+    merged = people_pkw_merged(ctx, rows)
+
+    (race,) = merged.iloc[0]["elections"]
+    assert race["candidacy_success"] == "TRUE"
+    assert race["supported_by"] == "pop. przez: Prawo i Sprawiedliwość"
+
+
+def test_what_a_candidate_said_of_their_party_reaches_the_candidacy():
+    rows = witko_rows(
+        {
+            "candidacy_success": "TRUE",
+            "office": "Rada miasta",
+            "party_member": "członek partii politycznej: Prawo i Sprawiedliwość",
+            "supported_by": None,
+        }
+    )
+    ctx = typing.cast(Context, SimpleNamespace(con=duckdb.connect()))
+    (candidacy,) = people_pkw_merged(ctx, rows).iloc[0]["elections"]
+
+    assert candidacy["party_member"] == (
+        "członek partii politycznej: Prawo i Sprawiedliwość"
+    )
+    assert candidacy["supported_by"] is None
