@@ -370,7 +370,9 @@ export function officeChoice(
   return {
     edgeTypeExt: "employed",
     direction: "outgoing",
-    verb: "pracował/a w urzędzie lub jednostce podległej",
+    // Just the verb: the line above the chips already names the region, and
+    // where in it is the next question (Szymon, 2026-11-11).
+    verb: "pracował/a",
     icon: mdiOfficeBuildingOutline,
     viaOffice: true,
   };

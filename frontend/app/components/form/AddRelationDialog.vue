@@ -47,7 +47,6 @@
               :value="index"
               filter
               variant="tonal"
-              class="relation-verb"
               :data-testid="`add-relation-verb-${verbKey(choice)}`"
             >
               {{ choice.verb }}
@@ -388,16 +387,3 @@ async function submit() {
   }
 }
 </script>
-
-<style scoped>
-/* A verb longer than a phone is wide - "pracował/a w urzędzie lub jednostce
-   podległej" is one - wraps inside its chip rather than out of it. A chip is
-   one line tall and clips the second, which left half of it on the dialog
-   below the chip. One-line chips keep their height. */
-.v-chip.relation-verb {
-  height: auto;
-  min-height: var(--v-chip-height);
-  padding-block: 4px;
-  white-space: normal;
-}
-</style>
