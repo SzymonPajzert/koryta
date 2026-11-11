@@ -403,7 +403,8 @@ GUS_S13 = "https://dane.gov.pl/pl/dataset/1609"
 #: founded in 1925 (expected_public_companies.csv files it not public), and
 #: Polska Fundacja Przedsiębiorczości, also S.1311, whose founder no source
 #: names and whose own page traces it to the Canada-Poland Entrepreneurs
-#: Foundation (task decide-polska-fundacja-przedsiebiorczosci).
+#: Foundation: not public, Szymon judged on 2026-11-11, and filed so in the
+#: same file. GUS's code alone does not make a body public.
 PUBLIC_FOUNDERS: dict[str, Founded] = {
     # Found by the koryciarze leads of 2026-10-09.
     "0000064452": Founded(
