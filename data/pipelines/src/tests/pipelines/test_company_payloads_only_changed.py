@@ -18,6 +18,7 @@ from analysis.payloads.site import (
     COMPANY_FIELDS,
     COMPANY_UNAPPROVED,
     NEW_COMPANY,
+    NEW_FOUNDER,
     NEW_OWNER,
     NEW_SEAT,
     SKARB_PANSTWA_NODE_ID,
@@ -82,6 +83,9 @@ def payload(**overrides):
         "owners": [],
         "owner_teryts": [],
         "owner_skarb_panstwa": False,
+        "founders": [],
+        "founder_teryts": [],
+        "founder_skarb_panstwa": False,
     }
     base.update(overrides)
     return base
@@ -237,6 +241,47 @@ class TestTheOwners:
         # A local stack seeded by `seed-emulator.ts` has none, and the ingest
         # checks before pointing an edge at it.
         assert changes(payload(owner_skarb_panstwa=True)) == []
+
+
+class TestTheFounders:
+    """A founder is drawn as an `owns` edge marked `founder`, on the owners'
+    terms: looked up the same way, skipped the same way."""
+
+    def test_a_founder_the_site_has_no_edge_for_is_a_change(self):
+        assert changes(payload(founders=[OWNER_KRS])) == [NEW_FOUNDER]
+
+    def test_a_founder_already_linked_is_not(self):
+        stored = {
+            "id": "edge-1",
+            "type": "owns",
+            "source": OWNER_ID,
+            "target": COMPANY_ID,
+            "founder": True,
+        }
+        assert changes(payload(founders=[OWNER_KRS]), edge_rows=[stored]) == []
+
+    def test_any_owns_edge_between_the_two_carries_it(self):
+        # The ingest finds the pair's `owns` edge and writes nothing beside it,
+        # so a founder already linked as an owner is no change either.
+        stored = {
+            "id": "edge-1",
+            "type": "owns",
+            "source": OWNER_ID,
+            "target": COMPANY_ID,
+        }
+        assert changes(payload(founders=[OWNER_KRS]), edge_rows=[stored]) == []
+
+    def test_a_gmina_founder_is_resolved_through_its_teryt(self):
+        assert changes(payload(founder_teryts=["2262"])) == [NEW_FOUNDER]
+
+    def test_the_treasury_as_founder_is_linked_by_node_id(self):
+        treasury = {"id": SKARB_PANSTWA_NODE_ID, "type": "place", "name": "Skarb"}
+        assert changes(
+            payload(founder_skarb_panstwa=True), node_rows=nodes(treasury)
+        ) == [NEW_FOUNDER]
+
+    def test_a_founder_the_site_does_not_track_is_skipped(self):
+        assert changes(payload(founders=["0000999999"])) == []
 
 
 class TestTheSeat:

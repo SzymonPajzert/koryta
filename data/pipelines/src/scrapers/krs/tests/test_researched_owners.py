@@ -11,7 +11,7 @@ from entities.company import Owner, Source
 from scrapers.krs.data import PUBLIC_FOUNDER
 from scrapers.krs.list import CompaniesKRS
 from scrapers.krs.researched_owners import PUBLIC_FOUNDERS, RESEARCHED_OWNERS
-from scrapers.map.jst import JstIndex
+from scrapers.map.jst import SKARB_PANSTWA, JstIndex
 
 POSTDATA = "0000117218"
 POCZTA = "0000334972"
@@ -207,3 +207,73 @@ def test_a_founded_body_carries_the_flag_to_what_it_owns():
     p.propagate_is_public(public, p.build_parent_to_children())
 
     assert p.companies[PB_INCUBATOR].is_public
+
+
+def krakow() -> JstIndex:
+    rows = [
+        ("12", None, None, None, "MAŁOPOLSKIE"),
+        ("12", "61", None, None, "Kraków"),
+        ("12", "61", "01", "1", "Kraków"),
+    ]
+    return JstIndex.from_terc(
+        pd.DataFrame(rows, columns=["WOJ", "POW", "GMI", "RODZ", "NAZWA"])
+    )
+
+
+ZOO_KRAKOW = "0000064452"
+CBOS = "0000070275"
+FUNDACJA_UG = "0000045713"
+
+
+def founded_in_krakow(*krss: str) -> CompaniesKRS:
+    p = CompaniesKRS()
+    p.jst_index = krakow()
+    for krs in krss:
+        p.add_company(KrsCompany(krs=krs, teryt_code="1261"))
+    return p
+
+
+def test_a_founder_is_recorded_apart_from_the_owners():
+    p = pipeline(FUNDACJA_ARP, ARP)
+
+    p.add_public_founders()
+
+    assert p.companies[FUNDACJA_ARP].founded_by == [Owner(krs=ARP, teryt=None)]
+    assert p.companies[FUNDACJA_ARP].parents == []
+
+
+def test_a_gmina_founder_is_resolved_by_name():
+    p = founded_in_krakow(ZOO_KRAKOW)
+
+    p.add_public_founders()
+
+    assert p.companies[ZOO_KRAKOW].founded_by == [Owner(krs=None, teryt="1261011")]
+
+
+def test_the_treasury_as_founder_keeps_its_sentinel():
+    # The payload splits it out into `founder_skarb_panstwa`, as it does an
+    # owner's.
+    p = founded_in_krakow(CBOS)
+
+    p.add_public_founders()
+
+    assert p.companies[CBOS].founded_by == [Owner(krs=None, teryt=SKARB_PANSTWA)]
+
+
+def test_a_founder_with_neither_a_krs_number_nor_a_territory_is_left_out():
+    # Uniwersytet Gdański: on record in the table, with nothing to link to.
+    p = founded_in_krakow(FUNDACJA_UG)
+
+    p.add_public_founders()
+
+    assert p.companies[FUNDACJA_UG].is_public
+    assert p.companies[FUNDACJA_UG].founded_by == []
+
+
+def test_founding_twice_records_each_founder_once():
+    p = founded_in_krakow(ZOO_KRAKOW)
+
+    p.add_public_founders()
+    p.add_public_founders()
+
+    assert len(p.companies[ZOO_KRAKOW].founded_by) == 1

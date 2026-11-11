@@ -177,71 +177,31 @@ export default defineEventHandler(async (event) => {
   // Who holds shares, per dział 1 of the register. A company owner is looked up
   // by KRS; a gmina, powiat or województwo has no KRS and arrives as the TERYT
   // code its register name was resolved to.
-  let unknownOwners = 0;
-  if (body.owners && Array.isArray(body.owners)) {
-    for (const parent of body.owners) {
-      if (!parent) continue;
-      let parentRef;
-      try {
-        ({ ref: parentRef } = await findCompanyByKRS(db, parent, false));
-      } catch {
-        // The register names 238 companies as shareholders that koryta.pl does
-        // not track. `findCompanyByKRS` throws a 404 for those, and the throw
-        // used to escape the handler - so a company whose parent is missing was
-        // rejected whole, losing its categories and its seat along with the one
-        // edge that could not be drawn. 266 of 3,928 in a real run.
-        //
-        // Skipped rather than created: minting a place node as a side effect of
-        // an ownership edge would add those 238 companies to the site, and that
-        // is a decision about what the site covers, not about this request.
-        console.warn(
-          `Owner KRS ${parent} is not on the site (krs=${body.krs}), skipping the edge`,
-        );
-        unknownOwners += 1;
-        continue;
-      }
-      await createEdge(dbb, parentRef.id, nodeRef.id, "owns", publish);
-    }
-  }
-  // The Treasury. It owns 110 of the companies the register describes and it is
-  // the one owner that can only be named by a node id: it has no KRS number -
-  // it is not in the register - and it is not a territory, so there is no TERYT
-  // to resolve either. The pipeline therefore sends a flag and the id lives
-  // here, on the side of the wire that already deals in node ids.
-  if (body.owner_skarb_panstwa) {
-    // Checked rather than assumed. The id is stable on production, but a local
-    // stack seeded by `scripts/seed-emulator.ts` has no such node, and an edge
-    // pointing at a document that does not exist is worse than no edge: it
-    // draws on the graph as a nameless dot and `computeNodes` folds it into
-    // every employee's `targetNodeIds`.
-    const treasury = await db
-      .collection("nodes")
-      .doc(SKARB_PANSTWA_NODE_ID)
-      .get();
-    if (treasury.exists) {
-      await createEdge(dbb, SKARB_PANSTWA_NODE_ID, nodeRef.id, "owns", publish);
-    } else {
-      console.warn(
-        `No „Skarb Państwa" node (${SKARB_PANSTWA_NODE_ID}); skipping the Treasury owner edge for krs=${body.krs}`,
-      );
-    }
-  }
-  if (body.owner_teryts && Array.isArray(body.owner_teryts)) {
-    for (const owner of body.owner_teryts) {
-      if (!owner) continue;
-      const regionNodeId = await findRegionByTeryt(db, owner);
-      if (!regionNodeId) {
-        // 985 gminy have a region node because they own something; a code that
-        // resolves to no node is one the region ingest has not reached yet.
-        // Reported rather than fatal, the same way an unknown seat is.
-        console.warn(
-          `No region node for owner TERYT ${owner} (krs=${body.krs})`,
-        );
-        continue;
-      }
-      await createEdge(dbb, regionNodeId, nodeRef.id, "owns", publish);
-    }
-  }
+  const unknownOwners = await drawOwners(dbb, body.krs, nodeRef.id, publish, {
+    krss: body.owners,
+    teryts: body.owner_teryts,
+    skarbPanstwa: body.owner_skarb_panstwa,
+  });
+  // Who set it up, where a public body did: a foundation or an association
+  // holds no shares, so its founder is all the register would have to say
+  // about who stands behind it, and the register does not say it. The
+  // pipelines name it by hand (`PUBLIC_FOUNDERS` in
+  // data/pipelines/src/scrapers/krs/researched_owners.py). Drawn as an
+  // ownership edge marked `founder`, so everything that reads `owns` as "is
+  // behind" (the graph, a region's companies, the public flag) reads it so too,
+  // and the page lists it under „Właściciele” labelled as the founder.
+  const unknownFounders = await drawOwners(
+    dbb,
+    body.krs,
+    nodeRef.id,
+    publish,
+    {
+      krss: body.founders,
+      teryts: body.founder_teryts,
+      skarbPanstwa: body.founder_skarb_panstwa,
+    },
+    { founder: true },
+  );
 
   // Where the company is registered. A `seat` edge, not an `owns` one: until
   // the register's shareholder lists were ingested the two were the same type
@@ -313,6 +273,7 @@ export default defineEventHandler(async (event) => {
     region,
     company,
     ...(unknownOwners > 0 ? { unknownOwners } : {}),
+    ...(unknownFounders > 0 ? { unknownFounders } : {}),
   };
 });
 
@@ -343,9 +304,10 @@ async function createEdge(
   target: string,
   type: EdgeType,
   publish: boolean,
+  extra: EdgeExtra = {},
 ): Promise<boolean> {
   const { db, batch, user, added } = dbb;
-  const edgeData = { source, target, type };
+  const edgeData = { source, target, type, ...extra };
 
   const edgeId = edgeDocumentId(edgeData);
   if (added.has(edgeId)) {
@@ -376,6 +338,98 @@ async function createEdge(
     published: publish,
   });
   return true;
+}
+
+/** What an edge says beyond its two ends and its type. Only `founder` so far,
+ * which marks an ownership edge as the one from whoever set up a foundation or
+ * an association. It takes no part in the edge's id: an `owns` edge is one
+ * fact per pair (`edgeSemantics`), so a pair that already has one keeps it as
+ * it is. */
+type EdgeExtra = { founder?: true };
+
+/** Draws the edges from a company's owners, or from its founders, to it.
+ *
+ * Returns how many company owners it named that the site does not hold.
+ */
+async function drawOwners(
+  dbb: DBB,
+  krs: string,
+  target: string,
+  publish: boolean,
+  owners: { krss?: string[]; teryts?: string[]; skarbPanstwa?: boolean },
+  extra: EdgeExtra = {},
+): Promise<number> {
+  const { db } = dbb;
+  const role = extra.founder ? "Founder" : "Owner";
+  let unknown = 0;
+  for (const parent of owners.krss ?? []) {
+    if (!parent) continue;
+    let parentRef;
+    try {
+      ({ ref: parentRef } = await findCompanyByKRS(db, parent, false));
+    } catch {
+      // The register names 238 companies as shareholders that koryta.pl does
+      // not track. `findCompanyByKRS` throws a 404 for those, and the throw
+      // used to escape the handler - so a company whose parent is missing was
+      // rejected whole, losing its categories and its seat along with the one
+      // edge that could not be drawn. 266 of 3,928 in a real run.
+      //
+      // Skipped rather than created: minting a place node as a side effect of
+      // an ownership edge would add those 238 companies to the site, and that
+      // is a decision about what the site covers, not about this request.
+      console.warn(
+        `${role} KRS ${parent} is not on the site (krs=${krs}), skipping the edge`,
+      );
+      unknown += 1;
+      continue;
+    }
+    await createEdge(dbb, parentRef.id, target, "owns", publish, extra);
+  }
+  // The Treasury. It owns 110 of the companies the register describes and it is
+  // the one owner that can only be named by a node id: it has no KRS number -
+  // it is not in the register - and it is not a territory, so there is no TERYT
+  // to resolve either. The pipeline therefore sends a flag and the id lives
+  // here, on the side of the wire that already deals in node ids.
+  if (owners.skarbPanstwa) {
+    // Checked rather than assumed. The id is stable on production, but a local
+    // stack seeded by `scripts/seed-emulator.ts` has no such node, and an edge
+    // pointing at a document that does not exist is worse than no edge: it
+    // draws on the graph as a nameless dot and `computeNodes` folds it into
+    // every employee's `targetNodeIds`.
+    const treasury = await db
+      .collection("nodes")
+      .doc(SKARB_PANSTWA_NODE_ID)
+      .get();
+    if (treasury.exists) {
+      await createEdge(
+        dbb,
+        SKARB_PANSTWA_NODE_ID,
+        target,
+        "owns",
+        publish,
+        extra,
+      );
+    } else {
+      console.warn(
+        `No „Skarb Państwa" node (${SKARB_PANSTWA_NODE_ID}); skipping the Treasury ${role.toLowerCase()} edge for krs=${krs}`,
+      );
+    }
+  }
+  for (const owner of owners.teryts ?? []) {
+    if (!owner) continue;
+    const regionNodeId = await findRegionByTeryt(db, owner);
+    if (!regionNodeId) {
+      // 985 gminy have a region node because they own something; a code that
+      // resolves to no node is one the region ingest has not reached yet.
+      // Reported rather than fatal, the same way an unknown seat is.
+      console.warn(
+        `No region node for ${role.toLowerCase()} TERYT ${owner} (krs=${krs})`,
+      );
+      continue;
+    }
+    await createEdge(dbb, regionNodeId, target, "owns", publish, extra);
+  }
+  return unknown;
 }
 
 /** Locate the company node for a KRS number.

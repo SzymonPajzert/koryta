@@ -169,6 +169,11 @@ class Companies(Pipeline[Company]):
                     # found no gmina worth a node. The article's owners only
                     # where the register names none - see `wiki_owners`.
                     parents=parents,
+                    # Who set a foundation up, where a public body did - see
+                    # `CompaniesKRS.add_public_founders`. Only KRS's output has
+                    # it, and like `parents` it is dropped on the way to the
+                    # site unless it is named here.
+                    founded_by=list(krs.founded_by) if krs is not None else [],
                     wikipedia=wiki.source if wiki is not None else None,
                     wiki_categories=list(wiki.categories) if wiki is not None else [],
                     # Only KRS's output has it, off Prokuratoria's list.

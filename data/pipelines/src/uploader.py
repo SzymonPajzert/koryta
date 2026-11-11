@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from analysis.interesting import Companies
 from conductor import setup_context
-from entities.company import display_name, on_the_treasury_list
+from entities.company import display_name, on_the_treasury_list, split_owners
 from entities.company_bodies import supervisory_body
 from entities.company_categories import categories_for
 from entities.composite import PersonScore
@@ -767,6 +767,14 @@ class CompanyUploader(Uploader):
             payload["owners"] = owners
             payload["owner_teryts"] = owner_teryts
             payload["owner_skarb_panstwa"] = skarb_panstwa
+        # Who set it up, where a public body did, on the same terms: a company
+        # straight from `Companies` carries `founded_by` and no `founders`.
+        if "founders" not in payload:
+            (
+                payload["founders"],
+                payload["founder_teryts"],
+                payload["founder_skarb_panstwa"],
+            ) = split_owners(payload.get("founded_by"))
         if "teryt_code" in payload and payload["teryt_code"]:
             payload["teryt"] = payload["teryt_code"]
         # `CompaniesPayloads` already worked these out, but a company created

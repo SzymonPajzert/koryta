@@ -214,6 +214,7 @@ NEW_COMPANY = "company not on koryta.pl"
 COMPANY_FIELDS = "company node learns a field"
 COMPANY_UNAPPROVED = "company node has no approved revision"
 NEW_OWNER = "owner link not stored"
+NEW_FOUNDER = "founder link not stored"
 NEW_SEAT = "seat not stored"
 
 #: The site's own node for the Skarb Panstwa, which has no KRS and no TERYT of
@@ -1028,6 +1029,7 @@ class SiteSnapshot:
 
         company_id = str(stored["id"])
         reasons += self._owner_changes(company_id, payload)
+        reasons += self._founder_changes(company_id, payload)
         reasons += self._seat_changes(company_id, payload)
         return reasons
 
@@ -1110,32 +1112,53 @@ class SiteSnapshot:
         companies as shareholders that koryta.pl does not track, and a TERYT
         the region ingest has not reached yet resolves to nothing.
         """
+        sources = self._owner_nodes(
+            payload.get("owners"),
+            payload.get("owner_teryts"),
+            payload.get("owner_skarb_panstwa"),
+        )
+        return [NEW_OWNER for source in sources if not self._owns(source, company_id)]
+
+    def _founder_changes(
+        self, company_id: str, payload: typing.Mapping[str, typing.Any]
+    ) -> list[str]:
+        """The founder edges the upload would draw and the site has not.
+
+        A founder is drawn as an `owns` edge marked `founder`, so any `owns`
+        edge between the pair already carries it: the ingest finds that one and
+        writes nothing, and the same goes for an owner listed as a founder too.
+        """
+        sources = self._owner_nodes(
+            payload.get("founders"),
+            payload.get("founder_teryts"),
+            payload.get("founder_skarb_panstwa"),
+        )
+        return [NEW_FOUNDER for source in sources if not self._owns(source, company_id)]
+
+    def _owner_nodes(
+        self, krss: typing.Any, teryts: typing.Any, skarb_panstwa: typing.Any
+    ) -> list[str]:
+        """The site's nodes behind a payload's owners, each once, in order.
+
+        `createEdge` keeps its own set of the ids a request has already added,
+        because nothing is committed until the end and a payload naming one
+        owner twice would otherwise write the link twice over.
+        """
         sources: list[str] = []
-        for owner_krs in _as_list(payload.get("owners")):
+        for owner_krs in _as_list(krss):
             owner_id = self.companies.get(str(owner_krs))
             if owner_id:
                 sources.append(owner_id)
-        if payload.get("owner_skarb_panstwa") and (
-            SKARB_PANSTWA_NODE_ID in self.node_ids
-        ):
+        if skarb_panstwa and SKARB_PANSTWA_NODE_ID in self.node_ids:
             sources.append(SKARB_PANSTWA_NODE_ID)
-        for owner_teryt in _as_list(payload.get("owner_teryts")):
+        for owner_teryt in _as_list(teryts):
             region_id = self._region_by_teryt(str(owner_teryt))
             if region_id:
                 sources.append(region_id)
+        return list(dict.fromkeys(sources))
 
-        # `createEdge` keeps its own set of the ids this request has already
-        # added, because nothing is committed until the end and a payload
-        # naming one owner twice would otherwise write the link twice over.
-        drawn: set[str] = set()
-        reasons = []
-        for source in sources:
-            if source in drawn:
-                continue
-            drawn.add(source)
-            if not self._edge_exists(source, company_id, "owns"):
-                reasons.append(NEW_OWNER)
-        return reasons
+    def _owns(self, source: str, company_id: str) -> bool:
+        return self._edge_exists(source, company_id, "owns")
 
     def _seat_changes(
         self, company_id: str, payload: typing.Mapping[str, typing.Any]

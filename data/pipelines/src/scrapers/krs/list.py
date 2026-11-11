@@ -32,6 +32,7 @@ from scrapers.krs.researched_owners import (
     FUND_HOLDERS,
     PUBLIC_FOUNDERS,
     RESEARCHED_OWNERS,
+    ResearchedOwner,
 )
 from scrapers.map.jst import AMBIGUOUS, SKARB_PANSTWA, JstIndex
 from scrapers.map.postal_codes import PostalCodes
@@ -770,12 +771,19 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         """Mark public the foundations and associations a public body set up.
 
         `PUBLIC_FOUNDERS` names the founders, which the register never does. A
-        founder is not a shareholder, so no ownership edge is drawn to it; the
-        body is marked and carries the flag down to what it owns itself. A body
-        the crawl does not describe is left out. Returns how many it marked.
+        founder is not a shareholder, so it goes in `founded_by` rather than
+        `parents`: no ownership edge is drawn in this graph, and the body is
+        marked public itself, carrying the flag down to what it owns. A body the
+        crawl does not describe is left out. Returns how many it marked.
+
+        A founder is resolved the way `add_researched_owners` resolves an owner:
+        a company by its KRS number, whether or not the crawl describes it (the
+        site may, and the ingest skips one it does not hold), and a gmina or the
+        Treasury by name with `JstIndex`. A university or the Polish Academy of
+        Sciences is neither, so it stays on record in `PUBLIC_FOUNDERS` only.
         """
         marked = 0
-        for krs in PUBLIC_FOUNDERS:
+        for krs, founded in PUBLIC_FOUNDERS.items():
             company = self.companies.get(krs)
             if company is None:
                 continue
@@ -785,7 +793,27 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                 }
             company.is_public = True
             marked += 1
+            for founder in founded.founders:
+                resolved = self.resolve_founder(founder, company)
+                if resolved is not None and resolved not in company.founded_by:
+                    company.founded_by.append(resolved)
         return marked
+
+    def resolve_founder(
+        self, founder: ResearchedOwner, company: KrsCompany
+    ) -> Owner | None:
+        """A founder as an `Owner`, or None where it cannot be placed."""
+        if founder.krs is not None:
+            return Owner(krs=founder.krs, teryt=None)
+        if self.jst_index is None:
+            return None
+        # The body's own województwo settles a name two units share, as it does
+        # for an owner in `add_researched_owners`.
+        seat = (company.teryt_code or "")[:2] or None
+        resolved = self.jst_index.resolve(founder.name, seat)
+        if resolved is None or resolved == AMBIGUOUS:
+            return None
+        return Owner(krs=None, teryt=resolved)
 
     def process_api_krs_blob(
         self, blob_name: str, data, postal_codes: DataFrame

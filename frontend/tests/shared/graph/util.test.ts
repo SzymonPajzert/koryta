@@ -132,6 +132,31 @@ describe("graph utils", () => {
     });
   });
 
+  describe("a founder's edge", () => {
+    const owns: DBEdge = {
+      id: "o1",
+      source: "arp",
+      target: "fundacja",
+      type: "owns",
+    } as DBEdge;
+
+    it("keeps the mark and is labelled as the founder's", () => {
+      const [edge] = getEdges([{ ...owns, founder: true }]);
+
+      expect(edge!.founder).toBe(true);
+      expect(edge!.label).toBe("fundator");
+      // Still ownership to everything that walks the graph.
+      expect(edge!.type).toBe("owns");
+    });
+
+    it("adds nothing to an ordinary ownership edge", () => {
+      const [edge] = getEdges([owns]);
+
+      expect(edge).not.toHaveProperty("founder");
+      expect(edge!.label).toBe("właściciel");
+    });
+  });
+
   describe("tagged edges", () => {
     const taggedEdge: DBEdge = {
       id: "t1",
