@@ -346,6 +346,7 @@ import { useDomainIcon } from "~/composables/useDomainIcon";
 import { useExtractions } from "~/composables/extractions";
 import { useCanCapture } from "~/composables/captures";
 import { entityDescription, SOCIAL_CARD } from "~/composables/entitySeo";
+import { isListedSource } from "~~/shared/articleListing";
 import type { Article, Link, NodeType, Revision } from "~~/shared/model";
 import type { ArticleCapture } from "~~/shared/capture";
 import type {
@@ -412,6 +413,15 @@ const article = computed<Article | undefined>(() => {
   return node;
 });
 const isPublished = computed(() => article.value?.published === true);
+
+// A source from a social network keeps its page but is not offered to search
+// engines (shared/articleListing.ts says why); `inSitemap` leaves it out of the
+// sitemap by the same test. Decided once, at setup: it matters only to the
+// server's render, the anonymous one a crawler gets. `follow`, so the links to
+// the people and companies it is filed under still count.
+if (article.value && !isListedSource(article.value)) {
+  useRobotsRule("noindex, follow");
+}
 
 /** The card listing what this reader has proposed here, read again once they
  * have proposed something more. */
