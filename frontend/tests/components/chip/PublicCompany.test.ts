@@ -21,6 +21,24 @@ describe("ChipPublicCompany", () => {
     );
   });
 
+  it("calls an urząd an urząd, not a public company", async () => {
+    const label = await labelOf({
+      company: company({ name: "URZĄD MIASTA OPOLA", isPublic: true }),
+    });
+    expect(label).toContain("Urząd");
+    expect(label).not.toContain("Instytucja publiczna");
+  });
+
+  it("says so for an urząd nobody flagged public as well", async () => {
+    // One added by hand before the urząd choice existed, with no flag at all.
+    expect(
+      await labelOf({
+        company: company({ name: "Starostwo Powiatowe w Wejherowie" }),
+        showUnknown: true,
+      }),
+    ).toContain("Urząd");
+  });
+
   it("never reads the scrapers' false as private", async () => {
     // KRS does not list the shareholders of a spółka akcyjna, so `false` is
     // what a company nobody could place looks like - Małopolska Agencja
