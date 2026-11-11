@@ -1,3 +1,4 @@
+import { isListedSource } from "./articleListing";
 import { pageIsPublic, type NodeRevisions, type NodeType } from "./model";
 import { normalizeUpdateTime } from "./revisions";
 
@@ -50,19 +51,23 @@ export const SITEMAP_NODE_TYPES: readonly NodeType[] = [
 ];
 
 /** Whether a node's page is in the sitemap: a live page of one of those types,
- * with a name to make its url from. The pages a change to the whole site is
- * dated on (scripts/migrate/stamp-site-changes.ts) are these too. */
+ * with a name to make its url from, and not an article whose source is a
+ * social network (`isListedSource`, which also marks such a page noindex). The
+ * pages a change to the whole site is dated on
+ * (scripts/migrate/stamp-site-changes.ts) are these too. */
 export function inSitemap(node: {
   type?: unknown;
   name?: unknown;
   published?: unknown;
   deleted?: unknown;
+  sourceURL?: unknown;
 }): node is { type: NodeType; name: string } {
   return (
     pageIsPublic(node) &&
     typeof node.name === "string" &&
     node.name.length > 0 &&
-    (SITEMAP_NODE_TYPES as readonly unknown[]).includes(node.type)
+    (SITEMAP_NODE_TYPES as readonly unknown[]).includes(node.type) &&
+    isListedSource(node)
   );
 }
 

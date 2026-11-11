@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "zrodla-z-portali-spolecznosciowych-poza-google",
+    title:
+      "Źródła z Facebooka, LinkedIna i podobnych serwisów nie trafiają do Google",
+    description:
+      "Źródło z portalu społecznościowego (Facebook, LinkedIn, X, YouTube, Instagram) zostaje na stronie jako artykuł, ale nie ma go w mapie strony, a jego strona prosi wyszukiwarki, by jej nie indeksowały. Takie strony prawie nie przyprowadzały czytelników: 85 stron, 3 kliknięcia z Google od września. Źródła z BIP i z portali informacyjnych zostają w mapie jak dotąd, także te z jedną osobą.",
+    steps: [
+      'Otwórz stronę artykułu, którego źródłem jest profil na LinkedInie albo post na Facebooku (np. z sekcji artykułów na stronie osoby), i zajrzyj do źródła strony (Ctrl+U): jest w nim <meta name="robots" content="noindex, follow">. Adresu tej strony nie ma w /sitemap.xml (ani w mapie artykułów, jeśli /sitemap.xml jest spisem kilku map).',
+      "Strona artykułu ze źródłem w BIP albo w portalu informacyjnym nie ma „noindex” i jest w mapie strony.",
+    ],
+    link: "/sitemap.xml",
+    area: "admin",
+  },
+  {
     id: "zrodla-bez-tytulu-nie-nazywaja-sie-adresem",
     title: "Źródło bez tytułu nie nazywa się już swoim adresem",
     description:
