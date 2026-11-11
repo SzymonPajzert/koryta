@@ -104,7 +104,7 @@ async function section(
   cards: number,
 ): Promise<Locator> {
   const list = page.getByTestId("node-mentions");
-  await expect(list.locator("h3")).toHaveText(title, { timeout: 30_000 });
+  await expect(list.locator("h2")).toHaveText(title, { timeout: 30_000 });
   // Below the fold, an icon starts loading only once its card is in view.
   await list.scrollIntoViewIfNeeded();
   const icons = list.locator("img.v-img__img");

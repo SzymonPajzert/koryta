@@ -8,7 +8,7 @@
     :id="declarations.length > 0 ? DECLARATIONS_ANCHOR : undefined"
     :title="sectionTitle"
     :icon="mdiNewspaperVariantOutline"
-    class="mt-4 mention-section"
+    class="mention-section"
     data-testid="node-mentions"
   >
     <template #lead>

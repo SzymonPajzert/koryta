@@ -3,7 +3,9 @@
        teleports to the body - so the wrapper is no box at all. Left an empty
        inline-block, it was a flex item of its own beside the home page's
        search, worth one more gap: the search stopped 16px short of its line
-       on a phone and the button beside it stood 40px off rather than 24. -->
+       on a phone and the button beside it stood 40px off rather than 24. It
+       also opened a line of text, which put 24px of nothing under /pomoc's
+       last section. -->
   <div
     :class="{ 'd-inline-block': !hideActivator }"
     :style="hideActivator ? 'display: contents' : undefined"
@@ -16,9 +18,8 @@
       <v-btn
         icon
         border="sm current"
-        class="text-none pa-1 me-2"
+        class="text-none pa-1 me-2 k-r-control"
         color="warning"
-        rounded="lg"
         size="44"
         variant="outlined"
         @click="handleActivatorClick"

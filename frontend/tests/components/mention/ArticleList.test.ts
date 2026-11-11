@@ -125,7 +125,7 @@ async function mountPersonList(nodeId: string) {
 type ListWrapper = Awaited<ReturnType<typeof mountPersonList>>;
 
 const title = (wrapper: ListWrapper) =>
-  wrapper.get('[data-testid="node-mentions"] h3').text();
+  wrapper.get('[data-testid="node-mentions"] h2').text();
 
 /** Each card of the section, in order: a declaration or an article. A column
  * given `cols` is `.v-col-12`, not `.v-col`, so a column is any child. */

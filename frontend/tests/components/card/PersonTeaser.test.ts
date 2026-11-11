@@ -58,7 +58,8 @@ describe("CardPersonTeaser", () => {
     // dates a reader sees once signed in.
     const wrapper = await mount();
 
-    expect(wrapper.get("h2").text()).toBe("Jan Kowalski");
+    // The name is the page's h1, as the full page heads a person.
+    expect(wrapper.get("h1").text()).toBe("Jan Kowalski");
     const history = wrapper.findComponent(EmploymentHistory);
     expect(history.exists()).toBe(true);
     expect(history.props("unlinkDrafts")).toBe(true);
@@ -198,7 +199,7 @@ describe("CardPersonTeaser", () => {
     // An explanation, not a way in: the banner's buttons are that.
     expect(chip.element.closest("a")).toBeNull();
     // In the header, by the name, as the full page puts the party chips.
-    expect(chip.element.parentElement?.querySelector("h2")?.textContent).toBe(
+    expect(chip.element.parentElement?.querySelector("h1")?.textContent).toBe(
       "Jan Kowalski",
     );
     expect(wrapper.get('[data-testid="person-teaser-more"]').text()).toBe(

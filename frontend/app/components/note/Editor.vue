@@ -98,7 +98,7 @@
            through "Zgłoś" like any other. -->
       <div v-if="user && snippetOnly" class="d-flex flex-wrap ga-2 mt-3">
         <v-btn
-          variant="outlined"
+          variant="tonal"
           size="small"
           rounded="lg"
           data-testid="note-add-snippet"
@@ -117,7 +117,7 @@
         <v-btn
           v-for="(config, value) in noteKindConfig"
           :key="value"
-          variant="outlined"
+          variant="tonal"
           size="small"
           rounded="lg"
           @click="addSource(value)"
@@ -157,7 +157,12 @@
         podanego adresu. Spróbujemy ponownie przy następnym zapisie.
       </v-alert>
 
-      <div v-if="user" class="d-flex justify-end mt-4">
+      <!-- Only with a button in it: left empty, its `mt-4` was 16px of
+           nothing under the section, on top of the gap to the next one. -->
+      <div
+        v-if="user && (userNote || isEditing)"
+        class="d-flex justify-end mt-4"
+      >
         <v-btn
           v-if="userNote && !isEditing"
           variant="tonal"

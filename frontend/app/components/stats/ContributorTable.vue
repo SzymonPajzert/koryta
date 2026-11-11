@@ -4,9 +4,7 @@
       <template #prepend>
         <v-icon :icon="mdiTrophyOutline" color="primary" />
       </template>
-      <v-card-title class="text-subtitle-1 font-weight-medium">
-        Najaktywniejsi
-      </v-card-title>
+      <v-card-title class="text-subtitle-1"> Najaktywniejsi </v-card-title>
       <v-card-subtitle class="text-wrap">{{ subtitle }}</v-card-subtitle>
     </v-card-item>
 

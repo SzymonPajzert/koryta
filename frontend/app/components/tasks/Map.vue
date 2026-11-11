@@ -708,7 +708,7 @@ function pickMark(id: string) {
   position: relative;
   height: 72vh;
   min-height: 420px;
-  border: 1px solid rgba(var(--v-border-color), 0.16);
+  border: 1px solid var(--k-line);
   border-radius: 10px;
   overflow: hidden;
   background: rgb(var(--v-theme-surface-muted));

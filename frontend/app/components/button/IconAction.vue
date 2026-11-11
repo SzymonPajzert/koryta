@@ -1,12 +1,15 @@
 <template>
+  <!-- A neutral one is a plain icon button: a near-black outline round
+       each of five admin tools outweighed the name they sit beside. One with
+       a colour of its own keeps that colour's outline. Square at the control
+       radius either way. -->
   <v-btn
     icon
-    border="sm current"
-    class="text-none pa-1"
+    :border="color ? 'sm current' : undefined"
+    class="text-none pa-1 k-r-control"
     :color="color"
-    rounded="lg"
     size="44"
-    variant="outlined"
+    :variant="color ? 'outlined' : 'text'"
     :to="to"
   >
     <v-icon :icon="icon" :color="color" />
@@ -22,11 +25,12 @@
 </template>
 
 <script setup lang="ts">
-/** One of the square outlined buttons in an entity page's header.
+/** One of the square icon buttons in an entity page's header.
  *
  * The shape is `DialogProposeEditNode`'s activator, which is the button these
- * were asked to look like: 44px, outlined in whatever colour the icon is,
- * captioned by a tooltip rather than by a label. That one keeps its own copy -
+ * were asked to look like: 44px, captioned by a tooltip rather than by a
+ * label, outlined in the icon's colour where it has one and plain where it
+ * does not. That one keeps its own copy -
  * it is an activator inside a dialog component, and every other caller of that
  * dialog would have had to be re-checked to share this.
  */

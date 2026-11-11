@@ -128,6 +128,34 @@ describe("CiteExistingEdgeDialog", () => {
     );
   });
 
+  it("prints a relation's period as every relation's is printed", async () => {
+    // Through `relationPeriodLabel`: a post with no end is still held, and a
+    // relation with no dates gets no trailing separator.
+    mockAuthRequest.mockImplementation(async (url: string) =>
+      url.startsWith("/api/graph/local/")
+        ? {
+            ...graph,
+            edges: graph.edges.map((edge) =>
+              edge.id === "edge-job" ? { ...edge, end_date: undefined } : edge,
+            ),
+          }
+        : { id: "edge-job" },
+    );
+    const wrapper = mountDialog();
+    await lookUp(wrapper);
+
+    expect(byTestId("cite-existing-edge-edge-job")?.textContent).toContain(
+      "prezes zarządu · 2014-11-06 - obecnie",
+    );
+    // The candidacy has no dates: its subtitle is the relation alone (the
+    // „· już powołuje się…” after it is the already-cited note, not a period).
+    expect(
+      byTestId("cite-existing-edge-edge-vote")
+        ?.querySelector(".v-list-item-subtitle")
+        ?.firstChild?.textContent?.trim(),
+    ).toBe("Kandydował/a w");
+  });
+
   it("cites the relation that was chosen", async () => {
     const wrapper = mountDialog();
     await lookUp(wrapper);

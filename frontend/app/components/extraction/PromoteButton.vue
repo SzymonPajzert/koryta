@@ -3,10 +3,12 @@
     <!-- What a confirmed fact is *for*. Voting a fact correct used to lead
          nowhere: nothing reads the verdict, and recording what the fact said
          meant retyping it into the edge form on somebody else's page. -->
+    <!-- A sage fill with dark text: sage on white is 1.85:1, and sage is a
+         fill, never text (Szymon, 2026-10-23, for every control). -->
     <v-btn
       v-if="!done"
       size="small"
-      variant="text"
+      variant="flat"
       color="primary"
       :prepend-icon="mdiVectorLink"
       data-testid="extraction-promote"

@@ -1,7 +1,7 @@
 <template>
-  <div v-if="edges.length > 0 || canAdd" class="mb-4">
+  <div v-if="edges.length > 0 || canAdd">
     <div class="d-flex align-center justify-space-between mb-2">
-      <h3 class="text-h6">{{ title }}</h3>
+      <h2 class="text-h6">{{ title }}</h2>
       <v-btn
         v-if="canAdd"
         variant="text"
@@ -14,7 +14,10 @@
         Dodaj
       </v-btn>
     </div>
-    <v-card v-if="edges.length > 0">
+    <!-- A ruled list on the hairline, not a card lifted on a shadow; edge to
+         edge on a phone, like the relation history. Only entity pages list
+         these, at their full width. -->
+    <v-card v-if="edges.length > 0" variant="flat" border class="k-bleed-xs">
       <v-list density="compact">
         <v-list-item
           v-for="edge in edgesSorted"

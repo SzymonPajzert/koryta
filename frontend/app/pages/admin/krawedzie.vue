@@ -1,5 +1,7 @@
 <template>
-  <div class="pa-4">
+  <!-- Full width takes the layout's padding away, so the page puts its own
+       back - the page-top inset and page-end gap too (assets/css/edges.css). -->
+  <div class="pa-4 k-page-top k-page-end">
     <div class="d-flex align-center mb-4">
       <v-btn :icon="mdiArrowLeft" variant="text" class="mr-2" to="/admin" />
       <div>
@@ -87,7 +89,10 @@
       <template #[`item.dates`]="{ item }">
         <span class="text-caption">
           {{
-            [item.start_date, item.end_date].filter(Boolean).join(" - ") || "-"
+            relationPeriodLabel(
+              item.start_date ?? undefined,
+              item.end_date ?? undefined,
+            ) || "-"
           }}</span
         >
       </template>
@@ -117,6 +122,7 @@ import { computed, ref } from "vue";
 import { mdiArrowLeft, mdiEarth } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
+import { relationPeriodLabel } from "~/utils/relationPeriod";
 import type {
   UnpublishedEdgeRow,
   UnpublishedEdges,

@@ -1,5 +1,5 @@
 <template>
-  <div class="pa-4">
+  <div class="pa-4 pb-0">
     <div class="mb-6">
       <h1 class="text-h4 mb-1">Aktywność</h1>
       <p class="text-body-2 text-medium-emphasis mb-0">

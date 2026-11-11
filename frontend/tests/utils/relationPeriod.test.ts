@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { relationPeriodLabel } from "~/utils/relationPeriod";
+import {
+  relationPeriodLabel,
+  relationPeriodParts,
+} from "~/utils/relationPeriod";
 
 describe("relationPeriodLabel", () => {
   it("reads both ends of a closed period", () => {
@@ -30,5 +33,48 @@ describe("relationPeriodLabel", () => {
     // `connection` edges have no date fields in the schema, and the row asks
     // for a label before it knows that.
     expect(relationPeriodLabel(undefined, undefined)).toBe("");
+  });
+});
+
+describe("relationPeriodParts", () => {
+  it("hands back both ends of a closed period, not current", () => {
+    expect(relationPeriodParts("2014-11-06", "2017-08-25")).toEqual({
+      start: "2014-11-06",
+      end: "2017-08-25",
+      current: false,
+    });
+  });
+
+  it("marks a post still held as current, so the caller can set „obecnie” apart", () => {
+    expect(relationPeriodParts("2014-11-06", undefined)).toEqual({
+      start: "2014-11-06",
+      end: "obecnie",
+      current: true,
+    });
+    // An empty end is as open as a missing one.
+    expect(relationPeriodParts("2014-11-06", "")).toEqual({
+      start: "2014-11-06",
+      end: "obecnie",
+      current: true,
+    });
+  });
+
+  it("gives a missing start as „?”, never today", () => {
+    expect(relationPeriodParts(undefined, "2017-08-25")).toEqual({
+      start: "?",
+      end: "2017-08-25",
+      current: false,
+    });
+  });
+
+  it("has no end to print for a single day or no dates at all", () => {
+    expect(relationPeriodParts("2014-11-06", "2014-11-06")).toEqual({
+      start: "2014-11-06",
+      current: false,
+    });
+    expect(relationPeriodParts(undefined, undefined)).toEqual({
+      start: "",
+      current: false,
+    });
   });
 });

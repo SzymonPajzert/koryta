@@ -14,7 +14,9 @@
         Powrót
       </v-btn>
       <div class="header-text">
-        <h1 class="text-subtitle-1 font-weight-medium text-truncate">
+        <h1
+          class="text-subtitle-1 font-weight-medium text-truncate k-title-inline"
+        >
           Kategoryzuj notatki
         </h1>
         <div v-if="!pending" class="text-caption text-medium-emphasis">
@@ -80,11 +82,7 @@
       <div class="queue-area mx-auto">
         <NoteTriageCard :key="current.key" :row="current" />
 
-        <v-list
-          class="mt-4 rounded-lg border"
-          density="comfortable"
-          lines="two"
-        >
+        <v-list class="mt-4 k-r-card border" density="comfortable" lines="two">
           <v-list-item
             v-for="(config, value) in noteAdminTypeConfig"
             :key="value"

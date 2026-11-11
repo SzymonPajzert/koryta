@@ -78,7 +78,7 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   back, and it carries a chevron down. Szymon: "Don't keep the pokaż mniej
   toggle for now, sure, let's add a chevron" (2026-10-15).
 - **/eksploruj/tabela on desktop: one summary line per person**, e.g.
-  „8 spółek ▾ · ostatnio <company> · 2023–2024 · 12 lat pracy · 8 startów”.
+  „8 spółek ▾ · ostatnio <company> · 2023-2024 · 12 lat pracy · 8 startów”.
   Each row's „N spółek ▾” opens its companies in place, and a single
   „Rozwiń wszystkie” toggle opens every row at once. This was picked over the
   rendered list of three posts per person (2026-10-15).
@@ -86,17 +86,36 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   Columns are divided by thin lines, because without them it is sometimes
   hard to read (2026-10-15). The summary line is aligned sub-columns, each
   divided by the same neutral hairline: count | latest post | date | years.
-- **The wordmark „koryta.pl” is set entirely in bold**, in the app bar and
-  in the home footer, not „koryta” bold and „.pl” regular. Szymon: "I prefer
-  the whole koryta.pl to be bolded" (2026-10-15).
+- **The wordmark „koryta.pl” is set entirely in bold** in the app bar, not
+  „koryta” bold and „.pl” regular. Szymon: "I prefer the whole koryta.pl to
+  be bolded" (2026-10-15).
+- **The footer stays as it was before the redesign** (logo, the sentence
+  about the project, the socials and the two link columns on the sage band),
+  not the slim row of round 1. Szymon: "yes for now, we can redesign it
+  later" (2026-10-16).
 - **The top bar is ruled off by a firm line, and lifted by a soft shadow once
   the page scrolls** (option „A + B”, picked 2026-10-15 from three rendered
   options). The line is a neutral black at .2, firmer than the site's .12
   hairline, because the bar is the one edge with nothing else to frame it.
   The shadow uses Vuetify's `scroll-behavior="elevate"`.
+- **The hairline is .24, not round 1's .12**: every record and panel edge,
+  the table's lines and the top bar's line are one neutral black at .24, so a
+  card still reads as a box. The type system and the sentence-case menu stay
+  as round 1 set them, and the typeface stays Roboto. Picked 2026-10-23 out of
+  seven rendered versions („2 teraz + wyraźniejsze linie”), after Szymon
+  preferred main's firmer boxes on the blog (2026-10-16).
+- **A control drawn in sage text becomes a sage fill with dark text now**,
+  during the colour hold: „Pomóż sprawdzać”, the region's „Zobacz wszystkie
+  osoby”, the forms' „Wyślij”, „Zapisz zmianę” and „Utwórz powiązanie”; an
+  admin's „Dodaj” or „Opublikuj” beside a neutral one copies the neutral
+  tonal button. Sage text that is not a control (links, names, icons, /o-nas)
+  waits for the palette. Picked 2026-10-23 („controls only, now”).
 - **Admin page titles follow the public pages' title rule**: the h1 is
   40/700, 28 on phones, not a smaller 28 for working pages. Szymon: "Let's
   keep the admin pages like public pages for now" (2026-10-15).
+- **The site's text uses the plain hyphen „-”**, never „–” or „—”, in prose
+  and in date ranges alike. Szymon: "This is very AI and I think people
+  start noticing it" (2026-10-16).
 - **The admin and working pages share the public pages' frame** (approved
   2026-10-16 from rendered screenshots, task
   approve-redesign-admin-pages-screenshots). They use one column and inset
@@ -107,6 +126,9 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   stand one 40/32 gap apart. The szyna's fact labels are 12px in sentence
   case, and /admin opens on its work queues. Szymon: "Looks good, I approve
   the changed screenshots".
+
+  A lone „—” standing for a missing value, in a table cell or for a date
+  nobody recorded, stays: it is a sign, not punctuation (2026-10-23).
 
 ## How UI changes are made
 

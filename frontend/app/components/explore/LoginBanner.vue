@@ -48,11 +48,12 @@
         >
           Zaloguj się
         </v-btn>
-        <!-- Outlined in the banner's own ink, which it inherits: in sage the
-             label would be the 1.85:1 `text-primary` is on a light ground. -->
+        <!-- The neutral control tint in the banner's own ink, which it
+             inherits: in sage the label would be the 1.85:1 `text-primary`
+             is on a light ground. -->
         <v-btn
           v-if="signupTo"
-          variant="outlined"
+          variant="tonal"
           :to="signupTo"
           data-testid="login-banner-signup"
           @click="emit('signup')"

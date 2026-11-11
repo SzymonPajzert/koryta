@@ -264,7 +264,7 @@
         v-for="action in actions"
         :key="action.status"
         size="small"
-        :variant="action.primary ? 'flat' : 'outlined'"
+        :variant="action.primary ? 'flat' : 'tonal'"
         :color="action.primary ? 'ink-sage' : undefined"
         :disabled="saving"
         :data-task-action="action.status"

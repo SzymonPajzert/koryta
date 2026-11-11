@@ -1,0 +1,459 @@
+/* The site's type system.
+
+   Eight sizes - 12, 14, 16, 20, 24, 32, 40, 48 - where the pages used to set
+   25, and nothing under 12px. Each weight has one job: 700 the page title,
+   entity names and figures; 600 section heads, card titles, labels and group
+   heads; 500 buttons, tabs, the menu and values under a label; 400 body, UI
+   text and meta. Ink does the rest: labels and group heads are the quiet 0.6,
+   so the names and data under them lead.
+
+   Accepted with the 2026-10-15 redesign round (.interface-design/system.md),
+   rendered on 10-14/15 over production's pages. No colour is set here beyond
+   the emphasis of neutral black text.
+
+   Most of this restyles Vuetify's own classes. Every selector starts one
+   class above Vuetify's, because a component's own stylesheet can load after
+   this one: at `.v-application`, or at the `.v-overlay-container` Vuetify
+   teleports menus and dialogs into, which sits outside it on <body>.
+
+   `!important` only where Vuetify's own declaration is: the size, tracking
+   and case of its typography utilities (`.text-h6`, `.text-overline`, ...).
+   Their weight and line height are plain rules there, and so are all of its
+   components' styles, so they are plain here too - which leaves a utility
+   written in the markup (`font-weight-bold`, `text-body-1`) the last word.
+   A component with type of its own keeps it in its scoped styles, on the
+   same scale.
+
+   The footer is left out: it stays exactly as it was before the redesign
+   (Szymon, 2026-10-16). Each rule here that would change how it looks - the
+   tracking, a button's indent, the body and caption line heights, a
+   paragraph's wrapping - ends in `:where(:not(.v-footer *))`, which adds
+   nothing to the rule's weight, so Vuetify's own values still apply there
+   rather than copies of them, which would go stale. Two rules do reach it,
+   because they draw it the same: sentence case, which its labelled buttons
+   already ask for with `text-none`, and tabular figures, which Roboto's
+   digits already are. */
+
+:root {
+  /* the page's one title, an h1 */
+  --k-title-size: 40px;
+  --k-title-size-phone: 28px;
+  /* an ALL-CAPS name (a company) as the title: capitals carry about 30% more
+     mass than mixed case, so it is set one step down */
+  --k-title-caps-size: 32px;
+  --k-title-caps-size-phone: 24px;
+  /* a title that heads a card rather than the page's column - the sign-in
+     form, the profile - and the phone home's one sentence */
+  --k-title-sm-size: 24px;
+  /* section heads */
+  --k-section-size: 24px;
+  --k-section-size-phone: 20px;
+  /* card and step titles */
+  --k-sub-size: 16px;
+  /* a dialog's title, one step over the dialog's own 16px text */
+  --k-dialog-title-size: 20px;
+  /* reading text, UI text, single-line meta */
+  --k-body-size: 16px;
+  --k-ui-size: 14px;
+  --k-meta-size: 12px;
+  /* the one sentence under a page title */
+  --k-lead-size: 20px;
+  --k-lead-size-phone: 16px;
+  /* labels and group heads */
+  --k-quiet-ink: 0.6;
+}
+
+/* ---- ground rules ---- */
+
+/* Vuetify tracks its type for Roboto's upper case. Sentence case wants none.
+   A list of the classes that carry tracking, not a blanket `*`: first its
+   typography utilities, whose tracking is `!important`... The footer's
+   column heads and its copyright line keep Vuetify's. */
+:is(.v-application, .v-overlay-container)
+  :is(
+    .text-h1,
+    .text-h2,
+    .text-h3,
+    .text-h4,
+    .text-h5,
+    .text-h6,
+    [class*="text-sm-h"],
+    [class*="text-md-h"],
+    [class*="text-lg-h"],
+    [class*="text-xl-h"],
+    .text-subtitle-1,
+    .text-subtitle-2,
+    .text-body-1,
+    .text-body-2,
+    .text-caption,
+    .text-overline,
+    .text-button
+  ):where(:not(.v-footer *)) {
+  letter-spacing: normal !important;
+}
+
+/* ...then its components, whose tracking is a plain rule. The footer's
+   links keep Vuetify's button tracking. */
+:is(.v-application, .v-overlay-container)
+  :is(
+    .v-btn,
+    .v-chip,
+    .v-card-title,
+    .v-card-subtitle,
+    .v-card-text,
+    .v-list-item-title,
+    .v-list-item-subtitle,
+    .v-list-subheader,
+    .v-toolbar-title,
+    .v-expansion-panel-title,
+    .v-data-table__th,
+    .v-field,
+    .v-label
+  ):where(:not(.v-footer *)) {
+  letter-spacing: normal;
+}
+
+/* The indent Vuetify adds to a button balances its tracking; with no
+   tracking it only pushes the label off centre. The footer's tracked links
+   keep it. */
+:is(.v-application, .v-overlay-container) .v-btn:where(:not(.v-footer *)) {
+  text-indent: 0;
+}
+
+/* Dates and counts line up in columns. */
+:is(.v-application, .v-overlay-container) {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+:is(.v-application, .v-overlay-container) :is(h1, h2, h3, .v-card-title) {
+  text-wrap: balance;
+}
+
+/* Not the footer's sentence, which keeps the line breaks it had. */
+:is(.v-application, .v-overlay-container)
+  :is(p, .k-lead, .v-card-text):where(:not(.v-footer *)) {
+  text-wrap: pretty;
+}
+
+/* ---- card and step titles: 16/600 ----
+
+   Before the section heads and the page title, which out-rank it on the
+   headings they share a class with. `.text-h6` is a utility, so its size
+   needs `!important`; a card title's does not, and one whose markup says
+   `text-h5` keeps that size. */
+:is(.v-application, .v-overlay-container) .text-h6:not(p) {
+  font-size: var(--k-sub-size) !important;
+}
+
+/* `.v-card .v-card-title` because that is where Vuetify sets a card title's
+   line height. */
+:is(.v-application, .v-overlay-container) :is(.text-h6:not(p), .v-card-title),
+:is(.v-application, .v-overlay-container) .v-card .v-card-title {
+  font-size: var(--k-sub-size);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* ---- dialog titles: 20/600 ----
+
+   A dialog's text is 16px, not a card's 14: Vuetify sets it to `inherit`
+   there, with body-1's tracking. A card title's 16 is then no bigger than
+   the sentence under it, and „Zaproponuj zmianę” read smaller than its own
+   lead. So a dialog's title stands one step up the scale, and its text drops
+   the tracking every other text on the site has dropped. Vuetify's selectors,
+   one class above them; `text-subtitle-1` in the markup keeps its 16. */
+:is(.v-application, .v-overlay-container)
+  .v-dialog
+  > .v-overlay__content
+  > .v-card
+  > .v-card-title,
+:is(.v-application, .v-overlay-container)
+  .v-dialog
+  > .v-overlay__content
+  > form
+  > .v-card
+  > .v-card-title {
+  font-size: var(--k-dialog-title-size);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+:is(.v-application, .v-overlay-container)
+  .v-dialog
+  > .v-overlay__content
+  > .v-card
+  > .v-card-text,
+:is(.v-application, .v-overlay-container)
+  .v-dialog
+  > .v-overlay__content
+  > form
+  > .v-card
+  > .v-card-text {
+  letter-spacing: normal;
+}
+
+/* ---- section heads: 24/600, 20 on a phone ----
+
+   Vuetify's heading classes on a heading (h2-h6) are section heads, clearly
+   under the 40px title. Only on headings - on anything else a Vuetify
+   heading class is a figure or a badge (error.vue's „404”, the initials in
+   /profil's avatar) and keeps its size. The responsive variants are named
+   too, or a heading would change size by breakpoint. `text-h6` heads a
+   section on an h2 or h3; lower down it is a card title.
+
+   The utilities' size and tracking first, which take `!important`... */
+:is(.v-application, .v-overlay-container)
+  :is(h2, h3, h4, h5, h6):is(
+    .text-h1,
+    .text-h2,
+    .text-h3,
+    .text-h4,
+    .text-h5,
+    [class*="text-sm-h"],
+    [class*="text-md-h"],
+    [class*="text-lg-h"],
+    [class*="text-xl-h"]
+  ),
+:is(.v-application, .v-overlay-container) :is(h2, h3).text-h6 {
+  font-size: var(--k-section-size) !important;
+  letter-spacing: -0.012em !important;
+}
+
+/* ...then the rest of a section head, and the heads that carry no Vuetify
+   class at all. */
+:is(.v-application, .v-overlay-container)
+  :is(h2, h3, h4, h5, h6):is(
+    .text-h1,
+    .text-h2,
+    .text-h3,
+    .text-h4,
+    .text-h5,
+    [class*="text-sm-h"],
+    [class*="text-md-h"],
+    [class*="text-lg-h"],
+    [class*="text-xl-h"]
+  ),
+:is(.v-application, .v-overlay-container) :is(h2, h3).text-h6,
+:is(.v-application, .v-overlay-container) .sec-head > :is(h2, h3),
+:is(.v-application, .v-overlay-container) .k-section-title {
+  font-size: var(--k-section-size);
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.25;
+}
+
+/* ---- body, UI text and meta ----
+
+   Vuetify's body classes are on the scale already (16, 14, 12); only their
+   line heights change - outside the footer, whose column heads and copyright
+   line keep Vuetify's 1.5 and 1.667, and with them its height. */
+:is(.v-application, .v-overlay-container)
+  :is(.text-subtitle-1, .text-subtitle-2) {
+  line-height: 1.4;
+}
+
+:is(.v-application, .v-overlay-container)
+  .text-body-1:where(:not(.v-footer *)) {
+  line-height: 1.55;
+}
+
+:is(.v-application, .v-overlay-container) .v-alert p {
+  font-size: var(--k-body-size);
+  line-height: 1.55;
+}
+
+:is(.v-application, .v-overlay-container) .text-body-2 {
+  line-height: 1.45;
+}
+
+:is(.v-application, .v-overlay-container)
+  :is(
+    .v-card-text,
+    .v-card-subtitle,
+    .v-list-item-title,
+    .v-table,
+    .v-expansion-panel-text,
+    .v-data-table-footer
+  ) {
+  font-size: var(--k-ui-size);
+  line-height: 1.45;
+}
+
+:is(.v-application, .v-overlay-container) .v-expansion-panel-title {
+  font-size: var(--k-ui-size);
+  font-weight: 500;
+}
+
+:is(.v-application, .v-overlay-container)
+  .text-caption:where(:not(.v-footer *)) {
+  line-height: 1.45;
+}
+
+:is(.v-application, .v-overlay-container) sup {
+  font-size: var(--k-meta-size);
+  line-height: 1.45;
+}
+
+/* The overline's capitals are `!important` in Vuetify. */
+:is(.v-application, .v-overlay-container) .text-overline {
+  text-transform: none !important;
+}
+
+/* Card subtitles composited to #7a7a7a on white, 4.3:1. The same neutral,
+   with more ink. */
+:is(.v-application, .v-overlay-container) .v-card-subtitle {
+  --v-card-subtitle-opacity: 0.78;
+}
+
+/* ---- buttons, tabs, menus: sentence case ----
+
+   A default button is 14px, a small one 12 and a large one 16 in Vuetify
+   already. The two ends come onto the scale through Vuetify's own size
+   variable. Labelled buttons only: an icon button's glyph is sized off its
+   font size, and it has no text to put on the scale. */
+:is(.v-application, .v-overlay-container) .v-btn {
+  text-transform: none;
+}
+
+:is(.v-application, .v-overlay-container) .text-button {
+  text-transform: none !important;
+}
+
+:is(.v-application, .v-overlay-container)
+  .v-btn--size-x-small:not(.v-btn--icon) {
+  --v-btn-size: var(--k-meta-size);
+}
+
+:is(.v-application, .v-overlay-container)
+  .v-btn--size-x-large:not(.v-btn--icon) {
+  --v-btn-size: var(--k-body-size);
+}
+
+/* ---- chips: the 12px floor, compact so the floor costs no width ---- */
+:is(.v-application, .v-overlay-container) .v-chip.v-chip--size-x-small,
+:is(.v-application, .v-overlay-container) .v-chip.v-chip--size-small {
+  --v-chip-size: var(--k-meta-size);
+  font-size: var(--k-meta-size);
+}
+
+:is(.v-application, .v-overlay-container) .v-chip.v-chip--size-x-small {
+  padding-inline: 6px;
+}
+
+:is(.v-application, .v-overlay-container) .v-chip.v-chip--size-x-small .v-icon {
+  font-size: 13px;
+  height: 13px;
+  width: 13px;
+}
+
+:is(.v-application, .v-overlay-container)
+  .v-chip.v-chip--size-x-small
+  .v-chip__prepend
+  .v-icon,
+:is(.v-application, .v-overlay-container)
+  .v-chip.v-chip--size-x-small
+  > .v-icon--start {
+  margin-inline: 0 3px;
+}
+
+/* ---- labels: what a value is called. Quiet, sentence case ---- */
+:is(.v-application, .v-overlay-container) .v-list-subheader {
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-meta-size);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* `.v-table` because Vuetify styles its header cells four elements deep. */
+:is(.v-application, .v-overlay-container) .v-table .v-data-table__th {
+  font-size: var(--k-meta-size);
+  font-weight: 600;
+  text-transform: none;
+}
+
+/* ---- the lead: one sentence directly under the h1 ----
+
+   One per page, and only one sentence. Method and anything longer is body
+   text, or goes behind the (i). */
+:is(.v-application, .v-overlay-container) .k-page-lead {
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-lead-size);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.45;
+  max-width: 62ch;
+}
+
+/* ---- the page title ----
+
+   One treatment on every page: the h1 is 40/700, 28 on a phone. Person and
+   company pages make the entity's name the h1. Many h1s still carry the
+   Vuetify heading class they used to be sized with (`text-h4`), whose size
+   and tracking are `!important` - so those two are here.
+
+   `k-title-inline` is the two categorisation screens' toolbar title, an h1
+   naming a working tool inside a 48px bar. It keeps its own size until the
+   admin pages' titles are decided (typography's open question 5). */
+:is(.v-application, .v-overlay-container) h1:not(.k-title-inline) {
+  font-size: var(--k-title-size) !important;
+  letter-spacing: -0.025em !important;
+  font-weight: 700;
+  line-height: 1.1;
+  /* break-word, not anywhere: a word that fits on a line of its own is never
+     split; only one wider than the whole column breaks */
+  overflow-wrap: break-word;
+}
+
+:is(.v-application, .v-overlay-container) h1.k-title--caps {
+  font-size: var(--k-title-caps-size) !important;
+  letter-spacing: -0.012em !important;
+  line-height: 1.15;
+}
+
+:is(.v-application, .v-overlay-container) h1.k-title--sm {
+  font-size: var(--k-title-sm-size) !important;
+  letter-spacing: -0.012em !important;
+  line-height: 1.25;
+}
+
+/* ---- phones ---- */
+@media (max-width: 599.98px) {
+  :is(.v-application, .v-overlay-container) h1:not(.k-title-inline) {
+    font-size: var(--k-title-size-phone) !important;
+  }
+
+  :is(.v-application, .v-overlay-container) h1.k-title--caps {
+    font-size: var(--k-title-caps-size-phone) !important;
+  }
+
+  :is(.v-application, .v-overlay-container) h1.k-title--sm {
+    font-size: var(--k-title-sm-size) !important;
+  }
+
+  :is(.v-application, .v-overlay-container)
+    :is(h2, h3, h4, h5, h6):is(
+      .text-h1,
+      .text-h2,
+      .text-h3,
+      .text-h4,
+      .text-h5,
+      [class*="text-sm-h"],
+      [class*="text-md-h"],
+      [class*="text-lg-h"],
+      [class*="text-xl-h"]
+    ),
+  :is(.v-application, .v-overlay-container) :is(h2, h3).text-h6 {
+    font-size: var(--k-section-size-phone) !important;
+  }
+
+  :is(.v-application, .v-overlay-container) .sec-head > :is(h2, h3),
+  :is(.v-application, .v-overlay-container) .k-section-title {
+    font-size: var(--k-section-size-phone);
+  }
+
+  :is(.v-application, .v-overlay-container) .k-page-lead {
+    font-size: var(--k-lead-size-phone);
+    letter-spacing: normal;
+    line-height: 1.55;
+  }
+}

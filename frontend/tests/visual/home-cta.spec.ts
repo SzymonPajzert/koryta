@@ -93,14 +93,14 @@ async function openCta(page: Page, figures: ProgressStats | null) {
   return cta;
 }
 
-/** The app bar and the feedback launcher are both `position: fixed`, so what
- * they cover depends on where the scroll stopped rather than on the card - and
- * on a phone the card is taller than the window, which put the bar across its
- * top edge. Neither is part of the card, so both are hidden for the shot
- * rather than masked: a mask would photograph a magenta block instead. */
+/** The app bar, „Zgłoś” included, is `position: fixed`, so what it covers
+ * depends on where the scroll stopped rather than on the card - and on a phone
+ * the card is taller than the window, which put the bar across its top edge.
+ * It is not part of the card, so it is hidden for the shot rather than masked:
+ * a mask would photograph a magenta block instead. */
 const shoot = async (page: Page, name: string) => {
   await page.addStyleTag({
-    content: ".v-app-bar, .feedback-fab { visibility: hidden !important; }",
+    content: ".v-app-bar { visibility: hidden !important; }",
   });
   await expect(page.getByTestId("home-help-cta")).toHaveScreenshot(name);
 };

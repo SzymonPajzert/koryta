@@ -1,5 +1,7 @@
 <template>
-  <div class="pa-4">
+  <!-- Full width takes the layout's padding away, so the page puts its own
+       back - the page-top inset and page-end gap too (assets/css/edges.css). -->
+  <div class="pa-4 k-page-top k-page-end">
     <ExploreNodeDrawer
       v-model="openDrawer"
       :node="focusedNode"

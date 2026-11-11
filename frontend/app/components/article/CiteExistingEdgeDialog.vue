@@ -137,6 +137,7 @@ import {
 import type { Link, NodeType } from "~~/shared/model";
 import type { GraphLayout } from "~~/shared/graph/util";
 import { edgeTypeLabels } from "~/composables/edges";
+import { relationPeriodLabel } from "~/utils/relationPeriod";
 import { authRequest } from "~/composables/auth";
 
 const props = defineProps<{
@@ -187,9 +188,7 @@ const candidates = computed<Candidate[]>(() => {
     .map((edge): Candidate => {
       const sourceName = layout.nodes[edge.source]?.name ?? edge.source;
       const targetName = layout.nodes[edge.target]?.name ?? edge.target;
-      const period = [edge.start_date, edge.end_date]
-        .filter(Boolean)
-        .join(" - ");
+      const period = relationPeriodLabel(edge.start_date, edge.end_date);
       return {
         id: edge.id!,
         title: `${sourceName} → ${targetName}`,

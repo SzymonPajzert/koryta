@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import { test, expect } from "./test";
 import { hospitalStatsFixture } from "./fixtures/hospitalStats";
 import { expectFitsThePhone } from "./phoneWidth";
+import { backToTheTop } from "./fullPage";
 import { pageTag } from "./pageTags";
 
 /** /eksploruj/szpitale, with hospitals in it.
@@ -49,15 +50,20 @@ async function openWithFixture(page: Page) {
   await expect(page.getByText("Podziel według")).toBeVisible();
 }
 
-/** Lazy images below the fold keep growing the page mid-capture otherwise. */
+/** Lazy images below the fold keep growing the page mid-capture otherwise.
+ *
+ * Every scroll is `instant`: the site sets `scroll-behavior: smooth` on
+ * <html>, so a plain `scrollTo` only starts a glide, and the shot caught the
+ * window part of the way back up - the fixed app bar came out across the
+ * middle of the page, and at a different height from one run to the next. */
 async function settled(page: Page) {
   await page.evaluate(async () => {
     for (let y = 0; y < document.body.scrollHeight; y += window.innerHeight) {
-      window.scrollTo(0, y);
+      window.scrollTo({ top: y, behavior: "instant" });
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
-    window.scrollTo(0, 0);
   });
+  await backToTheTop(page);
   await page.evaluate(() => document.fonts.ready);
 }
 

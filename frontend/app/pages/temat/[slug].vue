@@ -14,8 +14,8 @@
         <template #prepend>
           <v-icon :icon="mdiTagOutline" size="large" color="primary" />
         </template>
-        <v-card-title class="text-h5 font-weight-bold text-wrap">
-          {{ topic?.name }}
+        <v-card-title class="text-wrap">
+          <h1 class="d-inline">{{ topic?.name }}</h1>
           <ChipDraftStatus
             :published="topicPublished"
             :node-id="topicId"
@@ -45,9 +45,7 @@
          and are listed below, but they are not drawn - what a reader wants from
          a story is the people. -->
     <v-card class="mb-4">
-      <v-card-title class="text-subtitle-1 font-weight-bold">
-        Graf powiązań
-      </v-card-title>
+      <v-card-title class="text-subtitle-1"> Graf powiązań </v-card-title>
       <v-card-text>
         <GraphContainer
           :key="topicId"
@@ -63,9 +61,7 @@
     </v-card>
 
     <v-card>
-      <v-card-title class="text-subtitle-1 font-weight-bold">
-        Artykuły
-      </v-card-title>
+      <v-card-title class="text-subtitle-1"> Artykuły </v-card-title>
       <v-list v-if="articles.length" lines="two">
         <v-list-item
           v-for="article in articles"

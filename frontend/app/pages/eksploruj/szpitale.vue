@@ -1,8 +1,8 @@
 <template>
-  <!-- The container this sits in already pads 16px, so `pa-4` spent a fifth of
-       a 375px screen on nothing before a word was read. Kept from `sm` up,
-       where there is room for it. -->
-  <div class="py-4 px-0 pa-sm-4">
+  <!-- No side padding of its own: the layout's container pads the column, so
+       the title and the panels share their left edge with every other page's
+       (and `pa-4` spent a fifth of a 375px screen on nothing). -->
+  <div>
     <!-- The heading and nothing else. The standfirst that stood here said what
          a rada nadzorcza is, what we show and what we leave out - all three of
          which the chart's own subtitle and the note under it say again, in
@@ -41,13 +41,7 @@
          used to share a row with stays: it is the one control above everything
          it scopes, and the chart and the hospitals below change together. -->
     <div class="d-flex align-center flex-wrap ga-3 mb-1">
-      <v-btn-toggle
-        v-model="group"
-        density="compact"
-        variant="outlined"
-        divided
-        mandatory
-      >
+      <SegmentedToggle v-model="group">
         <v-btn
           v-for="value in boardGroups"
           :key="value"
@@ -56,7 +50,7 @@
         >
           {{ boardGroupShortLabels[value] }}
         </v-btn>
-      </v-btn-toggle>
+      </SegmentedToggle>
     </div>
     <p class="text-body-2 text-medium-emphasis mb-3">
       {{ boardGroupLabels[group] }}
@@ -93,7 +87,7 @@
         <template #prepend>
           <v-icon :icon="mdiHandHeartOutline" size="large" color="ink-info" />
         </template>
-        <v-card-title class="text-subtitle-1 font-weight-medium text-wrap">
+        <v-card-title class="text-subtitle-1 text-wrap">
           Pomóż uzupełnić te liczby
         </v-card-title>
         <v-card-subtitle class="text-wrap">
@@ -176,7 +170,7 @@
     <!-- ------------------------------------------------------------------ -->
     <h2 class="text-h6 mb-3">W skrócie</h2>
 
-    <v-card variant="outlined" class="mb-4">
+    <v-card variant="outlined" class="mb-4 k-bleed-xs">
       <v-card-text>
         <v-skeleton-loader v-if="!stats" type="heading, text" />
         <!-- A grid rather than a wrapping flex row: laid out by content the
@@ -192,9 +186,9 @@
       </v-card-text>
     </v-card>
 
-    <v-card variant="outlined" class="mb-6">
+    <v-card variant="outlined" class="mb-6 k-bleed-xs">
       <v-card-item>
-        <v-card-title class="text-subtitle-1 font-weight-medium text-wrap">
+        <v-card-title class="text-subtitle-1 text-wrap">
           Czym są nadzorowane szpitale publiczne
         </v-card-title>
         <v-card-subtitle class="text-wrap">
@@ -215,7 +209,7 @@
     <!-- ------------------------------------------------------------------ -->
     <h2 class="text-h6 mb-3">Jak liczymy</h2>
 
-    <v-card variant="outlined" class="mb-4">
+    <v-card variant="outlined" class="mb-4 k-bleed-xs">
       <v-card-text class="text-body-2">
         <p class="mb-3">
           Bierzemy pod uwagę wyłącznie szpitale, o których KRS mówi, że należą

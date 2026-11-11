@@ -4,7 +4,7 @@
       v-if="isLogin"
       type="button"
       block
-      variant="outlined"
+      variant="tonal"
       class="mb-4"
       :disabled="loading"
       :prepend-icon="mdiGoogle"

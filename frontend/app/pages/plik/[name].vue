@@ -25,8 +25,8 @@ useSeoMeta({
 </script>
 
 <template>
-  <v-container max-width="900" class="py-12">
-    <v-sheet elevation="1" rounded="xl" class="pa-8 pa-md-12 content-styles">
+  <v-container max-width="900" class="pt-12 pb-0">
+    <v-sheet border class="pa-8 pa-md-12 k-r-card content-styles">
       <ContentRenderer v-if="file" :value="file" />
       <div v-else class="text-center text-h5 text-medium-emphasis">
         Nie znaleziono strony
@@ -43,29 +43,29 @@ useSeoMeta({
 }
 
 .content-styles h1 {
-  font-size: 2.25rem;
+  font-size: 2.5rem;
   font-weight: 500;
   margin-bottom: 32px;
   line-height: 1.2;
 }
 
 .content-styles h2 {
-  font-size: 1.75rem;
-  font-weight: 500;
+  font-size: 1.5rem;
+  font-weight: 600;
   margin-top: 48px;
   margin-bottom: 24px;
   line-height: 1.3;
 }
 
 .content-styles h3 {
-  font-size: 1.35rem;
-  font-weight: 500;
+  font-size: 1.25rem;
+  font-weight: 600;
   margin-top: 32px;
   margin-bottom: 16px;
 }
 
 .content-styles p {
-  font-size: 1.05rem;
+  font-size: 1rem;
   margin-bottom: 20px;
 }
 
@@ -73,7 +73,7 @@ useSeoMeta({
 .content-styles ol {
   margin-bottom: 20px;
   padding-left: 28px;
-  font-size: 1.05rem;
+  font-size: 1rem;
 }
 
 .content-styles li {
