@@ -17,6 +17,11 @@ def people_pkw_merged(ctx: Context, pkw_data):  # noqa: F841
         # A `person_pkw` built before it had the column: every office unknown,
         # so every local candidacy stays „Samorząd” and nothing is folded.
         pkw_data = pkw_data.assign(office=None)
+    for statement in ("party_member", "supported_by"):
+        if statement not in pkw_data.columns:
+            # One built before PKW's backing column was read: nobody backed,
+            # and nobody said what party they belong to.
+            pkw_data = pkw_data.assign(**{statement: None})
 
     con.execute(
         """
@@ -53,6 +58,10 @@ def people_pkw_merged(ctx: Context, pkw_data):  # noqa: F841
         election_type,
         candidacy_success,
         CAST(office AS VARCHAR) AS office,
+        -- What the candidate said of their own party, and who backed them:
+        -- `scrapers.pkw.affiliations` reads parties off both.
+        CAST(party_member AS VARCHAR) AS party_member,
+        CAST(supported_by AS VARCHAR) AS supported_by,
     FROM pkw_data
     WHERE first_name IS NOT NULL AND last_name IS NOT NULL
     """
@@ -79,6 +88,8 @@ def people_pkw_merged(ctx: Context, pkw_data):  # noqa: F841
             "teryt_powiat": "teryt_powiat",
             "candidacy_success": "candidacy_success",
             "office": "office",
+            "party_member": "party_member",
+            "supported_by": "supported_by",
         },
     )
 
@@ -107,11 +118,15 @@ def fold_rounds(con):
     SELECT * FROM people_pkw_merged_raw WHERE office IS NULL
     UNION ALL BY NAME
     SELECT
-        * EXCLUDE (candidacy_success),
+        * EXCLUDE (candidacy_success, party_member, supported_by),
         CASE
             WHEN bool_or(candidacy_success = 'TRUE') THEN 'TRUE'
             WHEN bool_or(candidacy_success = 'FALSE') THEN 'FALSE'
         END AS candidacy_success,
+        -- Whatever a round's row says: a statement written on one round's
+        -- row only must not keep the two rounds apart.
+        max(party_member) AS party_member,
+        max(supported_by) AS supported_by,
     FROM people_pkw_merged_raw
     WHERE office IS NOT NULL
     GROUP BY ALL
@@ -148,7 +163,7 @@ def split_records_by_place(con):
     reviewers' to judge, as for any record two people fit. The runs that
     clashed reach people the way every ingested candidacy does - as an edge
     the ingest stores unpublished, which only a reviewer puts live - and name
-    no party for them (`parties_from_committees`), since a page's parties go
+    no party for them (`parties_from_candidacies`), since a page's parties go
     live with the page.
 
     A part is a województwo. 16,342 of the 18,980 records clash only between

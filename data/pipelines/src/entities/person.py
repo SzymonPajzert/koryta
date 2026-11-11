@@ -91,7 +91,16 @@ class PKW:
     first_name: str | None = None
     middle_name: str | None = None
     last_name: str | None = None
+    #: What the candidate declared about their own party, as PKW wrote it:
+    #: „członek partii politycznej: Prawo i Sprawiedliwość”, „członek Polskiego
+    #: Stronnictwa Ludowego”, „nie należy do partii politycznej”.
     party_member: str | None = None
+    #: Who backed the candidate, as PKW wrote it: a party or an organisation,
+    #: „popierana przez partię polityczną: Prawo i Sprawiedliwość”, „pop. przez:
+    #: SLD”, or a bare name in the older files. Recorded for candidates on any
+    #: list, a local voters' committee's included, which is where it says most:
+    #: the committee names no party there. 2006-2024 local files.
+    supported_by: str | None = None
     #: The seat a local candidacy was for, as the site names it ("Rada
     #: miasta", "Wójt"...), or None - see `scrapers.pkw.offices`. Worked out
     #: once the whole file is read, as it needs the TERYT register.
