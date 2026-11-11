@@ -47,6 +47,14 @@ class Researched:
 
 
 @dataclasses.dataclass(frozen=True)
+class Founded:
+    """Who set up a foundation or association, where a public body did."""
+
+    founders: tuple[ResearchedOwner, ...]
+    source: str
+
+
+@dataclasses.dataclass(frozen=True)
 class FundHolder:
     """Who stands behind an owner the register names without a KRS number."""
 
@@ -367,6 +375,215 @@ RESEARCHED_OWNERS: dict[str, Researched] = {
         ),
         "https://www.umz.zgierz.pl/bip/?bip_umz_did=164",
     ),
+}
+
+
+KGHM = ResearchedOwner("KGHM POLSKA MIEDŹ S.A.", "0000023302")
+TOTALIZATOR = ResearchedOwner("TOTALIZATOR SPORTOWY SP. Z O.O.", "0000007411")
+SKARB_PANSTWA = ResearchedOwner("SKARB PAŃSTWA")
+KRAKOW = ResearchedOwner("GMINA MIEJSKA KRAKÓW")
+#: GUS's list of general-government (S.13) units, 31.12.2024: dane.gov.pl
+#: dataset 1609, CC BY 4.0. It names each unit and its subsector, not its
+#: founder; S.1311 is central government, S.1313 local government.
+GUS_S13 = "https://dane.gov.pl/pl/dataset/1609"
+
+#: Foundations and associations a public body set up, and so public by Szymon's
+#: rule of 2026-11-11 ("the public founder counts"), as a public shareholder
+#: makes a company public. The register never names a foundation's founder, so
+#: each was found by hand: 23 by the koryciarze leads of 2026-10-09, the rest
+#: by GUS counting them in the general-government sector, with the founder read
+#: off the source given beside it.
+#:
+#: A founder is not a shareholder, so `CompaniesKRS.add_public_founders` draws
+#: no ownership edge to it and the founder is named here for the record only.
+#: The flag still carries down to what the body itself owns: Progress and
+#: Business's incubator, Fundacja Rozwoju Gminy Kleszczów's companies.
+#:
+#: Left out: Zakłady Kórnickie, which GUS counts in S.1311 but the Zamoyskis
+#: founded in 1925 (expected_public_companies.csv files it not public), and
+#: Polska Fundacja Przedsiębiorczości, also S.1311, whose founder no source
+#: names and whose own page traces it to the Canada-Poland Entrepreneurs
+#: Foundation (task decide-polska-fundacja-przedsiebiorczosci).
+PUBLIC_FOUNDERS: dict[str, Founded] = {
+    # Found by the koryciarze leads of 2026-10-09.
+    "0000064452": Founded(
+        (KRAKOW,),
+        "https://www.bip.krakow.pl/zarzadzenia/2007/793/X19UUF9fMTA3NTg=/zp_793_2_07.pdf",
+    ),
+    # Fundacja CBOS: set up by the Act of 20 February 1997.
+    "0000070275": Founded(
+        (SKARB_PANSTWA,),
+        "https://cbos.bip-e.pl/cbs/status-prawny/1665,Status-prawny.html",
+    ),
+    "0000042901": Founded(
+        (
+            ResearchedOwner("UNIWERSYTET JAGIELLOŃSKI"),
+            KRAKOW,
+            SKARB_PANSTWA,
+        ),
+        "https://pl.wikipedia.org/wiki/Fundacja_Centrum_Dokumentacji_Czynu_Niepodleg%C5%82o%C5%9Bciowego",
+    ),
+    # Era Parowozów.
+    "0000241695": Founded(
+        (ResearchedOwner("PKP CARGO S.A.", "0000027702"),),
+        "https://eraparowozow.org.pl/o-nas/",
+    ),
+    # Fundacja Gdańska, with the Pomorska Izba Przemysłowo-Handlowa.
+    "0000052463": Founded(
+        (ResearchedOwner("GMINA MIASTA GDAŃSKA"),),
+        "https://fundacjagdanska.pl/o-nas/",
+    ),
+    "0000499069": Founded(
+        (ResearchedOwner("POLSKIE KOLEJE PAŃSTWOWE S.A.", "0000019193"),),
+        "https://www.pkp.pl/pl/fundacja-aktualnosci/3127-czyn-dobro-i-dziel-sie-dobrem-przekaz-1-podatku-fundacji-grupy-pkp",
+    ),
+    # Patronus Animalium.
+    "0000376820": Founded(
+        (
+            ResearchedOwner(
+                "INSTYTUT ZOOTECHNIKI - PAŃSTWOWY INSTYTUT BADAWCZY", "0000125481"
+            ),
+        ),
+        "https://fundacjaiz.pl/o-fundacji/",
+    ),
+    # Kaliski Inkubator Przedsiębiorczości.
+    "0000064811": Founded(
+        (ResearchedOwner("MIASTO KALISZ"),),
+        "https://calisia.pl/25-lat-dzialalnosci-kaliskiego-inkubatora-przedsiebiorczosci,42201",
+    ),
+    "0000154740": Founded((KGHM,), "http://fundacjakghm.pl/en/o-fundacji-kghm"),
+    # Fundacja LOTTO im. Haliny Konopackiej.
+    "0000345434": Founded((TOTALIZATOR,), "https://www.fundacjalotto.pl/"),
+    "0000667056": Founded((PGZ,), "https://fundacjapgz.pl/o-fundacji/statut/"),
+    # Fundacja Promocji Kultury Miasta Krakowa.
+    "0000251136": Founded((KRAKOW,), "https://www.bip.krakow.pl/?id=44"),
+    "0000627669": Founded(
+        (
+            ResearchedOwner(
+                "POLSKA WYTWÓRNIA PAPIERÓW WARTOŚCIOWYCH S.A.", "0000062594"
+            ),
+        ),
+        "https://fundacjapwpw.pl/misja-i-cele/",
+    ),
+    "0000053778": Founded(
+        (ResearchedOwner("POWSZECHNY ZAKŁAD UBEZPIECZEŃ S.A.", "0000009831"),),
+        "https://fundacja.pzu.pl/o-fundacji",
+    ),
+    "0000045713": Founded(
+        (ResearchedOwner("UNIWERSYTET GDAŃSKI"),),
+        "https://old.ug.edu.pl/uniwersytet/struktura_ug/fundacje_i_spolki",
+    ),
+    "0000966052": Founded(
+        (TOTALIZATOR,),
+        "https://www.fundacja.totalizator.pl/Uploads/sprawozdanie-merytoryczne-fts-2024.pdf",
+    ),
+    # MKS Zagłębie Lubin: the state copper combine's works club, from 1966.
+    "0000126455": Founded(
+        (KGHM,),
+        "https://pl.wikipedia.org/wiki/Zag%C5%82%C4%99bie_Lubin_(pi%C5%82ka_r%C4%99czna_m%C4%99%C5%BCczyzn)",
+    ),
+    # Polska Fundacja Narodowa: seventeen state companies.
+    "0000655791": Founded(
+        (
+            ResearchedOwner("ORLEN S.A.", "0000028860"),
+            ResearchedOwner("PGE POLSKA GRUPA ENERGETYCZNA S.A.", "0000059307"),
+            ResearchedOwner(
+                "POLSKIE GÓRNICTWO NAFTOWE I GAZOWNICTWO S.A.", "0000059492"
+            ),
+            ResearchedOwner("POWSZECHNY ZAKŁAD UBEZPIECZEŃ S.A.", "0000009831"),
+            ResearchedOwner(
+                "POWSZECHNA KASA OSZCZĘDNOŚCI BANK POLSKI S.A.", "0000026438"
+            ),
+            KGHM,
+            ResearchedOwner("TAURON POLSKA ENERGIA S.A.", "0000271562"),
+            ResearchedOwner("ENEA S.A.", "0000012483"),
+            ResearchedOwner("ENERGA S.A.", "0000271591"),
+            GRUPA_AZOTY,
+            ResearchedOwner("GRUPA LOTOS S.A.", "0000106150"),
+            ResearchedOwner(
+                "GIEŁDA PAPIERÓW WARTOŚCIOWYCH W WARSZAWIE S.A.", "0000082312"
+            ),
+            TOTALIZATOR,
+            PGZ,
+            ResearchedOwner("POLSKIE KOLEJE PAŃSTWOWE S.A.", "0000019193"),
+            ResearchedOwner("POLSKI HOLDING NIERUCHOMOŚCI S.A."),
+            ResearchedOwner(
+                "POLSKA WYTWÓRNIA PAPIERÓW WARTOŚCIOWYCH S.A.", "0000062594"
+            ),
+        ),
+        "https://www.phnsa.pl/pl/aktualnosc/podpisanie-aktu-zalozycielskiego-i-statutu-polskiej-fundacji-narodowej",
+    ),
+    # Polska Fundacja Promocji Kadr, in liquidation.
+    "0000094560": Founded(
+        (SKARB_PANSTWA, ARP),
+        "https://arp.pl/pl/aktualnosci/polska-fundacja-promocji-kadr-weszla-do-klastra-centrum-inzynierii-biomedycznej/",
+    ),
+    # Unia Metropolii Polskich: an association of seven cities.
+    "0000129432": Founded(
+        (
+            ResearchedOwner("GMINA MIASTA GDAŃSKA"),
+            ResearchedOwner("MIASTO KATOWICE"),
+            ResearchedOwner("GMINA LUBLIN"),
+            ResearchedOwner("MIASTO ŁÓDŹ"),
+            ResearchedOwner("GMINA MIASTO SZCZECIN"),
+            ResearchedOwner("MIASTO STOŁECZNE WARSZAWA"),
+            ResearchedOwner("GMINA WROCŁAW"),
+        ),
+        "https://metropolie.pl/o-nas/statut",
+    ),
+    # Fundacja WKS Śląsk Wrocław: the club's company, the city's.
+    "0000868751": Founded(
+        (
+            ResearchedOwner(
+                'WROCŁAWSKI KLUB SPORTOWY "ŚLĄSK WROCŁAW" S.A.', "0000070008"
+            ),
+        ),
+        "https://www.slaskwroclaw.pl/fundacja",
+    ),
+    # Mokotowska Fundacja Warszawianka - Wodny Park.
+    "0000039836": Founded(
+        (ResearchedOwner("MIASTO STOŁECZNE WARSZAWA"),),
+        "https://www.wodnypark.com.pl/o-fundacji/",
+    ),
+    # Związek Pracodawców Polska Miedź: KGHM and its group, with local
+    # governments and public hospitals among the members.
+    "0000126828": Founded((KGHM,), "https://pracodawcy.pl/lista-firm-czlonkowskich/"),
+    # GUS S.13, 2026-10-14, and Szymon asking about the first on 2026-11-11.
+    # Fundacja Agencji Rozwoju Przemysłu: S.1311. No source seen names the
+    # founder; ARP's own name is on it.
+    "0000765394": Founded((ARP,), GUS_S13),
+    # Centrum Europejskie Natolin: "a foundation established by the Polish State".
+    "0000021941": Founded((SKARB_PANSTWA,), "https://www.natolin.edu.pl/en/about/"),
+    # Orły Sportu: S.1311, which the Sejm sport committee (term 10) heard
+    # called a state foundation the finance minister set up.
+    "0000037541": Founded((SKARB_PANSTWA,), GUS_S13),
+    # Platforma Przemysłu Przyszłości: art. 4 of its Act, Dz.U. 2019 poz. 229.
+    "0000784300": Founded(
+        (SKARB_PANSTWA,), "https://eli.gov.pl/eli/DU/2019/229/ogl/pol/pdf"
+    ),
+    # Pro Arte et Historia: S.1311, there to keep ARP's castles at Krasiczyn and
+    # Baranów Sandomierski.
+    "0000518786": Founded(
+        (ARP,),
+        "https://www.krasiczyn.com.pl/en/castle/10th-anniversary-of-the-pro-arte-et-historia-foundation",
+    ),
+    # Progress and Business: AGH, the Jagiellonian University and the Polish
+    # Academy of Sciences among its founders, with the Danish Technological
+    # Institute.
+    "0000155141": Founded(
+        (
+            ResearchedOwner("AKADEMIA GÓRNICZO-HUTNICZA IM. STANISŁAWA STASZICA"),
+            ResearchedOwner("UNIWERSYTET JAGIELLOŃSKI"),
+            ResearchedOwner("POLSKA AKADEMIA NAUK"),
+        ),
+        "https://polsa.gov.pl/baza-podmiotow/progress-and-business-foundation",
+    ),
+    # Fundacja Solidarności Międzynarodowej (Solidarity Fund PL).
+    "0000024453": Founded(
+        (SKARB_PANSTWA,), "https://www.gov.pl/web/polishaid/solidarity-fund-pl"
+    ),
+    # Fundacja Rozwoju Gminy Kleszczów: S.1313, the gmina's by its name.
+    "0000114731": Founded((ResearchedOwner("GMINA KLESZCZÓW"),), GUS_S13),
 }
 
 

@@ -12,10 +12,12 @@ The basis says how settled a row is.
   any stake, makes a company public, and its subsidiaries with it),
   `rule_struck_off_owner` (the owner a company had when it was struck off),
   `researched_owner` (`RESEARCHED_OWNERS`), `regon_code` (REGON's ownership
-  code), `wikipedia_owner` (an owner only the company's article names), and
-  `evidence_not_public` for a company nobody public owns, founded or joins.
-  These are checked against `companies_merged` every time.
-- A proposal: `proposed_public_founder`, `proposed_public_members`
+  code), `wikipedia_owner` (an owner only the company's article names),
+  `rule_public_founder` (2026-11-11: a foundation or association a public body
+  set up, `PUBLIC_FOUNDERS`), and `evidence_not_public` for a company nobody
+  public owns, founded or joins. These are checked against `companies_merged`
+  every time.
+- A proposal: `proposed_public_members`
   (decide-public-foundations-and-associations), `proposed_formerly_public`
   (decide-formerly-public-companies) and `proposed_not_public` (chambers and
   guilds whose members nobody has checked). They are always skipped. Checking
@@ -55,10 +57,10 @@ RULES = (
     "researched_owner",
     "regon_code",
     "wikipedia_owner",
+    "rule_public_founder",
     "evidence_not_public",
 )
 PROPOSALS = (
-    "proposed_public_founder",
     "proposed_public_members",
     "proposed_formerly_public",
     "proposed_not_public",
