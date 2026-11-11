@@ -37,10 +37,12 @@ for each of the 2,479 gminy, the 380 powiaty and the 18 Warsaw dzielnice, and
 two for each województwo - the marszałek's and the wojewoda's. No gmina or
 powiat has two.
 
-The names are the catalogue's, which is what an urząd calls itself, with two
+The names are the catalogue's, which is what an urząd calls itself, with three
 repairs. Two urzędy call themselves only "URZĄD GMINY" and "URZĄD MIASTA I
 GMINY", which tells a contributor picking one out of a powiat's twenty nothing,
-so they get their gmina's name after it; and "URZĄDGMINY" gets its space back.
+so they get their gmina's name after it; "URZĄDGMINY" gets its space back; and
+a name printed in capitals, as a quarter of them are, is written in normal
+case, which is how the site stores the place made for it.
 Each row also carries TERC's name for its region, which is the only name the
 site has for the gminy it has no region node for - most of them.
 """
@@ -89,6 +91,11 @@ _OFFICE_WORDS = frozenset(
 
 #: "URZĄDGMINY RADZIECHOWY-WIEPRZ", the catalogue's one run-together name.
 _GLUED = re.compile(r"\b(URZĄD)(GMINY|MIASTA|MIEJSKI)\b", re.IGNORECASE)
+
+#: The words a name in normal case keeps lower: "Urząd Miasta i Gminy w Rui",
+#: "Nowe Miasto nad Pilicą". W, WE, I and NAD are the ones the catalogue's
+#: capitals hold; the rest are there for the next edition.
+_LOWER_WORDS = frozenset({"w", "we", "i", "nad", "pod", "na", "z", "ze", "o", "przy"})
 
 COLUMNS = ["teryt", "region", "name", "regon", "nip"]
 
@@ -148,7 +155,7 @@ def offices_by_region(catalogue: pd.DataFrame, terc: pd.DataFrame) -> pd.DataFra
             {
                 "teryt": teryt,
                 "region": units.names.get(teryt),
-                "name": name or entry["Nazwa podmiotu"],
+                "name": _recased(name or entry["Nazwa podmiotu"]),
                 "regon": entry["REGON"].strip(),
                 "nip": entry["NIP"].strip() or None,
             }
@@ -187,6 +194,27 @@ def offices_by_region(catalogue: pd.DataFrame, terc: pd.DataFrame) -> pd.DataFra
 def _unglued(name: str) -> str:
     """The name single-spaced, with "URZĄDGMINY" as the two words it is."""
     return _GLUED.sub(r"\1 \2", " ".join(name.split()))
+
+
+def _recased(name: str) -> str:
+    """A name the catalogue prints in capitals, in normal case: "URZĄD MIASTA
+    OPOLA" is "Urząd Miasta Opola". A name in any other case is the office's
+    own spelling and is kept.
+
+    A new place on the site is stored under this name, and Szymon wants those
+    in normal case rather than the register's capitals (2026-11-11). Each word
+    and each part of a hyphenated one starts with a capital, as in
+    "Warmińsko-Mazurski", except the words in `_LOWER_WORDS`.
+    """
+    if not name.isupper():
+        return name
+    words = name.split(" ")
+    return " ".join(
+        word.lower()
+        if index > 0 and word.lower() in _LOWER_WORDS
+        else "-".join(part.capitalize() for part in word.split("-"))
+        for index, word in enumerate(words)
+    )
 
 
 def _placed(name: str, gmina: str) -> str:

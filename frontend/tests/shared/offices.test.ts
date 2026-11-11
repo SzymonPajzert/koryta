@@ -237,7 +237,7 @@ describe("the shipped table", () => {
 
   it("names the gmina of an urząd the catalogue calls only URZĄD GMINY", () => {
     expect(officesFor(index, "0412042").map((office) => office.name)).toEqual([
-      "URZĄD GMINY RYPIN",
+      "Urząd Gminy Rypin",
     ]);
   });
 
