@@ -7,11 +7,10 @@ import pandas as pd
 
 from analysis.interesting import Companies
 from analysis.payloads.site import SiteSnapshot
-from entities.company import display_name, on_the_treasury_list
+from entities.company import display_name, on_the_treasury_list, split_owners
 from entities.company_bodies import supervisory_body
 from entities.company_categories import categories_for
 from scrapers.koryta.download import KorytaCompanies
-from scrapers.map.jst import SKARB_PANSTWA
 from scrapers.stores import Context, Pipeline
 
 
@@ -246,21 +245,14 @@ class CompaniesPayloads(Pipeline):
             # ownership edge was ever written for a company already on the site
             # - which is why 3,927 of 4,024 of them had exactly one `owns` edge
             # and it was the seat.
-            owners, owner_teryts = [], []
             # The Treasury rides in on `teryt` because it has no KRS, but it is
             # not a territory and the ingest must not look it up as one - see
-            # `company_from_api_krs`. Split out here into a flag the ingest
-            # resolves to the site's own "Skarb Panstwa" node.
-            skarb_panstwa = False
-            for parent in row.get("parents") or []:
-                if not isinstance(parent, dict):
-                    continue
-                if parent.get("krs"):
-                    owners.append(str(parent["krs"]).zfill(10))
-                elif parent.get("teryt") == SKARB_PANSTWA:
-                    skarb_panstwa = True
-                elif parent.get("teryt"):
-                    owner_teryts.append(str(parent["teryt"]))
+            # `company_from_api_krs`. Split out into a flag the ingest resolves
+            # to the site's own "Skarb Panstwa" node.
+            owners, owner_teryts, skarb_panstwa = split_owners(row.get("parents"))
+            founders, founder_teryts, founder_skarb_panstwa = split_owners(
+                row.get("founded_by")
+            )
 
             payload = {
                 "krs": krs,
@@ -277,6 +269,12 @@ class CompaniesPayloads(Pipeline):
                 "owners": owners,
                 "owner_teryts": owner_teryts,
                 "owner_skarb_panstwa": skarb_panstwa,
+                # Who set it up, where a public body did, split the same way.
+                # The ingest draws these as ownership edges marked `founder`,
+                # which the site lists under „Właściciele” as the founder.
+                "founders": founders,
+                "founder_teryts": founder_teryts,
+                "founder_skarb_panstwa": founder_skarb_panstwa,
             }
             add_is_public(payload, row)
             add_register_fields(payload, form, row.get("supervisory_organ"))
@@ -302,11 +300,17 @@ class CompaniesPayloads(Pipeline):
         with_jst = sum(1 for p in payloads if p["owner_teryts"])
         with_skarb = sum(1 for p in payloads if p["owner_skarb_panstwa"])
         with_wikipedia = sum(1 for p in payloads if p.get("wikipedia"))
+        with_founder = sum(
+            1
+            for p in payloads
+            if p["founders"] or p["founder_teryts"] or p["founder_skarb_panstwa"]
+        )
         print(
             f"Emitting {len(payloads)} company payloads "
             f"({with_teryt} with a TERYT code, {with_owners} with a company "
             f"owner, {with_jst} with a JST owner, {with_skarb} owned by the "
-            f"Treasury, {with_wikipedia} with a Wikipedia article)"
+            f"Treasury, {with_founder} with a public founder, {with_wikipedia} "
+            f"with a Wikipedia article)"
         )
         if not payloads:
             return pd.DataFrame(
@@ -320,6 +324,9 @@ class CompaniesPayloads(Pipeline):
                     "owners",
                     "owner_teryts",
                     "owner_skarb_panstwa",
+                    "founders",
+                    "founder_teryts",
+                    "founder_skarb_panstwa",
                     "teryt_code",
                     "legal_form",
                     "supervisory_organ",

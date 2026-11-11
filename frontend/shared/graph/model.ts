@@ -88,4 +88,6 @@ export interface Edge {
   by_election?: boolean;
   start_date?: string;
   end_date?: string;
+  /** See `Edge.founder` in shared/model.ts. */
+  founder?: boolean;
 }

@@ -394,10 +394,13 @@ GUS_S13 = "https://dane.gov.pl/pl/dataset/1609"
 #: by GUS counting them in the general-government sector, with the founder read
 #: off the source given beside it.
 #:
-#: A founder is not a shareholder, so `CompaniesKRS.add_public_founders` draws
-#: no ownership edge to it and the founder is named here for the record only.
-#: The flag still carries down to what the body itself owns: Progress and
-#: Business's incubator, Fundacja Rozwoju Gminy Kleszczów's companies.
+#: A founder is not a shareholder, so `CompaniesKRS.add_public_founders` puts
+#: it in `founded_by` rather than among the owners: the site lists it under
+#: „Właściciele”, labelled as the founder, and nothing that reads the ownership
+#: graph takes it for a shareholder. The flag still carries down to what the
+#: body itself owns: Progress and Business's incubator, Fundacja Rozwoju Gminy
+#: Kleszczów's companies. A founder with neither a KRS number nor a TERYT code
+#: (a university, the Polish Academy of Sciences) is named here only.
 #:
 #: Left out: Zakłady Kórnickie, which GUS counts in S.1311 but the Zamoyskis
 #: founded in 1925 (expected_public_companies.csv files it not public), and
@@ -507,7 +510,7 @@ PUBLIC_FOUNDERS: dict[str, Founded] = {
             TOTALIZATOR,
             PGZ,
             ResearchedOwner("POLSKIE KOLEJE PAŃSTWOWE S.A.", "0000019193"),
-            ResearchedOwner("POLSKI HOLDING NIERUCHOMOŚCI S.A."),
+            ResearchedOwner("POLSKI HOLDING NIERUCHOMOŚCI S.A.", "0000383595"),
             ResearchedOwner(
                 "POLSKA WYTWÓRNIA PAPIERÓW WARTOŚCIOWYCH S.A.", "0000062594"
             ),

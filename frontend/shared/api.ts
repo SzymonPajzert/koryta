@@ -62,6 +62,15 @@ export const companyRequestSchema = z.object({
    * with real regions for the company's seat. The ingest resolves it to the
    * site's own „Skarb Państwa" node; see `SKARB_PANSTWA_NODE_ID`. */
   owner_skarb_panstwa: z.boolean().optional(),
+  /** Who set up a foundation or an association, where a public body did, in
+   * the three shapes the owners above come in: KRS numbers, TERYT codes and
+   * the Treasury's flag. A founder holds no shares and the register never
+   * names one, so the pipelines carry them from a list made by hand
+   * (`PUBLIC_FOUNDERS`). Drawn as `owns` edges marked `founder`; see
+   * `Edge.founder`. */
+  founders: z.array(z.string()).optional(),
+  founder_teryts: z.array(z.string()).optional(),
+  founder_skarb_panstwa: z.boolean().optional(),
   /** Whether the public sector owns the company, as far as KRS shows — not
    * whether it is publicly traded. Only `true` is an assertion, see
    * `Company.isPublic`. */
@@ -105,6 +114,9 @@ export type CompanyRequest = {
   owners?: string[];
   owner_teryts?: string[];
   owner_skarb_panstwa?: boolean;
+  founders?: string[];
+  founder_teryts?: string[];
+  founder_skarb_panstwa?: boolean;
   teryt?: string;
   activity?: string[];
   categories?: string[];

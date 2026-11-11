@@ -194,7 +194,8 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      label: edge.name ?? edgeLabel[edge.type],
+      // A founder's `owns` edge says who set the body up, not who holds it.
+      label: edge.name ?? (edge.founder ? "fundator" : edgeLabel[edge.type]),
       type: edge.type,
       traverse: edgeTraverse[edge.type],
       content: edge.content,
@@ -209,6 +210,9 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       by_election: edge.by_election,
       start_date: edge.start_date,
       end_date: edge.end_date,
+      // Copied only where set, like nothing above: every other edge would
+      // otherwise carry `founder: undefined` into each graph response.
+      ...(edge.founder ? { founder: true } : {}),
     };
     return result;
   });

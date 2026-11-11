@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
+from scrapers.map.jst import SKARB_PANSTWA
+
 
 @dataclass(frozen=True)
 class Source:
@@ -28,6 +30,36 @@ class Owner:
     #: the `udziałowcy` of the company's Wikipedia article, which `Companies`
     #: falls back to only where the register names no owner at all.
     source: Literal["wiki"] | None = None
+
+
+def split_owners(entries: object) -> tuple[list[str], list[str], bool]:
+    """Owners as the ingest takes them: KRS numbers, TERYT codes, the Treasury.
+
+    A company by its KRS number, a gmina, powiat or województwo by the TERYT
+    code its name resolved to, and the Treasury, which rides in on `teryt` as
+    `SKARB_PANSTWA` but is no territory, as a flag the ingest resolves to the
+    site's own „Skarb Państwa” node. Read off an output, so the list may come
+    back as an array and its entries as dicts.
+    """
+    krss: list[str] = []
+    teryts: list[str] = []
+    skarb_panstwa = False
+    if hasattr(entries, "tolist"):  # a numpy array, off a frame
+        entries = entries.tolist()
+    if not isinstance(entries, list):
+        return krss, teryts, skarb_panstwa
+    for entry in entries:
+        if isinstance(entry, Owner):
+            entry = {"krs": entry.krs, "teryt": entry.teryt}
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("krs"):
+            krss.append(str(entry["krs"]).zfill(10))
+        elif entry.get("teryt") == SKARB_PANSTWA:
+            skarb_panstwa = True
+        elif entry.get("teryt"):
+            teryts.append(str(entry["teryt"]))
+    return krss, teryts, skarb_panstwa
 
 
 #: The commercial company forms, spelled out, as a name in the register ends
@@ -215,6 +247,16 @@ class Company:
     sources: list[Source] = field(default_factory=list)
     children: list[str] = field(default_factory=list)
     parents: list[Owner] = field(default_factory=list)
+    #: Who set the foundation or association up, where a public body did - see
+    #: `scrapers.krs.researched_owners.PUBLIC_FOUNDERS`. Kept apart from
+    #: `parents` because a founder holds no shares: nothing that reads the
+    #: ownership graph (the flag's propagation, the children lists, the
+    #: Wikipedia fallback for a company with no owner) should take it for one.
+    #: The site still lists it under „Właściciele”, labelled as the founder.
+    #: Not `founders`: a company sent straight from `Companies` carries its own
+    #: fields to the ingest, where `founders` is the payload's list of KRS
+    #: numbers.
+    founded_by: list[Owner] = field(default_factory=list)
     is_public: bool = False
     #: Which kind of organ supervises the company, normalised - see
     #: `scrapers.krs.organs.SUPERVISION_KINDS`. None is "no odpis was read

@@ -43,6 +43,9 @@ export type EdgeNode = {
   elected?: boolean;
   term?: string;
   by_election?: boolean;
+  /** An `owns` edge from whoever set the other end up, not from a shareholder.
+   * See `Edge.founder`. */
+  founder?: boolean;
 };
 
 /** The row's other end, where that end is a company at all.

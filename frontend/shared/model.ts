@@ -221,6 +221,12 @@ export interface Edge extends PageBase<EdgeType> {
   elected?: boolean;
   term?: string;
   by_election?: boolean;
+  /** On an `owns` edge: the source set the target up rather than holding
+   * shares in it. A foundation or an association has no shareholders, so its
+   * founder is who stands behind it; the company page lists it under
+   * „Właściciele” and says it is the founder. Written by the company ingest
+   * from the pipelines' list of public founders. */
+  founder?: boolean;
 }
 
 export type ElectionPosition =
