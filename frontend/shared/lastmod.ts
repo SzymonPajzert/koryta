@@ -24,15 +24,15 @@ import { normalizeUpdateTime } from "./revisions";
 
 /** Node types whose entity page renders a page of its own.
  *
- * `region` is deliberately absent. A region has no page of its own:
- * shared/slugs.ts `generateNodeUrl` sends every one to
- * `/eksploruj/tabela?teryt=...`, and app/pages/[seoType]/[slug].vue then
- * redirects there on the server - so listing them advertised URLs that exist
- * only to bounce a crawler into the heaviest response on the site, and one
- * robots.txt blocks besides. None of them could ever rank, because the page
- * they land on renders no markup. The one region with a real page, teryt1261,
- * is reachable from the homepage and from the explore table, so dropping the
- * type here does not hide it.
+ * `region` is deliberately absent, and since 2026-11-11 no longer because it
+ * has no page: every region renders one, with its election lists. It is
+ * absent because most of them would be thin, and whether to list them is a
+ * decision of its own (task decide-whether-region-pages-merges). On the
+ * 2026-11-11 export 398 of the 1,389 regions held a candidacy, and the 993
+ * gminas held 4 between them: the night files a gmina's runs under its
+ * powiat. Until 2026-11-11 every region but teryt1261 was a redirect to
+ * `/eksploruj/tabela?teryt=...`, a page robots.txt blocks, which is why none
+ * was listed then.
  *
  * `place` was absent for the same reason until 2026-08-26, when companies got
  * their page back, and then stayed absent because putting the URLs in was a

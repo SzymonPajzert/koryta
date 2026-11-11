@@ -129,8 +129,9 @@ export const GOALS = {
   // What a logged out reader is shown where a page is not theirs to read yet,
   // and the way to sign in for it. One set of goals for every such surface,
   // `surface` and `kind` saying which: an unpublished person's page
-  // (`osoba` / `profil`) and the parties of the unpublished people on a
-  // company's board (`instytucja` / `partia`); the planned lock on hidden
+  // (`osoba` / `profil`), the parties of the unpublished people on a
+  // company's board (`instytucja` / `partia`) and on a region's election
+  // lists (`region` / `partia`); the planned lock on hidden
   // candidacies (task login-teaser-hidden-politics) is meant to send these too -
   // a property-filtered goal tells them apart on the dashboard. Read in order:
   // search:pick -> teaser:shown -> teaser:click -> login:success, and against
@@ -157,7 +158,7 @@ export const GOALS = {
   // --- Signing in ---------------------------------------------------------
   "login:success": {
     description:
-      "Somebody signed in or created an account, on /login or in the sign-in dialog. `mode` is `login` or `signup`. `from` is the reason the link to /login carried (`powod`), from the closed list in `LOGIN_REASONS` - `profil-osoby` is a teaser on an unpublished person's page, `partie-w-skladzie` the hidden parties on a company's board - or `inne`. A session restored on page load does not count.",
+      "Somebody signed in or created an account, on /login or in the sign-in dialog. `mode` is `login` or `signup`. `from` is the reason the link to /login carried (`powod`), from the closed list in `LOGIN_REASONS` - `profil-osoby` is a teaser on an unpublished person's page, `partie-w-skladzie` the hidden parties on a company's board, `partie-na-listach` those on a region's election lists - or `inne`. A session restored on page load does not count.",
     props: ["mode", "from"],
   },
 
@@ -412,7 +413,7 @@ export function resultBucket(count: number): string {
 // --- teasers and signing in ----------------------------------------------
 
 /** Where a teaser is, for the `teaser:*` goals' `surface`. */
-export const TEASER_SURFACES = ["osoba", "instytucja"] as const;
+export const TEASER_SURFACES = ["osoba", "instytucja", "region"] as const;
 export type TeaserSurface = (typeof TEASER_SURFACES)[number];
 
 /** What a teaser stands in for, for their `kind`: `profil` is the whole page
@@ -447,7 +448,11 @@ export function teaserDestination(path: string): string {
  * reports them. Closed, because the parameter is in the url and anybody can
  * type anything into it; a reason that is not here is reported as `inne`.
  * Add one here with the link that sends it. */
-export const LOGIN_REASONS = ["profil-osoby", "partie-w-skladzie"] as const;
+export const LOGIN_REASONS = [
+  "profil-osoby",
+  "partie-w-skladzie",
+  "partie-na-listach",
+] as const;
 export type LoginReason = (typeof LOGIN_REASONS)[number];
 
 /** `powod` off a /login url, as `login:success`'s `from`. */

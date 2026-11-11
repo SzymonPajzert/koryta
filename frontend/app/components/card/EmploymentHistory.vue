@@ -467,12 +467,26 @@ const emit = defineEmits<{
 }>();
 
 /** Where a row leads: the page at its far end, unless that page is a draft
- * this list was asked not to link to. */
+ * this list was asked not to link to.
+ *
+ * A run leads to the region's page with the person named in the url, so the
+ * page opens on their runs there and the lists they stood on (Szymon,
+ * 2026-11-11). The person is the edge's source: a candidacy runs from them to
+ * the place. */
 function rowLink(edge: EdgeNode): string | undefined {
   if (props.unlinkDrafts && edge.richNode.visibility === false) {
     return undefined;
   }
-  return nodeLinkUrl(edge.richNode);
+  const url = nodeLinkUrl(edge.richNode);
+  if (
+    edge.type === "election" &&
+    edge.richNode.type === "region" &&
+    edge.source &&
+    url.startsWith("/region/")
+  ) {
+    return `${url}?osoba=${encodeURIComponent(edge.source)}`;
+  }
+  return url;
 }
 
 /** Whether the row's „Opublikuj" is offered, for this list's subject. */

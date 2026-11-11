@@ -74,10 +74,25 @@
       </AdminPageHead>
 
       <!-- The city council and the regional assembly: two sections, one
-           section gap apart. -->
+           section gap apart. A reader who came from somebody's run in Kraków
+           meets that person above them, as on any region's page, and the
+           city's lists under them. -->
       <div class="k-sections">
+        <RegionPersonRuns
+          v-if="personHere && personRuns.length"
+          :person="personHere"
+          :runs="personRuns"
+          :kind="kindOfRegion"
+          :wariant="wariant"
+        />
         <RegionPeopleStatistics teryt="1261" />
         <RegionPeopleStatistics teryt="12" />
+        <RegionElectionLists
+          :region-id="node"
+          :groups="electionGroups"
+          :highlight-id="osoba"
+          :open-keys="openListKeys"
+        />
       </div>
     </template>
     <!-- The page sits on the page: no card around it, so the name, the
@@ -94,11 +109,35 @@
         >.
       </v-alert>
 
+      <!-- A region opens with the admin pages' head (system.md, 2026-10-24:
+           „the region page use[s] the admin pages' head”): the name at the
+           page top, where it sits on it in the trail of the places above, and
+           „Eksploruj region” beside it. Szymon, board round region-lists-r1,
+           on the card head: "A bit too much of the negative space here." -->
+      <AdminPageHead
+        v-if="entity?.type === 'region' && glowa !== 'karta'"
+        :title="regionTitle"
+      >
+        <template v-if="regionAncestors.length || trailKind" #meta>
+          <RegionTrail :ancestors="regionAncestors" :kind-label="trailKind" />
+        </template>
+        <template #actions>
+          <v-btn
+            variant="tonal"
+            :prepend-icon="mdiFormatListBulleted"
+            :to="`/eksploruj/tabela?teryt=${regionTeryt}`"
+          >
+            Eksploruj region
+          </v-btn>
+        </template>
+      </AdminPageHead>
       <!-- The header, as one block: a region's „Eksploruj region” belongs to
            the name under it and stays 16px above it, where on its own it would
            stand a section's gap away. A wrapper rather than a class on the
-           card, which renders one root per type and so takes none. -->
-      <div>
+           card, which renders one root per type and so takes none.
+           TEMP(wariant) glowa=karta: a region's old card head, for the board
+           round's comparison. -->
+      <div v-else>
         <div v-if="entity?.type === 'region'" class="d-flex mb-4">
           <v-btn
             variant="tonal"
@@ -114,6 +153,7 @@
           :entity="entity"
           :type="type"
           :extra-locations="searchLocations"
+          :ancestors="regionAncestors"
           @published="refreshNode()"
           @voted="emit('voted')"
         />
@@ -126,7 +166,41 @@
            `v-else` below, which binds to the person branch rather than to
            the chain of them. -->
       <template v-if="entity?.type === 'region'">
+        <!-- Who the reader came from, when they came from a run on
+             somebody's page: that person's runs here, each with the way to
+             the list it was on. First, because it is what the click was
+             for. -->
+        <RegionPersonRuns
+          v-if="personHere && personRuns.length"
+          :person="personHere"
+          :runs="personRuns"
+          :kind="kindOfRegion"
+          :wariant="wariant"
+        />
+        <!-- Who governs the place: where Szymon pinned it on the board,
+             above the lists (region-lists-r1). -->
+        <RegionAuthorities
+          v-if="authorities"
+          :authorities="authorities"
+          :pointer-target="pointerTarget"
+          :highlight-id="osoba"
+          :wariant="wladze"
+          :composition="composition"
+        />
+        <!-- Before the institutions: the people of a region are what its
+             page has to say about it, as a person's history lists the
+             people first. -->
+        <RegionElectionLists
+          :region-id="node"
+          :groups="electionGroups"
+          :highlight-id="osoba"
+          :open-keys="openListKeys"
+        />
+        <!-- The region above is the line under the name now (Szymon,
+             region-lists-r1). The list stays for an admin, whose removal
+             and „Opublikuj” of that relation live on its rows. -->
         <CardConnectionList
+          v-if="canRemoveRelations"
           :edges="owners"
           title="Część regionu"
           :can-remove="canRemoveRelations"
@@ -479,6 +553,20 @@ import CommentsSection from "@/components/comment/CommentsSection.vue";
 import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
 import type { edgeTypeExt } from "~/composables/useEdgeTypes";
 import type { PersonTeaser } from "~~/shared/personTeaser";
+import {
+  groupElectionLists,
+  personRunsIn,
+  regionKind,
+  type ListMember,
+} from "~~/shared/electionLists";
+import {
+  useRegionComposition,
+  useRegionElectionRuns,
+} from "~/composables/electionLists";
+import { regionAuthorities } from "~~/shared/regionAuthorities";
+import { nodeLinkUrl } from "~~/shared/slugs";
+import { wojewodztwoLabel } from "~~/shared/teryt";
+import { useRegionAncestors } from "~/composables/regionAncestors";
 import { useDisplay } from "vuetify";
 
 definePageMeta({
@@ -613,6 +701,32 @@ const regionTeryt = computed(() => {
   return undefined;
 });
 
+/** Who stood for election in this region, for its lists and for the box at
+ * the top. Asked at all only on a region's page; `type` never changes for the
+ * life of the component (see `successions` below). Started before the graph
+ * request and awaited after it, so the two run side by side and the page
+ * opens with the box in it: arriving from a run on somebody's page is a
+ * navigation inside the site, and the box is what the click was for - drawn
+ * a moment late, it pushed the whole page down under the reader. */
+const electionRuns =
+  type === "region" ? useRegionElectionRuns(node) : undefined;
+
+/** The regions above this one, for the line under its name. Started here
+ * and awaited with the graph below, so the line is in the page as it opens
+ * rather than pushing the page down a moment later. */
+const regionAncestorsData =
+  type === "region" && node !== "teryt1261"
+    ? useRegionAncestors(regionTeryt)
+    : undefined;
+const regionAncestors = computed(() => regionAncestorsData?.data.value ?? []);
+/** PKW's whole 2024 result, for the preview of „Władze” (TEMP(wariant)
+ * wladze=c). */
+const compositionData =
+  type === "region"
+    ? useRegionComposition(node, () => route.query.wladze === "c")
+    : undefined;
+const composition = computed(() => compositionData?.data.value ?? null);
+
 // Calculate edges and relationships
 const {
   sources,
@@ -620,6 +734,7 @@ const {
   referencedIn,
   refresh: refreshEdges,
 } = await useEdges(node);
+await Promise.all([electionRuns, regionAncestorsData, compositionData]);
 const edges = computed(() => [...sources.value, ...targets.value]);
 
 /** The relations a page that is not a person's lists as cards. */
@@ -698,6 +813,128 @@ const subregions = computed(() => {
     (e) => e.type === "owns" && e.richNode.type === "region",
   );
 });
+const electionGroups = computed(() =>
+  groupElectionLists(electionRuns?.data.value?.runs ?? []),
+);
+
+/** The person whose run the reader followed here: `?osoba=` on the link from
+ * a run on their page (card/EmploymentHistory.vue). */
+const osoba = computed(() =>
+  typeof route.query.osoba === "string" ? route.query.osoba : undefined,
+);
+const personRuns = computed(() =>
+  osoba.value
+    ? personRunsIn(
+        osoba.value,
+        electionRuns?.data.value?.runs ?? [],
+        electionGroups.value,
+      )
+    : [],
+);
+/** Who they are, as the lists name them: undefined where they stood for
+ * nothing here this reader may see, and then there is no box. */
+const personHere = computed<ListMember | undefined>(() => {
+  const run = electionRuns?.data.value?.runs?.find(
+    (each) => each.personId === osoba.value,
+  );
+  return run
+    ? {
+        personId: run.personId,
+        personName: run.personName,
+        parties: run.parties,
+        ...(run.partyHidden ? { partyHidden: true } : {}),
+        published: run.published,
+        offices: [],
+        elected: false,
+      }
+    : undefined;
+});
+
+/** TEMP(wariant): the two looks on the board round - a: the person's lists
+ * open in the box, b: the box leads down to them, open in „Listy wyborcze”. */
+const wariant = computed<"a" | "b">(() =>
+  route.query.wariant === "b" ? "b" : "a",
+);
+/** In b, the newest of the person's lists, open where the reader lands; the
+ * box's links open the others. All of them open at once was Adam Struzik's
+ * nine lists in Województwo mazowieckie, 14,600 px of page. */
+const openListKeys = computed(() => {
+  if (wariant.value !== "b") return [];
+  const newest = personRuns.value.find((run) => run.list)?.list;
+  return newest ? [newest.key] : [];
+});
+
+const kindOfRegion = computed(() => regionKind(regionTeryt.value));
+
+/** Who governs the place, off the runs above (shared/regionAuthorities.ts). */
+const authorities = computed(() =>
+  type === "region" && node !== "teryt1261"
+    ? regionAuthorities(
+        electionRuns?.data.value?.runs ?? [],
+        regionTeryt.value,
+        electionRuns?.data.value?.hiddenElected,
+      )
+    : null,
+);
+
+/** Where a place that shows nobody sends the reader: its powiat's lists (a
+ * gmina, whose runs the night files there - task
+ * check-gmina-runs-sent-at-powiat-depth), its city's government (a city's
+ * gmina twin) or its city's lists (a Warsaw district). Built from the TERYT
+ * code, so a failed read of the name still leaves the way there. */
+const pointerTarget = computed(() => {
+  const pointer = authorities.value?.pointer;
+  const code = regionTeryt.value;
+  if (!pointer || !code) return undefined;
+  const id = `teryt${code.slice(0, 4)}`;
+  const anchor =
+    pointer === "miasto" && authorities.value?.kind !== "dzielnica"
+      ? id === "teryt1261"
+        ? ""
+        : "#wladze"
+      : "#listy-wyborcze";
+  const above = regionAncestors.value.find((each) => each.id === id);
+  return above
+    ? { name: above.name, url: `${above.url}${anchor}` }
+    : { url: `${nodeLinkUrl({ id, type: "region", name: "" })}${anchor}` };
+});
+
+/** TEMP(wariant) wladze: the board round's looks of „Władze” - a, a row each
+ * with the person's parties; b, names under their committee; c, a with
+ * PKW's whole result (preview). */
+const wladze = computed<"a" | "b" | "c">(() =>
+  route.query.wladze === "b" || route.query.wladze === "c"
+    ? route.query.wladze
+    : "a",
+);
+/** TEMP(wariant) glowa=karta: the old card head, for the comparison crop. */
+const glowa = computed(() => route.query.glowa);
+/** TEMP(wariant) rodzaj=1: the trail ends on the kind of unit. */
+const trailKind = computed(() => {
+  if (!route.query.rodzaj || !regionTeryt.value) return undefined;
+  const code = regionTeryt.value;
+  if (code.length === 4) {
+    return Number(code.slice(2)) >= 61
+      ? "miasto na prawach powiatu"
+      : undefined;
+  }
+  return (
+    {
+      "1": "gmina miejska",
+      "2": "gmina wiejska",
+      "3": "gmina miejsko-wiejska",
+      "8": "dzielnica Warszawy",
+    } as Record<string, string>
+  )[code[6] ?? ""];
+});
+
+/** The region's name as its head and tab say it: a województwo stored by
+ * its bare adjective („łódzkie”) reads „Województwo łódzkie”. */
+const regionTitle = computed(() => {
+  const name = entity.value?.name ?? "";
+  return regionTeryt.value?.length === 2 ? wojewodztwoLabel(name) : name;
+});
+
 /** The companies a region seats or holds shares in, once each: a gmina that
  * does both has two edges to the company, and the row is its `owns` one. See
  * `onePerNode`. */
@@ -726,6 +963,7 @@ const seoEntity = computed(() =>
 // page is: the reader is looking at a draft, not at what the site publishes.
 const seoTitle = computed(
   () =>
+    (seoEntity.value?.type === "region" ? regionTitle.value : undefined) ??
     seoEntity.value?.name ??
     (teaser.value
       ? `${teaser.value.name} - profil niezweryfikowany`

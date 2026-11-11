@@ -284,3 +284,40 @@
 .v-application .k-sections > * + * {
   margin-top: var(--k-section-gap);
 }
+
+/* ---- a ruled box of rows: the region page's lists and its councils ----
+
+   One white box on the hairline, a hairline between the rows, edge to edge
+   on a phone (with `k-bleed-xs`), as a person's history is drawn. Shared by
+   region/ElectionLists.vue and region/Authorities.vue, which each draw
+   their own rows inside it; the „Pokaż wszystkie” button under the rows is
+   the box's own. */
+.lists-box {
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-card);
+  overflow: hidden;
+}
+
+.lists-box > * + .list-more {
+  border-top: 1px solid var(--k-line);
+}
+
+.list-more {
+  color: rgba(var(--v-theme-on-surface), var(--k-quiet-ink));
+  font-size: var(--k-ui-size);
+  font-weight: 600;
+  padding: 12px 16px;
+  text-align: left;
+  width: 100%;
+}
+
+.list-more:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-ink-neutral));
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .list-more:hover {
+    text-decoration: underline;
+  }
+}

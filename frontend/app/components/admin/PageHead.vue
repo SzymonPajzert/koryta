@@ -11,6 +11,12 @@
             <slot name="info">{{ info }}</slot>
           </InfoBubble>
         </div>
+        <!-- A line about the page's subject, under its name: where a region
+             sits. Only when a page fills it, so every other head is as it
+             was. -->
+        <div v-if="$slots.meta" class="apage-head__meta">
+          <slot name="meta" />
+        </div>
         <p v-if="lead || $slots.lead" class="k-page-lead apage-head__lead">
           <slot name="lead">{{ lead }}</slot>
         </p>
@@ -42,7 +48,8 @@ import InfoBubble from "../InfoBubble.vue";
  * that line for a small tool that must not cost a phone a line of its own
  * (the notes queue's „Cofnij”); `info` - the bubble's text when it is more
  * than a string; `lead` - when the sentence holds a link; `actions` - the
- * page's buttons, which wrap under the title on a phone. */
+ * page's buttons, which wrap under the title on a phone; `meta` - a line
+ * about the subject under the title, the region page's trail. */
 defineProps<{
   title: string;
   /** The one sentence under the title. */
@@ -110,6 +117,11 @@ defineProps<{
 
 .apage-head__lead {
   margin: 8px 0 0;
+}
+
+/* 8px under the title, as the facts line stands under a person's name. */
+.apage-head__meta {
+  margin-top: 8px;
 }
 
 /* The buttons centre on the title's first line, 44px at 40/1.1. */

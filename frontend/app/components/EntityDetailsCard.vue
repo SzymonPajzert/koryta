@@ -211,8 +211,12 @@
         {{ region?.name }}
       </h1>
     </v-card-title>
-    <v-card-text class="px-0">
-      {{ region?.content }}
+    <!-- Only when there is something to say: the empty text block was 32px
+         of blank under the name of nearly every region (Szymon,
+         region-lists-r1: "a bit too much of the negative space here"). -->
+    <RegionTrail v-if="ancestors?.length" :ancestors="ancestors" />
+    <v-card-text v-if="region?.content" class="px-0">
+      {{ region.content }}
     </v-card-text>
   </v-card>
 </template>
@@ -242,8 +246,11 @@ const props = withDefaults(
      * table builds those, from what it fetches - so the page derives both
      * from its edges and hands them down. */
     extraLocations?: string[];
+    /** TEMP(wariant) glowa=karta: a region's parents, widest first, for the
+     * line under its name in the old card head the board compares with. */
+    ancestors?: { name: string; url: string }[];
   }>(),
-  { extraLocations: undefined },
+  { extraLocations: undefined, ancestors: undefined },
 );
 
 /** The page went live from the badge above. The card holds no data of its own

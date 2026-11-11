@@ -119,13 +119,23 @@ export function generateNodeUrl(node: Node): string | undefined {
     case "place":
       return generateEntityUrl(node.type, node.id, node.name);
 
-    case "region": {
+    // A region has a page of its own again: its election lists, the
+    // institutions seated in it and the regions inside it. Until 2026-11-11
+    // every region but Kraków answered `/eksploruj/tabela?teryt=…`, so the url
+    // `/region/<slug>-teryt…` only ever 302ed, into a page robots.txt
+    // disallows and that renders nothing on the server - and Google ranked
+    // the redirects anyway (`/region/powiat-polkowicki-teryt0216`, 76
+    // impressions at position 4.43 in the three months to 2026-09-10).
+    // Szymon asked for the pages on 2026-11-11, so that a run on somebody's
+    // page leads to the place they stood in and the list they stood on.
+    //
+    // Kraków keeps the url its hand-drawn statistics have always had, which
+    // the home page and outside links point at.
+    case "region":
       if (node.id == "teryt1261") {
         return "/region/krakow-teryt1261";
       }
-      const teryt = node.id.replace("teryt", "");
-      return `/eksploruj/tabela?teryt=${teryt}`;
-    }
+      return generateEntityUrl(node.type, node.id, node.name);
 
     // A type the front end does not know about yet keeps whatever url it was
     // reached by, rather than being sent somewhere wrong.
