@@ -14,6 +14,7 @@ from entities.person import KRS as KrsPerson
 from entities.person import PERSON_FEED
 from scrapers.krs.coverage import parse_person_connections_url
 from scrapers.krs.data import (
+    PUBLIC_FOUNDER,
     REGON_PUBLIC_IDENTITY,
     REGON_PUBLIC_OWNERSHIP,
     TREASURY_STAKE,
@@ -27,7 +28,11 @@ from scrapers.krs.data import (
 from scrapers.krs.graph import PARENT_RELATION, QueryRelation
 from scrapers.krs.organs import supervision_kind
 from scrapers.krs.public_bodies import public_body
-from scrapers.krs.researched_owners import FUND_HOLDERS, RESEARCHED_OWNERS
+from scrapers.krs.researched_owners import (
+    FUND_HOLDERS,
+    PUBLIC_FOUNDERS,
+    RESEARCHED_OWNERS,
+)
 from scrapers.map.jst import AMBIGUOUS, SKARB_PANSTWA, JstIndex
 from scrapers.map.postal_codes import PostalCodes
 from scrapers.map.teryt import Jst, Teryt, normalize_unit_name
@@ -761,6 +766,27 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                     company.parents.append(Owner(krs=None, teryt=resolved))
         return marked
 
+    def add_public_founders(self) -> int:
+        """Mark public the foundations and associations a public body set up.
+
+        `PUBLIC_FOUNDERS` names the founders, which the register never does. A
+        founder is not a shareholder, so no ownership edge is drawn to it; the
+        body is marked and carries the flag down to what it owns itself. A body
+        the crawl does not describe is left out. Returns how many it marked.
+        """
+        marked = 0
+        for krs in PUBLIC_FOUNDERS:
+            company = self.companies.get(krs)
+            if company is None:
+                continue
+            if not company.is_public:
+                self.company_sources[krs] = self.company_sources.get(krs, set()) | {
+                    Source("hardcoded", reason=PUBLIC_FOUNDER)
+                }
+            company.is_public = True
+            marked += 1
+        return marked
+
     def process_api_krs_blob(
         self, blob_name: str, data, postal_codes: DataFrame
     ) -> None:
@@ -943,6 +969,8 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         print(f"Owners by REGON: {joined} holdings joined")
         marked = self.add_researched_owners()
         print(f"Researched owners: {marked} of {len(RESEARCHED_OWNERS)} companies")
+        founded = self.add_public_founders()
+        print(f"Public founders: {founded} of {len(PUBLIC_FOUNDERS)} bodies")
 
         public_krss = self.compute_public_krss(hardcoded)
         parent_to_children = self.build_parent_to_children()
