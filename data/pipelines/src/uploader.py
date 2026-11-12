@@ -187,6 +187,26 @@ def refusal(status: int, text: str) -> str:
     return f"{status} {' '.join(text.split())[:ERROR_TEXT_CHARS]}"
 
 
+def company_answer(krs: str, resp: requests.Response, unsaid: str) -> CompanyResult:
+    """What one answer of the company ingest says the site did with a company:
+    its `company`, or "failed" for a refusal. `unsaid` is the outcome of an
+    answer that took the company without saying what it did, as a site
+    deployed before the field answered."""
+    if resp.status_code not in [200, 201]:
+        return CompanyResult(
+            krs,
+            "failed",
+            status=resp.status_code,
+            error=f"firma {krs}: {refusal(resp.status_code, resp.text)}",
+        )
+    outcome = json_object(resp).get("company")
+    return CompanyResult(
+        krs,
+        outcome if outcome in COMPANY_OUTCOMES else unsaid,
+        status=resp.status_code,
+    )
+
+
 def one_line(error: BaseException) -> str:
     if isinstance(error, IngestRefused):
         return refusal(error.status, error.text)
@@ -978,21 +998,11 @@ class PersonUploader(CompanyUploader):
             resp = self.submit_company(krs, None, fail=False)
         except Exception as error:
             return CompanyResult(krs, "failed", error=f"firma {krs}: {one_line(error)}")
-        if resp.status_code not in [200, 201]:
-            return CompanyResult(
-                krs,
-                "failed",
-                status=resp.status_code,
-                error=f"firma {krs}: {refusal(resp.status_code, resp.text)}",
-            )
-        outcome = json_object(resp).get("company")
-        return CompanyResult(
-            krs,
-            outcome if outcome in COMPANY_OUTCOMES else "created",
+        result = company_answer(krs, resp, "created")
+        if result.outcome != "failed":
             # Looked up, and named for display, on the way: `submit_company`.
-            name=self.company_payloads.get(krs, {}).get("name"),
-            status=resp.status_code,
-        )
+            result.name = self.company_payloads.get(krs, {}).get("name")
+        return result
 
     def answered(self, resp: requests.Response, result: PersonResult) -> PersonResult:
         """`result`, with the candidacies `resp` - the last answer about the
