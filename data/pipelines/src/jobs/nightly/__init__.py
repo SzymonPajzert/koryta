@@ -35,9 +35,10 @@ The steps, in order (`STEPS`):
                 --odpis-max in all
     krs_paid    koryta_scrape_krs_paid --scope fallback: rejestr.io for what the
                 free sources cannot give - the people somebody marked
-                interesting, and the companies whose odpis did not come - at
-                most --paid-max-calls a day; before the reprocess, so what it
-                buys reaches tonight's people, who send those pages first
+                interesting, by rejestr.io's own count of their connections,
+                and the companies whose odpis did not come - at most
+                --paid-max-calls a day; before the reprocess, so what it buys
+                reaches tonight's people, who send those pages first
     rebuild_held
                 `koryta <Name> --refresh <Name>`, one at a time, for each
                 pipeline the reprocess holds whose code has changed since

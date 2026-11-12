@@ -1,20 +1,42 @@
 """What the paid job buys, in which order, and how much of it today.
 
 Pure: it is handed the queue `ScrapeRejestrIO` built, the companies the free
-odpis failed for, the public ones, the names of what the crawl bucket already
-holds and the cap, and decides. Nothing here makes a request.
+odpis failed for, the public ones, rejestr.io's own count of each person's
+connections, the names of what the crawl bucket already holds and the cap, and
+decides. Nothing here makes a request.
 """
 
 import typing
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Mapping
+from dataclasses import replace
 
-from scrapers.krs.scrape import RejestrIOQuery
+from scrapers.krs.person_counts import PersonCount
+from scrapers.krs.scrape import (
+    REASON_HARDCODED,
+    REASON_INTERESTING_PERSON,
+    QueryType,
+    RejestrIOQuery,
+)
 
 #: Everything the queue owes rejestr.io, as a hand run has always bought it.
 SCOPE_ALL = "all"
 #: What the night buys: only what the free sources cannot give.
 SCOPE_FALLBACK = "fallback"
 SCOPES = (SCOPE_ALL, SCOPE_FALLBACK)
+
+#: The fewest connections, current and past, rejestr.io must count for a
+#: person before their feed is bought, unless somebody named them (`named`).
+#: Of the 599 people bought from 2026-10-06 to 11-06, the 47 counted under 3
+#: cost 4.70 PLN and led to no new public company; the rest kept all 57 found
+#: and all 154 people of interest, at 92% of the spend. Szymon's decision of
+#: 11-12 (decide-how-the-paid-night-picks-person-feeds).
+FLOOR = 3
+
+#: Why a person is bought whatever rejestr.io counts: somebody asked for them
+#: by name - a reader's vote, or the hardcoded list. A page put live is not
+#: such an ask: about 120 a day went live in early November, more than the cap
+#: buys, and those are what the count ranks.
+NAMED = frozenset({REASON_INTERESTING_PERSON, REASON_HARDCODED})
 
 
 def calls(queries: Iterable[RejestrIOQuery]) -> int:
@@ -50,22 +72,112 @@ def fallback(
     ]
 
 
+def named(query: RejestrIOQuery) -> bool:
+    """Whether somebody asked for this person by name (`NAMED`)."""
+    return not NAMED.isdisjoint(query.reasons)
+
+
+def counted(
+    query: RejestrIOQuery, counts: Mapping[str, PersonCount]
+) -> PersonCount | None:
+    """rejestr.io's count for a person nobody named, None for a company,
+    a named person or somebody no company feed we hold lists."""
+    if query.person is None or named(query):
+        return None
+    return counts.get(str(query.person.id))
+
+
+def above_the_floor(
+    queries: Iterable[RejestrIOQuery], counts: Mapping[str, PersonCount]
+) -> tuple[list[RejestrIOQuery], list[RejestrIOQuery]]:
+    """The queries less the people counted under `FLOOR`, and those people.
+
+    Nobody is left out for good: the queue owes them still. The count is as
+    old as the newest company feed that lists the person - the median in the
+    queue of 2026-11-06 was 78 days - and a newer one counts them again. The
+    night buys few company feeds now, only those whose free odpis failed, so
+    a newer one mostly comes from a hand run; a vote buys them whatever the
+    count says.
+    """
+    kept: list[RejestrIOQuery] = []
+    under: list[RejestrIOQuery] = []
+    for query in queries:
+        count = counted(query, counts)
+        (under if count is not None and count.stated < FLOOR else kept).append(query)
+    return kept, under
+
+
+def counted_empty(query_type: QueryType, count: PersonCount) -> bool:
+    """Whether the count says this feed of the person would list nothing: the
+    current connections when it counts none current, the past ones when none
+    past."""
+    if query_type == QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_AKTUALNE:
+        return count.aktualne == 0
+    if query_type == QueryType.REJESTRIO_OSOBY_KRS_POWIAZANIA_HISTORYCZNE:
+        return count.przeszle == 0
+    return False
+
+
+def without_empty_feeds(
+    queries: Iterable[RejestrIOQuery], counts: Mapping[str, PersonCount]
+) -> tuple[list[RejestrIOQuery], list[RejestrIOQuery]]:
+    """The queries less the person feeds the count says are empty, and those
+    feeds, as queries of their own.
+
+    rejestr.io bills an empty answer as any other: of the 79 such calls bought
+    from 2026-10-06 to 11-06, 72 came back with nothing. A feed left here is
+    owed still, and comes back with a count that says otherwise, as a person
+    under the floor does (`above_the_floor`). A named person gets both, as
+    before.
+    """
+    kept: list[RejestrIOQuery] = []
+    empty: list[RejestrIOQuery] = []
+    for query in queries:
+        count = counted(query, counts)
+        if count is None:
+            kept.append(query)
+            continue
+        feeds = [q for q in query.queries if counted_empty(q, count)]
+        if not feeds:
+            kept.append(query)
+            continue
+        empty.append(replace(query, queries=feeds))
+        rest = [q for q in query.queries if q not in feeds]
+        if rest:
+            kept.append(replace(query, queries=rest))
+    return kept, empty
+
+
 def order(
-    queries: Iterable[RejestrIOQuery], public: Collection[str]
+    queries: Iterable[RejestrIOQuery],
+    public: Collection[str],
+    counts: Mapping[str, PersonCount] | None = None,
 ) -> list[RejestrIOQuery]:
     """People first, then the companies the public owns, then the rest.
 
-    People first: each was asked for by somebody, and there are a few a day -
-    but for the nights after `PUBLISHED_SINCE` moves back: 2026-07-11 queued
-    218 people at once, nine nights of a 50-call cap. Then public companies,
-    the ones a page is likeliest to show - the order the odpis job asks the
-    graph in. The queue's own order stands within each.
-    """
+    People first: each was asked for by somebody. The ones somebody named
+    (`named`) go first, then the rest by rejestr.io's own count of their
+    connections (`RejestrIOPersonCounts`), highest first: the count is what a
+    feed lists, and the companies it lists are what a purchase is for. Bought
+    in that order, half of 2026-10-06..11-06's spend would have found 80% of
+    the new public companies, against 53% for a random half; the queue's own
+    order is by entry id. A person no company feed we hold lists, so with no
+    count, goes before those with one: their feed is the only word on their
+    companies, and they are few - 2 of the 814 queued on 2026-11-12.
 
-    def rank(query: RejestrIOQuery) -> int:
+    Then public companies, the ones a page is likeliest to show - the order the
+    odpis job asks the graph in. The queue's own order stands within each, and
+    between people the count does not tell apart.
+    """
+    counts = counts or {}
+
+    def rank(query: RejestrIOQuery) -> tuple[int, ...]:
         if query.person is not None:
-            return 0
-        return 1 if query.krs is not None and query.krs.id in public else 2
+            if named(query):
+                return (0, 0)
+            count = counted(query, counts)
+            return (0, 1) if count is None else (0, 2, -count.stated)
+        return (1,) if query.krs is not None and query.krs.id in public else (2,)
 
     return sorted(queries, key=rank)
 

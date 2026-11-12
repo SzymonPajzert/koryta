@@ -17,6 +17,7 @@ import jobs.krs_scrape_paid as job
 from entities.company import KRS
 from entities.person import RejestrIOKey
 from scrapers.krs.odpis_attempts import FETCHED, GATEWAY
+from scrapers.krs.person_counts import COLUMNS
 from scrapers.krs.scrape import PEOPLE_QUERIES, PLN_PER_CALL, QueryType, RejestrIOQuery
 from stores.job_runs import JobRun
 from stores.rejestr import RejestrRefused, RejestrUnavailable
@@ -134,6 +135,9 @@ class Paid:
         self.policies: list = []
         self.answers: Callable[[str], object] = lambda url: '{"id": 1}'
         self.uploads: Callable[[str], bool] = lambda url: True
+        # rejestr.io's own counts, as `RejestrIOPersonCounts` stores them:
+        # nobody counted, so everybody is bought as before the counts.
+        self.counts = pd.DataFrame(columns=COLUMNS)
 
         def setup_context(*args, policy=None, **kwargs):
             self.policies.append(policy)
@@ -171,6 +175,11 @@ class Paid:
             job,
             "KrsOdpisAttempts",
             lambda: SimpleNamespace(read_or_process=lambda ctx: ATTEMPTS),
+        )
+        monkeypatch.setattr(
+            job,
+            "RejestrIOPersonCounts",
+            lambda: SimpleNamespace(read_or_process=lambda ctx: self.counts),
         )
         monkeypatch.setattr(job, "rejestr_names", lambda ctx: self.stored_names)
         monkeypatch.setattr(job, "today", lambda: TODAY)
@@ -292,10 +301,70 @@ def test_the_night_buys_the_people_and_the_companies_the_free_odpis_failed_for(
         4,
     )
     assert summary["exit_code"] == 0
-    # The odpis job's record is refolded, and PeopleMerged held at its copy.
+    # The odpis job's record is refolded, and so are rejestr.io's counts;
+    # PeopleMerged is held at its copy.
     policy = paid.policies[0]
     assert "KrsOdpisAttempts" in policy.refresh_pipelines
+    assert "RejestrIOPersonCounts" in policy.refresh_pipelines
     assert policy.exclude_refresh == {"PeopleMerged"}
+
+
+def test_the_night_buys_people_by_rejestr_ios_own_count_of_them(
+    paid, monkeypatch, capsys
+):
+    def wanted(person: str, reason: str = "published_person") -> RejestrIOQuery:
+        return RejestrIOQuery(
+            person=RejestrIOKey(person), queries=list(PEOPLE_QUERIES), reasons=[reason]
+        )
+
+    # In the queue's order, by entry id.
+    monkeypatch.setattr(
+        job,
+        "ScrapeRejestrIO",
+        lambda: Queue(
+            [
+                wanted("101"),
+                wanted("102"),
+                wanted("103"),
+                wanted("104"),
+                wanted("105"),
+                wanted("106", reason="interesting_person"),
+            ]
+        ),
+    )
+    paid.counts = pd.DataFrame(
+        {
+            "id": ["101", "102", "103", "105", "106"],
+            "aktualne": [1, 0, 3, 2, 0],
+            "aktualne_organizacje": [1, 0, 2, 1, 0],
+            "przeszle": [1, 9, 3, 2, 1],
+            "counted_on": ["2026-08-20"] * 5,
+            "krs": ["0000000001"] * 5,
+        },
+        columns=COLUMNS,
+    )
+
+    assert paid("--scope", "fallback", "--max-calls", "50") == 0
+
+    # The vote first and whole though counted 1; 104, whom no company feed
+    # lists, next; then the highest count first, 102's current connections
+    # left as counted empty; 101, counted 2, not at all.
+    assert paid.asked == [
+        *person_feed("106"),
+        *person_feed("104"),
+        person_feed("102")[1],
+        *person_feed("103"),
+        *person_feed("105"),
+    ]
+    summary = paid.summary
+    assert (summary["planned"], summary["deferred"]) == (9, 0)
+    assert (summary["under_floor"], summary["counted_empty"]) == (2, 1)
+    # Left out by the counts is not left for the next day: the run is whole.
+    assert paid.run["state"] == "succeeded"
+    assert (
+        "rejestr.io counts 5 of the queue's 6 people; under 3 connections: 1 "
+        "(2 calls); feeds counted empty: 1. Neither is bought."
+    ) in capsys.readouterr().out
 
 
 def test_the_cap_is_the_days_and_what_was_bought_today_counts(paid):
