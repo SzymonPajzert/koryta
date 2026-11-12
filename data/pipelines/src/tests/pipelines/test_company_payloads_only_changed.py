@@ -204,6 +204,65 @@ class TestTheNode:
         ]
 
 
+def snapshot_of(node_rows=None) -> SiteSnapshot:
+    return SiteSnapshot(node_rows if node_rows is not None else nodes(), edges())
+
+
+class TestARenameAndAPublicFlag:
+    """The two changes the night's company import judges on their own
+    (`jobs.company_import`): a rename, and a public company made private."""
+
+    def test_a_new_name_is_a_rename_from_the_sites_to_the_registers(self):
+        stored = company_node()["name"]
+
+        assert snapshot_of().company_rename(payload(name="PKP SKM")) == (
+            stored,
+            "PKP SKM",
+        )
+
+    @pytest.mark.parametrize(
+        "company",
+        [
+            {},  # the same name
+            {"name": "Stawy Milickie", "nameSource": "manual"},
+            {"name": None},  # nothing to replace: a name is filled in
+        ],
+    )
+    def test_no_rename_where_the_ingest_writes_none_or_replaces_nothing(self, company):
+        site = snapshot_of(nodes(company=company))
+
+        assert site.company_rename(payload()) is None
+
+    def test_no_rename_of_a_company_the_site_has_no_page_for(self):
+        assert snapshot_of().company_rename(payload(krs="0000999999")) is None
+
+    def test_the_flag_turns_where_the_payload_and_the_page_disagree(self):
+        public = snapshot_of()
+        private = snapshot_of(nodes(company={"isPublic": False}))
+
+        assert public.company_is_public_change(payload(is_public=False)) is False
+        assert private.company_is_public_change(payload(is_public=True)) is True
+
+    @pytest.mark.parametrize(
+        "company, sent",
+        [
+            ({}, True),
+            ({"isPublic": False}, False),
+            # A stored false is no field at all, and says private as well.
+            ({"isPublic": None}, False),
+            ({"isPublicSource": "manual"}, False),
+            ({}, None),  # no odpis said who owns it: the flag is left alone
+        ],
+    )
+    def test_the_flag_stays_where_the_ingest_would_leave_it(self, company, sent):
+        site = snapshot_of(nodes(company=company))
+        sending = payload(is_public=sent)
+        if sent is None:
+            del sending["is_public"]
+
+        assert site.company_is_public_change(sending) is None
+
+
 class TestTheOwners:
     def test_an_owner_the_site_has_no_edge_for_is_a_change(self):
         assert changes(payload(owners=[OWNER_KRS])) == [NEW_OWNER]

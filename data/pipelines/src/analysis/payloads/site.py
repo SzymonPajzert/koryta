@@ -1033,6 +1033,54 @@ class SiteSnapshot:
         reasons += self._seat_changes(company_id, payload)
         return reasons
 
+    def company_rename(
+        self, payload: typing.Mapping[str, typing.Any]
+    ) -> tuple[str, str] | None:
+        """The company's name as the site has it and as this payload would
+        write it, where the upload would rename the company; None where it
+        would not: the site has no page for it, or a page with no name to
+        replace, a person named it (`nameSource: "manual"`), or the payload
+        says the same.
+
+        `_company_learns`'s rule for the name, on its own, for the night's
+        company import (`jobs.company_import`), which sends the site's name in
+        place of the register's unless told to rename.
+        """
+        stored = self.company_nodes.get(str(payload.get("krs") or ""))
+        if stored is None:
+            return None
+        current = stored.get("name")
+        if not isinstance(current, str) or not current:
+            return None
+        if stored.get("nameSource") == "manual":
+            return None
+        name = payload.get("name")
+        if not isinstance(name, str) or name == current:
+            return None
+        return current, name
+
+    def company_is_public_change(
+        self, payload: typing.Mapping[str, typing.Any]
+    ) -> bool | None:
+        """The `isPublic` this payload would write over the site's, where the
+        two differ: True makes a private company public, False a public one
+        private. None where the upload would leave the flag as it is: the site
+        has no page for the company, the payload says nothing of who owns it, a
+        person decided it (`isPublicSource: "manual"`), or the two agree.
+
+        `_company_learns`'s rule for the flag, on its own. A stored `false`
+        reads as no field at all, as `field` reads it, and both say private.
+        """
+        stored = self.company_nodes.get(str(payload.get("krs") or ""))
+        if stored is None:
+            return None
+        is_public = payload.get("is_public")
+        if is_public is None or stored.get("isPublicSource") == "manual":
+            return None
+        if bool(is_public) == bool(stored.get("isPublic")):
+            return None
+        return bool(is_public)
+
     def _company_learns(
         self, stored: dict, payload: typing.Mapping[str, typing.Any]
     ) -> bool:

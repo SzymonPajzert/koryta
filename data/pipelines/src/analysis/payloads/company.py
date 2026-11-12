@@ -243,6 +243,61 @@ class CompaniesPayloads(Pipeline):
         return changed
 
     def process(self, ctx: Context):
+        payloads = self.build(ctx)
+        if self.args.only_changed:
+            payloads = self.only_changed(ctx, payloads)
+
+        # Counted and printed because the failure mode here is silence: when
+        # `Companies` dropped `parents`, every payload came out with two empty
+        # lists and the run reported nothing wrong. A zero on either of these is
+        # worth noticing - the register names a company owner for 837 of the
+        # companies on the site and a JST owner for 1,354. Counted over what is
+        # left after `--only-changed`, so the line describes what is emitted.
+        with_teryt = sum(1 for p in payloads if p.get("teryt_code"))
+        with_owners = sum(1 for p in payloads if p["owners"])
+        with_jst = sum(1 for p in payloads if p["owner_teryts"])
+        with_skarb = sum(1 for p in payloads if p["owner_skarb_panstwa"])
+        with_wikipedia = sum(1 for p in payloads if p.get("wikipedia"))
+        with_founder = sum(
+            1
+            for p in payloads
+            if p["founders"] or p["founder_teryts"] or p["founder_skarb_panstwa"]
+        )
+        print(
+            f"Emitting {len(payloads)} company payloads "
+            f"({with_teryt} with a TERYT code, {with_owners} with a company "
+            f"owner, {with_jst} with a JST owner, {with_skarb} owned by the "
+            f"Treasury, {with_founder} with a public founder, {with_wikipedia} "
+            f"with a Wikipedia article)"
+        )
+        if not payloads:
+            return pd.DataFrame(
+                columns=[
+                    "krs",
+                    "name",
+                    "activity",
+                    "categories",
+                    "supervisory_body",
+                    "is_public",
+                    "owners",
+                    "owner_teryts",
+                    "owner_skarb_panstwa",
+                    "founders",
+                    "founder_teryts",
+                    "founder_skarb_panstwa",
+                    "teryt_code",
+                    "legal_form",
+                    "supervisory_organ",
+                    "wikipedia",
+                ]
+            )
+        return pd.DataFrame.from_records(payloads)
+
+    def build(self, ctx: Context) -> list[dict]:
+        """A payload for every company the site has a page for, whatever it
+        would change: `process` before `--only-changed`. The night's company
+        import (`jobs.company_import`) calls it too, and judges what each
+        payload would write itself."""
         # TODO this should be a field and dependency
         submitted_df = KorytaCompanies(self.args.koryta_date).read_or_process(ctx)
         submitted_krs = {
@@ -321,52 +376,4 @@ class CompaniesPayloads(Pipeline):
                 payload["teryt_code"] = teryt_code.strip()
 
             payloads.append(payload)
-
-        if self.args.only_changed:
-            payloads = self.only_changed(ctx, payloads)
-
-        # Counted and printed because the failure mode here is silence: when
-        # `Companies` dropped `parents`, every payload came out with two empty
-        # lists and the run reported nothing wrong. A zero on either of these is
-        # worth noticing - the register names a company owner for 837 of the
-        # companies on the site and a JST owner for 1,354. Counted over what is
-        # left after `--only-changed`, so the line describes what is emitted.
-        with_teryt = sum(1 for p in payloads if p.get("teryt_code"))
-        with_owners = sum(1 for p in payloads if p["owners"])
-        with_jst = sum(1 for p in payloads if p["owner_teryts"])
-        with_skarb = sum(1 for p in payloads if p["owner_skarb_panstwa"])
-        with_wikipedia = sum(1 for p in payloads if p.get("wikipedia"))
-        with_founder = sum(
-            1
-            for p in payloads
-            if p["founders"] or p["founder_teryts"] or p["founder_skarb_panstwa"]
-        )
-        print(
-            f"Emitting {len(payloads)} company payloads "
-            f"({with_teryt} with a TERYT code, {with_owners} with a company "
-            f"owner, {with_jst} with a JST owner, {with_skarb} owned by the "
-            f"Treasury, {with_founder} with a public founder, {with_wikipedia} "
-            f"with a Wikipedia article)"
-        )
-        if not payloads:
-            return pd.DataFrame(
-                columns=[
-                    "krs",
-                    "name",
-                    "activity",
-                    "categories",
-                    "supervisory_body",
-                    "is_public",
-                    "owners",
-                    "owner_teryts",
-                    "owner_skarb_panstwa",
-                    "founders",
-                    "founder_teryts",
-                    "founder_skarb_panstwa",
-                    "teryt_code",
-                    "legal_form",
-                    "supervisory_organ",
-                    "wikipedia",
-                ]
-            )
-        return pd.DataFrame.from_records(payloads)
+        return payloads
