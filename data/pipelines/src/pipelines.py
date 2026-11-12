@@ -53,6 +53,7 @@ from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.krs.odpis_attempts import KrsOdpisAttempts
 from scrapers.krs.odpis_history import KrsOdpisEntries, KrsOdpisSeats
 from scrapers.krs.odpis_people import PeopleKRSCombined
+from scrapers.krs.person_counts import RejestrIOPersonCounts
 from scrapers.krs.public_owners import CompaniesPublicByRegister
 from scrapers.krs.register import KRSRegisterEntries, KRSRegisterQueue
 from scrapers.krs.scrape import KRSAlreadyScraped, KRSNeedsRefresh, ScrapeRejestrIO
@@ -108,6 +109,7 @@ PIPELINES = [
     KrsOdpisSeats,
     PersonFeedCoverage,
     RejestrIOCoverage,
+    RejestrIOPersonCounts,
     KorytaCompanies,
     KorytaDiffer,
     KorytaEdges,
