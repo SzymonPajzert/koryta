@@ -44,6 +44,7 @@ other pages a script draws are rendered (``render``).
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import functools
 import gzip
@@ -58,11 +59,12 @@ import threading
 import time
 import zlib
 from collections import Counter, defaultdict
+from collections.abc import Iterator, Mapping
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 from urllib.parse import parse_qsl, urljoin, urlsplit
 
 from bs4 import BeautifulSoup
@@ -124,8 +126,9 @@ from scrapers.krs.data import read_public_bodies_catalogue
 from scrapers.map.teryt import read_terc
 from scrapers.stores import (
     BipPeopleStore,
-    BipQueue,
+    DocRow,
     PersonDocRow,
+    PersonOutcome,
     PersonRow,
     UnitRow,
     with_outcomes,
@@ -526,11 +529,21 @@ def load_known_urls(path: Path) -> dict[str, list[str]]:
     return dict(known)
 
 
+class DocIndex(Protocol):
+    """The files the search has downloaded, by content: the crawl's ``bip_docs``
+    (`stores.bip_queue.PostgresBipQueue`), or `walk.MemoryDocIndex` for a walk
+    that keeps nothing. All the people mode asks of the crawl's queue."""
+
+    def doc_bundle(self, sha256: str) -> str | None: ...
+
+    def record_docs(self, docs: list[DocRow], crawl_id: str) -> int: ...
+
+
 class PeopleSearch:
     def __init__(
         self,
         people_store: BipPeopleStore,
-        bip_queue: BipQueue,
+        bip_queue: DocIndex,
         bundles: LocalBundleStore,
         seeds: dict[str, UnitSeed],
         options: PeopleOptions,
@@ -1508,10 +1521,116 @@ def load_seeds(
     return seeds, source, apply_unit_starts(seeds, read_unit_starts())
 
 
+def selected(
+    args: Any,  # argparse.Namespace with the --poi-* selection flags
+    people: list[PersonRow],
+    searched: Mapping[str, PersonOutcome],
+) -> tuple[list[PersonRow], list[PersonRow]]:
+    """The list with what the search made of each candidacy so far, and the
+    candidacies a run with ``args``' selection flags searches, most wanted first."""
+    rows = with_outcomes(people, searched)
+    retry = frozenset(r.strip() for r in args.poi_retry.split(",") if r.strip())
+    todo = to_search(
+        rows,
+        refresh=args.poi_refresh,
+        max_priority=args.poi_max_priority,
+        limit=args.poi_limit,
+        retry=retry,
+        retry_before=args.poi_retry_before,
+    )
+    if args.poi_units is not None:
+        todo = [r for r in todo if r.unit in args.poi_units]
+    return rows, todo
+
+
+@contextlib.contextmanager
+def people_search(
+    args: Any,  # argparse.Namespace with the walk flags (`add_walk_args`)
+    ctx: Any,
+    people: list[PersonRow],
+    store: BipPeopleStore,
+    docs: DocIndex,
+    bundles: LocalBundleStore,
+    robots_allowed: Callable[[str], bool],
+    robots_unreachable: Callable[[str], bool],
+    agents: Callable[[str], str] | None,
+    user_agent: str,
+    starts: list[dict[str, str]] | None = None,
+) -> Iterator[PeopleSearch]:
+    """A search set up as ``args`` say: the units' starts, the walk's options,
+    the known URLs and the renderer, which closes when the block ends. A chunk
+    (`run_people_mode`) and `walk` both search through it, so a walk shows what
+    a chunk would do. ``starts`` are rows as in unit_starts.csv, put over its
+    own: a walk tries an address before it goes in the file."""
+    seeds, source, checked = load_seeds(
+        ctx, args.xml_cache, getattr(args, "refresh_registry", False)
+    )
+    if starts:
+        apply_unit_starts(seeds, starts)
+        for row in starts:
+            print(f"start tried for {row['unit']}: {seeds[row['unit']].bip_urls}")
+    print(
+        f"unit starts: {len(seeds):,} units (registry from {source}; "
+        f"{checked:,} from {UNIT_STARTS.name})",
+        flush=True,
+    )
+    max_minutes = getattr(args, "max_minutes", None)
+    options = PeopleOptions(
+        unit_pages=args.unit_pages,
+        pages_per_candidacy=args.pages_per_candidacy,
+        max_unit_pages=args.max_unit_pages,
+        sitemaps=not args.no_sitemaps,
+        per_person=args.per_person,
+        workers=args.workers,
+        rate_interval_s=args.rate,
+        user_agent=user_agent,
+        max_run_seconds=max_minutes * 60 if max_minutes else None,
+        max_unit_seconds=args.max_unit_minutes * 60 if args.max_unit_minutes else None,
+        max_per_host=args.max_per_host,
+        max_per_server=args.max_per_server,
+    )
+    known = load_known_urls(Path(args.known_urls)) if args.known_urls else {}
+    if known:
+        print(
+            f"known declaration URLs: {sum(map(len, known.values())):,} "
+            f"on {len(known):,} hosts",
+            flush=True,
+        )
+    renderer, how = None, "read as their HTML"
+    if not args.no_render and args.render_workers > 0 and rendering.available():
+        try:
+            renderer = rendering.Renderer(user_agent, workers=args.render_workers)
+            how = "rendered in headless Chromium"
+        except rendering.RendererDown as exc:
+            how = f"read as their HTML (no browser started: {exc})"
+    print(f"JavaScript pages: {how}", flush=True)
+    try:
+        yield PeopleSearch(
+            store,
+            docs,
+            bundles,
+            seeds,
+            options,
+            robots_allowed=robots_allowed,
+            robots_unreachable=robots_unreachable,
+            known=known,
+            render=renderer.render if renderer else None,
+            unit_sizes=Counter(p.unit for p in people),
+            first_names=frozenset(
+                stem(p.first_name, min_a=4) for p in people if p.first_name
+            ),
+            resolve=server_of,
+            agents=agents,
+        )
+    finally:
+        if renderer:
+            renderer.close()
+
+
 def run_people_mode(
     args,  # the crawl command's argparse.Namespace
     pg,  # PostgresClient
-    bip_queue: BipQueue,
+    bip_queue: DocIndex,
     bundles: LocalBundleStore,
     robots_allowed: Callable[[str], bool],
     robots_unreachable: Callable[[str], bool] = lambda url: False,
@@ -1527,81 +1646,26 @@ def run_people_mode(
     ctx, _ = setup_context(policy=list_policy())
     people = read_list(ctx)
     store = PostgresBipPeopleStore(pg)
-    rows = with_outcomes(people, store.searched())
+    rows, todo = selected(args, people, store.searched())
     pending = sum(r.status == "pending" for r in rows)
-    retry = frozenset(r.strip() for r in args.poi_retry.split(",") if r.strip())
-    todo = to_search(
-        rows,
-        refresh=args.poi_refresh,
-        max_priority=args.poi_max_priority,
-        limit=args.poi_limit,
-        retry=retry,
-        retry_before=args.poi_retry_before,
-    )
-    if args.poi_units is not None:
-        todo = [r for r in todo if r.unit in args.poi_units]
     print(
         f"people of interest: {len(people):,} candidacies ({pending:,} pending); "
         f"{len(todo):,} to search in {len({r.unit for r in todo}):,} units",
         flush=True,
     )
-    seeds, source, checked = load_seeds(ctx, args.xml_cache, args.refresh_registry)
-    print(
-        f"unit starts: {len(seeds):,} units (registry from {source}; "
-        f"{checked:,} from {UNIT_STARTS.name})",
-        flush=True,
-    )
-    options = PeopleOptions(
-        unit_pages=args.unit_pages,
-        pages_per_candidacy=args.pages_per_candidacy,
-        max_unit_pages=args.max_unit_pages,
-        sitemaps=not args.no_sitemaps,
-        per_person=args.per_person,
-        workers=args.workers,
-        rate_interval_s=args.rate,
-        user_agent=USER_AGENT,
-        max_run_seconds=args.max_minutes * 60 if args.max_minutes else None,
-        max_unit_seconds=args.max_unit_minutes * 60 if args.max_unit_minutes else None,
-        max_per_host=args.max_per_host,
-        max_per_server=args.max_per_server,
-    )
-    known = load_known_urls(Path(args.known_urls)) if args.known_urls else {}
-    if known:
-        print(
-            f"known declaration URLs: {sum(map(len, known.values())):,} "
-            f"on {len(known):,} hosts",
-            flush=True,
-        )
-    renderer, how = None, "read as their HTML"
-    if not args.no_render and args.render_workers > 0 and rendering.available():
-        try:
-            renderer = rendering.Renderer(USER_AGENT, workers=args.render_workers)
-            how = "rendered in headless Chromium"
-        except rendering.RendererDown as exc:
-            how = f"read as their HTML (no browser started: {exc})"
-    print(f"JavaScript pages: {how}", flush=True)
-    search = PeopleSearch(
+    with people_search(
+        args,
+        ctx,
+        people,
         store,
         bip_queue,
         bundles,
-        seeds,
-        options,
-        robots_allowed=robots_allowed,
-        robots_unreachable=robots_unreachable,
-        known=known,
-        render=renderer.render if renderer else None,
-        unit_sizes=Counter(p.unit for p in people),
-        first_names=frozenset(
-            stem(p.first_name, min_a=4) for p in people if p.first_name
-        ),
-        resolve=server_of,
-        agents=agents,
-    )
-    try:
+        robots_allowed,
+        robots_unreachable,
+        agents,
+        USER_AGENT,
+    ) as search:
         counts = search.run(todo)
-    finally:
-        if renderer:
-            renderer.close()
     now = with_outcomes(people, store.searched())
     summary = {
         "this_run": counts,
