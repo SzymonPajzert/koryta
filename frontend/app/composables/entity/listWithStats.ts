@@ -3,6 +3,7 @@ import type { Edge, Node } from "~~/shared/graph/model";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { workLocationNames, type PlaceRegion } from "~/utils/companyLocation";
 import { rowMatches, type RowEmployment } from "~/utils/rowMatches";
+import { idTokenWhenOnline } from "~/utils/tokenRefresh";
 import { candidacyElection } from "~~/shared/electionDays";
 
 import { useCurrentUser, useIsCurrentUserLoaded } from "vuefire";
@@ -52,7 +53,7 @@ export async function useListWithStats(
 
       const headers: HeadersInit = {};
       if (user.value) {
-        const token = await user.value.getIdToken();
+        const token = await idTokenWhenOnline(user.value);
         headers["Authorization"] = `Bearer ${token}`;
       }
 
