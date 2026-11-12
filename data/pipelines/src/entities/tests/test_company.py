@@ -2,10 +2,7 @@
 
 import unittest
 
-import numpy as np
-
-from entities.company import KRS, Owner, split_owners
-from scrapers.map.jst import SKARB_PANSTWA
+from entities.company import KRS
 
 
 class TestCompany(unittest.TestCase):
@@ -82,17 +79,3 @@ class TestCompany(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-def test_split_owners_reads_every_shape_an_output_gives_back():
-    entries = [
-        {"krs": "37957", "teryt": None},
-        Owner(krs=None, teryt="1261011"),
-        {"krs": None, "teryt": SKARB_PANSTWA},
-        "not an owner",
-    ]
-    expected = (["0000037957"], ["1261011"], True)
-    assert split_owners(entries) == expected
-    assert split_owners(np.array(entries, dtype=object)) == expected
-    assert split_owners(None) == ([], [], False)
-    assert split_owners(float("nan")) == ([], [], False)

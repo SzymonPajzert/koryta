@@ -4,8 +4,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
-from scrapers.map.jst import SKARB_PANSTWA
-
 
 @dataclass(frozen=True)
 class Source:
@@ -30,36 +28,6 @@ class Owner:
     #: the `udziałowcy` of the company's Wikipedia article, which `Companies`
     #: falls back to only where the register names no owner at all.
     source: Literal["wiki"] | None = None
-
-
-def split_owners(entries: object) -> tuple[list[str], list[str], bool]:
-    """Owners as the ingest takes them: KRS numbers, TERYT codes, the Treasury.
-
-    A company by its KRS number, a gmina, powiat or województwo by the TERYT
-    code its name resolved to, and the Treasury, which rides in on `teryt` as
-    `SKARB_PANSTWA` but is no territory, as a flag the ingest resolves to the
-    site's own „Skarb Państwa” node. Read off an output, so the list may come
-    back as an array and its entries as dicts.
-    """
-    krss: list[str] = []
-    teryts: list[str] = []
-    skarb_panstwa = False
-    if hasattr(entries, "tolist"):  # a numpy array, off a frame
-        entries = entries.tolist()
-    if not isinstance(entries, list):
-        return krss, teryts, skarb_panstwa
-    for entry in entries:
-        if isinstance(entry, Owner):
-            entry = {"krs": entry.krs, "teryt": entry.teryt}
-        if not isinstance(entry, dict):
-            continue
-        if entry.get("krs"):
-            krss.append(str(entry["krs"]).zfill(10))
-        elif entry.get("teryt") == SKARB_PANSTWA:
-            skarb_panstwa = True
-        elif entry.get("teryt"):
-            teryts.append(str(entry["teryt"]))
-    return krss, teryts, skarb_panstwa
 
 
 #: The commercial company forms, spelled out, as a name in the register ends

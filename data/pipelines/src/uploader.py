@@ -11,8 +11,9 @@ import requests
 from tqdm import tqdm
 
 from analysis.interesting import Companies
+from analysis.payloads.company import split_owners
 from conductor import setup_context
-from entities.company import display_name, on_the_treasury_list, split_owners
+from entities.company import display_name, on_the_treasury_list
 from entities.company_bodies import supervisory_body
 from entities.company_categories import categories_for
 from entities.composite import PersonScore
