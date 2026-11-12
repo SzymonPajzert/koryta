@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "import-dopisuje-do-strony-z-drugim-imieniem",
+    title:
+      "Import dopisuje dane do strony osoby z drugim imieniem, zamiast zakładać obok szkic",
+    description:
+      "Strona założona, zanim osobę znał rejestr, nie ma linku do rejestr.io ani daty urodzenia i często nosi drugie imię, którego dane nie podają, jak „Krzysztof Jan Żuk”, więc nocny import zakładał obok szkic „Krzysztof Żuk” z tymi samymi zatrudnieniami. Teraz, gdy taka strona ma już jedno z zatrudnień z danych (ta sama spółka, funkcja i dzień początku), import dopisuje dane do niej, a gdy pasują dwie takie strony, wstrzymuje osobę i zgłasza ją w przebiegu jako nieudaną.",
+    steps: [
+      "Po nocnym imporcie otwórz stronę opublikowanej osoby z drugim imieniem, która nie miała linku do rejestr.io, a której przybyło zatrudnienie - ma teraz link do rejestr.io i datę urodzenia, a wyszukiwarka nie znajduje obok niej nowej strony bez drugiego imienia.",
+    ],
+    area: "admin",
+  },
+  {
     id: "fundator-wsrod-wlascicieli",
     title:
       "Fundator fundacji wśród jej właścicieli, a fundacja wśród spółek zależnych fundatora",

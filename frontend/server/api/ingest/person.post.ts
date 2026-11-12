@@ -107,7 +107,7 @@ export default defineEventHandler(async (event) => {
     // The document, not just its id: the update below needs the visibility
     // stored on it, and this query has already read it - asking again would be
     // a second read of every person in the payload.
-    const personDoc = await lookupPersonDoc(ctx, body);
+    const personDoc = await lookupPersonDoc(ctx, body, companyIDs);
     let personId: string | undefined = personDoc?.id;
     if (!personId) {
       const personRef = db.collection("nodes").doc();
@@ -945,6 +945,10 @@ async function lookupNodeDoc(
  *    (`lookupByName`). 880 people predate the pipeline sending an entry, and
  *    refusing to match them would give every one of them a second page on the
  *    next run. The match adopts the entry, so it happens once per person.
+ *    Failing a page of the name it may land on, the page whose name agrees
+ *    with the payload's past a middle name, which links no entry, stores no
+ *    birth date and already holds one of the payload's jobs
+ *    (`lookupByNameAndJob`).
  *    A payload with neither an entry nor a page id does not get this far
  *    where it has a birth date: a namesake's page that stores none holds it
  *    back instead (`lookupByNameAndBirthDate`).
@@ -965,6 +969,7 @@ async function lookupNodeDoc(
 async function lookupPersonDoc(
   ctx: Context,
   body: PersonRequest,
+  companyIDs: (string | undefined)[],
 ): Promise<FirebaseFirestore.DocumentSnapshot | undefined> {
   if (body.korytaId) {
     const { snapshot } = await resolveMergedNode(ctx.db, body.korytaId);
@@ -998,8 +1003,8 @@ async function lookupPersonDoc(
     }
   }
 
-  if (body.birthDate) return lookupByNameAndBirthDate(ctx, body);
-  return lookupByName(ctx, body);
+  if (body.birthDate) return lookupByNameAndBirthDate(ctx, body, companyIDs);
+  return lookupByName(ctx, body, companyIDs);
 }
 
 /** A 409 for a page the payload names by its `korytaId` that stores another
@@ -1106,6 +1111,9 @@ function refuseAnotherEntry(
  * PKW or Wikipedia does, and the pages it made before are titled the
  * register's way - "Nowak Rudnik".
  *
+ * Failing both, or where the page they find is somebody else's, the page of
+ * an agreeing name that holds one of the payload's jobs (`lookupByNameAndJob`).
+ *
  * "Another register entry" is another number (`linksAnotherEntry`), as in
  * every other lookup here, not another string. A link pasted from a browser
  * carries the person's name after the number; the register lookup, which asks
@@ -1116,6 +1124,7 @@ function refuseAnotherEntry(
 async function lookupByName(
   ctx: Context,
   body: PersonRequest,
+  companyIDs: (string | undefined)[],
 ): Promise<FirebaseFirestore.DocumentSnapshot | undefined> {
   const spaced = spacedSurname(body.name);
   const byName =
@@ -1123,7 +1132,7 @@ async function lookupByName(
     (spaced === body.name
       ? undefined
       : await lookupNodeDoc(ctx, "name", spaced, "person"));
-  if (!byName) return undefined;
+  if (!byName) return lookupByNameAndJob(ctx, body, companyIDs);
 
   const stored = byName.data();
   if (
@@ -1131,11 +1140,96 @@ async function lookupByName(
     stored?.birthDate &&
     stored.birthDate !== body.birthDate
   ) {
-    return undefined;
+    return lookupByNameAndJob(ctx, body, companyIDs);
   }
   return linksAnotherEntry(stored?.rejestrIo, body.rejestrIo)
-    ? undefined
+    ? lookupByNameAndJob(ctx, body, companyIDs)
     : byName;
+}
+
+/** The one page of a name agreeing with the payload's that already holds one
+ * of its jobs, where the name finds no page the payload may land on.
+ *
+ * A page made before the register reached its person links no entry and
+ * stores no birth date, and it often carries a middle name the payload leaves
+ * out: the 2026-03-26 upload titled Krzysztof Żuk's published page „Krzysztof
+ * Jan Żuk”. The payload of his entry, born 1957-06-21, found no page by the
+ * entry, by the date or by its exact name, so on 2026-11-06 the night made a
+ * draft „Krzysztof Żuk” beside the page and filed there the five jobs the page
+ * already showed. Eight such drafts were made from 11-01 to 11-11, each beside
+ * a published page holding one to five of its jobs.
+ *
+ * So, past the exact name: a page whose name agrees with the payload's
+ * (`namesAgree`: folded, and one writing given names the other leaves out),
+ * which links no register entry and stores no birth date - nothing on it says
+ * it is somebody else - and which holds a job of the payload's: an employment
+ * not removed, at the same company, in the same role, begun on the same day
+ * (`edgeIdentity`, the identity `findEdgeOrCreate` files a job by). Two
+ * namesakes do not take one seat on one day, so that job is the register
+ * saying the page is this entry's. Only a row with a start counts, since an
+ * undated one names no day to be the same on, and only at a company the site
+ * has a page for, which is where a page can hold it.
+ *
+ * Never a page linking an entry - two entries are two people, whatever they
+ * share - nor one storing a birth date: a page of the payload's day was found
+ * by it (`lookupByNameAndBirthDate`), and one of another day is somebody else.
+ * Two pages that both qualify are a 409, nothing written: which of them the
+ * payload is about is a reviewer's question.
+ *
+ * `SiteSnapshot._by_name_and_job` in the pipeline is the same rule, and
+ * predicts it against the export.
+ */
+async function lookupByNameAndJob(
+  ctx: Context,
+  body: PersonRequest,
+  companyIDs: (string | undefined)[],
+): Promise<FirebaseFirestore.DocumentSnapshot | undefined> {
+  const jobs = body.companies.flatMap((employment, index) => {
+    const companyId = companyIDs[index];
+    return employment.start && companyId !== undefined
+      ? [{ employment, companyId }]
+      : [];
+  });
+  if (jobs.length === 0) return undefined;
+
+  const pages = new Map<string, FirebaseFirestore.DocumentSnapshot>();
+  for (const doc of await namesakes(ctx, body.name)) {
+    const found = doc.data();
+    if (!isNamesake(found, body)) continue;
+    const page = found.merged_into
+      ? (await resolveMergedNode(ctx.db, doc.id)).snapshot
+      : doc;
+    const data = page?.data();
+    if (!page || data?.type !== "person" || data.deleted === true) continue;
+    if (registerEntry(data.rejestrIo) !== undefined || data.birthDate) continue;
+    pages.set(page.id, page);
+  }
+
+  const holding: FirebaseFirestore.DocumentSnapshot[] = [];
+  for (const page of pages.values()) {
+    const stored = await ctx.db
+      .collection("edges")
+      .where("source", "==", page.id)
+      .where("type", "==", "employed")
+      .get();
+    const held = new Set(
+      stored.docs
+        .map((doc) => doc.data())
+        .filter((edge) => edge.deleted !== true)
+        .map((edge) => edgeIdentity(edge as EdgeLike)),
+    );
+    const holds = jobs.some(({ employment, companyId }) =>
+      held.has(edgeIdentity(employmentEdge(page.id, employment, companyId))),
+    );
+    if (holds) holding.push(page);
+  }
+  if (holding.length > 1) {
+    throw conflict(
+      `${body.name}: ${holding.length} pages of an agreeing name hold one of ` +
+        `its jobs (${holding.map((page) => page.id).join(", ")}); held`,
+    );
+  }
+  return holding[0];
 }
 
 /** The page of the person of this name born on this day, if the site has it.
@@ -1165,6 +1259,7 @@ async function lookupByName(
 async function lookupByNameAndBirthDate(
   ctx: Context,
   body: PersonRequest,
+  companyIDs: (string | undefined)[],
 ): Promise<FirebaseFirestore.DocumentSnapshot | undefined> {
   const dated = new Map<string, FirebaseFirestore.DocumentSnapshot>();
   const undated = new Set<string>();
@@ -1198,7 +1293,7 @@ async function lookupByNameAndBirthDate(
         `and the date (${[...dated.keys()].join(", ")}); held`,
     );
   }
-  if (body.rejestrIo) return lookupByName(ctx, body);
+  if (body.rejestrIo) return lookupByName(ctx, body, companyIDs);
 
   // Every page of the name, the dated ones again: a merged page found here
   // can stand for a survivor born that day, which the date did not reach.
