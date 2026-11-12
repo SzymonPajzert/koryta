@@ -6,12 +6,14 @@ import { describe, it, expect } from "vitest";
 // because under the Nuxt test environment firebase-admin's lazy exports read
 // as undefined.
 import { Timestamp } from "@google-cloud/firestore";
+import type { Firestore } from "firebase-admin/firestore";
 import {
   dayOf,
   decide,
   exactCopies,
   newestRegister,
   parseRegister,
+  revisionsOfEach,
   type Case,
   type RegisterRow,
   type RevisionFacts,
@@ -534,5 +536,52 @@ describe("newestRegister", () => {
 
   it("finds nothing where there is no cache at all", () => {
     expect(newestRegister(join(cache([]), "missing"))).toBeUndefined();
+  });
+});
+
+describe("revisionsOfEach", () => {
+  /** A revisions collection that answers `node_id ==` and `node_id in`, and
+   * logs the ids each query asked about. */
+  function revisionsDb(revisions: Record<string, { node_id: string }>) {
+    const asked: string[][] = [];
+    const db = {
+      collection: (name: string) => ({
+        where: (field: string, op: string, value: unknown) => ({
+          get: async () => {
+            expect([name, field]).toEqual(["revisions", "node_id"]);
+            const ids = op === "in" ? (value as string[]) : [value as string];
+            asked.push(ids);
+            const docs = Object.entries(revisions)
+              .filter(([, data]) => ids.includes(data.node_id))
+              .map(([id, data]) => ({ id, data: () => data }));
+            return { size: docs.length, docs };
+          },
+        }),
+      }),
+    } as unknown as Firestore;
+    return { db, asked };
+  }
+
+  // The Firestore emulator answers an `in` by indexing every revision once per
+  // id, all held at once: 30 ids ran check:archived-migrations out of its 6 GB
+  // heap on the 2026-11-12 export.
+  it("asks about one edge at a time", async () => {
+    const { db, asked } = revisionsDb({});
+    await revisionsOfEach(db, ["e1", "e2", "e3"]);
+    expect(asked).toEqual([["e1"], ["e2"], ["e3"]]);
+  });
+
+  it("gives each edge its own revisions, and none to an edge without", async () => {
+    const { db } = revisionsDb({
+      r1: { node_id: "e1" },
+      r2: { node_id: "e2" },
+      r3: { node_id: "e9" },
+    });
+    const revisions = await revisionsOfEach(db, ["e1", "e2", "e3"]);
+    expect(
+      Object.fromEntries(
+        [...revisions].map(([edge, list]) => [edge, list.map((r) => r.id)]),
+      ),
+    ).toEqual({ e1: ["r1"], e2: ["r2"], e3: [] });
   });
 });
