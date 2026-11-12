@@ -18,6 +18,13 @@ from rejestr.io today counts against it (`plan.bought_today`), so a night run
 twice buys no more than once, and a hand run the same morning leaves the night
 less. Within the cap the people come first, then the public companies.
 
+The people go by rejestr.io's own count of their connections, read free off
+the company feeds we hold (`RejestrIOPersonCounts`): those somebody named - a
+vote, the hardcoded list - first and whole, then the rest, highest count
+first. Nobody else is bought under `plan.FLOOR` connections, and no feed the
+count says is empty. The queue still owes what that leaves out, and the run
+summary counts it (`under_floor`, `counted_empty`).
+
 In either scope a company's connections are left out where its people already
 come from a current odpis pełny (`ScrapeRejestrIO.companies_told_by_the_odpis`),
 so by hand the bill is smallest after `koryta_krs_odpis` and a rebuild of the
@@ -41,7 +48,7 @@ import os
 import signal
 import sys
 import typing
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from time import sleep
@@ -52,6 +59,7 @@ from conductor import setup_context
 from jobs.krs_common import PINNED, REFRESH_PIPELINES, upload_result
 from jobs.krs_scrape_paid import plan
 from scrapers.krs.odpis_attempts import KrsOdpisAttempts, failed_odpis
+from scrapers.krs.person_counts import PersonCount, RejestrIOPersonCounts, read_counts
 from scrapers.krs.scrape import (
     PLN_PER_CALL,
     RejestrIOQuery,
@@ -105,6 +113,12 @@ class RunSummary:
     #: Calls this run set out to buy, and those the cap left for the next day.
     planned: int = 0
     deferred: int = 0
+    #: Calls the queue owes that rejestr.io's own counts say are not worth
+    #: buying: the people under `plan.FLOOR`, and the feeds counted empty.
+    #: Neither is left for the next day: they wait for a count that says
+    #: otherwise.
+    under_floor: int = 0
+    counted_empty: int = 0
     #: Calls bought; not bought - declined at the prompt, or rejestr.io holds
     #: nothing under the id; failed; and bought but not stored, which the
     #: next run buys again.
@@ -196,9 +210,12 @@ def parser() -> argparse.ArgumentParser:
 
 def build_queue(
     scope: str, unattended: bool
-) -> tuple[Context, list[RejestrIOQuery], set[str]]:
-    """The queue rebuilt, cut to `scope`, and the companies the public owns."""
-    refresh = set(REFRESH_PIPELINES)
+) -> tuple[Context, list[RejestrIOQuery], set[str], dict[str, PersonCount]]:
+    """The queue rebuilt, cut to `scope`, the companies the public owns, and
+    rejestr.io's own count of each person's connections."""
+    # Folded again from every company feed the bucket holds: one bought by
+    # hand since the night's reprocess counts too.
+    refresh = set(REFRESH_PIPELINES) | {"RejestrIOPersonCounts"}
     if scope == plan.SCOPE_FALLBACK:
         # The fold of the odpis job's record: nothing it depends on changes
         # when tonight's attempts are added to it.
@@ -219,7 +236,27 @@ def build_queue(
         failed = failed_odpis(KrsOdpisAttempts().read_or_process(ctx))
         print(f"Companies the free odpis failed for: {len(failed)}")
         queries = plan.fallback(queries, failed)
-    return ctx, queries, public
+    counts = read_counts(RejestrIOPersonCounts().read_or_process(ctx))
+    return ctx, queries, public, counts
+
+
+def held_back(
+    queries: Sequence[RejestrIOQuery],
+    counts: Mapping[str, PersonCount],
+    under: Sequence[RejestrIOQuery],
+    empty: Sequence[RejestrIOQuery],
+) -> str:
+    """What rejestr.io's own counts kept out of the bill, in a line."""
+    people = [
+        str(query.person.id) for query in plan.paid(queries) if query.person is not None
+    ]
+    counted = sum(1 for person in people if person in counts)
+    return (
+        f"rejestr.io counts {counted} of the queue's {len(people)} people; "
+        f"under {plan.FLOOR} connections: {len(under)} "
+        f"({plan.calls(under)} calls); feeds counted empty: "
+        f"{plan.calls(empty)}. Neither is bought."
+    )
 
 
 def rejestr_names(ctx: Context) -> Iterable[str]:
@@ -399,15 +436,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(missing)
             return EXIT_FAILED
 
-    ctx, queries, public = build_queue(args.scope, unattended)
+    ctx, queries, public, counts = build_queue(args.scope, unattended)
     # What the bill is made of, not just what it comes to. Every query carries
     # the reason it exists, and the reasons are not worth the same money: a
     # refresh re-buys a company we already hold, a person feed is one name, and
     # a newly discovered public company is the thing the site is for.
     print(cost_breakdown(queries, public))
-    ordered = plan.order(plan.paid(queries), public)
+    worth, under = plan.above_the_floor(plan.paid(queries), counts)
+    worth, empty = plan.without_empty_feeds(worth, counts)
+    print(held_back(queries, counts, under, empty))
+    ordered = plan.order(worth, public, counts)
     summary = RunSummary(
-        run=uuid7str(), started=now(), scope=args.scope, max_calls=args.max_calls
+        run=uuid7str(),
+        started=now(),
+        scope=args.scope,
+        max_calls=args.max_calls,
+        under_floor=plan.calls(under),
+        counted_empty=plan.calls(empty),
     )
     if unattended:
         summary.bought_before = plan.bought_today(rejestr_names(ctx), today())
