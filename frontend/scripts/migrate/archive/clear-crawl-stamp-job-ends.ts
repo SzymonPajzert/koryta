@@ -7,6 +7,7 @@ import {
   getFirestore,
   Timestamp,
   type DocumentSnapshot,
+  type Firestore,
   type QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
 import { approvedRevisionId, pageIsPublic } from "../../../shared/model";
@@ -534,6 +535,31 @@ export function newestRegister(
     .at(-1);
 }
 
+type EdgeRevisions = Awaited<ReturnType<typeof edgeRevisionsForMany>>;
+
+/** Each edge's revisions, newest first, by edge id: `edgeRevisionsForMany`
+ * asked about one edge at a time rather than 30.
+ *
+ * The Firestore emulator answers `node_id in [30 ids]` by building an index of
+ * every revision once for each id, and holds all 30 at the same time. Against
+ * the 2026-11-12 export's 218,658 revisions that took more than the 6 GB heap
+ * `check:archived-migrations` gives the emulator in the morning job - the
+ * "2 UNKNOWN" this script died with from 2026-11-09. One id builds one index.
+ * Production looks every id up in an index either way, so all it costs there
+ * is a round trip per edge. */
+export async function revisionsOfEach(
+  db: Firestore,
+  edgeIds: readonly string[],
+): Promise<EdgeRevisions> {
+  const revisions: EdgeRevisions = new Map();
+  for (const id of edgeIds) {
+    for (const [edge, list] of await edgeRevisionsForMany(db, [id])) {
+      revisions.set(edge, list);
+    }
+  }
+  return revisions;
+}
+
 async function main() {
   const isProd = process.argv.includes("--prod");
   const commit = process.argv.includes("--commit");
@@ -603,7 +629,7 @@ async function main() {
     });
     for (const snap of snaps) if (snap.exists) nodes.set(snap.id, snap.data()!);
   }
-  const revisions = await edgeRevisionsForMany(
+  const revisions = await revisionsOfEach(
     db,
     stamped.map((doc) => doc.id),
   );
