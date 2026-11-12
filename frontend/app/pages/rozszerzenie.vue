@@ -85,6 +85,7 @@
 import { computed, onMounted, ref } from "vue";
 import { mdiCheckCircle, mdiPuzzle } from "@mdi/js";
 import { useCurrentUser } from "vuefire";
+import { idTokenResultIfReachable } from "~/utils/tokenRefresh";
 
 definePageMeta({
   title: "Rozszerzenie",
@@ -191,7 +192,12 @@ function waitForAck(): Promise<boolean> {
 }
 
 onMounted(async () => {
-  const result = await user.value?.getIdTokenResult();
+  const current = user.value;
+  const result = current ? await idTokenResultIfReachable(current) : undefined;
+  // Firebase out of reach even once back online: no warning either way, and
+  // no silent send. A click sends, reading the claim again, and says why it
+  // could not.
+  if (result === null) return;
   isDatascience.value = result?.claims.datascience === true;
   if (silent.value && isDatascience.value) await sendToken();
 });

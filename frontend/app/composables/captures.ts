@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 import { useCurrentUser } from "vuefire";
 import { authRequest } from "~/composables/auth";
+import { idTokenResultIfReachable } from "~/utils/tokenRefresh";
 import { normalizeUrl } from "~~/shared/url";
 import type { ArticleCapture } from "~~/shared/capture";
 
@@ -19,8 +20,8 @@ export function useCanCapture() {
       canCapture.value = false;
       return;
     }
-    const result = await user.value.getIdTokenResult();
-    canCapture.value = result.claims.datascience === true;
+    const result = await idTokenResultIfReachable(user.value);
+    canCapture.value = result?.claims.datascience === true;
   });
 
   return canCapture;
