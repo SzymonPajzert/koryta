@@ -22,11 +22,14 @@
           :to="nodeLinkUrl(edge.richNode)"
           :prepend-icon="entityIcon(edge.richNode.type)"
         >
+          <!-- The name alone. It used to carry a people count in brackets,
+               which the local graph fills with the size of the group the row
+               falls into on this page rather than the institution's own: every
+               founder of Polska Fundacja Narodowa read „(11)”, ENEA too,
+               whose own stored figure is 257. Szymon, 2026-11-12: "I don't think it's
+               useful for anything now". -->
           <v-list-item-title>
             {{ edge.richNode.name }}
-            <span v-if="getPeopleCount(edge) > 0" class="text-medium-emphasis">
-              ({{ getPeopleCount(edge) }})
-            </span>
           </v-list-item-title>
           <!-- Which sector the institution belongs to. The rows here are a
                company's owners and subsidiaries, or a region's institutions,
@@ -132,23 +135,14 @@ function founderText(edge: EdgeNode): string | undefined {
   return founderLabel(edge);
 }
 
-function getPeopleCount(edge: EdgeNode) {
-  const stats = edge.richNode.stats as
-    | {
-        nodeGroupSize?: number;
-        people?: number;
-      }
-    | undefined;
-  return stats?.nodeGroupSize ?? stats?.people ?? 0;
-}
-
-const edgesSorted = computed(() => {
-  return [...edges].sort((a, b) => {
-    const countDiff = getPeopleCount(b) - getPeopleCount(a);
-    if (countDiff !== 0) return countDiff;
-    return (a.richNode.name || "").localeCompare(b.richNode.name || "");
-  });
-});
+/** By name. The rows were ordered by the people count they no longer show,
+ * which ranked them by the same page-local group size - an order nobody could
+ * read off the list. */
+const edgesSorted = computed(() =>
+  [...edges].sort((a, b) =>
+    (a.richNode.name || "").localeCompare(b.richNode.name || "", "pl"),
+  ),
+);
 </script>
 
 <style scoped>

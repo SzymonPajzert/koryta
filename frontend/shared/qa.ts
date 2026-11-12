@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "bez-liczby-osob-przy-wlascicielach",
+    title: "Bez liczby w nawiasie przy właścicielach i spółkach zależnych",
+    description:
+      "Listy „Właściciele” i „Spółki zależne” nie pokazują już liczby w nawiasie po nazwie. Ta liczba nie mówiła, ile osób ma instytucja, tylko ile ich było w grupie na tej jednej stronie, więc przy wszystkich fundatorach Polskiej Fundacji Narodowej stało to samo „(11)”. Wiersze idą teraz alfabetycznie.",
+    steps: [
+      "Wejdź na stronę dowolnej spółki z właścicielami albo spółkami zależnymi, na przykład PKP SKM: przy nazwach nie ma liczby w nawiasie, a wiersze idą alfabetycznie.",
+    ],
+    link: "/instytucja/pkp-szybka-kolej-miejska-w-trojmiescie-gdynia-ZBcdQ9tUxVyv0o1mnpLH",
+    area: "public",
+  },
+  {
     id: "fundator-wsrod-wlascicieli",
     title:
       "Fundator fundacji wśród jej właścicieli, a fundacja wśród spółek zależnych fundatora",
