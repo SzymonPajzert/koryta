@@ -2277,11 +2277,13 @@ def test_a_spell_of_employment_is_on_one_page(
     linked page with an unlinked one from the 2026-03-26 upload, made before
     the register reached the person. A payload with a link that finds no page
     by it falls back to the exact name (`lookupByName`), so a given name the
-    older page writes and the payload does not makes a second page; seven
-    pairs carry exactly the same name, which that does not explain. Some pair
-    two entries, where one of the pages holds a namesake's job. Counted is a
-    pair of pages, however many spells the two share, and only a spell with a
-    start, since an undated one names no day to be the same on.
+    older page writes and the payload does not made a second page, until the
+    ingest took instead the one page of an agreeing name, with no link and no
+    birth date, that holds one of the payload's jobs (`lookupByNameAndJob`);
+    seven pairs carry exactly the same name, which that does not explain.
+    Some pair two entries, where one of the pages holds a namesake's job.
+    Counted is a pair of pages, however many spells the two share, and only a
+    spell with a start, since an undated one names no day to be the same on.
 
     The message lists the pairs newest first, by when the younger page of the
     two was made, so the pairs that pushed the count up come before the ones

@@ -15,6 +15,7 @@ from analysis.payloads.election import get_election_type
 from analysis.payloads.priority import MISSING, Pick, prioritised
 from analysis.payloads.site import (
     BY_NAME_AND_DATE,
+    BY_NAME_AND_JOB,
     IDENTIFIED,
     INFORMATIONAL_REASONS,
     SiteSnapshot,
@@ -924,9 +925,10 @@ def matching_one_page(payloads: list[Person], snapshot: SiteSnapshot) -> list[Pe
 
     A name and a birth date pool two people only where another payload reaches
     the same page, by them or by anything else; the one that came by them is
-    dropped then, for the same reason. So is a payload the ingest would hold
-    back. Every count is reported, because they are the part of the backlog a
-    run leaves.
+    dropped then, for the same reason, and so is one that came by a name and a
+    job the page holds (`BY_NAME_AND_JOB`). So is a payload the ingest would
+    hold back. Every count is reported, because they are the part of the
+    backlog a run leaves.
     """
     candidates = collections.Counter(person.name for person in payloads)
     resolved = [snapshot.resolve(asdict(person)) for person in payloads]
@@ -944,7 +946,7 @@ def matching_one_page(payloads: list[Person], snapshot: SiteSnapshot) -> list[Pe
             held[found.how] += 1
         elif found.page is None:
             created += 1
-        elif found.how == BY_NAME_AND_DATE:
+        elif found.how in (BY_NAME_AND_DATE, BY_NAME_AND_JOB):
             if reaching[str(found.page.get("id"))] == 1:
                 result.append(person)
             else:
