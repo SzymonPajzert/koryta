@@ -227,5 +227,6 @@ export { onEdgeWritten, sweepEdgeStats } from "./edges";
 export { onNodeWritten } from "./nodes";
 export { onRevisionWritten } from "./revisions";
 export { onFeedbackCreated } from "./feedback";
+export { releaseCampaignMail } from "./mail";
 
 export * from "./votes";
