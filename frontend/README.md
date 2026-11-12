@@ -389,6 +389,21 @@ accounts: the pilot first, then everybody else. The rules are in
 - **Once per person** — each message is `mail/campaign_<id>_<uid>`, made with
   `create`, so sending a campaign again only reaches whoever has not had it.
   The owner's tests are `mail/campaignTest_<id>_<ms>`, "[Test]" in the subject.
+- **In batches** - a send writes every message with `delivery.state` HELD,
+  which the extension leaves alone. `releaseCampaignMail`
+  (`functions/src/mail.ts`) runs every minute and sets the next ones to
+  PENDING, which the extension sends: at most 20 within 50 seconds, and at
+  most 90 in a UTC day (`shared/campaignPacing.ts`). The pilot's 40 messages,
+  written at once, got 29 through and 11 refused by Mailgun ("recipient limit
+  (26) exceeded"), and the Free plan sends 100 a day for everything the site
+  mails. The send answers how many wait and how many more go today. Cloud
+  Functions are deployed by hand; until this one is, a campaign waits in
+  `mail` and nothing is lost:
+
+  ```bash
+  firebase deploy --only functions:releaseCampaignMail --project koryta-pl
+  ```
+
 - **Leaving** — every message links to `/wypisz` with the reader's token
   (`mailTokens/{uid}`, server-only, made on the first send) and carries
   `List-Unsubscribe` and `List-Unsubscribe-Post` headers, so a mail client's own

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Firestore } from "firebase-admin/firestore";
 import {
   campaignDeliveries,
+  campaignQueue,
   queueCampaign,
   queueTest,
   saveCampaign,
@@ -38,8 +39,35 @@ const { store, FieldValue, Timestamp } = vi.hoisted(() => {
 
 vi.mock("firebase-admin/firestore", () => ({ FieldValue, Timestamp }));
 
+/** A stored time as milliseconds: a Date, or the Timestamp above. */
+function millis(value: unknown): number {
+  if (value instanceof Date) return value.getTime();
+  const toDate = (value as { toDate?: () => Date } | null)?.toDate;
+  return typeof toDate === "function" ? toDate.call(value).getTime() : NaN;
+}
+
+/** The value at a dotted path, as a query reads `delivery.state`. */
+function at(data: Record<string, unknown>, path: string): unknown {
+  return path
+    .split(".")
+    .reduce<unknown>(
+      (value, key) => (value as Record<string, unknown> | undefined)?.[key],
+      data,
+    );
+}
+
+function matches(
+  data: Record<string, unknown>,
+  [field, op, value]: [string, string, unknown],
+): boolean {
+  const stored = at(data, field);
+  if (op === ">=") return millis(stored) >= millis(value);
+  return stored === value;
+}
+
 /** Enough of Firestore for the store: documents with get, create, set (with
- * merge), update (with arrayUnion), and an equality query. */
+ * merge), update (with arrayUnion), and queries with `==` and `>=` (on
+ * times), `limit` and `count`. */
 function fakeDb(): Firestore {
   const docRef = (collection: string, id: string) => {
     const key = `${collection}/${id}`;
@@ -87,20 +115,32 @@ function fakeDb(): Firestore {
       },
     };
   };
-  const query = (collection: string, filters: [string, unknown][]) => ({
-    where: (field: string, _op: string, value: unknown) =>
-      query(collection, [...filters, [field, value]]),
-    select: () => query(collection, filters),
-    get: async () => ({
-      docs: [...store]
+  type Filter = [string, string, unknown];
+  const query = (
+    collection: string,
+    filters: Filter[],
+    limit = Infinity,
+  ): Record<string, unknown> => {
+    const docs = () =>
+      [...store]
         .filter(([key]) => key.startsWith(`${collection}/`))
-        .filter(([, data]) => filters.every(([f, v]) => data[f] === v))
+        .filter(([, data]) => filters.every((filter) => matches(data, filter)))
+        .slice(0, limit)
         .map(([key, data]) => ({
           id: key.slice(collection.length + 1),
           data: () => data,
-        })),
-    }),
-  });
+        }));
+    return {
+      where: (field: string, op: string, value: unknown) =>
+        query(collection, [...filters, [field, op, value]], limit),
+      select: () => query(collection, filters, limit),
+      limit: (n: number) => query(collection, filters, n),
+      count: () => ({
+        get: async () => ({ data: () => ({ count: docs().length }) }),
+      }),
+      get: async () => ({ docs: docs() }),
+    };
+  };
   return {
     collection: (collection: string) => ({
       doc: (id: string) => docRef(collection, id),
@@ -254,6 +294,8 @@ describe("queueCampaign", () => {
       kind: "campaign",
       campaign: campaign.id,
       uid: "fan",
+      // Not sent yet: releaseCampaignMail lets it out with its batch.
+      delivery: { state: "HELD" },
     });
     const message = mail.message as { subject: string; text: string };
     expect(message.subject).toBe("Wracamy do kolejki!");
@@ -301,6 +343,33 @@ describe("queueCampaign", () => {
     const { outcomes, campaign: after } = await send(["a", "b"]);
     expect(outcomes).toEqual({ a: "duplicate", b: "queued" });
     expect(after.recipients).toEqual(["a", "b"]);
+  });
+
+  it("says how many messages wait, and how many more go out today", async () => {
+    const campaign = await draft();
+    const released = (key: string, iso: string) =>
+      store.set(`mail/${key}`, {
+        delivery: { state: "SUCCESS" },
+        released_at: new Timestamp(Date.parse(iso)),
+      });
+    // Mailgun's day starts at midnight UTC: yesterday's does not count.
+    released("x", "2026-10-09T07:00:00Z");
+    released("y", "2026-10-09T11:59:00Z");
+    released("z", "2026-10-08T23:59:00Z");
+
+    const { queue } = await queueCampaign(db, {
+      campaign,
+      members: [member("a", { admin: true }), member("b", { admin: true })],
+      community: COMMUNITY,
+      uids: ["a", "b"],
+      by: "owner",
+      siteUrl: "https://koryta.pl",
+      now: NOW,
+    });
+    expect(queue).toEqual({ waiting: 2, leftToday: 88 });
+
+    for (let i = 0; i < 90; i++) released(`spent${i}`, "2026-10-09T10:00:00Z");
+    expect(await campaignQueue(db, NOW)).toEqual({ waiting: 2, leftToday: 0 });
   });
 });
 
@@ -373,6 +442,19 @@ describe("campaignDeliveries", () => {
       uid: "c",
       created_at: Timestamp.now(),
     });
+    store.set(`mail/campaign_${campaign.id}_d`, {
+      campaign: campaign.id,
+      uid: "d",
+      created_at: Timestamp.now(),
+      delivery: { state: "HELD" },
+    });
+    store.set(`mail/campaign_${campaign.id}_e`, {
+      campaign: campaign.id,
+      uid: "e",
+      created_at: Timestamp.now(),
+      released_at: new Timestamp(Date.parse("2026-10-09T12:05:00Z")),
+      delivery: { state: "PENDING" },
+    });
     store.set("mail/campaign_other_a", { campaign: "other", uid: "a" });
 
     expect(await campaignDeliveries(db, campaign.id)).toEqual({
@@ -392,6 +474,21 @@ describe("campaignDeliveries", () => {
       c: {
         state: "queued",
         queuedAt: NOW.toISOString(),
+        finishedAt: null,
+        error: null,
+      },
+      // Waiting for its batch: nothing has picked it up either, and it has
+      // not been handed over at all yet.
+      d: {
+        state: "queued",
+        queuedAt: null,
+        finishedAt: null,
+        error: null,
+      },
+      // Handed over with its batch five minutes after the send.
+      e: {
+        state: "PENDING",
+        queuedAt: "2026-10-09T12:05:00.000Z",
         finishedAt: null,
         error: null,
       },

@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "kampania-wychodzi-partiami",
+    title: "Kampania wychodzi partiami, po 20 wiadomości na minutę",
+    description:
+      "Pilot wysłał 40 wiadomości naraz i Mailgun odrzucił 11 z nich. Teraz wiadomości kampanii czekają w kolejce i wychodzą po 20 co minutę, najwyżej 90 dziennie, a reszta następnego dnia.",
+    steps: [
+      "Na /admin/mailing wyślij kampanię do ponad 20 osób: zaraz po wysyłce wszyscy mają w kolumnie „Ta kampania” „W kolejce”.",
+      "Odśwież stronę po minucie: 20 osób ma „Wysłano”, a po następnej minucie kolejne.",
+    ],
+    link: "/admin/mailing",
+    area: "admin",
+  },
+  {
     id: "fundator-wsrod-wlascicieli",
     title:
       "Fundator fundacji wśród jej właścicieli, a fundacja wśród spółek zależnych fundatora",

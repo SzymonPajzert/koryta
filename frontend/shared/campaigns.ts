@@ -626,8 +626,9 @@ export function renderCampaign(args: CampaignRender): CampaignMail {
 }
 
 /** Where a queued message is, as the Trigger Email extension records it on the
- * `mail` document - or `queued` while nothing has picked it up yet, which is
- * all a message ever is until the extension is installed. */
+ * `mail` document - or `queued` while nothing has picked it up yet: a message
+ * still held back for its batch (shared/campaignPacing.ts), or any message
+ * while the extension is not installed. */
 export const deliveryStates = [
   "queued",
   "PENDING",
@@ -692,7 +693,18 @@ export type CampaignRecord = CampaignContent & {
 /** One queued message, as far as the extension has got with it. */
 export type Delivery = {
   state: DeliveryState;
+  /** When the message was handed to the extension. Null while it is held
+   * back for its batch. */
   queuedAt: string | null;
   finishedAt: string | null;
   error: string | null;
+};
+
+/** Campaign mail still to go out, as a send leaves it: messages go a batch a
+ * minute and only so many a day (shared/campaignPacing.ts). */
+export type CampaignQueue = {
+  /** Held back, of every campaign, this send's included. */
+  waiting: number;
+  /** How many more today's allowance lets out; the rest go on later days. */
+  leftToday: number;
 };

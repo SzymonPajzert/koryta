@@ -1,5 +1,5 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import type { Firestore } from "firebase-admin/firestore";
+import type { Firestore, Query } from "firebase-admin/firestore";
 import { createError } from "h3";
 import { z } from "zod";
 import { isAlreadyExists, mailToken } from "~~/server/utils/mailTokens";
@@ -14,6 +14,7 @@ import {
   type AudienceMember,
   type CampaignContent,
   type CampaignMail,
+  type CampaignQueue,
   type CampaignRecord,
   type CampaignSend,
   type CampaignTopic,
@@ -22,6 +23,11 @@ import {
   type DeliveryState,
   type SendOutcome,
 } from "~~/shared/campaigns";
+import {
+  CAMPAIGN_DAILY_LIMIT,
+  HELD_STATE,
+  utcDayStart,
+} from "~~/shared/campaignPacing";
 import { taskSlug, uniqueTaskId } from "~~/shared/tasks";
 
 /** The owner's campaigns: what each says, and who it has been sent to.
@@ -30,7 +36,9 @@ export const CAMPAIGNS = "mailCampaigns";
 
 /** How many messages are rendered and queued at once. Each is a token read,
  * maybe a token write and a `mail` create; ten keeps a send of a few hundred
- * to seconds without a burst of writes. */
+ * to seconds without a burst of writes. Nothing is mailed here: the messages
+ * are written held back, and go out a batch a minute
+ * (shared/campaignPacing.ts). */
 const SEND_CONCURRENCY = 10;
 
 export const campaignContentSchema = z
@@ -148,6 +156,9 @@ type SendArgs = {
  * word. One `mail` document per campaign and person, made with `create`, so a
  * second press - or a later send to a wider group - never reaches anybody
  * twice.
+ *
+ * Every message is written held back, and `releaseCampaignMail` lets them out
+ * a batch a minute; `queue` says how many wait and how many more go today.
  */
 export async function queueCampaign(
   db: Firestore,
@@ -155,6 +166,7 @@ export async function queueCampaign(
 ): Promise<{
   outcomes: Record<string, SendOutcome>;
   campaign: CampaignRecord;
+  queue: CampaignQueue;
 }> {
   const byUid = new Map(args.members.map((member) => [member.uid, member]));
   const uids = [...new Set(args.uids)];
@@ -176,10 +188,11 @@ export async function queueCampaign(
     outcomes: tally(Object.values(outcomes)),
   };
   const campaign = await recordSend(db, args.campaign.id, send, queued);
+  const queue = await campaignQueue(db, args.now);
   console.info(
-    `Campaign ${args.campaign.id}: queued ${queued.length} of ${uids.length}`,
+    `Campaign ${args.campaign.id}: queued ${queued.length} of ${uids.length}; ${queue.waiting} waiting, ${queue.leftToday} more can go today`,
   );
-  return { outcomes, campaign };
+  return { outcomes, campaign, queue };
 }
 
 async function queueOne(
@@ -202,6 +215,9 @@ async function queueOne(
         campaign: args.campaign.id,
         uid: member.uid,
         created_at: Timestamp.now(),
+        // The extension leaves this alone until releaseCampaignMail lets it
+        // out with its batch.
+        delivery: { state: HELD_STATE },
       });
     return "queued";
   } catch (error) {
@@ -212,6 +228,25 @@ async function queueOne(
     );
     return "failed";
   }
+}
+
+/** How much campaign mail waits to go out, of every campaign, and how much
+ * more of it today's allowance lets out (shared/campaignPacing.ts). */
+export async function campaignQueue(
+  db: Firestore,
+  now: Date,
+): Promise<CampaignQueue> {
+  const mail = db.collection("mail");
+  const count = async (query: Query) =>
+    (await query.count().get()).data().count;
+  const [waiting, releasedToday] = await Promise.all([
+    count(mail.where("delivery.state", "==", HELD_STATE)),
+    count(mail.where("released_at", ">=", utcDayStart(now))),
+  ]);
+  return {
+    waiting,
+    leftToday: Math.max(0, CAMPAIGN_DAILY_LIMIT - releasedToday),
+  };
 }
 
 /** The owner's own copy, with "[Test]" in front of the subject, as many times
@@ -347,6 +382,7 @@ export async function campaignDeliveries(
     .select(
       "uid",
       "created_at",
+      "released_at",
       "delivery.state",
       "delivery.endTime",
       "delivery.error",
@@ -358,6 +394,7 @@ export async function campaignDeliveries(
     const data = doc.data();
     if (typeof data.uid !== "string") continue;
     const delivery = (data.delivery ?? {}) as Record<string, unknown>;
+    // A held message reads as `queued`: nothing has picked it up yet.
     const state = (deliveryStates as readonly unknown[]).includes(
       delivery.state,
     )
@@ -365,7 +402,11 @@ export async function campaignDeliveries(
       : "queued";
     deliveries[data.uid] = {
       state,
-      queuedAt: isoTime(data.created_at),
+      // Messages from before the batches went out as they were written.
+      queuedAt:
+        delivery.state === HELD_STATE
+          ? null
+          : (isoTime(data.released_at) ?? isoTime(data.created_at)),
       finishedAt: isoTime(delivery.endTime),
       error: typeof delivery.error === "string" ? delivery.error : null,
     };
