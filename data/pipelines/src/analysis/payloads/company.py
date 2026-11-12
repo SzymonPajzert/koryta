@@ -7,10 +7,11 @@ import pandas as pd
 
 from analysis.interesting import Companies
 from analysis.payloads.site import SiteSnapshot
-from entities.company import display_name, on_the_treasury_list, split_owners
+from entities.company import Owner, display_name, on_the_treasury_list
 from entities.company_bodies import supervisory_body
 from entities.company_categories import categories_for
 from scrapers.koryta.download import KorytaCompanies
+from scrapers.map.jst import SKARB_PANSTWA
 from scrapers.stores import Context, Pipeline
 
 
@@ -72,6 +73,41 @@ def add_is_public(payload: dict, row: dict) -> None:
         payload["is_public"] = True
     elif read_an_odpis(row):
         payload["is_public"] = False
+
+
+def split_owners(entries: object) -> tuple[list[str], list[str], bool]:
+    """Owners as the ingest takes them: KRS numbers, TERYT codes, the Treasury.
+
+    A company by its KRS number, a gmina, powiat or województwo by the TERYT
+    code its name resolved to, and the Treasury, which rides in on `teryt` as
+    `SKARB_PANSTWA` but is no territory, as a flag the ingest resolves to the
+    site's own „Skarb Państwa” node. Read off an output, so the list may come
+    back as an array and its entries as dicts.
+
+    Here rather than in `entities.company`, beside `Owner`: it needs the
+    `SKARB_PANSTWA` sentinel from `scrapers.map.jst`, and the layers contract in
+    pyproject.toml keeps `entities` from importing `scrapers`. `uploader`, which
+    sits outside the contract, imports it from here.
+    """
+    krss: list[str] = []
+    teryts: list[str] = []
+    skarb_panstwa = False
+    if hasattr(entries, "tolist"):  # a numpy array, off a frame
+        entries = entries.tolist()
+    if not isinstance(entries, list):
+        return krss, teryts, skarb_panstwa
+    for entry in entries:
+        if isinstance(entry, Owner):
+            entry = {"krs": entry.krs, "teryt": entry.teryt}
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("krs"):
+            krss.append(str(entry["krs"]).zfill(10))
+        elif entry.get("teryt") == SKARB_PANSTWA:
+            skarb_panstwa = True
+        elif entry.get("teryt"):
+            teryts.append(str(entry["teryt"]))
+    return krss, teryts, skarb_panstwa
 
 
 def wiki_categories(row: dict) -> list[str]:
