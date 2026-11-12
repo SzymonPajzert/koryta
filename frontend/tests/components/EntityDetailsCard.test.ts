@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
-import { nextTick, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import EntityDetailsCard from "../../app/components/EntityDetailsCard.vue";
 import { authRequest, useAuthState } from "~/composables/auth";
 import type { Article, Person } from "../../shared/model";
@@ -21,6 +21,27 @@ vi.mock("@plausible-analytics/tracker", () => ({
   init: vi.fn(),
   track: vi.fn(),
 }));
+
+/** The vote pill, without its subscription. For a signed in reader the real
+ * `useVotes` opens a live Firestore listener on their vote. No Firestore runs
+ * under vitest, so the listener only ever fails to reach the emulator at
+ * 127.0.0.1:8080, and Firestore logs each failure, retry after retry, for as
+ * long as it lives - past the end of this file, whose mounts are never torn
+ * down. The first failure lands as the last test ends, and a log still on its
+ * way to vitest when the worker closes fails the whole run with every test
+ * passing: "Closing rpc while "onUserConsoleLog" was pending" (main's Vitest
+ * on 10-28, 10-29 and 11-01, the morning check on 10-27, 10-28, 10-30 and
+ * 11-11). Nothing here asks about the vote. */
+vi.mock("~/composables/votes", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/composables/votes")>();
+  const useVotes: typeof actual.useVotes = (_id, category) => ({
+    userCategoryVotes: computed(() => ({})),
+    config: actual.voteCategoryConfig[category],
+    loading: ref(false),
+    castVote: vi.fn(),
+  });
+  return { ...actual, useVotes };
+});
 
 const person: Person = {
   id: "jan",
