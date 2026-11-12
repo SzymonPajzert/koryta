@@ -1,7 +1,17 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { registerEndpoint } from "@nuxt/test-utils/runtime";
-import { authRequest } from "../../app/composables/auth";
+import { flushPromises } from "@vue/test-utils";
+import { ref } from "vue";
+import { useCurrentUser } from "vuefire";
+import type { User } from "firebase/auth";
+import { authHeaders, authRequest } from "../../app/composables/auth";
 import { refuse, REFUSED } from "../serverRefusals";
+import {
+  backOnline,
+  goOffline,
+  networkRequestFailed,
+  restoreOnline,
+} from "../networkFailure";
 
 /** How many times the endpoint below was asked. It turns every request down
  * with a 429, as a limit of the day does, in the server's own way. */
@@ -11,9 +21,29 @@ registerEndpoint("/api/test/limited", (event) => {
   return refuse(event, { status: 429, message: REFUSED.dailyLimit });
 });
 
+/** How many times the endpoint below was asked; it answers every time. */
+let answered = 0;
+registerEndpoint("/api/test/answers", () => {
+  answered += 1;
+  return { ok: true };
+});
+
 beforeEach(() => {
   asked = 0;
+  answered = 0;
 });
+
+afterEach(restoreOnline);
+
+/** Somebody signed in whose token could not be refreshed for want of a
+ * network the first time, and could the second. */
+function wokenWithNoNetwork() {
+  const getIdToken = vi
+    .fn()
+    .mockRejectedValueOnce(networkRequestFailed())
+    .mockResolvedValueOnce("fresh-token");
+  return { user: { getIdToken } as unknown as User, getIdToken };
+}
 
 /** `authRequest` sends a GET that failed with a status on ofetch's list once
  * more by itself, 429 among them. A limit turns the second try down too, and
@@ -37,5 +67,41 @@ describe("authRequest", () => {
     ).rejects.toMatchObject({ statusCode: 429 });
 
     expect(asked).toBe(1);
+  });
+
+  // A device woken with no network holds an expired token, and the refresh
+  // fails before the request could have gone anywhere either. The header it
+  // goes out with is `authHeaders`' test below: the stub server here never
+  // sees the `Headers` this one builds.
+  it("holds a request whose token could not be refreshed offline until the browser is back online", async () => {
+    goOffline();
+    const { user, getIdToken } = wokenWithNoNetwork();
+    vi.mocked(useCurrentUser).mockReturnValueOnce(ref(user));
+
+    const answer = authRequest("/api/test/answers", { method: "GET" });
+    await flushPromises();
+    expect(answered).toBe(0);
+
+    backOnline();
+    await expect(answer).resolves.toEqual({ ok: true });
+    expect(answered).toBe(1);
+    expect(getIdToken).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("authHeaders", () => {
+  it("carries the token refreshed once the browser is back online", async () => {
+    goOffline();
+    const { user, getIdToken } = wokenWithNoNetwork();
+
+    let headers: Record<string, string> | undefined;
+    const pending = authHeaders(user).then((value) => (headers = value));
+    await flushPromises();
+    expect(headers).toBeUndefined();
+
+    backOnline();
+    await pending;
+    expect(headers).toEqual({ Authorization: "Bearer fresh-token" });
+    expect(getIdToken).toHaveBeenCalledTimes(2);
   });
 });
