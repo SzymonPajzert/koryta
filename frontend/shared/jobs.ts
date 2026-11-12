@@ -412,23 +412,24 @@ export const JOBS: readonly JobDefinition[] = [
   // of the payload type they send. A person upload reports as people_import,
   // which also has a daily run of its own, so it sits with the scheduled jobs.
   // score_import and company_import are steps of the night too
-  // (koryta_score_import, koryta_people_import --companies-only), but the
-  // night's own row is what says a night did not run them; these are judged
-  // by their newest run, as before.
+  // (koryta_score_import; koryta_people_import --companies-only before the
+  // people, koryta_company_import after them), but the night's own row is
+  // what says a night did not run them; these are judged by their newest run,
+  // as before.
   {
     id: "company_import",
     kind: "triggered",
     title: "Import firm",
     summary:
-      "Firmy przez /api/ingest/company. Co noc, przed importem osób: firmy, w których pracują osoby wysyłane tej nocy, a których nie ma w porannej kopii bazy - z potoku Companies, tak jak import osób dodaje brakującą firmę po drodze. Ręcznie: koryta_uploader --type company, firmy z CompaniesPayloads.",
+      "Firmy przez /api/ingest/company, w nocy dwa razy. Przed importem osób: firmy wysyłanych osób, których nie ma w porannej kopii bazy. Po nim: zmiany firm, które strona już ma.",
     runsOn:
-      "Krok nocy na VM koryta-nightly (koryta_nightly, krok „companies”, tuż przed osobami); ręcznie koryta_uploader --type company",
-    command:
-      "koryta CompaniesPayloads --output stdout | koryta_uploader --type company --submit",
+      "Kroki nocy na VM koryta-nightly (koryta_nightly): „companies” przed osobami, „company_updates” po nich; ręcznie koryta_company_import",
+    command: "koryta_company_import",
     heartbeatMinutes: 15,
     notes: [
       "Firmę, której nocny krok nie dodał, import osób próbuje dodać jeszcze raz; gdy i jemu się nie uda, zapisuje osobę bez tego zatrudnienia („zatrudnień bez strony firmy”).",
-      "Podsumowanie nocnego uruchomienia - każda firma, kto w niej pracuje i co z nią zrobiono - jest w koryta-pl-sharedcache/jobs/company_import/runs/.",
+      "Zmiany firm: do 1000 na noc, najpierw te, które stają się publiczne. Zmian nazw i firm, które stałyby się prywatne, noc nie wysyła - wymienia je w ostrzeżeniach.",
+      "Podsumowania nocnych uruchomień - każda firma i co z nią zrobiono - są w koryta-pl-sharedcache/jobs/company_import/runs/.",
     ],
   },
   {
@@ -483,7 +484,7 @@ export const JOBS: readonly JobDefinition[] = [
     partialIsHeld: true,
     title: "Noc na maszynie koryta-nightly",
     summary:
-      "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS, właścicieli nowo zarejestrowanych spółek i odpisy, dokupuje z rejestr.io to, czego nie dały (do 50 zapytań), przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, dodaje firmy, których brakuje osobom tej nocy, wysyła do 100 osób na stronę, a potem oceny modeli.",
+      "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS, właścicieli nowo zarejestrowanych spółek i odpisy, dokupuje z rejestr.io to, czego nie dały (do 50 zapytań), przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, dodaje firmy, których brakuje osobom tej nocy, wysyła do 100 osób na stronę, potem zmiany firm, które strona już ma, a na koniec oceny modeli.",
     runsOn:
       "VM koryta-nightly (europe-central2): harmonogram włącza ją o 04:15, a po pracy sama się wyłącza - data/nightly",
     command: "koryta_nightly",

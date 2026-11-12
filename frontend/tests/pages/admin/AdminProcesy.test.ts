@@ -670,9 +670,7 @@ describe("/admin/procesy", () => {
     expect(row.text()).not.toContain("Ostatnie zapisy");
     expect(row.find("[data-capture-stats]").exists()).toBe(false);
     expect(row.get("[data-fact-succeeded]").text()).toContain("1.10, 15:04");
-    expect(row.text()).toContain(
-      "koryta CompaniesPayloads --output stdout | koryta_uploader --type company --submit",
-    );
+    expect(row.text()).toContain("koryta_company_import");
 
     const done = row.get('[data-run="co-run"]');
     expect(done.find("[data-run-url]").exists()).toBe(false);

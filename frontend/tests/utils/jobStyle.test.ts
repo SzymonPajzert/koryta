@@ -154,6 +154,8 @@ describe("counters", () => {
       ...["matched", "to_change", "to_create", "up_to_date", "left_out"],
       // people_import --companies-only, which reports as company_import.
       ...["planned", "companies_created", "updated", "unchanged", "failed"],
+      // koryta_company_import, which does too.
+      ...["created", "held", "renames_held"],
       ...["uploaded", "failed", "skipped"],
       ...["written", "retracted", "unchanged", "new_pages", "new_pages_scored"],
       ...["articles", "facts"],
