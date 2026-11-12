@@ -2869,6 +2869,282 @@ describe("api/ingest/person, somebody only an odpis names: the name and the birt
   });
 });
 
+describe("api/ingest/person, a page with a middle name that holds one of the payload's jobs", () => {
+  /** Every collection the request reads, by id, answered by filtering - the
+   * name index too, as `generateChunksLower` writes it (`filteringQuery`). */
+  let store: Record<string, Record<string, Record<string, unknown>>> = {};
+
+  function fakeCollection(collection: string) {
+    return {
+      where: (field: string, op: string, value: unknown) =>
+        filteringQuery(() => store[collection] ?? {}, [[field, op, value]]),
+      doc: (id?: string) => ({
+        id: id ?? `new-${collection}-id`,
+        parent: { id: collection },
+        get: async () => ({
+          id: id ?? `new-${collection}-id`,
+          exists: id !== undefined && store[collection]?.[id] !== undefined,
+          data: () => (id === undefined ? undefined : store[collection]?.[id]),
+        }),
+      }),
+    };
+  }
+
+  /** The 2026-11-06 payload of Krzysztof Żuk's register entry, cut to two of
+   * its twelve jobs: the PGE seat his published page shows, and a seat at
+   * Bogdanka the page does not have. */
+  function payload(overrides: Record<string, unknown> = {}) {
+    mockReadBody.mockResolvedValue({
+      name: "Krzysztof Żuk",
+      rejestrIo: "https://rejestr.io/osoby/1295123",
+      birthDate: "1957-06-21",
+      parties: ["PO"],
+      elections: [],
+      reportUnplacedEmployments: true,
+      companies: [
+        {
+          krs: "0000059307",
+          role: "Rada Nadzorcza",
+          start: "2010-03-03",
+          end: "2012-06-25",
+        },
+        {
+          krs: "0000004549",
+          role: "Rada Nadzorcza",
+          start: "2001-03-26",
+          end: "2002-06-14",
+        },
+      ],
+      ...overrides,
+    });
+  }
+
+  /** A page as the 2026-03-26 upload made his: published, with the middle
+   * name, and no register link or birth date. */
+  function page(fields: Record<string, unknown> = {}) {
+    return {
+      type: "person",
+      name: "Krzysztof Jan Żuk",
+      parties: ["PO"],
+      published: true,
+      ...fields,
+    };
+  }
+
+  /** The PGE seat as a page shows it. */
+  function pgeSeat(source: string, fields: Record<string, unknown> = {}) {
+    return {
+      type: "employed",
+      name: "Rada Nadzorcza",
+      source,
+      target: "pge",
+      start_date: "2010-03-03",
+      end_date: "2012-06-25",
+      published: true,
+      ...fields,
+    };
+  }
+
+  /** The ids of the nodes a person revision was written to. */
+  function personRevisionTargets() {
+    return vi
+      .mocked(createRevisionTransaction)
+      .mock.calls.map(([, , , ref]) => (ref as unknown as { id: string }).id)
+      .filter((id) => !id.startsWith("edge_"));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUser.mockResolvedValue({
+      uid: "pipeline-people-import",
+      datascience: true,
+    });
+    store = {
+      nodes: {
+        zuk: page(),
+        pge: {
+          type: "place",
+          name: "PGE POLSKA GRUPA ENERGETYCZNA",
+          krsNumber: "0000059307",
+          published: true,
+        },
+        bogdanka: {
+          type: "place",
+          name: "LUBELSKI WĘGIEL BOGDANKA",
+          krsNumber: "0000004549",
+          published: true,
+        },
+      },
+      edges: { "zuk-pge": pgeSeat("zuk") },
+      revisions: {},
+    };
+    mockCollection.mockImplementation((name: string) => fakeCollection(name));
+    mockBatch.mockReturnValue({
+      commit: mockCommit,
+      set: vi.fn(),
+      update: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    mockCollection.mockReset();
+    mockCollection.mockReturnValue({ where: mockWhere, doc: mockDoc });
+    mockBatch.mockReturnValue({ commit: mockCommit, set: vi.fn() });
+  });
+
+  it("lands on the published page that already shows one of its jobs", async () => {
+    // The night made a draft „Krzysztof Żuk” beside this page on 2026-11-06
+    // and filed his jobs there a second time: no page had the entry or the
+    // date, and none the exact name.
+    payload();
+
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ personId: "zuk", person: "updated" });
+    expect(personRevisionTargets()).toEqual(["zuk"]);
+    // The page takes the entry and the date, and keeps its fuller name.
+    expect(createRevisionTransaction).toHaveBeenCalledWith(
+      mockDb,
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ id: "zuk" }),
+      expect.objectContaining({
+        name: "Krzysztof Jan Żuk",
+        rejestrIo: "https://rejestr.io/osoby/1295123",
+        birthDate: "1957-06-21",
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("lands there for a payload without a birth date too", async () => {
+    payload({ birthDate: undefined });
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("zuk");
+  });
+
+  it("puts the jobs it adds on the page live, as a shown job vouches for an adopted link", async () => {
+    // `verifiedEmployments`, unchanged: the page is live, adopts the entry in
+    // this request, and the payload restates the PGE seat it shows.
+    payload();
+
+    await handler({} as any);
+
+    const bogdanka = vi
+      .mocked(createRevisionTransaction)
+      .mock.calls.find(([, , , ref]) =>
+        (ref as unknown as { id: string }).id.startsWith(
+          "edge_zuk_bogdanka_employed",
+        ),
+      );
+    expect(bogdanka?.[5]).toMatchObject({ approve: true, published: true });
+  });
+
+  it("takes a page past a page of its exact name that links another entry", async () => {
+    // Andrzej Olszewski's: the night of 11-05 found the page of his exact
+    // name, linked to a namesake's entry, and made a draft rather than look
+    // at „Andrzej Mieczysław Olszewski”, which showed both his seats.
+    store.nodes!.namesake = page({
+      name: "Krzysztof Żuk",
+      rejestrIo: "https://rejestr.io/osoby/777",
+      published: false,
+    });
+    payload();
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("zuk");
+  });
+
+  it("takes the page of its exact name first, as before", async () => {
+    store.nodes!.exact = page({ name: "Krzysztof Żuk", published: false });
+    payload();
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("exact");
+  });
+
+  it("follows a merged page to the page it was merged into", async () => {
+    store.nodes!.zuk = page({ merged_into: "survivor" });
+    store.nodes!.survivor = page();
+    store.edges = { "survivor-pge": pgeSeat("survivor") };
+    payload();
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("survivor");
+  });
+
+  it("holds the payload back where two such pages show its jobs", async () => {
+    // Which of the two the entry is, is a reviewer's question.
+    store.nodes!.other = page({ name: "Krzysztof Józef Żuk" });
+    store.edges!["other-pge"] = pgeSeat("other");
+    payload();
+
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 409,
+      message: expect.stringContaining("zuk, other"),
+    });
+    expect(createRevisionTransaction).not.toHaveBeenCalled();
+  });
+
+  describe("gives the payload a page of its own", () => {
+    it.each([
+      ["a job begun on another day", { start_date: "2010-03-04" }],
+      ["another role at the company", { name: "Zarząd" }],
+      ["a job a reviewer removed", { deleted: true }],
+    ])("beside a page whose only match is %s", async (_, seat) => {
+      store.edges = { "zuk-pge": pgeSeat("zuk", seat) };
+      payload();
+
+      const result = await handler({} as any);
+
+      expect(result).toMatchObject({
+        personId: "new-nodes-id",
+        person: "created",
+      });
+      expect(personRevisionTargets()).toEqual(["new-nodes-id"]);
+    });
+
+    it.each([
+      ["links a register entry", { rejestrIo: "https://rejestr.io/osoby/777" }],
+      ["stores another birth date", { birthDate: "1960-01-01" }],
+      ["stores a year of birth", { birthDate: "1957" }],
+      ["was removed", { deleted: true }],
+    ])("beside a page that %s", async (_, fields) => {
+      store.nodes!.zuk = page(fields);
+      payload();
+
+      const result = await handler({} as any);
+
+      expect(result.person).toBe("created");
+      expect(personRevisionTargets()).toEqual(["new-nodes-id"]);
+    });
+
+    it("beside a page with another middle name than the payload's", async () => {
+      payload({ name: "Krzysztof Adam Żuk" });
+
+      const result = await handler({} as any);
+
+      expect(result.person).toBe("created");
+    });
+
+    it("for a job with no start, which names no day to share", async () => {
+      store.edges = { "zuk-pge": pgeSeat("zuk", { start_date: undefined }) };
+      payload({
+        companies: [{ krs: "0000059307", role: "Rada Nadzorcza" }],
+      });
+
+      const result = await handler({} as any);
+
+      expect(result.person).toBe("created");
+    });
+  });
+});
+
 describe("api/ingest/person, jobs from the register entry a published page links", () => {
   /** Every collection the request reads, keyed by id. Answered by filtering,
    * like the suite above, because what matters here is which stored edges and
