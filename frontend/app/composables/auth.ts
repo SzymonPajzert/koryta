@@ -20,6 +20,11 @@ import {
 } from "firebase/firestore";
 import type { NotificationPreferences } from "~~/shared/notifications";
 import type { CampaignTopic, NewsletterUpdate } from "~~/shared/campaigns";
+import {
+  idTokenResultIfReachable,
+  idTokenWhenOnline,
+  ignoreNetworkFailure,
+} from "~/utils/tokenRefresh";
 
 /** Which campaign topics a reader asked for - see `shared/campaigns.ts`.
  * Absent means never asked, which is no. */
@@ -56,20 +61,33 @@ export function useAuthState() {
   const db = getFirestore(useFirebaseApp(), "koryta-pl");
 
   const user = useCurrentUser();
-  const isAdmin = computedAsync(
-    async () =>
-      await user.value?.getIdTokenResult().then((r) => !!r.claims.admin),
-  );
+  /** The claims on the reader's ID token, for the three flags below:
+   * `undefined` while nobody is signed in, until the token has been read, and
+   * while it needs a refresh there is no network for (`tokenRefresh.ts`).
+   *
+   * One read for all three. Each flag used to read the token itself, and a
+   * page has many components that call this, so an expired token was sent to
+   * be refreshed three times per component - and on a device woken with no
+   * network, failed three times per component. */
+  const claims = computedAsync(async () => {
+    const current = user.value;
+    if (!current) return undefined;
+    return (await idTokenResultIfReachable(current))?.claims;
+  });
+  const isAdmin = computed(() => claims.value && !!claims.value.admin);
   /** The site's owner, whose task list (/admin/zadania) no other admin sees. */
-  const isOwner = computedAsync(
-    async () =>
-      await user.value?.getIdTokenResult().then((r) => !!r.claims.owner),
+  const isOwner = computed(() => claims.value && !!claims.value.owner);
+  const isDatascience = computed(
+    () => claims.value && !!claims.value.datascience,
   );
-  const isDatascience = computedAsync(
-    async () =>
-      await user.value?.getIdTokenResult().then((r) => !!r.claims.datascience),
-  );
-  const idToken = computed(() => user.value?.getIdToken());
+  /** A promise of the token, read only for whether there is one and never
+   * awaited, so a failed refresh had nobody to handle it. Offline it no
+   * longer reports itself; any other failure still does. */
+  const idToken = computed(() => {
+    const token = user.value?.getIdToken();
+    token?.catch(ignoreNetworkFailure);
+    return token;
+  });
   const auth = useFirebaseAuth()!;
 
   const userConfigRef = computed(() =>
@@ -146,6 +164,10 @@ async function waitForAuthReady() {
  * caller of the aborted request is left awaiting a promise that never
  * settles, so a submit button would spin forever even though the request
  * itself went through.
+ *
+ * A token that needs a refresh while the browser is offline holds the
+ * request until it is back online (`idTokenWhenOnline`); the request could
+ * not have gone out before that anyway.
  */
 export async function authRequest<T>(
   url: string,
@@ -168,7 +190,10 @@ export async function authRequest<T>(
   const user = useCurrentUser();
   const headers = new Headers();
   if (user.value) {
-    headers.set("Authorization", `Bearer ${await user.value.getIdToken()}`);
+    headers.set(
+      "Authorization",
+      `Bearer ${await idTokenWhenOnline(user.value)}`,
+    );
   }
 
   return await $fetch<T>(url, {
@@ -195,7 +220,7 @@ export async function authHeaders(
   user: User | null | undefined,
 ): Promise<Record<string, string>> {
   if (!user) return {};
-  return { Authorization: `Bearer ${await user.getIdToken()}` };
+  return { Authorization: `Bearer ${await idTokenWhenOnline(user)}` };
 }
 
 /** The counterpart to `authRequest`: a request sent deliberately without
@@ -246,7 +271,7 @@ export const authFetch = createUseFetch({
       // looks at the header (`eventIsAuthenticated` is stubbed to false); and
       // `readerAwareCachedEventHandler` exists precisely to resolve the reader
       // before the cache is consulted. No route rule caches /api either.
-      const token = await user.value.getIdToken();
+      const token = await idTokenWhenOnline(user.value);
       const headers = new Headers(unref(options.headers) || {});
       headers.set("Authorization", `Bearer ${token}`);
       options.headers = headers;
