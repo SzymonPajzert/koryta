@@ -96,9 +96,9 @@ rejestr.io's for every company where the odpis is the newer of the two, on the w
 1. Writes a table of the entries found - KRS, register, NIP, name, city - that `krs_odpis --krs-file` reads as it is
 
 ## nightly
-1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_register_owners --new-registrations`, `krs_odpis --queue --missing public`, `krs_scrape_paid --scope fallback --max-calls 50`, the held pipelines whose code changed, every pipeline rebuilt but the held ones (backed up as `main`), the pipeline tests, the output checks, the invariants, the companies the night's people name that the export has no page for (`people_import` as the people step runs it, with `--companies-only`), `people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --max-rejestrio-current 50 --max-published 10` and `score_import`
+1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_register_owners --new-registrations`, `krs_odpis --queue --missing public`, `krs_scrape_paid --scope fallback --max-calls 50`, the held pipelines whose code changed, every pipeline rebuilt but the held ones (backed up as `main`), the pipeline tests, the output checks, the invariants, the companies the night's people name that the export has no page for (`people_import` as the people step runs it, with `--companies-only`), `people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --max-rejestrio-current 50 --max-published 10`, `company_import --max-uploads 1000 --max-renames 0` and `score_import`
 1. The held pipelines are the ones whose sources change with a dump or an election (`HELD`). Each night the six of them it can rebuild in minutes are compared, by the git hashes of the paths they are built from, with what their last build on the VM recorded in its state dir, and each that differs - or has no record - is rebuilt alone with `koryta <Name> --refresh <Name>` before the reprocess, which still holds it. One that fails keeps the copy on disk and is tried again the next night, without failing the night or holding the people
-1. A step that fails holds only the steps that depend on it; the people and the scores wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing. The companies step runs only when the people may - skipped, not held, when they may not - and holds nothing back
+1. A step that fails holds only the steps that depend on it; the people and the scores wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing. The companies step and the company updates after the people run only when the people may - skipped, not held, when they may not - and hold nothing back
 1. Writes its summary to the shared cache (`jobs/nightly/runs/`) and its log beside it (`jobs/nightly/logs/`)
 
 Started by a systemd timer on the VM at 04:30, after the export - see [data/nightly/README.md](../../../nightly/README.md).
@@ -153,6 +153,19 @@ renews the token once and sends the request again; a token that cannot be renewe
 
 With neither of the first two set, whoever runs it signs in through the browser, as before, and again when the
 site answers 401.
+
+## company_import
+1. Refuses an export that is not today's, or not the one the night's export step took (`--export`), as `people_import` does, and rebuilds the frames of it on disk not built from it (`KorytaNodes`, `KorytaEdges`, `KorytaCompanies`)
+1. Builds a payload for every company the site has a page for (`CompaniesPayloads.build`) over `Companies` as it is on disk - on the VM the reprocess's, elsewhere the newest backup - and keeps the ones whose page would change (`SiteSnapshot.company_changes`), as `koryta CompaniesPayloads --only-changed` does
+1. Holds back, and names in its run's warnings for a hand upload: a payload that would make a public company private, the companies in `HAND_ONLY`, and one the site has no page for under its KRS number. Keeps the name the site shows, unless `--max-renames` lets the register's in; a payload that would change nothing else is not sent
+1. Writes what it is about to send to the shared cache (`jobs/company_import/payloads/date=<day>/<run>.jsonl.gz`), then sends the companies turning public first and the rest as they came to `/api/ingest/company`, one by one, at the uploader's pace
+1. Writes a run summary to the shared cache (`jobs/company_import/runs/`): each company sent, what it would write and what the site did with it, each held back and why, each name kept
+
+It reports as `company_import`, as `koryta_uploader --type company` does. It stops as failed (exit 1) when the site
+creates a page - a company the export had - and after 20 refusals in a row; as partial (exit 75) at `--max-uploads`
+(3000, 1000 on the night), at `--max-minutes`, on SIGTERM after the company in hand, on Ctrl+C, and when the site
+refused some. `--dry-run` builds and counts, signs in to nothing and writes nothing of its own. Runs nightly as the
+step `company_updates`, after the people - see [data/nightly/README.md](../../../nightly/README.md).
 
 ## score_import
 1. Rebuilds every scoring model (`analysis.scores`) over what is on disk - on the VM, what the night's reprocess has just built - rating the site's people as this morning's export has them, and the pages the people import created since: `KorytaPeopleCreated` folds them from its `sent/` parts, which name the page each person went to
