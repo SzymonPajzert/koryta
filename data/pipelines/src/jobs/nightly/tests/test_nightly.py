@@ -37,6 +37,7 @@ GOOD = {
     # The companies step runs the people import too, with one flag more.
     "koryta_people_import --companies-only": 0,
     "koryta_people_import": 0,
+    "koryta_company_import": 0,
     "koryta_score_import": 0,
     "compressor": 0,
     # The held pipelines' rebuilds, as `koryta <Name>`.
@@ -284,6 +285,7 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "pytest invariants",
         "koryta_people_import --companies-only",
         "koryta_people_import",
+        "koryta_company_import",
         "koryta_score_import",
     ]
     assert set(world.steps().values()) == {("succeeded", "")} | {
@@ -506,6 +508,81 @@ def test_a_people_dry_run_creates_no_company_either(world):
 
     argv, _ = world.command("koryta_people_import --companies-only")
     assert argv[-2:] == ["--dry-run", "--companies-only"]
+
+
+def test_what_tonights_data_changes_on_the_companies_goes_up_after_the_people(world):
+    """Szymon, 2026-11-12: "Can we make uploading the companies part of the
+    nightly as well, similar to the people upload?" The companies the site
+    has, sent as `koryta_company_import` sends them: over the export the
+    night took, under the night's caps, in the step's own time."""
+    assert night.main([]) == 0
+
+    ran = world.ran()
+    assert ran.index("koryta_company_import") == ran.index("koryta_people_import") + 1
+    assert ran.index("koryta_score_import") == ran.index("koryta_company_import") + 1
+    argv, env = world.command("koryta_company_import")
+    assert argv[1:] == [
+        "--max-uploads",
+        "1000",
+        "--max-renames",
+        "0",
+        "--max-minutes",
+        "30",
+        "--export",
+        FRESH,
+    ]
+    assert world.steps()["company_updates"] == ("succeeded", "")
+    assert env.get("DISABLE_BACKUP") != "1"
+
+
+def test_the_nights_company_caps_and_dry_run_reach_the_company_step(world):
+    night.main(
+        ["--max-company-uploads", "50", "--max-company-renames", "3"]
+        + ["--company-dry-run"]
+    )
+
+    argv, _ = world.command("koryta_company_import")
+    assert argv[argv.index("--max-uploads") + 1] == "50"
+    assert argv[argv.index("--max-renames") + 1] == "3"
+    assert "--dry-run" in argv
+    # The people's flags are the people's.
+    people, _ = world.command("koryta_people_import")
+    assert "--dry-run" not in people
+    assert people[people.index("--max-uploads") + 1] == "100"
+
+
+def test_a_held_upload_skips_the_company_changes_too(world):
+    world.export = STALE
+
+    assert night.main([]) == night.EXIT_TRY_LATER
+
+    assert world.steps()["company_updates"] == (
+        "skipped",
+        "pominięte - osoby wstrzymane: nie ma dzisiejszej kopii bazy",
+    )
+    assert "koryta_company_import" not in world.ran()
+    ending = world.runs[-1].ending()
+    assert ending["stop_reason"] == (
+        "people: held - wstrzymane: nie ma dzisiejszej kopii bazy"
+    )
+
+
+def test_what_the_company_step_leaves_or_breaks_holds_nothing_after_it(world):
+    world.codes["koryta_company_import"] = night.EXIT_TRY_LATER
+
+    assert night.main([]) == 0
+
+    assert world.steps()["company_updates"] == ("partial", "zostało na następny raz")
+    assert world.steps()["scores"] == ("succeeded", "")
+
+    world.commands.clear()
+    world.objects.clear()
+    world.codes["koryta_company_import"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["company_updates"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["scores"] == ("succeeded", "")
 
 
 def test_the_scores_go_up_after_the_people_within_the_steps_time(world):
@@ -1221,8 +1298,13 @@ def test_the_scores_do_not_wait_on_how_the_people_went(world):
     assert night.main([]) == night.EXIT_FAILED
 
     assert world.steps()["people"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["company_updates"] == ("succeeded", "")
     assert world.steps()["scores"] == ("succeeded", "")
-    assert world.ran()[-2:] == ["koryta_people_import", "koryta_score_import"]
+    assert world.ran()[-3:] == [
+        "koryta_people_import",
+        "koryta_company_import",
+        "koryta_score_import",
+    ]
 
 
 def test_a_failed_score_upload_fails_the_night(world):
@@ -1334,6 +1416,11 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
         "--max-published 10 --export <the export step's> --companies-only: the "
         "companies the people step's people name that the export has no page "
         "for, created first" in out
+    )
+    assert (
+        "koryta_company_import --max-uploads 1000 --max-renames 0 --export <the "
+        "export step's>: what tonight's data changes on the companies the site "
+        "has, those turning public first; none made private" in out
     )
     assert "koryta_score_import" in out
     assert "koryta_scrape_krs_paid --scope fallback --max-calls 50" in out

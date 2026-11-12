@@ -16,6 +16,7 @@
     koryta_nightly --register-backlog 2000
                                       # the register's backlog too, not only
                                       # the day's new registrations
+    koryta_nightly --company-dry-run  # count the companies' changes; send none
 
 The steps, in order (`STEPS`):
 
@@ -66,6 +67,13 @@ The steps, in order (`STEPS`):
                 sends them; and with --fill-rejestrio-current, more of the
                 people with a rejestr.io entry when that comes to fewer than
                 --max-uploads
+    company_updates
+                koryta_company_import: what tonight's data changes on the
+                pages of the companies the export has - sectors, register
+                fields, owners and founders, whether the public owns one -
+                at most --max-company-uploads (1000), those turning public
+                first; never a public company made private, and the names
+                the site shows kept, but --max-company-renames (0)
     scores      koryta_score_import: every scoring model rebuilt over the
                 day's newest export and the pages the people step has just
                 created, and its votes reconciled with the site's
@@ -98,7 +106,8 @@ night; only the steps that depend on it are held:
   up - skipped, not held, when they may not, so that a held night still names
   the people as what it held - and holds nothing back itself: the people go
   up whatever it did, and the uploader still creates on the way a company it
-  could not.
+  could not. `company_updates` the same: after the people, which it neither
+  waits for nor holds, as nothing it sends is anything they read.
 
 `companies` plans tonight's people as the people step plans them - one argv
 for both (`people_argv`), the same outputs on disk, nothing sent in between -
@@ -484,6 +493,9 @@ STEPS = (
     # company: 16 that night.
     Step("companies", "firmy", 20),
     Step("people", "osoby", 60),
+    # Two minutes to build and compare on predator over the 2026-11-11 export,
+    # and the hand uploads' pace: 290 companies in 3 minutes on 2026-10-29.
+    Step("company_updates", "zmiany firm", 30),
     Step("scores", "oceny", 30),
     Step("tidy", "porządki", 5, always=True),
 )
@@ -1089,7 +1101,9 @@ class Night:
             return "wstrzymane: brak kopii bazy"
         if step.name in ("tests", "outputs") and not self.came_through("reprocess"):
             return "wstrzymane: potoki się nie przeliczyły"
-        if step.name == "companies" and (held := self.why_not_upload()):
+        if step.name in ("companies", "company_updates") and (
+            held := self.why_not_upload()
+        ):
             # Skipped, not held: what the night held is the people.
             return f"pominięte - osoby {held}"
         if step.name in ("people", "scores"):
@@ -1490,6 +1504,35 @@ class Night:
     def step_people(self, step: Step) -> tuple[str, str, int | None]:
         return self.judge_job(*self.process(step, self.people_argv(step)))
 
+    def company_argv(self, step: Step) -> list[str]:
+        """The company import as the company_updates step runs it, in
+        `step`'s time, over the export the export step took."""
+        argv = [
+            bin_path("koryta_company_import"),
+            *self.company_limits(),
+            "--max-minutes",
+            f"{self.minutes_for(step):.0f}",
+        ]
+        if self.summary.export_fresh:
+            argv += ["--export", self.summary.export]
+        return argv
+
+    def company_limits(self) -> list[str]:
+        """The company import's caps, and --dry-run, as the night was given
+        them."""
+        argv = [
+            "--max-uploads",
+            str(self.args.max_company_uploads),
+            "--max-renames",
+            str(self.args.max_company_renames),
+        ]
+        if self.args.company_dry_run:
+            argv.append("--dry-run")
+        return argv
+
+    def step_company_updates(self, step: Step) -> tuple[str, str, int | None]:
+        return self.judge_job(*self.process(step, self.company_argv(step)))
+
     def step_scores(self, step: Step) -> tuple[str, str, int | None]:
         # The models are rebuilt over the newest export of the day; the rest
         # of what they read is the reprocess's, on disk, and the pages the
@@ -1575,6 +1618,11 @@ class Night:
             "companies": f"{people} --companies-only: the companies the people "
             "step's people name that the export has no page for, created first",
             "people": people,
+            "company_updates": "koryta_company_import "
+            + " ".join(self.company_limits())
+            + (" --export <the export step's>" if self.needs("export") else "")
+            + ": what tonight's data changes on the companies the site has, "
+            "those turning public first; none made private",
             "scores": "koryta_score_import: every scoring model, tonight's new "
             "pages included",
             "compress": "compressor -incremental -hostname "
@@ -1816,6 +1864,29 @@ def parser() -> argparse.ArgumentParser:
         help="When the people step's plan comes to fewer than --max-uploads, "
         "fill the slots left with more people with a rejestr.io entry in a "
         "public post that is not new, past --max-rejestrio-current.",
+    )
+    parser.add_argument(
+        "--max-company-uploads",
+        type=positive_int,
+        default=1000,
+        help="Companies whose page the night changes at most, the ones turning "
+        "public first; the rest wait for the next night. Default: "
+        "%(default)s, more than the 663 changes waiting on 2026-11-11.",
+    )
+    parser.add_argument(
+        "--max-company-renames",
+        type=positive_int,
+        default=0,
+        help="Companies the night renames at most, as the register spells the "
+        "name; past it the page keeps the name it shows. Default: "
+        "%(default)s: of the 3 renames waiting on 2026-11-11, 2 were the "
+        "pipelines' slips.",
+    )
+    parser.add_argument(
+        "--company-dry-run",
+        action="store_true",
+        help="Build and count what the night would change on the companies the "
+        "site has; send none of it.",
     )
     parser.add_argument(
         "--krs-minutes",
