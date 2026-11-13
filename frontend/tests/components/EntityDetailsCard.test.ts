@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
 import { computed, nextTick, ref } from "vue";
+import * as firestore from "firebase/firestore";
 import EntityDetailsCard from "../../app/components/EntityDetailsCard.vue";
 import { authRequest, useAuthState } from "~/composables/auth";
 import type { Article, Person } from "../../shared/model";
@@ -202,6 +203,24 @@ describe("EntityDetailsCard", () => {
       },
     });
     expect(live.text()).not.toContain("szkic");
+  });
+
+  /** What the stand-in for `useVotes` above is for: no mount here may leave a
+   * live Firestore listener behind. With no emulator it only ever logs failed
+   * connections, and one of those landing as vitest closes the worker fails
+   * the run with every test passing. A control the card gains with a listener
+   * of its own needs a stand-in as well, and this says so on the first run
+   * rather than in one CI run out of a few. An admin's card has every control
+   * there is. */
+  it("opens no Firestore listener, even with every control an admin gets", async () => {
+    const listen = vi.spyOn(firestore, "onSnapshot");
+    try {
+      await mountCard(true);
+      await flushPromises();
+      expect(listen).not.toHaveBeenCalled();
+    } finally {
+      listen.mockRestore();
+    }
   });
 });
 
