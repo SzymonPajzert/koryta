@@ -39,7 +39,9 @@ through the JSON-RPC calls of the e-Urząd app their pages embed (``finn``),
 Wrota Lubelszczyzny's document lists through the JSON their pages are drawn
 from (``wrota``), SISCO eDc's attachment tables through the call their pages'
 script makes (``sisco``), BUK Softres's file buttons as links (``softres``),
-other pages a script draws are rendered (``render``).
+Sputnik BIPv2's category lists 100 articles a page (``sputnik``), other pages
+a script draws are rendered (``render``). A page's breadcrumb says where it
+stands when its title does not (``crumbs``).
 """
 
 from __future__ import annotations
@@ -72,13 +74,14 @@ from bs4 import BeautifulSoup
 from conductor import setup_context
 from jobs.bip_crawler import (
     accordion,
+    crumbs,
     doclist,
     finn,
     person_page,
     sisco,
     softres,
+    sputnik,
     wrota,
-    zeto,
 )
 from jobs.bip_crawler import render as rendering
 from jobs.bip_crawler.identity import Agents
@@ -1038,10 +1041,12 @@ class PeopleSearch:
                 replace(x, row=owners[x.url]) if x.url in owners else x for x in links
             ]
         # A declarations page only its breadcrumb says is one: its files carry
-        # the breadcrumb, not its title, so it lends nobody a name (`zeto`).
-        if (where := zeto.trail(result.content)) and DECLARATION.search(fold(where)):
+        # the breadcrumb up to the declarations, not its title nor the crumbs
+        # after them, so it lends nobody a name (`crumbs`).
+        where = crumbs.trail(result.content)
+        if section := crumbs.declarations(where):
             links = [
-                replace(x, heading=f"{x.heading} | {where}".lstrip(" |"))
+                replace(x, heading=f"{x.heading} | {section}".lstrip(" |"))
                 if is_file_link(x.url)
                 else x
                 for x in links
@@ -1082,7 +1087,7 @@ class PeopleSearch:
                     )
                     follow = links + drawn_links
         folded_title = fold(title)
-        if DECLARATION.search(folded_title) or ASSETS.search(folded_title):
+        if DECLARATION.search(folded_title) or ASSETS.search(folded_title) or section:
             out.declaration_pages += 1
         out.found.extend(
             candidates(
@@ -1098,13 +1103,38 @@ class PeopleSearch:
         self._read_eurzad(out, result, seekers, prefer)
         self._read_wrota(out, result, seekers, prefer)
         self._read_sisco(out, result, title, seekers)
+        # Gdańsk's pages are all titled alike: its councillors' list for a
+        # year, reached from "Oświadczenia - 2024 rok", said nothing of
+        # declarations, and its links ranked below every menu (11-01).
+        says = bool(led or DECLARATION.search(folded_title + " " + fold(where)))
+        self._read_whole(frontier, result, where or title, says, seekers, depth, prefer)
         if depth < self.options.max_depth:
-            # Gdańsk's pages are all titled alike: its councillors' list for a
-            # year, reached from "Oświadczenia - 2024 rok", said nothing of
-            # declarations, and its links ranked below every menu (11-01).
-            says = led or DECLARATION.search(folded_title + " " + fold(where))
             bonus = DECLARATIONS_BONUS if says else 0.0
             frontier.follow(follow, seekers, depth + 1, prefer, bonus)
+
+    def _read_whole(
+        self,
+        frontier: _Frontier,
+        page: HttpResult,
+        where: str,
+        says: bool,
+        seekers: list[Seeker],
+        depth: int,
+        prefer: re.Pattern[str] | None,
+    ) -> None:
+        """A BIPv2 declarations list (``says``) links ten of its articles: the
+        rest wait on the same list asked for whole (`sputnik`), queued here as
+        the page it is, ``where`` its label."""
+        if not says:
+            return
+        whole = sputnik.whole_list(page.content, page.url)
+        frontier.follow(
+            [LinkContext(x, where) for x in whole],
+            seekers,
+            depth,
+            prefer,
+            DECLARATIONS_BONUS,
+        )
 
     def _read_eurzad(
         self,
@@ -1192,9 +1222,8 @@ class PeopleSearch:
         links = sisco.attachments(page, title, self._post)
         if links is None:
             return
-        folded = fold(title)
-        if not (DECLARATION.search(folded) or ASSETS.search(folded)):
-            out.declaration_pages += 1  # its breadcrumb says so, not its title
+        # A declarations page `_read_page` counted: its title or its breadcrumb
+        # (`crumbs`) says so, as `sisco.attachments` asks.
         out.found.extend(
             candidates(page.url, title, links, seekers, first_names=self.first_names)
         )

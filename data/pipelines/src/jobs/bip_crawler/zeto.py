@@ -6,7 +6,8 @@ name alone. Its breadcrumb, ``ul#trescLokator``, says "Oświadczenia majątkowe 
 2025 rok > Rada Powiatu", and a file on such a page ("plik w formacie pdf" in
 a row "Gruszka Wojciech") said nothing of being a declaration: named, it was
 not declaration-like, and nothing came down. `trail` reads the breadcrumb, for
-the page's files to carry in their heading.
+the page's files to carry in their heading (`crumbs`, which reads other
+platforms' too).
 """
 
 from __future__ import annotations
