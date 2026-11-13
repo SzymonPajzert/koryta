@@ -555,18 +555,26 @@ def declarants(link: LinkContext, seekers: list[Seeker]) -> set[tuple[str, str]]
     }
 
 
+#: A spaced dash or bar between a person's name and their office in a label.
+_LABEL_TAIL = re.compile(r"\s+[-–—|]\s+")
+
+
 def named_by_label(link: LinkContext, seekers: list[Seeker]) -> set[tuple[str, str]]:
     """The seekers a link's label names, first name and all, when the label is
-    a name and nothing more (two to four words, no digits)."""
-    label = fold(link.anchor)
-    words = label.split()
-    if not 2 <= len(words) <= 4 or any(c.isdigit() for c in label):
-        return set()
-    return {
-        s.name
-        for s in seekers
-        if all(s.named_in(label)) and not _joined_to_another(s, [link.anchor])
-    }
+    a name and nothing more (two to four words, no digits), or a name before a
+    spaced dash or bar: SkyCMS's "Lakwa Henryk - Przewodniczący Zarządu
+    Powiatu" (11-13). On the raw label: fold() takes the dash away."""
+    head = _LABEL_TAIL.split(link.anchor or "", maxsplit=1)[0]
+    for label in dict.fromkeys((fold(link.anchor), fold(head))):
+        words = label.split()
+        if 2 <= len(words) <= 4 and not any(c.isdigit() for c in label):
+            if named := {
+                s.name
+                for s in seekers
+                if all(s.named_in(label)) and not _joined_to_another(s, [link.anchor])
+            }:
+                return named
+    return set()
 
 
 def says_declarations(link: LinkContext) -> bool:
