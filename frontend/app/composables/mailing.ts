@@ -1,5 +1,7 @@
 import { ref } from "vue";
 import { authRequest } from "~/composables/auth";
+import { nominativeNoun, polishCountingGenitive } from "~/composables/polish";
+import { CAMPAIGN_BATCH_SIZE } from "~~/shared/campaignPacing";
 import type {
   Audience,
   CampaignContent,
@@ -14,6 +16,77 @@ export function mailingError(error: unknown): string {
   const data = (error as { data?: { message?: string } } | null)?.data;
   if (data?.message) return data.message;
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Where a reader stands with the open campaign. `failed`: it was sent and
+ * the delivery failed. `received`: they have it, or it is on its way to them,
+ * so a send skips them. A failed message never arrived and a withdrawn one
+ * never went, and a send writes either afresh (queueOne in
+ * server/utils/mailCampaigns.ts), so neither counts as received. */
+export function campaignStanding(
+  delivery: Delivery | null,
+  isRecipient: boolean,
+): { failed: boolean; received: boolean } {
+  const failed = delivery?.state === "ERROR";
+  const neverArrived = failed || delivery?.state === "WITHDRAWN";
+  return { failed, received: isRecipient && !neverArrived };
+}
+
+/** The confirmation's first sentence: how many people a send goes to, and
+ * how many of them get it again after a failed delivery. */
+export function campaignSendQuestion(count: number, retries: number): string {
+  const people = polishCountingGenitive(count, "osoby", "osób");
+  if (count > 0 && retries === count) {
+    return `Kampania pójdzie ponownie do ${people}, po błędzie wysyłki.`;
+  }
+  if (retries > 0) {
+    return `Kampania pójdzie do ${people} (do ${retries} z nich ponownie, po błędzie wysyłki).`;
+  }
+  return `Kampania pójdzie do ${people}.`;
+}
+
+/** When the mail that waits goes out: within minutes, or from tomorrow once
+ * the day's allowance is spent. `queue.waiting` counts every campaign's held
+ * mail, so where more waits than this send queued, the note says how much. */
+function paceNote(queue: CampaignQueue, queuedNow: number): string {
+  if (queue.waiting === 0) return "";
+  if (queue.waiting <= queue.leftToday) {
+    return `Wychodzą po ${CAMPAIGN_BATCH_SIZE} na minutę.`;
+  }
+  const waiting =
+    queue.waiting === queuedNow ? "" : `W kolejce: ${queue.waiting}. `;
+  if (queue.leftToday === 0) {
+    return `${waiting}Dzisiejszy limit jest już wykorzystany, wysyłka ruszy jutro.`;
+  }
+  const go = nominativeNoun(queue.leftToday, "wyjdzie", "wyjdą", "wyjdzie");
+  return `${waiting}Dziś ${go} jeszcze ${queue.leftToday}, reszta od jutra.`;
+}
+
+/** What the page says once a send is done: how many were queued, how many
+ * of them again after a failed delivery, how many were skipped, and when what
+ * waits goes out. Red only when nobody was queued. */
+export function campaignSendNotice(
+  outcomes: Record<string, SendOutcome>,
+  queue: CampaignQueue,
+): { text: string; color: "success" | "error" } {
+  const values = Object.values(outcomes);
+  const requeued = values.filter((o) => o === "requeued").length;
+  const queued = values.filter((o) => o === "queued").length + requeued;
+  const skipped = values.length - queued;
+  const sent =
+    requeued > 0 && requeued === queued
+      ? `Ponownie do kolejki: ${queued}.`
+      : `Wysłano do kolejki: ${queued}${requeued > 0 ? `, w tym ponownie: ${requeued}` : ""}.`;
+  return {
+    text: [
+      sent,
+      skipped > 0 ? `Pominięto: ${skipped} - szczegóły w wynikach.` : "",
+      queued > 0 ? paceNote(queue, queued) : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+    color: skipped > 0 && queued === 0 ? "error" : "success",
+  };
 }
 
 /** The owner's campaigns for /admin/mailing: who could get one, what each
