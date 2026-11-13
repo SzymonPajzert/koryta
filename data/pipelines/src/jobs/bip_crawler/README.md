@@ -168,7 +168,16 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   `--max-per-host`, 1, on one start host: they share its rate; and at most
   `--max-per-server`, 2, on one server, the address the start hosts resolve to:
   a hosting platform serves dozens of BIPs under their own names), `--rate` the
-  seconds between hits on one host, from the first one (no burst).
+  seconds between hits on one host, from the first one (no burst). A server in
+  `pace.py`'s table is asked once in its own interval, whichever of its hosts a
+  request is for: ZETO Lublin's e-zeto (185.182.96.228) answers 403 to a client
+  asking about once a second, and gets 15 s.
+- ZETO Lublin's e-zeto BIPs (`ezeto.py`) offer a list's further pages as form
+  buttons, read as links to them, and spell one page many ways, which
+  `normalize_url` gives one address: the query encoded whole, as the server
+  answers a pager's page only. A list that names a document in its heading
+  alone, its link saying "przejdź do dokumentu", has that link read under the
+  document's name when the name says it is a seeker's declaration.
 - One crawler per `--out`: the startup repair re-wraps every `.part` bundle
   there, so a second run on the same directory refuses to start
   (`.crawl.lock`).

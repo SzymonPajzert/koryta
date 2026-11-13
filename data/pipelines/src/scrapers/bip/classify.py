@@ -8,6 +8,7 @@ documents, which are junk, and which sections to crawl first.
 from __future__ import annotations
 
 import re
+from urllib.parse import quote
 
 from entities.util import format_query, parse_query
 
@@ -132,6 +133,50 @@ _NOISE_QUERY_PREFIXES = ("switch_",)
 # nests deeper on each visit (bip.warszawa.pl, 11-01: one councillor's page as
 # a dozen URLs).
 _NOISE_QUERY_SUFFIXES = ("redirect", "backurl")
+# ZETO Lublin's e-zeto pages: index.php?type=4&func=selectsite&value[0]=mnu55
+# &value[1]=12, a list's further pages func=dispNaviBar (`jobs.bip_crawler.ezeto`).
+_EZETO_FUNCS = frozenset({"selectsite", "dispnavibar"})
+# What its server reads past: a link's name=bt<N>, numbered anew each render,
+# or a breadcrumb's name=vb, whose page also carries value[2..4] (its buttons
+# param[wartosc][2..4]) = selectsite, 0, 0. The same page byte for byte, the
+# breadcrumb's but for the buttons' names (11-13).
+_EZETO_NAME = re.compile(r"bt\d+|vb")
+_EZETO_BREADCRUMB = frozenset(
+    (f"{key}[{i}]", value)
+    for key in ("value", "param[wartosc]")
+    for i, value in (("2", "selectsite"), ("3", "0"), ("4", "0"))
+)
+
+
+def _ezeto_url(base: str, pairs: list[tuple[str, str]]) -> str | None:
+    """An e-zeto page's one address; None for any other page.
+
+    Its links spell a page a dozen ways: the whole query percent-encoded once
+    more (index.php?type%3D4%26name%3Dbt31%26func%3Dselectsite...) or not,
+    under a name the server reads past (`_EZETO_NAME`). Read as one parameter,
+    an encoded query came back as "...=", which opens the home page instead of
+    a document; decoded, a list's further page is the home page too: the server
+    reads a pager's page only so encoded (11-13). So the query is decoded,
+    stripped of those, sorted and encoded whole once more: the bytes the site's
+    own link gets, for a menu's page, a document and a pager's page alike.
+    """
+    if not base.lower().endswith("/index.php"):
+        return None
+    if len(pairs) == 1 and not pairs[0][1] and "=" in pairs[0][0]:
+        pairs = parse_query(pairs[0][0])  # encoded whole
+    if ("type", "4") not in pairs or not any(
+        k == "func" and v.lower() in _EZETO_FUNCS for k, v in pairs
+    ):
+        return None
+    kept = sorted(
+        {
+            (key, value)
+            for key, value in pairs
+            if not (key == "name" and _EZETO_NAME.fullmatch(value))
+            and (key, value) not in _EZETO_BREADCRUMB
+        }
+    )
+    return f"{base}?{quote(format_query(kept), safe='')}"
 
 
 def normalize_url(url: str) -> str:
@@ -142,6 +187,7 @@ def normalize_url(url: str) -> str:
     supply of distinct URLs from one page. Unescaping `&amp;`, stripping `amp;`
     prefixes from parameter names, dropping presentation-only toggles and
     duplicate pairs, and sorting the rest makes those permutations converge.
+    An e-zeto page gets the one address its server answers (`_ezeto_url`).
     """
     clean = _AMP_ENTITY_RE.sub("&", url).split("#", maxsplit=1)[0].strip()
     if clean.endswith("/") and clean.count("/") > 3:
@@ -152,6 +198,8 @@ def normalize_url(url: str) -> str:
     pairs: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
     parsed = [(_AMP_PREFIX_RE.sub("", key), value) for key, value in parse_query(query)]
+    if (ezeto := _ezeto_url(base, parsed)) is not None:
+        return ezeto
     # AkcessNet (?idg=) places a page in its menu by x and y: without them every
     # page below the top answers "Błąd 404", articles included (10-31).
     noise = _NOISE_QUERY_PARAMS

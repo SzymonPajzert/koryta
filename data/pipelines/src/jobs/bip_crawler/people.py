@@ -73,6 +73,7 @@ from conductor import setup_context
 from jobs.bip_crawler import (
     accordion,
     doclist,
+    ezeto,
     finn,
     person_page,
     sisco,
@@ -83,6 +84,7 @@ from jobs.bip_crawler import (
 from jobs.bip_crawler import render as rendering
 from jobs.bip_crawler.identity import Agents
 from jobs.bip_crawler.madkom import Madkom, search_base, search_url
+from jobs.bip_crawler.pace import Paces
 from jobs.bip_crawler.people_list import (
     list_policy,
     outcomes,
@@ -289,6 +291,21 @@ class _Frontier:
 
     def has(self, url: str) -> bool:
         return _same_page(url) in self.seen
+
+    def continue_list(
+        self,
+        pages: list[LinkContext],
+        declared: bool,
+        lender: tuple[str, str] | None,
+    ) -> None:
+        """A list's further pages (`ezeto.pager`) are what its first is:
+        declarations, or one seeker's, whatever their buttons say."""
+        for page in pages:
+            target = normalize_url(page.url)
+            if declared:
+                self.declared.add(target)
+            if lender is not None:
+                self.lenders.setdefault(target, lender)
 
     def pop(self) -> tuple[int, str]:
         _, depth, _, url = heapq.heappop(self.heap)
@@ -593,6 +610,11 @@ class PeopleSearch:
         self.limiter = limiter or HostTokenBucket(
             options.rate_interval_s, burst_window_s=options.rate_interval_s
         )
+        #: A host's server where the server wants its own pace (`pace`), and
+        #: that server's turns, which every unit on it shares.
+        self.paces = Paces(resolve)
+        self._server_turns: dict[str, HostTokenBucket] = {}
+        self._server_turns_lock = threading.Lock()
         self.sleep = sleep
         self.clock = clock
         self.run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -686,8 +708,23 @@ class PeopleSearch:
         return result
 
     def _wait_turn(self, host: str) -> None:
-        while not self.limiter.acquire(host):
-            self.sleep(max(0.05, self.limiter.next_available_in(host)))
+        """The host's turn at the rate, then its server's where that server
+        wants a slower pace (`pace.SERVERS`): one turn for all its hosts."""
+        self._take(self.limiter, host)
+        server, interval = self.paces(host)
+        if server:
+            with self._server_turns_lock:
+                turns = self._server_turns.get(server)
+                if turns is None:
+                    turns = HostTokenBucket(
+                        interval, burst_window_s=interval, clock=self.clock
+                    )
+                    self._server_turns[server] = turns
+            self._take(turns, server)
+
+    def _take(self, bucket: HostTokenBucket, key: str) -> None:
+        while not bucket.acquire(key):
+            self.sleep(max(0.05, bucket.next_available_in(key)))
 
     def _get_page(self, url: str) -> HttpResult | str:
         """A page of the walk: on a Madkom BIP drawn from its API (`madkom`), at
@@ -1012,6 +1049,12 @@ class PeopleSearch:
             title = f"{who} | {title}"
         # Files offered as form buttons, under the position's name (`softres`).
         links = links + softres.files(result.content, result.url)
+        # A list's further pages offered as buttons, which are what the list is,
+        # and a seeker's documents named in their headings only (`ezeto`).
+        links, pages = ezeto.links(result.content, result.url, title, links, seekers)
+        frontier.continue_list(
+            pages, led or bool(DECLARATION.search(fold(title))), lender
+        )
         # Documents a Vue component draws from JSON, under the subject (`doclist`).
         links = links + doclist.links(result.content, result.url, self._get)
         # A Madkom list too long to read: its search box, asked for each seeker.

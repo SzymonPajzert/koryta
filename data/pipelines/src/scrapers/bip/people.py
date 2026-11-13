@@ -365,6 +365,19 @@ def same_file(url: str) -> str:
     return host_of(clean) + path_of(clean)
 
 
+#: What a page link naming a seeker by first name and surname scores beside the
+#: surname's 3: above any declarations menu, whose links score up to 9.5 at
+#: depth 1. Gdańsk lists each year's councillors as links to their pages, its
+#: titles all alike; the walk read every year's menus first, 840 pages and no
+#: declaration (11-01). Powiat bolesławiecki's left menu, ~940 links on every
+#: page, holds an "OŚWIADCZENIA MAJĄTKOWE" tree of officials and offices scoring
+#: 7.5 to 9.5, while "Jacek Łuczkowski" scored 5.5: the walk read 29 pages and
+#: never opened him; at 12 it found him in 3 pages (11-13). That menu lists
+#: every term's councillors as well, and a page is queued at the score of its
+#: first link: a name in a site's menu counts as one in the content.
+FULL_NAME = 12.0
+
+
 def link_score(
     link: LinkContext,
     seekers: list[Seeker],
@@ -396,11 +409,9 @@ def link_score(
     if any(surname for surname, _ in named):
         score += 3
     # First name and all: a person's own page, read before the menus around
-    # it. Gdańsk lists each year's councillors as links to their pages, its
-    # titles all alike; the walk read every year's menus first, 840 pages and
-    # no declaration (11-01).
+    # it (`FULL_NAME`).
     if any(surname and first for surname, first in named):
-        score += 3
+        score += FULL_NAME
     # A label that says it is a seeker's declaration, first name and all, is
     # read before the next person on a list: Mazowieckie's councillors' pages
     # each link a page per declaration, and the walk read 120 people's pages,
