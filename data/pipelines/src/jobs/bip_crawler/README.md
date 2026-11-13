@@ -214,6 +214,22 @@ koryta_scrape_bip problems --kind no_answer --csv blocked.csv
 koryta_scrape_bip problems --part state.jsonl.gz   # a part on disk
 ```
 
+### `reset`
+
+Make candidacies pending again, so the next chunk searches them: when a fix
+takes back what the crawl credited them (11-13: a menu's files stored as a
+councillor's declarations). It deletes their `bip_poi` and `bip_poi_docs` rows
+in one transaction, nothing else (the files stay in `bip_docs` and their
+bundles), each row first written to `--backup`, a new JSON file flushed to disk
+before anything goes. It refuses while a crawl holds the crawl's folder
+(`--out`, `$BIP_CRAWL_OUT`; its `.crawl.lock`), and holds it until done: run it
+between chunks.
+
+```bash
+koryta_scrape_bip reset @unfound-keys.txt --dry-run     # count; delete nothing
+koryta_scrape_bip reset @unfound-keys.txt --backup reset-2026-11-13.json
+```
+
 ### On predator: `run_chunk.sh`
 
 The people mode runs in chunks from `run_chunk.sh` beside this file: a crawl

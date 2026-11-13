@@ -1498,6 +1498,25 @@ class BipPeopleStore(metaclass=ABCMeta):
     def person_docs(self, key: str) -> list[PersonDocRow]:
         raise NotImplementedError()
 
+    @abstractmethod
+    def reset_rows(
+        self, keys: typing.Collection[str]
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Every row `reset` would delete for ``keys``, by table, read only."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def reset(
+        self,
+        keys: typing.Collection[str],
+        keep: Callable[[dict[str, list[dict[str, Any]]]], None],
+    ) -> dict[str, int]:
+        """Make ``keys`` pending again: delete what the search found for them,
+        once ``keep`` has every row it deletes, by table (a backup: it must
+        have them safe when it returns; nothing is deleted if it raises). How
+        many rows went, by table."""
+        raise NotImplementedError()
+
 
 @dataclass(frozen=True)
 class DeclarationFile:
