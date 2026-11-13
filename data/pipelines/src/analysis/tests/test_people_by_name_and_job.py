@@ -109,11 +109,38 @@ def test_lands_there_for_a_payload_without_a_birth_date_too():
 
 
 def test_takes_a_page_past_a_page_of_its_exact_name_that_links_another_entry():
-    """Andrzej Olszewski's: the page of his exact name linked a namesake's
-    entry, and „Andrzej Mieczysław Olszewski” showed both his seats."""
+    """A page of the exact name linking a namesake's entry is somebody else's,
+    and the payload goes on to the page that holds its job."""
     site = snapshot(
         [
             page("namesake", "Krzysztof Żuk", rejestrIo="https://rejestr.io/osoby/777"),
+            page("zuk"),
+        ],
+        [pge_seat("zuk")],
+    )
+
+    assert resolve(site, person()) == ("zuk", BY_NAME_AND_JOB)
+
+
+@pytest.mark.parametrize(
+    "link",
+    [
+        pytest.param({}, id="linking no entry"),
+        pytest.param(
+            {"rejestrIo": "https://rejestr.io/osoby/777"}, id="linking another entry"
+        ),
+    ],
+)
+def test_takes_a_page_past_a_page_of_its_exact_name_that_stores_another_birth_date(
+    link,
+):
+    """Andrzej Olszewski's, Tomasz Kowalski's and Jan Michalski's: the page of
+    the exact name linked a namesake's entry and stored the namesake's birth
+    date, and the date, read first, turned the payload away from it. Three of
+    the eight drafts of 11-01 to 11-11 were made past such a page."""
+    site = snapshot(
+        [
+            page("namesake", "Krzysztof Żuk", birthDate="1965-01-01", **link),
             page("zuk"),
         ],
         [pge_seat("zuk")],
@@ -129,8 +156,27 @@ def test_takes_the_page_of_its_exact_name_first_as_before():
 
 
 def test_follows_a_merged_page_to_the_page_it_was_merged_into():
+    """The merged page is reached by its own name, and the page it was merged
+    into goes by one the payload's does not agree with, so only the merge
+    leads there. Removed and unpublished, as the merge leaves a page."""
     site = snapshot(
-        [page("zuk", merged_into="survivor"), page("survivor")],
+        [
+            page("zuk", merged_into="survivor", deleted=True, published=False),
+            page("survivor", "Krzysztof Żuk-Nowak"),
+        ],
+        [pge_seat("survivor")],
+    )
+
+    assert resolve(site, person()) == ("survivor", BY_NAME_AND_JOB)
+
+
+def test_counts_once_a_page_reached_by_its_name_and_through_a_merged_page():
+    """Not two pages holding the job, which would hold the payload back."""
+    site = snapshot(
+        [
+            page("zuk", merged_into="survivor", deleted=True, published=False),
+            page("survivor"),
+        ],
         [pge_seat("survivor")],
     )
 
