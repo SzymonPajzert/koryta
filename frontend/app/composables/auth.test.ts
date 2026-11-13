@@ -206,3 +206,40 @@ describe("useAuthState claims", () => {
     expect(reportError).toHaveBeenCalledWith(failure);
   });
 });
+
+/** `idToken` is a promise read only for whether there is one, and nothing
+ * awaits it. Offline its refresh failed with nobody to handle it, and the
+ * browser reported the rejection as unhandled. */
+describe("useAuthState idToken", () => {
+  const unhandled = vi.fn();
+
+  beforeEach(() => {
+    unhandled.mockClear();
+    process.on("unhandledRejection", unhandled);
+    mockAuth.currentUser.getIdTokenResult = vi
+      .fn()
+      .mockResolvedValue({ claims: {} });
+  });
+
+  afterEach(() => {
+    process.off("unhandledRejection", unhandled);
+  });
+
+  it("leaves no unhandled rejection behind when the refresh fails offline", async () => {
+    // A plain function, not a `vi.fn`: a mock handles the promises it
+    // returns itself (for `mock.settledResults`), so its rejection would
+    // never be unhandled, whatever the code under test did.
+    let reads = 0;
+    mockAuth.currentUser.getIdToken = (() => {
+      reads += 1;
+      return Promise.reject(networkRequestFailed());
+    }) as unknown as typeof mockIdTokenFn;
+    const { idToken } = useAuthState();
+
+    expect(idToken.value).toBeInstanceOf(Promise);
+    await flushPromises();
+
+    expect(reads).toBe(1);
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+});
