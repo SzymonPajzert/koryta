@@ -287,6 +287,92 @@ def test_without_the_seekers_offices_a_register_of_councillors_is_the_councils()
     assert app.opened() == [2]
 
 
+#: Strzelin's register (gmstrzelin, 11-13): no council in its name, every
+#: subject "Oświadczenie majątkowe" or why it was filed, the person in the file's
+#: name alone; its list gives each record's files.
+OM = {"symbol": "OM", "nazwa": "Oświadczenia majątkowe"}
+PAWNUK = Seeker.of("pawnuk", "Dorota", "Pawnuk")
+
+
+def listed(ident: int, subject: str, year: int, file: int, name: str) -> dict:
+    """A record as Strzelin's list gives it, its file with it."""
+    return record(ident, subject, year, zalaczniki=[{"id": file, "nazwa": name}])
+
+
+def test_the_files_a_list_gives_with_a_record_say_whose_it_is() -> None:
+    records = [
+        listed(
+            1123400, "Oświadczenie majątkowe", 2026, 1239438, "Bogumiła Mierzwińska.pdf"
+        ),
+        listed(1108131, "Oświadczenie majątkowe", 2026, 1224903, "Dorota Pawnuk.pdf"),
+        listed(
+            976328,
+            "Oświadczenie majątkowe złożone w związku z rozpoczęciem IX kadencji "
+            "Rady Miejskiej Strzelina",
+            2024,
+            1052615,
+            "Zieliński Wojciech.pdf",
+        ),
+    ]
+    app = App([OM], {"OM": records})
+    zielinski = Seeker.of("zielinski", "Wojciech", "Zieliński")
+    seekers = [PAWNUK, zielinski]
+    (register,) = read(app, seekers, office_terms(["Rada gminy", "Burmistrz"]))
+    # The records' files came with the list: no record is asked for its own.
+    assert [route for route, _ in app.calls] == [0, 1]
+    assert [x.url.rsplit("/", 1)[1] for x in register.links] == ["1224903", "1052615"]
+    found = candidates(register.url, register.name, list(register.links), seekers)
+    assert {(c.key, c.anchor, c.first_name, c.declaration_like) for c in found} == {
+        ("pawnuk", "Dorota Pawnuk.pdf", True, True),
+        ("zielinski", "Zieliński Wojciech.pdf", True, True),
+    }
+
+
+def test_a_record_the_list_gives_no_files_with_is_asked_for_them() -> None:
+    # Radomsko's and Żywiec's lists say "zalaczniki": [], the person in the
+    # subject.
+    records = [
+        record(7, "Robert Wala - oświadczenie majątkowe za 2025 r.", zalaczniki=[])
+    ]
+    app = App([COUNCIL], {COUNCIL["symbol"]: records})
+    (register,) = read(app, [WALA])
+    assert app.opened() == [7]
+    assert [x.url.rsplit("/", 1)[1] for x in register.links] == ["70"]
+
+
+def test_a_person_sought_for_several_candidacies_has_their_three_records_opened() -> (
+    None
+):
+    # Strzelin's mayor stood five times: each record she was named in counted
+    # five, and her newest was her only one (11-13).
+    pawnuk = [Seeker.of(f"pawnuk{i}", "Dorota", "Pawnuk") for i in range(5)]
+    records = [
+        listed(1108131, "Oświadczenie majątkowe", 2026, 1224903, "Dorota Pawnuk.pdf"),
+        listed(1026472, "Oświadczenie majątkowe", 2025, 1118419, "Dorota Pawnuk.pdf"),
+        listed(
+            952554,
+            "Oświadczenie majątkowe złożone na 2 miesiące przed upływem kadencji",
+            2024,
+            1024244,
+            "Dorota Pawnuk.pdf",
+        ),
+        listed(899899, "Oświadczenie majątkowe", 2023, 952425, "Dorota Pawnuk.pdf"),
+    ]
+    (register,) = read(App([OM], {"OM": records}), pawnuk)
+    assert [x.url.rsplit("/", 1)[1] for x in register.links] == [
+        "1224903",
+        "1118419",
+        "1024244",
+    ]
+    # So in a council's register that names her by her surname alone.
+    council = [
+        record(i, "Oświadczenie majątkowe - Pawnuk", 2020 + i) for i in range(1, 5)
+    ]
+    app = App([COUNCIL], {COUNCIL["symbol"]: council})
+    read(app, pawnuk[:2], office_terms(["Rada gminy"]))
+    assert app.opened() == [4, 3, 2]
+
+
 # -- the walk ------------------------------------------------------------------
 STORE = "https://res.finn.pl/eurzad/447/1/1113346/oswiadczenie.pdf"
 

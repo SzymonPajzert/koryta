@@ -206,7 +206,12 @@ class Wrota:
             Entry(
                 " - ".join(x for x in (str(r.get("tresc") or ""), listing.name) if x),
                 str(r.get("data_utworzenia") or ""),
-                council,
+                # Or the document says it is the council's, in a list of the
+                # whole office's: Włodawa's "Oświadczenia majątkowe" under
+                # "STAROSTWO POWIATOWE" holds "Oświadczenia majątkowe radnych VII
+                # kadencji składane na 30 dni po objęciu mandatu", a file a
+                # councillor, beside the board's and the staff's (11-13).
+                council or is_council(str(r.get("tresc") or ""), prefer),
                 listing.url,
             )
             for r in rows

@@ -945,7 +945,10 @@ def entries_to_open(
     for i in order:
         entry = entries[i]
         named, namesake = named_by(entry.subject, seekers, first_names)
-        firsts = [s.name for s, first in named if first]
+        # A person once an entry, however many of their candidacies seek them:
+        # Strzelin's mayor, a seeker five times, had her first record count
+        # five and got that one alone (11-13).
+        firsts = list(dict.fromkeys(s.name for s, first in named if first))
         if firsts:
             if any(opened[name] < per_person for name in firsts):
                 opened.update(firsts)
@@ -963,11 +966,13 @@ def entries_to_open(
             chosen.append(i)
     by_surname: Counter[tuple[str, str]] = Counter()
     for i, who in surname_only:
-        wanting = [
-            s.name
-            for s in who
-            if not opened[s.name] and by_surname[s.name] < per_person
-        ]
+        wanting = list(
+            dict.fromkeys(
+                s.name
+                for s in who
+                if not opened[s.name] and by_surname[s.name] < per_person
+            )
+        )
         if wanting:
             by_surname.update(wanting)
             chosen.append(i)
