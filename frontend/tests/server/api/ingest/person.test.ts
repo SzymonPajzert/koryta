@@ -3043,9 +3043,8 @@ describe("api/ingest/person, a page with a middle name that holds one of the pay
   });
 
   it("takes a page past a page of its exact name that links another entry", async () => {
-    // Andrzej Olszewski's: the night of 11-05 found the page of his exact
-    // name, linked to a namesake's entry, and made a draft rather than look
-    // at „Andrzej Mieczysław Olszewski”, which showed both his seats.
+    // A page of the exact name linking a namesake's entry is somebody else's,
+    // and the payload goes on to the page that holds its job.
     store.nodes!.namesake = page({
       name: "Krzysztof Żuk",
       rejestrIo: "https://rejestr.io/osoby/777",
@@ -3058,6 +3057,32 @@ describe("api/ingest/person, a page with a middle name that holds one of the pay
     expect(result.personId).toBe("zuk");
   });
 
+  it.each([
+    ["linking no entry", {}],
+    ["linking another entry", { rejestrIo: "https://rejestr.io/osoby/777" }],
+  ])(
+    "takes a page past a page of its exact name that stores another birth date, %s",
+    async (_, link) => {
+      // Andrzej Olszewski's, Tomasz Kowalski's and Jan Michalski's: the page
+      // of the exact name linked a namesake's entry and stored the namesake's
+      // birth date, and the date, read first, turned the payload away from
+      // it. Three of the eight drafts of 11-01 to 11-11 were made past such a
+      // page - Olszewski's beside „Andrzej Mieczysław Olszewski”, which showed
+      // both his seats.
+      store.nodes!.namesake = page({
+        name: "Krzysztof Żuk",
+        birthDate: "1965-01-01",
+        published: false,
+        ...link,
+      });
+      payload();
+
+      const result = await handler({} as any);
+
+      expect(result.personId).toBe("zuk");
+    },
+  );
+
   it("takes the page of its exact name first, as before", async () => {
     store.nodes!.exact = page({ name: "Krzysztof Żuk", published: false });
     payload();
@@ -3068,7 +3093,30 @@ describe("api/ingest/person, a page with a middle name that holds one of the pay
   });
 
   it("follows a merged page to the page it was merged into", async () => {
-    store.nodes!.zuk = page({ merged_into: "survivor" });
+    // The merged page is found by its own name, and the page it was merged
+    // into goes by one the payload's does not agree with, so only the merge
+    // leads there. Removed and unpublished, as `applyNodeMerge` leaves it.
+    store.nodes!.zuk = page({
+      merged_into: "survivor",
+      deleted: true,
+      published: false,
+    });
+    store.nodes!.survivor = page({ name: "Krzysztof Żuk-Nowak" });
+    store.edges = { "survivor-pge": pgeSeat("survivor") };
+    payload();
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("survivor");
+  });
+
+  it("counts once a page reached by its own name and through a merged page", async () => {
+    // Not two pages holding the job, which would be a 409.
+    store.nodes!.zuk = page({
+      merged_into: "survivor",
+      deleted: true,
+      published: false,
+    });
     store.nodes!.survivor = page();
     store.edges = { "survivor-pge": pgeSeat("survivor") };
     payload();
