@@ -669,7 +669,8 @@ export type SendOutcome =
 
 export const sendOutcomeLabels: Record<SendOutcome, string> = {
   queued: "Wysłano do kolejki",
-  requeued: "Wysłano ponownie po błędzie",
+  // Back in the queue, not sent: like any other it waits for its batch.
+  requeued: "Ponownie do kolejki, po błędzie",
   duplicate: "Ma już tę kampanię",
   unknown: "Nie ma takiego konta",
   failed: "Błąd zapisu",
