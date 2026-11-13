@@ -59,11 +59,14 @@ NEGATIVE = re.compile(
 #: accessibility texts, which a page titled with a seeker lent them (10-31);
 #: or a letter explaining one ("Wyjaśnienia do oświadczenia majątkowego"),
 #: which took slots of Czeladź's, Brzeziny's and Łowicz's councillors (11-13).
+#: Głogów's "RODO oświadczenia majątkowe.docx", "Poradnik, jak prawidłowo
+#: wypełnić oświadczenie majątkowe?" and "OŚWIADCZENIE MAJĄTKOWE
+#: szablon.doc" went to three councillors as unnamed declarations (11-13).
 BLANK_FORM = re.compile(
     r"wzor|druk|formularz|instrukcj|zasad|informacj|objasnien|rozporzadzen|ustaw|"
     r"klauzul|przetwarzan\w* danych|lustrac|de minimis|pomoc\w* publiczn|"
     r"konflikt\w* interes|latw\w* do czytania|dostepnosc|cookie|polityk\w* prywatn|"
-    r"wyjasnien"
+    r"wyjasnien|szablon|poradnik|(?:^| )rodo(?= |$)"
 )
 #: A letter explaining a declaration, said by the row or heading that names its
 #: writer, or by a link to it: Iłża's dokument 1090, "Wyjaśnienia do
@@ -427,6 +430,16 @@ def _could_be(seekers: list[Seeker], initial: str, word: str) -> bool:
     surname that starts as the word does (declined, Kaczmarek is "Kaczmarka")."""
     first, last = fold(initial), fold(word)
     return any(s.first.startswith(first) and s.last[:4] == last[:4] for s in seekers)
+
+
+def _initialled_elsewhere(raw: str, people: list[Seeker]) -> bool:
+    """Whether raw text on a page about ``people`` names an initial and a
+    surname none of them could be: Głogów filed Łukasz Kogut's "Ł. Kogut ośw.
+    majątkowe stan na 31.12.23.pdf" on Mariusz Kędziora's page (11-13), and
+    the page lent it him. "J. Kaczmarka" on Jan Kaczmarek's stays his."""
+    return bool(people) and any(
+        not _could_be(people, initial, word) for initial, word in initialled_names(raw)
+    )
 
 
 #: What the seekers' own council or office is called, folded, by a candidacy's
@@ -947,7 +960,8 @@ def entries_to_open(
         named, namesake = named_by(entry.subject, seekers, first_names)
         # A person once an entry, however many of their candidacies seek them:
         # Strzelin's mayor, a seeker five times, had her first record count
-        # five and got that one alone (11-13).
+        # five and got that one alone; Mierzęcice's wójt, sought for 2014, 2018
+        # and 2024, had one article opened, counted three times (11-13).
         firsts = list(dict.fromkeys(s.name for s, first in named if first))
         if firsts:
             if any(opened[name] < per_person for name in firsts):
@@ -1008,9 +1022,12 @@ def _tiers_name(
     first_names: frozenset[str],
     *,
     initials: bool,
+    page_people: list[Seeker] | None = None,
 ) -> tuple[list[tuple[Seeker, bool]], bool]:
     """The seekers the nearest tier naming anybody names (with whether by first
-    name too), and whether the link is somebody else's (`candidates`)."""
+    name too), and whether the link is somebody else's (`candidates`): also
+    when it gives an initial and a surname none of ``page_people`` could be
+    (`_initialled_elsewhere`)."""
     for i, (text, raws, url) in enumerate(tiers):
         named, namesake = _named(text, url, seekers, raws, first_names)
         if named and EXPLANATION.search(text):
@@ -1028,7 +1045,11 @@ def _tiers_name(
                 or _whose(s, wider, first_names) != "namesake"
             ]
             return named, not named
-        if namesake or names_somebody(raws[0], initials=initials):
+        if (
+            namesake
+            or names_somebody(raws[0], initials=initials)
+            or _initialled_elsewhere(raws[0], page_people or [])
+        ):
             return [], True
     return [], False
 
@@ -1161,7 +1182,12 @@ def candidates(
             (fold(link.heading), (link.heading,), ""),
         )
         named, somebody_else = _tiers_name(
-            tiers, seekers, page_title, first_names, initials=not page_people
+            tiers,
+            seekers,
+            page_title,
+            first_names,
+            initials=not page_people,
+            page_people=page_people,
         )
         if FORMS.search(fold(link.row) + " " + fold(link.heading)):
             # In a row or under a heading of blank forms a file is nobody's,
