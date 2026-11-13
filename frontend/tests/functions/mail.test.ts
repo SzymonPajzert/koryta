@@ -2,17 +2,35 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Firestore } from "firebase-admin/firestore";
 import { releaseHeldMail } from "../../functions/src/mail";
 
+/** The options `releaseCampaignMail` is deployed with. */
+const scheduled = vi.hoisted(() => ({ options: undefined as unknown }));
+
 vi.mock("firebase-functions/v2/scheduler", () => ({
   // The handler itself; these tests call `releaseHeldMail` directly.
-  onSchedule: (_options: unknown, handler: unknown) => handler,
+  onSchedule: (options: unknown, handler: unknown) => {
+    scheduled.options = options;
+    return handler;
+  },
 }));
 
 vi.mock("firebase-functions/logger", () => ({ info: vi.fn() }));
 
 type Data = Record<string, unknown>;
 
-/** `mail`, by document id. */
-let mail: Map<string, Data>;
+/** `mail`, by document id. Every write moves the document's update time on,
+ * as in Firestore, the test's own writes included; a counter stands in for
+ * the time. */
+class Mail extends Map<string, Data> {
+  readonly updateTimes = new Map<string, number>();
+  private writes = 0;
+
+  override set(id: string, data: Data): this {
+    this.updateTimes.set(id, ++this.writes);
+    return super.set(id, data);
+  }
+}
+
+let mail: Mail;
 
 function at(data: Data, path: string): unknown {
   return path
@@ -21,8 +39,12 @@ function at(data: Data, path: string): unknown {
 }
 
 /** Enough of Firestore for the release: `mail` queried with `==`, or with `>=`
- * on a time, with `limit` and `count`, and a write batch of updates. */
-function fakeDb(): Firestore {
+ * on a time, with `limit` and `count`, and a write batch of updates, each with
+ * an optional `lastUpdateTime` precondition. A batch commits all or nothing.
+ *
+ * `beforeCommit` holds a run back between its reads and its write, for a
+ * second run to go in between. */
+function fakeDb(beforeCommit?: () => Promise<void>): Firestore {
   type Filter = [string, string, unknown];
   const query = (filters: Filter[], limit = Infinity) => {
     const docs = () =>
@@ -37,7 +59,12 @@ function fakeDb(): Firestore {
           ),
         )
         .slice(0, limit)
-        .map(([id, data]) => ({ id, ref: { id }, data: () => data }));
+        .map(([id, data]) => ({
+          id,
+          ref: { id },
+          data: () => data,
+          updateTime: mail.updateTimes.get(id),
+        }));
     return {
       where: (field: string, op: string, value: unknown): unknown =>
         query([...filters, [field, op, value]], limit),
@@ -57,11 +84,28 @@ function fakeDb(): Firestore {
       return query([]);
     },
     batch: () => {
-      const updates: [string, Data][] = [];
+      type Precondition = { lastUpdateTime?: number };
+      const updates: [string, Data, Precondition | undefined][] = [];
       return {
-        update: (ref: { id: string }, data: Data) =>
-          updates.push([ref.id, data]),
+        update: (
+          ref: { id: string },
+          data: Data,
+          precondition?: Precondition,
+        ) => updates.push([ref.id, data, precondition]),
         commit: async () => {
+          await beforeCommit?.();
+          const stale = updates.find(
+            ([id, , precondition]) =>
+              precondition?.lastUpdateTime !== undefined &&
+              precondition.lastUpdateTime !== mail.updateTimes.get(id),
+          );
+          if (stale) {
+            // What firebase-admin throws: the gRPC status as a number.
+            throw Object.assign(
+              new Error(`9 FAILED_PRECONDITION: ${stale[0]} has changed`),
+              { code: 9 },
+            );
+          }
           for (const [id, data] of updates) {
             mail.set(id, { ...mail.get(id), ...data });
           }
@@ -100,7 +144,7 @@ const states = () =>
 let db: Firestore;
 
 beforeEach(() => {
-  mail = new Map();
+  mail = new Mail();
   db = fakeDb();
 });
 
@@ -162,5 +206,51 @@ describe("releaseHeldMail", () => {
     expect(await releaseHeldMail(db, NOW)).toBe(0);
     expect(states()).toEqual(["ERROR", "SUCCESS", undefined]);
     expect(mail.get("revisionApproved_r1")).not.toHaveProperty("released_at");
+  });
+
+  it("sends nothing from a run that read its messages before another run let them out", async () => {
+    hold(2);
+    const sent = "campaign_c_held00";
+    const waiting = "campaign_c_held01";
+
+    // One run reads both messages held, and is held back before it writes...
+    let reachedCommit!: () => void;
+    let resume!: () => void;
+    const atCommit = new Promise<void>((resolve) => (reachedCommit = resolve));
+    const late = releaseHeldMail(
+      fakeDb(() => {
+        reachedCommit();
+        return new Promise((resolve) => (resume = resolve));
+      }),
+      NOW,
+    );
+    await atCommit;
+    // ...while the other lets them out, and the extension sends one.
+    expect(await releaseHeldMail(db, seconds(1))).toBe(2);
+    mail.set(sent, { ...mail.get(sent), delivery: { state: "SUCCESS" } });
+    resume();
+
+    // Its write would set both PENDING again, and the extension would send
+    // each of them a second time.
+    expect(await late).toBe(0);
+    expect(mail.get(sent)).toMatchObject({
+      delivery: { state: "SUCCESS" },
+      released_at: seconds(1),
+    });
+    expect(mail.get(waiting)).toMatchObject({
+      delivery: { state: "PENDING", startTime: seconds(1) },
+      released_at: seconds(1),
+    });
+  });
+});
+
+describe("releaseCampaignMail", () => {
+  it("runs one at a time: one instance, taking one request", () => {
+    // A 2nd gen function takes 80 requests at once on an instance unless
+    // told otherwise, so one instance alone still lets two runs overlap.
+    expect(scheduled.options).toMatchObject({
+      maxInstances: 1,
+      concurrency: 1,
+    });
   });
 });
