@@ -66,8 +66,8 @@ function matches(
 }
 
 /** Enough of Firestore for the store: documents with get, create, set (with
- * merge), update (with arrayUnion), and queries with `==` and `>=` (on
- * times), `limit` and `count`. */
+ * merge), update (with arrayUnion), transactions that write once the body
+ * returns, and queries with `==` and `>=` (on times), `limit` and `count`. */
 function fakeDb(): Firestore {
   const docRef = (collection: string, id: string) => {
     const key = `${collection}/${id}`;
@@ -141,11 +141,25 @@ function fakeDb(): Firestore {
       get: async () => ({ docs: docs() }),
     };
   };
+  type Ref = ReturnType<typeof docRef>;
   return {
     collection: (collection: string) => ({
       doc: (id: string) => docRef(collection, id),
       ...query(collection, []),
     }),
+    runTransaction: async <T>(body: (tx: unknown) => Promise<T>) => {
+      const writes: (() => Promise<void>)[] = [];
+      const tx = {
+        get: (ref: Ref) => ref.get(),
+        create: (ref: Ref, data: Record<string, unknown>) =>
+          writes.push(() => ref.create(data)),
+        set: (ref: Ref, data: Record<string, unknown>) =>
+          writes.push(() => ref.set(data)),
+      };
+      const result = await body(tx);
+      for (const write of writes) await write();
+      return result;
+    },
   } as unknown as Firestore;
 }
 
@@ -343,6 +357,97 @@ describe("queueCampaign", () => {
     const { outcomes, campaign: after } = await send(["a", "b"]);
     expect(outcomes).toEqual({ a: "duplicate", b: "queued" });
     expect(after.recipients).toEqual(["a", "b"]);
+  });
+
+  it("sends a failed delivery again, and nothing that went out or is on its way", async () => {
+    const campaign = await draft();
+    const earlier = (uid: string, delivery?: Record<string, unknown>) =>
+      store.set(`mail/campaign_${campaign.id}_${uid}`, {
+        to: [`${uid}@example.com`],
+        message: { subject: "Stary temat", text: "", html: "" },
+        kind: "campaign",
+        campaign: campaign.id,
+        uid,
+        ...(delivery ? { delivery } : {}),
+      });
+    // The pilot's 11: refused by Mailgun, and never tried again.
+    const refused =
+      "Error: Message failed: 421 Domain koryta.pl is not allowed to send: recipient limit (26) exceeded";
+    earlier("failed", { state: "ERROR", error: refused });
+    earlier("sent", { state: "SUCCESS" });
+    earlier("pending", { state: "PENDING" });
+    earlier("sending", { state: "PROCESSING" });
+    earlier("retrying", { state: "RETRY" });
+    earlier("held", { state: "HELD" });
+    // Written while the extension was not installed: nothing picked it up.
+    earlier("untouched");
+    // Failed too, but has left the topic since.
+    earlier("left", { state: "ERROR", error: refused });
+
+    const team = [
+      "failed",
+      "sent",
+      "pending",
+      "sending",
+      "retrying",
+      "held",
+      "untouched",
+      "new",
+    ];
+    const {
+      outcomes,
+      campaign: after,
+      queue,
+    } = await queueCampaign(db, {
+      campaign,
+      members: [
+        ...team.map((uid) => member(uid, { admin: true })),
+        member("left"),
+      ],
+      community: COMMUNITY,
+      uids: [...team, "left"],
+      by: "owner",
+      siteUrl: "https://koryta.pl",
+      now: NOW,
+    });
+
+    expect(outcomes).toEqual({
+      failed: "requeued",
+      sent: "duplicate",
+      pending: "duplicate",
+      sending: "duplicate",
+      retrying: "duplicate",
+      held: "duplicate",
+      untouched: "duplicate",
+      left: "noConsent",
+      new: "queued",
+    });
+    expect(after.sends.at(-1)!.outcomes).toEqual({
+      requeued: 1,
+      duplicate: 6,
+      noConsent: 1,
+      queued: 1,
+    });
+
+    // Written afresh, with the campaign's text as it is now, and held back
+    // for its batch like any other message.
+    const again = store.get(`mail/campaign_${campaign.id}_failed`)!;
+    expect(again).toMatchObject({
+      to: ["failed@example.com"],
+      delivery: { state: "HELD" },
+    });
+    expect((again.message as { subject: string }).subject).toBe(
+      "Wracamy do kolejki!",
+    );
+    expect(store.get(`mail/campaign_${campaign.id}_sent`)).toMatchObject({
+      message: { subject: "Stary temat" },
+      delivery: { state: "SUCCESS" },
+    });
+    expect(store.get(`mail/campaign_${campaign.id}_left`)).toMatchObject({
+      delivery: { state: "ERROR" },
+    });
+    // The failed one, the new one, and the one that was waiting already.
+    expect(queue.waiting).toBe(3);
   });
 
   it("says how many messages wait, and how many more go out today", async () => {
