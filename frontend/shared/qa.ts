@@ -62,7 +62,7 @@ export const QA_ITEMS: QaItem[] = [
     id: "kampania-wychodzi-partiami",
     title: "Kampania wychodzi partiami, po 20 wiadomości na minutę",
     description:
-      "Pilot wysłał 40 wiadomości naraz i Mailgun odrzucił 11 z nich. Teraz wiadomości kampanii czekają w kolejce i wychodzą po 20 co minutę, najwyżej 90 dziennie, a reszta następnego dnia.",
+      "Pilot wysłał 40 wiadomości naraz i Mailgun odrzucił 11 z nich. Teraz wiadomości kampanii czekają w kolejce i wychodzą po 20 co minutę, najwyżej 90 dziennie, a reszta następnego dnia. Kto wypisze się, zanim przyjdzie jego kolej, kampanii już nie dostanie: w kolumnie „Ta kampania” ma wtedy „Wycofano przed wysyłką”.",
     steps: [
       "Na /admin/mailing wyślij kampanię do ponad 20 osób: zaraz po wysyłce wszyscy mają w kolumnie „Ta kampania” „W kolejce”.",
       "Odśwież stronę po minucie: 20 osób ma „Wysłano”, a po następnej minucie kolejne.",

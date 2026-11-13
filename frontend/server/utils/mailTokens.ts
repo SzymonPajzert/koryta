@@ -8,6 +8,7 @@ import {
   type NewsletterChangeVia,
 } from "~~/shared/campaigns";
 import { SUBSCRIBERS, SUBSCRIBER_PREFIX } from "~~/shared/newsletterSignup";
+import { withdrawHeldMail } from "~~/server/utils/heldMail";
 
 /** One document per account that has been sent a campaign, holding the secret
  * its unsubscribe links carry. Server-only, like `mail`.
@@ -57,6 +58,9 @@ export type UnsubscribeOutcome = "unsubscribed" | "invalid";
  * it to stop, and the link does not say which of the two grounds the message
  * was sent on. The other topic stays as it was: that one they chose separately.
  * /profil puts back whatever they did not mean.
+ *
+ * Campaign mail of theirs still waiting for its batch, which they may no
+ * longer be sent, is withdrawn on the spot.
  */
 export async function unsubscribe(
   db: Firestore,
@@ -76,6 +80,18 @@ export async function unsubscribe(
     });
   } else {
     await unsubscribeAccount(db, args.uid, args.topic);
+  }
+
+  try {
+    await withdrawHeldMail(db, args.uid, new Date());
+  } catch (error) {
+    // The reader is off the list either way, and the release asks again
+    // before anything of theirs goes; the owner's page only says "W kolejce"
+    // until it does.
+    console.error(
+      `Unsubscribe: held campaign mail of uid=${args.uid} not withdrawn`,
+      error,
+    );
   }
 
   if (args.campaignId && CAMPAIGN_ID_PATTERN.test(args.campaignId)) {

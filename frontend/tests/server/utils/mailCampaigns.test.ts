@@ -16,7 +16,7 @@ import type {
   CommunityStats,
 } from "../../../shared/campaigns";
 
-const { store, FieldValue, Timestamp } = vi.hoisted(() => {
+const { store, FieldValue, Timestamp, getUsers } = vi.hoisted(() => {
   class Timestamp {
     constructor(readonly millis: number) {}
     static now() {
@@ -34,10 +34,14 @@ const { store, FieldValue, Timestamp } = vi.hoisted(() => {
       arrayUnion: (...items: unknown[]) => ({ arrayUnion: items }),
       serverTimestamp: () => ({ serverTimestamp: true }),
     },
+    /** The auth service: every uid asked for is an account with a confirmed
+     * address at example.com, unless a test says otherwise. */
+    getUsers: vi.fn(),
   };
 });
 
 vi.mock("firebase-admin/firestore", () => ({ FieldValue, Timestamp }));
+vi.mock("firebase-admin/auth", () => ({ getAuth: () => ({ getUsers }) }));
 
 /** A stored time as milliseconds: a Date, or the Timestamp above. */
 function millis(value: unknown): number {
@@ -66,8 +70,9 @@ function matches(
 }
 
 /** Enough of Firestore for the store: documents with get, create, set (with
- * merge), update (with arrayUnion), transactions that write once the body
- * returns, and queries with `==` and `>=` (on times), `limit` and `count`. */
+ * merge), update (with arrayUnion), `getAll`, transactions that write once
+ * the body returns, and queries with `==` and `>=` (on times), `limit` and
+ * `count`. */
 function fakeDb(): Firestore {
   const docRef = (collection: string, id: string) => {
     const key = `${collection}/${id}`;
@@ -128,6 +133,7 @@ function fakeDb(): Firestore {
         .slice(0, limit)
         .map(([key, data]) => ({
           id: key.slice(collection.length + 1),
+          ref: docRef(collection, key.slice(collection.length + 1)),
           data: () => data,
         }));
     return {
@@ -147,6 +153,13 @@ function fakeDb(): Firestore {
       doc: (id: string) => docRef(collection, id),
       ...query(collection, []),
     }),
+    // References, then the read options.
+    getAll: async (...args: unknown[]) =>
+      Promise.all(
+        (args.filter((arg) => "get" in (arg as object)) as Ref[]).map((ref) =>
+          ref.get(),
+        ),
+      ),
     runTransaction: async <T>(body: (tx: unknown) => Promise<T>) => {
       const writes: (() => Promise<void>)[] = [];
       const tx = {
@@ -155,6 +168,8 @@ function fakeDb(): Firestore {
           writes.push(() => ref.create(data)),
         set: (ref: Ref, data: Record<string, unknown>) =>
           writes.push(() => ref.set(data)),
+        update: (ref: Ref, data: Record<string, unknown>) =>
+          writes.push(() => ref.update(data)),
       };
       const result = await body(tx);
       for (const write of writes) await write();
@@ -225,6 +240,23 @@ const NOW = new Date("2026-10-09T12:00:00Z");
 beforeEach(() => {
   store.clear();
   db = fakeDb();
+  getUsers.mockReset();
+  getUsers.mockImplementation(
+    async (identifiers: ({ uid: string } | { email: string })[]) => ({
+      users: identifiers.flatMap((id) =>
+        "uid" in id
+          ? [
+              {
+                uid: id.uid,
+                email: `${id.uid}@example.com`,
+                emailVerified: true,
+                disabled: false,
+              },
+            ]
+          : [],
+      ),
+    }),
+  );
 });
 
 async function draft(): Promise<CampaignRecord> {
@@ -307,6 +339,8 @@ describe("queueCampaign", () => {
       to: ["fan@example.com"],
       kind: "campaign",
       campaign: campaign.id,
+      // What the release asks the reader's consent about again.
+      topic: "callsToAction",
       uid: "fan",
       // Not sent yet: releaseCampaignMail lets it out with its batch.
       delivery: { state: "HELD" },
@@ -383,6 +417,8 @@ describe("queueCampaign", () => {
     earlier("untouched");
     // Failed too, but has left the topic since.
     earlier("left", { state: "ERROR", error: refused });
+    // Left the team before its batch came, and has come back since.
+    earlier("returned", { state: "WITHDRAWN" });
 
     const team = [
       "failed",
@@ -392,6 +428,7 @@ describe("queueCampaign", () => {
       "retrying",
       "held",
       "untouched",
+      "returned",
       "new",
     ];
     const {
@@ -420,13 +457,15 @@ describe("queueCampaign", () => {
       held: "duplicate",
       untouched: "duplicate",
       left: "noConsent",
+      // Never went, so it is sent as to anybody new.
+      returned: "queued",
       new: "queued",
     });
     expect(after.sends.at(-1)!.outcomes).toEqual({
       requeued: 1,
       duplicate: 6,
       noConsent: 1,
-      queued: 1,
+      queued: 2,
     });
 
     // Written afresh, with the campaign's text as it is now, and held back
@@ -446,8 +485,13 @@ describe("queueCampaign", () => {
     expect(store.get(`mail/campaign_${campaign.id}_left`)).toMatchObject({
       delivery: { state: "ERROR" },
     });
-    // The failed one, the new one, and the one that was waiting already.
-    expect(queue.waiting).toBe(3);
+    expect(store.get(`mail/campaign_${campaign.id}_returned`)).toMatchObject({
+      message: { subject: "Wracamy do kolejki!" },
+      delivery: { state: "HELD" },
+    });
+    // The failed one, the withdrawn one, the new one, and the one that was
+    // waiting already.
+    expect(queue.waiting).toBe(4);
   });
 
   it("says how many messages wait, and how many more go out today", async () => {
@@ -570,6 +614,16 @@ describe("campaignDeliveries", () => {
       released_at: new Timestamp(Date.parse("2026-10-09T12:05:00Z")),
       delivery: { state: "PENDING" },
     });
+    store.set(`mail/campaign_${campaign.id}_f`, {
+      campaign: campaign.id,
+      uid: "f",
+      created_at: Timestamp.now(),
+      delivery: {
+        state: "WITHDRAWN",
+        endTime: new Timestamp(Date.parse("2026-10-09T13:00:00Z")),
+      },
+      withdrawn_reason: "noConsent",
+    });
     store.set("mail/campaign_other_a", { campaign: "other", uid: "a" });
 
     expect(await campaignDeliveries(db, campaign.id)).toEqual({
@@ -605,6 +659,13 @@ describe("campaignDeliveries", () => {
         state: "PENDING",
         queuedAt: "2026-10-09T12:05:00.000Z",
         finishedAt: null,
+        error: null,
+      },
+      // Its reader left before its batch came: it never went.
+      f: {
+        state: "WITHDRAWN",
+        queuedAt: null,
+        finishedAt: "2026-10-09T13:00:00.000Z",
         error: null,
       },
     });
@@ -645,6 +706,99 @@ describe("mail tokens", () => {
     expect(store.get(`mailCampaigns/${campaign.id}`)!.unsubscribed).toEqual([
       "a",
     ]);
+  });
+
+  it("withdraws the campaign mail they may no longer get that still waits for its batch, at once", async () => {
+    const token = await mailToken(db, "a");
+    store.set("users/a", {
+      newsletter: { callsToAction: true, recentPeople: true },
+    });
+    const message = (key: string, uid: string, topic: string, state = "HELD") =>
+      store.set(`mail/${key}`, {
+        to: [`${uid}@example.com`],
+        kind: "campaign",
+        campaign: key,
+        topic,
+        uid,
+        delivery: { state },
+      });
+    message("campaign_c1_a", "a", "callsToAction");
+    // The other topic they still want.
+    message("campaign_c2_a", "a", "recentPeople");
+    // Let out already: on its way, or sent.
+    message("campaign_c3_a", "a", "callsToAction", "PENDING");
+    // Somebody else's.
+    message("campaign_c1_b", "b", "callsToAction");
+
+    expect(
+      await unsubscribe(db, { uid: "a", token, topic: "callsToAction" }),
+    ).toBe("unsubscribed");
+
+    expect(store.get("mail/campaign_c1_a")).toMatchObject({
+      delivery: { state: "WITHDRAWN" },
+      withdrawn_reason: "noConsent",
+    });
+    expect(store.get("mail/campaign_c2_a")).toMatchObject({
+      delivery: { state: "HELD" },
+    });
+    expect(store.get("mail/campaign_c3_a")).toMatchObject({
+      delivery: { state: "PENDING" },
+    });
+    expect(store.get("mail/campaign_c1_b")).toMatchObject({
+      delivery: { state: "HELD" },
+    });
+  });
+
+  it("withdraws team mail too, since leaving takes them off it", async () => {
+    const token = await mailToken(db, "admin");
+    getUsers.mockResolvedValue({
+      users: [
+        {
+          uid: "admin",
+          email: "admin@example.com",
+          emailVerified: true,
+          disabled: false,
+          customClaims: { admin: true },
+        },
+      ],
+    });
+    store.set("mail/campaign_c2_admin", {
+      to: ["admin@example.com"],
+      topic: "recentPeople",
+      uid: "admin",
+      delivery: { state: "HELD" },
+    });
+
+    await unsubscribe(db, { uid: "admin", token, topic: "callsToAction" });
+    expect(store.get("mail/campaign_c2_admin")).toMatchObject({
+      delivery: { state: "WITHDRAWN" },
+      withdrawn_reason: "teamOptOut",
+    });
+  });
+
+  it("still unsubscribes when the held mail cannot be withdrawn, which the release then does", async () => {
+    const token = await mailToken(db, "a");
+    store.set("mail/campaign_c1_a", {
+      to: ["a@example.com"],
+      topic: "callsToAction",
+      uid: "a",
+      delivery: { state: "HELD" },
+    });
+    getUsers.mockRejectedValue(new Error("auth service unavailable"));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(
+      await unsubscribe(db, { uid: "a", token, topic: "callsToAction" }),
+    ).toBe("unsubscribed");
+    expect(store.get("users/a")).toMatchObject({
+      newsletter: { callsToAction: false },
+    });
+    // Still held: the release asks again before it lets anything out.
+    expect(store.get("mail/campaign_c1_a")).toMatchObject({
+      delivery: { state: "HELD" },
+    });
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
   });
 
   it("refuses a wrong token, and an account that never got one", async () => {
