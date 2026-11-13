@@ -10,25 +10,44 @@
         <p class="text-body-1 text-grey-darken-1 mb-8">{{ description }}</p>
 
         <div class="d-flex flex-wrap justify-center ga-3">
-          <v-btn
-            color="primary"
-            size="large"
-            :prepend-icon="mdiHome"
-            @click="goHome"
-          >
-            Wróć na stronę główną
-          </v-btn>
-          <v-btn
-            v-if="isNotFound"
-            variant="outlined"
-            size="large"
-            to="/eksploruj/tabela"
-          >
-            Przeglądaj osoby
-          </v-btn>
-          <v-btn v-else variant="outlined" size="large" to="/pomoc">
-            Zgłoś problem
-          </v-btn>
+          <!-- With no connection the page that was asked for is one reload
+               away, and the description says to reload, so that leads. The
+               home page needs the network as much, and the reader's
+               connection is nothing to report to us. -->
+          <template v-if="isOffline">
+            <v-btn
+              color="primary"
+              size="large"
+              :prepend-icon="mdiRefresh"
+              @click="reload"
+            >
+              Odśwież stronę
+            </v-btn>
+            <v-btn variant="outlined" size="large" @click="goHome">
+              Wróć na stronę główną
+            </v-btn>
+          </template>
+          <template v-else>
+            <v-btn
+              color="primary"
+              size="large"
+              :prepend-icon="mdiHome"
+              @click="goHome"
+            >
+              Wróć na stronę główną
+            </v-btn>
+            <v-btn
+              v-if="isNotFound"
+              variant="outlined"
+              size="large"
+              to="/eksploruj/tabela"
+            >
+              Przeglądaj osoby
+            </v-btn>
+            <v-btn v-else variant="outlined" size="large" to="/pomoc">
+              Zgłoś problem
+            </v-btn>
+          </template>
         </div>
 
         <!-- Only in dev: the message can carry internals we do not want to
@@ -47,7 +66,13 @@
 </template>
 
 <script lang="ts" setup>
-import { mdiAlertCircleOutline, mdiHome, mdiMapSearchOutline } from "@mdi/js";
+import {
+  mdiAlertCircleOutline,
+  mdiHome,
+  mdiMapSearchOutline,
+  mdiRefresh,
+  mdiWifiOff,
+} from "@mdi/js";
 import { computed } from "vue";
 import type { NuxtError } from "#app";
 import { NO_CONNECTION_STATUS } from "~/utils/tokenRefresh";
@@ -61,7 +86,11 @@ const isNotFound = computed(() => statusCode.value === 404);
 const isOffline = computed(() => statusCode.value === NO_CONNECTION_STATUS);
 
 const icon = computed(() =>
-  isNotFound.value ? mdiMapSearchOutline : mdiAlertCircleOutline,
+  isNotFound.value
+    ? mdiMapSearchOutline
+    : isOffline.value
+      ? mdiWifiOff
+      : mdiAlertCircleOutline,
 );
 
 const title = computed(() =>
@@ -92,4 +121,9 @@ useSeoMeta({
 // clearError tears down the error state before navigating; a plain
 // navigateTo("/") would leave this page mounted over the homepage.
 const goHome = () => clearError({ redirect: "/" });
+
+// The same address loaded afresh, which is what reaching the page needs once
+// the connection is back. `force`: a second press within reloadNuxtApp's ten
+// seconds would otherwise do nothing.
+const reload = () => reloadNuxtApp({ force: true });
 </script>
