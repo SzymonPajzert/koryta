@@ -35,10 +35,10 @@ import { taskSlug, uniqueTaskId } from "~~/shared/tasks";
 export const CAMPAIGNS = "mailCampaigns";
 
 /** How many messages are rendered and queued at once. Each is a token read,
- * maybe a token write and a `mail` create; ten keeps a send of a few hundred
- * to seconds without a burst of writes. Nothing is mailed here: the messages
- * are written held back, and go out a batch a minute
- * (shared/campaignPacing.ts). */
+ * maybe a token write and a transaction on its `mail` document; ten keeps a
+ * send of a few hundred to seconds without a burst of writes. Nothing is
+ * mailed here: the messages are written held back, and go out a batch a
+ * minute (shared/campaignPacing.ts). */
 const SEND_CONCURRENCY = 10;
 
 export const campaignContentSchema = z
@@ -153,9 +153,10 @@ type SendArgs = {
  *
  * Eligibility is decided here again, from `members` the server read itself:
  * the page only offers eligible people, but what it posts is the browser's
- * word. One `mail` document per campaign and person, made with `create`, so a
- * second press - or a later send to a wider group - never reaches anybody
- * twice.
+ * word. One `mail` document per campaign and person, so a second press - or a
+ * later send to a wider group - never reaches anybody twice. The one document
+ * written again is a message whose delivery failed: the extension never
+ * retries, so without this its recipient could never be sent the campaign.
  *
  * Every message is written held back, and `releaseCampaignMail` lets them out
  * a batch a minute; `queue` says how many wait and how many more go today.
@@ -190,7 +191,7 @@ export async function queueCampaign(
   const campaign = await recordSend(db, args.campaign.id, send, queued);
   const queue = await campaignQueue(db, args.now);
   console.info(
-    `Campaign ${args.campaign.id}: queued ${queued.length} of ${uids.length}; ${queue.waiting} waiting, ${queue.leftToday} more can go today`,
+    `Campaign ${args.campaign.id}: queued ${queued.length}, requeued ${send.outcomes.requeued ?? 0} of ${uids.length}; ${queue.waiting} waiting, ${queue.leftToday} more can go today`,
   );
   return { outcomes, campaign, queue };
 }
@@ -206,22 +207,34 @@ async function queueOne(
 
   try {
     const mail = await renderFor(db, args, member, eligibility.via);
-    await db
+    const ref = db
       .collection("mail")
-      .doc(`campaign_${args.campaign.id}_${member.uid}`)
-      .create({
-        ...mailDocument(member.email!, mail),
-        kind: "campaign",
-        campaign: args.campaign.id,
-        uid: member.uid,
-        created_at: Timestamp.now(),
-        // The extension leaves this alone until releaseCampaignMail lets it
-        // out with its batch.
-        delivery: { state: HELD_STATE },
-      });
-    return "queued";
+      .doc(`campaign_${args.campaign.id}_${member.uid}`);
+    const message = {
+      ...mailDocument(member.email!, mail),
+      kind: "campaign",
+      campaign: args.campaign.id,
+      uid: member.uid,
+      created_at: Timestamp.now(),
+      // The extension leaves this alone until releaseCampaignMail lets it out
+      // with its batch.
+      delivery: { state: HELD_STATE },
+    };
+    return await db.runTransaction(async (tx): Promise<SendOutcome> => {
+      const existing = await tx.get(ref);
+      if (!existing.exists) {
+        tx.create(ref, message);
+        return "queued";
+      }
+      // Sent, held, or on its way: writing over any of those could mail it
+      // twice. A failed one never went out, and the extension will not try
+      // it again, so it is written afresh - with today's text, which is what
+      // anybody new would get.
+      if (deliveryStateOf(existing.data()) !== "ERROR") return "duplicate";
+      tx.set(ref, message);
+      return "requeued";
+    });
   } catch (error) {
-    if (isAlreadyExists(error)) return "duplicate";
     console.error(
       `Failed to queue campaign ${args.campaign.id} for uid=${member.uid}`,
       error,
@@ -247,6 +260,10 @@ export async function campaignQueue(
     waiting,
     leftToday: Math.max(0, CAMPAIGN_DAILY_LIMIT - releasedToday),
   };
+}
+
+function deliveryStateOf(data: Record<string, unknown> | undefined): unknown {
+  return (data?.delivery as { state?: unknown } | undefined)?.state;
 }
 
 /** The owner's own copy, with "[Test]" in front of the subject, as many times
