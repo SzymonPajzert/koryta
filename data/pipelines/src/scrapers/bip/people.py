@@ -45,11 +45,13 @@ OFFICE = re.compile(
 #: property appraisers ("rzeczoznawcy majątkowi"): Brzostek's FOIA requests
 #: sit under "... podlegających składaniu oświadczenia majątkowego", and the
 #: walk read ~80 of them (11-13).
+#: A request for public information, and the office's answer to it.
+PUBLIC_INFORMATION = re.compile(r"udostepnieni[a-z]* informacji publicznej")
 NEGATIVE = re.compile(
     r"przetarg|zamowien|ogloszen|nabor|kariera|uchwal|protokol|budzet|podatk|zarzadzeni|"
     r"ochron|odpad|zezwolen|konkurs|petycj|skarg|rodo|dostepnos|kontakt|ankiet|wybor|"
     r"rekrutac|planowan|zagospodarow|inwestycj|dotacj|sprawozdan|interpelac|aktualnosc|"
-    r"rzeczoznawc|udostepnieni[a-z]* informacji publicznej"
+    r"rzeczoznawc|" + PUBLIC_INFORMATION.pattern
 )
 #: A declaration-like file that is a blank form or guidance, not anybody's;
 #: or nobody's asset declaration: a GDPR clause for those who file them, a
@@ -1062,6 +1064,13 @@ def candidates(
     forms_page = any(
         rule.search(text) for rule in (FORMS, OBLIGED) for text in (title, page_path)
     )
+    # And a request for public information, whatever it asks about: Brzostek
+    # keeps each request about its mayor's declarations, and the answer, on the
+    # request's page ("Wniosek SO.1431.58.2026.pdf"), and six seekers got them
+    # as their unnamed files once a case code's capitals named nobody (11-13).
+    asks_information = any(
+        PUBLIC_INFORMATION.search(text) for text in (title, page_path)
+    )
     # A page about one person nobody seeks ("... - B. Kułacz - Stan majątkowy na
     # 31.12.2025 r."): its files are theirs, whatever the labels say. Unless a
     # seeker could be that person in a form named_in misses ("J. Kaczmarka").
@@ -1176,6 +1185,7 @@ def candidates(
             and not somebody_else
             and not title_somebody
             and not forms_page
+            and not asks_information
             and not site_file
             and (declared or bool(DECLARATION.search(title)))
             and bool(ASSETS.search(around) or ASSETS.search(title))
