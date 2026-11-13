@@ -336,8 +336,9 @@ The site writes to a contributor when a reviewer acts on something they
 proposed. Nothing in this repo talks to an SMTP server: `notifyUser`
 (`server/utils/notifications.ts`) appends a document to the `mail` collection,
 and the Firebase **Trigger Email from Firestore** extension delivers it and
-writes the result back onto the same document. Retries, bounces and the SMTP
-credentials are the extension's problem.
+writes the result back onto the same document. Bounces and the SMTP
+credentials are the extension's problem. A failed delivery is not: the
+extension never tries one again (see Campaigns below).
 
 - **What is sent** — `shared/notifications.ts` holds one entry per kind: the
   default, the label the profile page shows, and the copy. Adding a kind is a
@@ -386,9 +387,13 @@ accounts: the pilot first, then everybody else. The rules are in
   signed-in readers are shown (`components/mail/OptInPrompt.vue`). Confirmed
   addresses only, as for notifications. The server decides this again for each
   recipient before queueing: the page's checkboxes are a suggestion.
-- **Once per person** — each message is `mail/campaign_<id>_<uid>`, made with
-  `create`, so sending a campaign again only reaches whoever has not had it.
-  The owner's tests are `mail/campaignTest_<id>_<ms>`, "[Test]" in the subject.
+- **Once per person** — each message is `mail/campaign_<id>_<uid>`, written in
+  a transaction, so sending a campaign again only reaches whoever has not had
+  it. The one exception is a message whose delivery failed (`delivery.state`
+  ERROR): the extension never retries, so a send writes it afresh, with the
+  campaign's current text, and counts it as "requeued". One that went out, or
+  still waits, is never written again. The owner's tests are
+  `mail/campaignTest_<id>_<ms>`, "[Test]" in the subject.
 - **In batches** - a send writes every message with `delivery.state` HELD,
   which the extension leaves alone. `releaseCampaignMail`
   (`functions/src/mail.ts`) runs every minute and sets the next ones to

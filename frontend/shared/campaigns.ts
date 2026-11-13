@@ -652,7 +652,10 @@ export const deliveryStateLabels: Record<DeliveryState, string> = {
 /** What became of one requested recipient when a campaign was sent. */
 export type SendOutcome =
   | "queued"
-  /** Already had this campaign. */
+  /** Had been sent it, and the delivery failed (`delivery.state` ERROR): it
+   * is queued again. */
+  | "requeued"
+  /** Already had this campaign, or still waits for it. */
   | "duplicate"
   /** No such account any more. */
   | "unknown"
@@ -661,6 +664,7 @@ export type SendOutcome =
 
 export const sendOutcomeLabels: Record<SendOutcome, string> = {
   queued: "Wysłano do kolejki",
+  requeued: "Wysłano ponownie po błędzie",
   duplicate: "Ma już tę kampanię",
   unknown: "Nie ma takiego konta",
   failed: "Błąd zapisu",
@@ -683,7 +687,8 @@ export type CampaignRecord = CampaignContent & {
   updatedAt: string;
   createdBy: string;
   /** Everybody it was queued for, ever. One campaign reaches one person
-   * once, so sending it again only reaches the people added since. */
+   * once, so sending it again only reaches the people added since - and
+   * anybody whose delivery failed. */
   recipients: string[];
   /** Who left a topic through this campaign's link. */
   unsubscribed: string[];
