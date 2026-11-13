@@ -191,6 +191,26 @@ def test_a_page_with_another_middle_name_is_somebody_else():
     assert resolve(site, person("Krzysztof Adam Żuk")) == (None, NOT_ON_SITE)
 
 
+def test_misses_a_page_with_polish_letters_for_a_payload_written_without_them():
+    """„Krzysztof Zuk” asks the ingest's name index for „zuk” alone, which
+    „Krzysztof Jan Żuk” is not filed under, so the ingest never sees the page
+    and makes the payload one of its own. Planned onto the page, the payload
+    would go out as a stored person's, and the page the ingest made would
+    stop the people run."""
+    site = snapshot([page("zuk")], [pge_seat("zuk")])
+    plain = person("Krzysztof Zuk")
+
+    assert resolve(site, plain) == (None, NOT_ON_SITE)
+    assert missing_from_koryta([plain], site) == [plain]
+
+
+def test_finds_a_page_written_without_polish_letters_for_a_payload_with_them():
+    """`namesakes` asks for the surname written plain as well."""
+    site = snapshot([page("zuk", "Krzysztof Jan Zuk")], [pge_seat("zuk")])
+
+    assert resolve(site, person()) == ("zuk", BY_NAME_AND_JOB)
+
+
 def test_a_job_with_no_start_names_no_day_to_share():
     site = snapshot([page("zuk")], [pge_seat("zuk", start_date=None)])
     undated = [Company(krs=PGE, role="Rada Nadzorcza")]

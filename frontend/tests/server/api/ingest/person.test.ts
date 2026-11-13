@@ -3078,6 +3078,17 @@ describe("api/ingest/person, a page with a middle name that holds one of the pay
     expect(result.personId).toBe("survivor");
   });
 
+  it("finds a page written without Polish letters for a payload written with them", async () => {
+    // `namesakes` asks for the surname written plain as well, „zuk” beside
+    // „żuk”.
+    store.nodes!.zuk = page({ name: "Krzysztof Jan Zuk" });
+    payload();
+
+    const result = await handler({} as any);
+
+    expect(result.personId).toBe("zuk");
+  });
+
   it("holds the payload back where two such pages show its jobs", async () => {
     // Which of the two the entry is, is a reviewer's question.
     store.nodes!.other = page({ name: "Krzysztof Józef Żuk" });
@@ -3130,6 +3141,22 @@ describe("api/ingest/person, a page with a middle name that holds one of the pay
       const result = await handler({} as any);
 
       expect(result.person).toBe("created");
+    });
+
+    it("beside a page writing the Polish letters its name leaves out", async () => {
+      // „Krzysztof Zuk” asks the name index for „zuk” alone (`namesakes`),
+      // which „Krzysztof Jan Żuk” is not filed under, so the page is never
+      // looked at. `SiteSnapshot._by_name_and_job` has to miss it too:
+      // planned onto the page, the payload would go out as a stored
+      // person's, and a page made for one stops the people run.
+      payload({ name: "Krzysztof Zuk" });
+
+      const result = await handler({} as any);
+
+      expect(result).toMatchObject({
+        personId: "new-nodes-id",
+        person: "created",
+      });
     });
 
     it("for a job with no start, which names no day to share", async () => {

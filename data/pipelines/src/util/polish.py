@@ -281,6 +281,21 @@ def normalize_person_name(name: str | None) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
 
 
+def without_diacritics(text: str) -> str:
+    """The text with its Polish letters written plain: "Żelewski" is
+    "Zelewski". Case and everything else as it was, unlike
+    `normalize_person_name`: a mark comes off wherever Unicode calls it one
+    (Mn), and ł, a letter of its own, becomes l.
+
+    `withoutDiacritics` in `frontend/shared/names.ts`, with which the ingest
+    asks the name index for a surname written plain as well (`namesakes`),
+    and has to stay it.
+    """
+    decomposed = unicodedata.normalize("NFD", text)
+    plain = "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
+    return plain.replace("ł", "l").replace("Ł", "L")
+
+
 def names_agree(one: str | None, other: str | None) -> bool:
     """Whether two spellings name one person, as far as names can: the same
     once folded (`normalize_person_name`), or one with given names written into
