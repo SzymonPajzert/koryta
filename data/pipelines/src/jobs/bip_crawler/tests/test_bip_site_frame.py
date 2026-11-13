@@ -306,12 +306,17 @@ def test_what_names_a_frame():
         "topbar",
         "stopka",
         "navbar",
+        # Łódź's menu: a <div class="col-3 aside"> in its <main> (11-13).
+        "aside",
+        "aside-nav",
     ):
         assert _frame_name(name), name
     for name in (
         # Bootstrap's "nav" may be a content's tabs.
         "nav",
+        "nav-tabs",
         "nav-container",
+        "aside-container",
         "footer-bg",
         "header",
         "dropdown-menu",
