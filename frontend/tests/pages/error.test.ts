@@ -53,6 +53,17 @@ describe("ErrorPage", () => {
     expect(wrapper.html()).toContain('to="/pomoc"');
   });
 
+  // An admin page's guard that could not reach Firebase on the page's first
+  // load (`abortWithoutNetwork`). Nuxt would have said the page did not
+  // exist; the generic message would have blamed the server.
+  it("says there is no connection for a page that could not check the reader", () => {
+    const wrapper = mountError(408);
+
+    expect(wrapper.text()).toContain("Brak połączenia z siecią");
+    expect(wrapper.text()).toContain("Sprawdź połączenie i odśwież stronę.");
+    expect(wrapper.text()).not.toContain("Po naszej stronie wystąpił błąd");
+  });
+
   it("clears the error state when going home", async () => {
     const wrapper = mountError(404);
 

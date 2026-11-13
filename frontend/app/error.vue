@@ -50,24 +50,34 @@
 import { mdiAlertCircleOutline, mdiHome, mdiMapSearchOutline } from "@mdi/js";
 import { computed } from "vue";
 import type { NuxtError } from "#app";
+import { NO_CONNECTION_STATUS } from "~/utils/tokenRefresh";
 
 const props = defineProps<{ error: NuxtError }>();
 
 const statusCode = computed(() => props.error.statusCode);
 const isNotFound = computed(() => statusCode.value === 404);
+/** A page whose guard could not reach Firebase to check the reader, on the
+ * page's first load (`abortWithoutNetwork`). */
+const isOffline = computed(() => statusCode.value === NO_CONNECTION_STATUS);
 
 const icon = computed(() =>
   isNotFound.value ? mdiMapSearchOutline : mdiAlertCircleOutline,
 );
 
 const title = computed(() =>
-  isNotFound.value ? "Nie ma takiej strony" : "Coś poszło nie tak",
+  isNotFound.value
+    ? "Nie ma takiej strony"
+    : isOffline.value
+      ? "Brak połączenia z siecią"
+      : "Coś poszło nie tak",
 );
 
 const description = computed(() =>
   isNotFound.value
     ? "Strona, której szukasz, została przeniesiona albo nigdy nie istniała. Sprawdź adres lub zacznij od strony głównej."
-    : "Po naszej stronie wystąpił błąd. Spróbuj ponownie za chwilę - jeśli problem się powtarza, daj nam znać.",
+    : isOffline.value
+      ? "Bez połączenia z siecią nie sprawdzimy, czy masz dostęp do tej strony. Sprawdź połączenie i odśwież stronę."
+      : "Po naszej stronie wystąpił błąd. Spróbuj ponownie za chwilę - jeśli problem się powtarza, daj nam znać.",
 );
 
 const devMessage = computed(() =>
