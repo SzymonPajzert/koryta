@@ -21,11 +21,13 @@ loses a fact and nobody would see it go.
 import math
 import re
 import typing
+import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+import regex
 
 from scrapers.koryta.download import KorytaEdges, KorytaNodes
 from scrapers.pkw.elections import party_sort_key
@@ -35,6 +37,7 @@ from util.polish import (
     names_agree,
     normalize_person_name,
     spaced_surname,
+    without_diacritics,
 )
 
 #: Fields a node owns rather than states, which a revision never carries. The
@@ -303,6 +306,67 @@ def surname_key(name: typing.Any) -> str:
     """The folded last word of a name, which a page's namesakes share."""
     words = normalize_person_name(name if isinstance(name, str) else "").split()
     return words[-1] if words else ""
+
+
+#: Every character but a letter (with its accents), a digit, whitespace or the
+#: hyphen, which the name index reads as a space: `NOT_A_WORD` in
+#: `frontend/shared/search.ts`.
+NOT_A_WORD = regex.compile(r"[^\p{L}\p{M}\p{N}\s-]+")
+
+
+def searchable_text(text: str) -> str:
+    """A name as the name index reads it: composed, lowercased, every run of
+    `NOT_A_WORD` a space, the whitespace flattened to single spaces.
+    `searchableText` in `frontend/shared/search.ts`."""
+    lowered = unicodedata.normalize("NFC", text).lower()
+    return " ".join(NOT_A_WORD.sub(" ", lowered).split())
+
+
+def name_index(name: str) -> set[str]:
+    """The name index of a person's page (`nameChunksLower`), which the
+    ingest's queries for the namesakes of a payload match: every prefix of
+    the whole name, of each of its words where it has two or more, and of
+    each part of a hyphenated word after the first. `generateChunksLower` in
+    `frontend/shared/search.ts`, for a person, whose name has no town in a
+    bracket to index apart.
+
+    Worked out from the name, because the export the snapshot reads leaves
+    the stored index out (`NODE_FIELDS`). A page carries this one: the
+    trigger writes it over any other on the page's next write
+    (`nameChunksToWrite`), and it is what each of the 23,407 person pages of
+    the 2026-11-12 export stored, all but the empty chunk, which no lookup
+    asks for.
+    """
+    text = searchable_text(name)
+    words = text.split(" ")
+    pieces = [text, *(words if len(words) > 1 else [])]
+    pieces += [part for word in words for part in word.split("-")[1:]]
+    return {piece[:end] for piece in pieces for end in range(1, len(piece) + 1)}
+
+
+def namesake_spellings(name: str) -> set[str]:
+    """What `namesakes` in `person.post.ts` asks the name index for, to find
+    the pages of a payload's name: the last word as written, lowercased, the
+    last part of a double surname (`spaced_surname`) and the last word as the
+    index cuts it (`searchable_text`), each also with its Polish letters
+    written plain (`without_diacritics`).
+
+    Plain is added, never taken away: "Krzysztof Żuk" asks for „żuk” and
+    „zuk”, and finds „Krzysztof Jan Zuk”, while "Krzysztof Zuk" asks for
+    „zuk” alone, which is no chunk of „Krzysztof Jan Żuk” (`name_index`).
+    """
+    words = name.strip().lower().split()
+    if not words:
+        return set()
+    surname = words[-1]
+    last_part = (spaced_surname(name).strip().lower().split() or [surname])[-1]
+    cut = [word for word in re.split(r"[\s-]+", searchable_text(name)) if word]
+    indexed = cut[-1] if cut else last_part
+    return {
+        spelling
+        for word in (surname, last_part, indexed)
+        for spelling in (word, without_diacritics(word))
+    }
 
 
 def day_of(value: typing.Any) -> str | None:
@@ -830,9 +894,21 @@ class SiteSnapshot:
         „Krzysztof Jan Żuk” and filed there the five jobs the page showed.
 
         Only a job with a start counts, at a company the site has a page for.
-        Found among the pages of the folded surname, as `_by_name_and_date`
-        finds the undated namesakes, and so wider than the ingest's search
-        index where the two differ.
+
+        And only a page the ingest's query returns: one whose name index
+        (`name_index`) holds a chunk `namesakes` asks for
+        (`namesake_spellings`). The folded surname finds every page of an
+        agreeing name, and more of them than the index does, which here is
+        the side that stops the night: „Krzysztof Zuk”, written without his
+        Polish letters, asks the index for „zuk”, which „Krzysztof Jan Żuk”
+        is not filed under. The ingest gives that payload a page of its own;
+        planned onto „Krzysztof Jan Żuk”, it would go out as a stored
+        person's, and a page made for one stops the people run. Taken as
+        payload names, the folded surname reached a page the index does not
+        for 9 of the 22,781 names of person pages in the 2026-11-12 export,
+        and for 7,074 of the 11,227 of them written without their Polish
+        letters. A merged page is reached by its own name and index, as the
+        ingest's query reaches the tombstone, and stands for its survivor.
         """
         name = payload.get("name")
         jobs: list[tuple[str, typing.Mapping[str, typing.Any]]] = []
@@ -844,9 +920,12 @@ class SiteSnapshot:
         if not jobs:
             return Resolution(None, NOT_ON_SITE)
 
+        asked = namesake_spellings(name if isinstance(name, str) else "")
         pages: dict[str, dict] = {}
         for node in self.people_by_surname.get(surname_key(name), ()):
             if not names_agree(node.get("name"), name):
+                continue
+            if asked.isdisjoint(name_index(str(node.get("name")))):
                 continue
             page = self._survivor(node)
             # True off a fresh frame and 1.0 off one read back from disk.
