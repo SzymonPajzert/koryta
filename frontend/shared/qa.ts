@@ -63,10 +63,11 @@ export const QA_ITEMS: QaItem[] = [
     title:
       "Import dopisuje dane do strony osoby z drugim imieniem, zamiast zakładać obok szkic",
     description:
-      "Strona założona, zanim osobę znał rejestr, nie ma linku do rejestr.io ani daty urodzenia i często nosi drugie imię, którego dane nie podają, jak „Krzysztof Jan Żuk”, więc nocny import zakładał obok szkic „Krzysztof Żuk” z tymi samymi zatrudnieniami. Teraz, gdy taka strona ma już jedno z zatrudnień z danych (ta sama spółka, funkcja i dzień początku), import dopisuje dane do niej, a gdy pasują dwie takie strony, wstrzymuje osobę i zgłasza ją w przebiegu jako nieudaną.",
+      "Strona założona, zanim osobę znał rejestr, nie ma linku do rejestr.io ani daty urodzenia i często nosi drugie imię, którego dane nie podają, jak „Krzysztof Jan Żuk”, więc nocny import zakładał obok szkic „Krzysztof Żuk” z tymi samymi zatrudnieniami. Teraz, gdy taka strona ma już jedno z zatrudnień z danych (ta sama spółka, funkcja i dzień początku), import dopisuje dane do niej, a gdy pasują dwie takie strony, nie dopisuje do żadnej i noc wstrzymuje tę osobę.",
     steps: [
-      "Po nocnym imporcie otwórz stronę opublikowanej osoby z drugim imieniem, która nie miała linku do rejestr.io, a której przybyło zatrudnienie - ma teraz link do rejestr.io i datę urodzenia, a wyszukiwarka nie znajduje obok niej nowej strony bez drugiego imienia.",
+      "Rano po nocy otwórz /admin/procesy i rozwiń „Import osób na stronę” - ostatnie uruchomienie nie zatrzymało się z powodem „utworzył stronę dla osoby, która już ma stronę”.",
     ],
+    link: "/admin/procesy",
     area: "admin",
   },
   {
