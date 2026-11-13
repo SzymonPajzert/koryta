@@ -5,6 +5,7 @@ import { initializeApp, getApps } from "firebase-admin/app";
 import {
   CAMPAIGN_BATCH_GAP_MS,
   CAMPAIGN_BATCH_SIZE,
+  HANDED_OVER_AT,
   HELD_STATE,
   releaseRoom,
   utcDayStart,
@@ -19,8 +20,11 @@ const FAILED_PRECONDITION = 9;
  *
  * Releasing writes `delivery` the way the extension itself does for a
  * document it has just been given - PENDING, no attempts yet - so it sends the
- * message on that write. `released_at` is what the gap and the day are counted
- * from; nothing but a release writes it.
+ * message on that write. The gap and the day are counted by
+ * `delivery.startTime`, which the extension stamps on every message the site
+ * sends, so mail that never waits - a notification, a newsletter confirmation,
+ * the owner's test - takes its share of both. `released_at` marks what a
+ * release let out; nothing else writes it.
  *
  * Each message is written only as it was read. A run that read it HELD just
  * before another run let it out would otherwise set PENDING again over a
@@ -41,11 +45,11 @@ export async function releaseHeldMail(
     .get();
   if (held.empty) return 0;
 
-  const releasedSince = async (since: Date) =>
-    (await mail.where("released_at", ">=", since).count().get()).data().count;
+  const handedOverSince = async (since: Date) =>
+    (await mail.where(HANDED_OVER_AT, ">=", since).count().get()).data().count;
   const [recently, today] = await Promise.all([
-    releasedSince(new Date(now.getTime() - CAMPAIGN_BATCH_GAP_MS)),
-    releasedSince(utcDayStart(now)),
+    handedOverSince(new Date(now.getTime() - CAMPAIGN_BATCH_GAP_MS)),
+    handedOverSince(utcDayStart(now)),
   ]);
 
   const batch = held.docs.slice(0, releaseRoom({ recently, today }));

@@ -25,6 +25,7 @@ import {
 } from "~~/shared/campaigns";
 import {
   CAMPAIGN_DAILY_LIMIT,
+  HANDED_OVER_AT,
   HELD_STATE,
   utcDayStart,
 } from "~~/shared/campaignPacing";
@@ -244,7 +245,9 @@ async function queueOne(
 }
 
 /** How much campaign mail waits to go out, of every campaign, and how much
- * more of it today's allowance lets out (shared/campaignPacing.ts). */
+ * more of it today's allowance lets out (shared/campaignPacing.ts): the day
+ * counts every message the site has sent since midnight UTC, campaign or
+ * not, as the release does. */
 export async function campaignQueue(
   db: Firestore,
   now: Date,
@@ -252,13 +255,13 @@ export async function campaignQueue(
   const mail = db.collection("mail");
   const count = async (query: Query) =>
     (await query.count().get()).data().count;
-  const [waiting, releasedToday] = await Promise.all([
+  const [waiting, handedOverToday] = await Promise.all([
     count(mail.where("delivery.state", "==", HELD_STATE)),
-    count(mail.where("released_at", ">=", utcDayStart(now))),
+    count(mail.where(HANDED_OVER_AT, ">=", utcDayStart(now))),
   ]);
   return {
     waiting,
-    leftToday: Math.max(0, CAMPAIGN_DAILY_LIMIT - releasedToday),
+    leftToday: Math.max(0, CAMPAIGN_DAILY_LIMIT - handedOverToday),
   };
 }
 
