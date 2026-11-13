@@ -194,9 +194,12 @@
       <v-card-title>Odbiorcy</v-card-title>
       <v-card-text>
         <div class="d-flex align-center flex-wrap ga-2 mb-2">
+          <!-- Wrapped, not a strip to swipe: on a phone the last chips - the
+               failed ones among them - would sit off screen. -->
           <v-chip-group
             :model-value="preset"
             selected-class="text-ink-sage"
+            column
             @update:model-value="applyPreset"
           >
             <v-chip
@@ -314,7 +317,7 @@
               </span>
               <div
                 v-if="item.delivery.error"
-                class="text-caption text-ink-danger"
+                class="text-caption text-ink-danger mailing-page__error"
               >
                 {{ item.delivery.error }}
               </div>
@@ -410,19 +413,7 @@
         </v-card-title>
         <v-card-text>
           <p>
-            <template v-if="selectedRetries === selected.length">
-              Kampania pójdzie ponownie do
-              {{ polishCountingGenitive(selected.length, "osoby", "osób") }}, po
-              błędzie wysyłki.
-            </template>
-            <template v-else>
-              Kampania pójdzie do
-              {{ polishCountingGenitive(selected.length, "osoby", "osób")
-              }}<template v-if="selectedRetries > 0">
-                (do {{ selectedRetries }} z nich ponownie, po błędzie
-                wysyłki)</template
-              >.
-            </template>
+            {{ campaignSendQuestion(selected.length, selectedRetries) }}
             Każda dostanie ją raz: wysłanie jej później do kolejnych osób
             pominie te, które już ją mają. Wysłanej wiadomości nie da się
             cofnąć.
@@ -456,7 +447,13 @@
 <script setup lang="ts">
 import { mdiEmailCheckOutline, mdiMagnify, mdiPlus, mdiSend } from "@mdi/js";
 import { useAuthState } from "@/composables/auth";
-import { mailingError, useMailing } from "~/composables/mailing";
+import {
+  campaignSendNotice,
+  campaignSendQuestion,
+  campaignStanding,
+  mailingError,
+  useMailing,
+} from "~/composables/mailing";
 import { polishCountingGenitive } from "~/composables/polish";
 import { formatDaysAgo } from "~/utils/chartTheme";
 import { formatTaskDate } from "~/utils/taskStyle";
@@ -486,7 +483,6 @@ import {
   type Eligibility,
   type IneligibleReason,
   type SendOutcome,
-  type CampaignQueue,
 } from "~~/shared/campaigns";
 import {
   CAMPAIGN_BATCH_SIZE,
@@ -702,9 +698,10 @@ const rows = computed<Row[]>(() =>
   members.value.map((member) => {
     const eligibility = campaignEligibility(member, form.topic);
     const delivery = deliveries.value[member.uid] ?? null;
-    const failed = delivery?.state === "ERROR";
-    const received =
-      !failed && (current.value?.recipients.includes(member.uid) ?? false);
+    const { failed, received } = campaignStanding(
+      delivery,
+      current.value?.recipients.includes(member.uid) ?? false,
+    );
     return {
       ...member,
       name: member.displayName || member.email || member.uid,
@@ -911,36 +908,14 @@ async function test() {
   }
 }
 
-/** When what a send queued goes out: within minutes, or partly on later days
- * once the day's allowance is spent. */
-function paceNote(queue: CampaignQueue): string {
-  if (queue.waiting === 0) return "";
-  if (queue.waiting <= queue.leftToday) {
-    return `Wychodzą po ${CAMPAIGN_BATCH_SIZE} na minutę.`;
-  }
-  return `Dziś wyjdzie jeszcze ${queue.leftToday}, pozostałe ${queue.waiting - queue.leftToday} w kolejnych dniach.`;
-}
-
 async function sendNow() {
   confirmOpen.value = false;
   busy.value = "send";
   try {
     const campaign = await persist();
     const { outcomes, queue } = await send(campaign.id, selected.value);
-    const values = Object.values(outcomes);
-    const requeued = values.filter((o) => o === "requeued").length;
-    const queued = values.filter((o) => o === "queued").length + requeued;
-    const skipped = values.length - queued;
-    notify(
-      [
-        `Wysłano do kolejki: ${queued}${requeued > 0 ? `, w tym ponownie: ${requeued}` : ""}.`,
-        skipped > 0 ? `Pominięto: ${skipped} - szczegóły w wynikach.` : "",
-        paceNote(queue),
-      ]
-        .filter(Boolean)
-        .join(" "),
-      skipped > 0 && queued === 0 ? "error" : "success",
-    );
+    const notice = campaignSendNotice(outcomes, queue);
+    notify(notice.text, notice.color);
     selected.value = [];
     preset.value = null;
   } catch (error) {
@@ -990,5 +965,14 @@ function resendFailed() {
   padding: 12px;
   max-height: 520px;
   overflow: auto;
+}
+
+/* The extension's error is a sentence long. On a phone the table squeezed
+   its column to the longest word, so the error ran a word to a line and its
+   row grew taller than the screen. On a computer the column has room. */
+@media (max-width: 599.98px) {
+  .mailing-page__error {
+    min-width: 16rem;
+  }
 }
 </style>
