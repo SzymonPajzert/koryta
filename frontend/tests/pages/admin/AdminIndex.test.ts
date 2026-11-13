@@ -1,22 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
 import AdminPage from "../../../app/pages/admin/index.vue";
+import { networkRequestFailed } from "../../networkFailure";
 
-const { mockAuthRequest, claims } = vi.hoisted(() => ({
+const { mockAuthRequest, claims, getIdTokenResult } = vi.hoisted(() => ({
   mockAuthRequest: vi.fn(),
   claims: { current: {} as Record<string, unknown> },
+  getIdTokenResult: vi.fn(),
 }));
 
 vi.mock("~/composables/auth", () => ({
   authRequest: mockAuthRequest,
   useAuthState: () => ({
-    user: {
-      value: {
-        uid: "me",
-        getIdTokenResult: async () => ({ claims: claims.current }),
-      },
-    },
+    user: { value: { uid: "me", getIdTokenResult } },
     isAdmin: { value: true },
   }),
 }));
@@ -36,9 +33,16 @@ const newAdminsLink = (wrapper: Awaited<ReturnType<typeof mountSuspended>>) =>
 describe("/admin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getIdTokenResult.mockImplementation(async () => ({
+      claims: claims.current,
+    }));
     // Neither panel matters here, and a failed one is the page's own concern.
     mockAuthRequest.mockRejectedValue(new Error("not under test"));
     vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("links an established administrator to the trial administrators", async () => {
@@ -59,6 +63,20 @@ describe("/admin", () => {
     await flushPromises();
 
     expect(newAdminsLink(wrapper)).toBeUndefined();
+  });
+
+  // Reading the claims refreshes an expired token first. Offline that failed
+  // into `computedAsync`, which hands what it catches to `reportError`.
+  it("leaves the link out, and reports nothing, when the token cannot be refreshed", async () => {
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+    getIdTokenResult.mockRejectedValue(networkRequestFailed());
+    const wrapper = await mountSuspended(AdminPage);
+    await flushPromises();
+
+    expect(getIdTokenResult).toHaveBeenCalledTimes(2);
+    expect(newAdminsLink(wrapper)).toBeUndefined();
+    expect(reportError).not.toHaveBeenCalled();
   });
 
   it("has a tile for the readings of the asset declarations", async () => {
