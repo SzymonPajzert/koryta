@@ -22,7 +22,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from jobs.bip_crawler import found, robots_exceptions, state, walk
+from jobs.bip_crawler import found, reset, robots_exceptions, state, walk
 from jobs.bip_crawler.coordinator import BipCoordinator, CoordinatorOptions
 from jobs.bip_crawler.identity import Agents
 from jobs.bip_crawler.people import run_people_mode, server_of
@@ -106,16 +106,18 @@ def ingest_registry(
 
 
 @contextlib.contextmanager
-def single_crawler(root: Path) -> Iterator[None]:
+def single_crawler(root: Path, refusal: str = "") -> Iterator[None]:
     """Hold ``root`` for this run: the startup repair re-wraps every ``.part``
-    bundle there, which is only safe when no other crawler writes to it."""
+    bundle there, which is only safe when no other crawler writes to it.
+    ``refusal`` is what to say when another run holds it."""
     root.mkdir(parents=True, exist_ok=True)
     with (root / ".crawl.lock").open("w") as handle:
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise SystemExit(
-                f"another koryta_scrape_bip is using {root}; "
+                refusal
+                or f"another koryta_scrape_bip is using {root}; "
                 "give this run its own --out"
             ) from None
         yield
@@ -420,13 +422,50 @@ _LIST_HELP = (
 )
 
 
+def _crawl_out() -> Path:
+    """The people mode's folder, as run_chunk.sh finds it."""
+    return Path(
+        os.environ.get("BIP_CRAWL_OUT", Path.home() / ".cache/koryta/bip-people-crawl")
+    )
+
+
+def add_reset_parser(sub: argparse._SubParsersAction) -> None:
+    """`reset` (`reset.py`): send candidacies back to pending."""
+    reset_cmd = sub.add_parser(
+        "reset",
+        help="make candidacies pending again for the next chunk: delete their "
+        "bip_poi and bip_poi_docs rows, each first written to --backup",
+    )
+    reset_cmd.add_argument(
+        "keys",
+        type=_units,
+        help="candidacy keys, comma-separated, or @FILE with one a line",
+    )
+    reset_cmd.add_argument(
+        "--backup",
+        type=Path,
+        default=None,
+        help="a new JSON file every deleted row is written to, on disk before "
+        "anything is deleted; required unless --dry-run",
+    )
+    reset_cmd.add_argument(
+        "--dry-run", action="store_true", help="count the rows; delete nothing"
+    )
+    reset_cmd.add_argument(
+        "--out",
+        type=Path,
+        default=_crawl_out(),
+        help="the crawl's folder: reset refuses while a crawl holds its .crawl.lock "
+        "(default $BIP_CRAWL_OUT or ~/.cache/koryta/bip-people-crawl)",
+    )
+    reset_cmd.set_defaults(func=reset.cmd_reset)
+
+
 def add_walk_parsers(sub: argparse._SubParsersAction) -> None:
     """`walk` and `plan` (`walk.py`): try the people mode on a few units, and
     size a chunk, without touching what the crawl keeps."""
     # Beside the crawl's own files, as run_chunk.sh finds them.
-    crawl_out = Path(
-        os.environ.get("BIP_CRAWL_OUT", Path.home() / ".cache/koryta/bip-people-crawl")
-    )
+    crawl_out = _crawl_out()
     walk_cmd = sub.add_parser(
         "walk",
         help="search a few units as a chunk would and keep nothing: shows what a "
@@ -585,6 +624,7 @@ def build_parser() -> argparse.ArgumentParser:
     state.add_parser(sub)
 
     add_walk_parsers(sub)
+    add_reset_parser(sub)
     return parser
 
 

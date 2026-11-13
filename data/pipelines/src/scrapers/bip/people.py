@@ -466,6 +466,16 @@ def _years(text: str) -> list[int]:
     return [int(y) for y in YEAR.findall(text)]
 
 
+def _base_score(declaration_like: bool, url: str, around: str) -> float:
+    """A file's rank before whose it is counts: a declaration, a PDF, a
+    recent year in its words."""
+    base = (3.0 if declaration_like else 0.0) + (1.0 if ".pdf" in url.lower() else 0.0)
+    years = _years(around)
+    if years:
+        base += 1.5 if max(years) >= 2024 else 1 if max(years) >= 2019 else 0
+    return base
+
+
 _ID_QUERY = re.compile(r"[?&](?:id|zid|iddok|idplik)=[^&#]*", re.I)
 #: An AkcessNet page, menu item or article: its "&id=" makes it look like a
 #: file, and a page titled with one seeker's name lent them its ~100 menu links.
@@ -789,6 +799,8 @@ def candidates(
     first names' stems, tell "Michał Rzepka" from Józef; `_whose`).
     Documents on a declarations page that name nobody at all (one file for the
     whole council, or labels like "za 2023") come back with an empty ``key``.
+    A file in the site's menus, header, footer or sidebars (``frame``) is
+    nobody's by where it stands: only its own words make it somebody's.
     """
     title = fold(page_title)
     in_title, namesake_titled = _named(title, "", seekers, [page_title], first_names)
@@ -846,6 +858,13 @@ def candidates(
         )
         if BLANK_FORM.search(named_as):
             continue
+        # A file in the site's frame (a menu, the header or footer, a sidebar:
+        # `LinkContext.frame`) stands on every page: no page lends it, and it
+        # is a declaration that names nobody only when its own label or name
+        # says so. Karczew's left menu lent its "Statut" to each councillor
+        # whose page it framed; Lwówek Śląski's lent the banner rodo.pdf to the
+        # one seeker a link to its declarations page named (11-13).
+        site_file = link.frame and not ASSETS.search(named_as)
         around = " ".join(fold(x) for x in (link.anchor, link.row, link.heading))
         around += " " + address
         named: list[tuple[Seeker, bool]] = []
@@ -875,7 +894,7 @@ def candidates(
             if namesake or names_somebody(raws[0], initials=not page_people):
                 somebody_else = True
                 break
-        if not named and not somebody_else and page_people:
+        if not named and not somebody_else and page_people and not site_file:
             named = [(s, s.named_in(title)[1] or lent) for s in page_people]
         declaration_like = bool(
             DECLARATION.search(around)
@@ -887,12 +906,7 @@ def candidates(
             or filed_under
             or STATED_AS_OF.search(fold(link.anchor))
         )
-        years = _years(around)
-        base: float = (3 if declaration_like else 0) + (
-            1 if ".pdf" in link.url.lower() else 0
-        )
-        if years:
-            base += 1.5 if max(years) >= 2024 else 1 if max(years) >= 2019 else 0
+        base = _base_score(declaration_like, link.url, around)
         context = " | ".join(x for x in (link.row, link.heading) if x)[:400]
         for seeker, first in named:
             out.append(
@@ -912,6 +926,7 @@ def candidates(
             and not somebody_else
             and not title_somebody
             and not forms_page
+            and not site_file
             and not FORMS.search(fold(link.row) + " " + fold(link.heading))
             and (declared or titled)
             and bool(ASSETS.search(around) or ASSETS.search(title))

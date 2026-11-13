@@ -20,16 +20,25 @@ own disk, so on 11-01 the upload still ranked the site of 10-29.
 
 A later run picks up the pending candidacies only, so new people of interest
 (a new election, a wider list) are searched without redoing the found ones;
-``--poi-refresh`` searches everybody again.
+``--poi-refresh`` searches everybody again. ``reset`` makes chosen candidacies
+pending again (``koryta_scrape_bip reset``): their ``bip_poi`` and
+``bip_poi_docs`` rows go, the files stay in ``bip_docs`` and their bundles.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Collection
+from dataclasses import asdict
 from datetime import datetime, timezone
+from typing import Any
 
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import BipPeopleStore, PersonDocRow, PersonOutcome, UnitRow
+
+#: What `reset` deletes, by candidacy key: the outcome, then the files tried.
+RESET_TABLES = ("bip_poi", "bip_poi_docs")
+_RESET_ORDER = {"bip_poi": "key", "bip_poi_docs": "key, url"}
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS bip_poi (
@@ -78,6 +87,33 @@ def read_searched(pg: PostgresClient) -> dict[str, PersonOutcome]:
         key: PersonOutcome(status, reason, int(docs), checked_at)
         for key, status, reason, docs, checked_at in rows
     }
+
+
+def _select_rows(
+    cursor: Any, keys: list[str], *, lock: bool
+) -> dict[str, list[dict[str, Any]]]:
+    """Every row of `RESET_TABLES` that ``keys`` own, whole (a ``bip_poi``
+    from before 11-01 has the list's fields too), by table."""
+    rows: dict[str, list[dict[str, Any]]] = {}
+    for table in RESET_TABLES:
+        cursor.execute(
+            f"SELECT * FROM {table} WHERE key = ANY(%s) "
+            f"ORDER BY {_RESET_ORDER[table]}{' FOR UPDATE' if lock else ''}",
+            (keys,),
+        )
+        names = [column.name for column in cursor.description]
+        rows[table] = [dict(zip(names, row)) for row in cursor.fetchall()]
+    return rows
+
+
+def read_reset_rows(
+    pg: PostgresClient, keys: Collection[str]
+) -> dict[str, list[dict[str, Any]]]:
+    """What a reset of ``keys`` would delete, read without creating anything:
+    for ``reset --dry-run``."""
+    with pg.transaction() as cursor:
+        cursor.execute("SET TRANSACTION READ ONLY")
+        return _select_rows(cursor, sorted(set(keys)), lock=False)
 
 
 def read_units(pg: PostgresClient) -> dict[str, UnitRow]:
@@ -211,6 +247,24 @@ class PostgresBipPeopleStore(BipPeopleStore):
         )
         return [PersonDocRow(*r) for r in rows]
 
+    def reset_rows(self, keys: Collection[str]) -> dict[str, list[dict[str, Any]]]:
+        return read_reset_rows(self.pg, keys)
+
+    def reset(
+        self,
+        keys: Collection[str],
+        keep: Callable[[dict[str, list[dict[str, Any]]]], None],
+    ) -> dict[str, int]:
+        # One transaction: the rows kept are the rows deleted, locked between.
+        wanted = sorted(set(keys))
+        with self.pg.transaction() as cursor:
+            keep(_select_rows(cursor, wanted, lock=True))
+            deleted = {}
+            for table in reversed(RESET_TABLES):
+                cursor.execute(f"DELETE FROM {table} WHERE key = ANY(%s)", (wanted,))
+                deleted[table] = cursor.rowcount
+        return {table: deleted[table] for table in RESET_TABLES}
+
 
 class MemoryBipPeopleStore(BipPeopleStore):
     """The same in memory: for tests, and for a run that should leave nothing behind."""
@@ -250,3 +304,32 @@ class MemoryBipPeopleStore(BipPeopleStore):
             (d for (k, _), d in self.docs.items() if k == key),
             key=lambda d: (-d.score, d.url),
         )
+
+    def reset_rows(self, keys: Collection[str]) -> dict[str, list[dict[str, Any]]]:
+        wanted = set(keys)
+        return {
+            "bip_poi": [
+                {"key": key, **asdict(outcome)}
+                for key, outcome in sorted(self.outcomes.items())
+                if key in wanted
+            ],
+            "bip_poi_docs": [
+                asdict(doc)
+                for (key, _), doc in sorted(self.docs.items())
+                if key in wanted
+            ],
+        }
+
+    def reset(
+        self,
+        keys: Collection[str],
+        keep: Callable[[dict[str, list[dict[str, Any]]]], None],
+    ) -> dict[str, int]:
+        rows = self.reset_rows(keys)
+        keep(rows)
+        wanted = set(keys)
+        for key in wanted:
+            self.outcomes.pop(key, None)
+        for pair in [pair for pair in self.docs if pair[0] in wanted]:
+            del self.docs[pair]
+        return {table: len(rows[table]) for table in RESET_TABLES}
