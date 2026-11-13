@@ -26,7 +26,10 @@ from scrapers.bip.classify import host_of, is_document_url, normalize_url, path_
 from scrapers.common.links import LinkContext
 
 # On folded text: lower case, ASCII, words separated by single spaces.
-DECLARATION = re.compile(r"oswiadcz")
+#: Not "doświadczenie" (experience, on every job advert) nor "poświadczenie":
+#: Brzostek's sitemap seeded three requests for public information "...dla
+#: kobiet doświadczających przemocy" as declaration pages (11-13).
+DECLARATION = re.compile(r"(?<![dp])oswiadcz")
 ASSETS = re.compile(r"majatk")
 #: A file's own label dating it the way a declaration is dated, "wg stanu na
 #: 31.12.2025 r.": Tarnów's person base files each councillor's as "Grażyna
@@ -37,21 +40,33 @@ OFFICE = re.compile(
     r"(?:^| )(?:rad[ay]|radn\w*|sejmik\w*|wojt\w*|burmistrz\w*|prezydent\w*|starost\w*|"
     r"zarzad\w*|marszal\w*|kadencj\w*)"
 )
-#: Sections that never hold declarations but eat a unit's page budget.
+#: Sections that never hold declarations but eat a unit's page budget; and a
+#: request for public information, whatever it asks about, or a list of
+#: property appraisers ("rzeczoznawcy majątkowi"): Brzostek's FOIA requests
+#: sit under "... podlegających składaniu oświadczenia majątkowego", and the
+#: walk read ~80 of them (11-13).
 NEGATIVE = re.compile(
     r"przetarg|zamowien|ogloszen|nabor|kariera|uchwal|protokol|budzet|podatk|zarzadzeni|"
     r"ochron|odpad|zezwolen|konkurs|petycj|skarg|rodo|dostepnos|kontakt|ankiet|wybor|"
-    r"rekrutac|planowan|zagospodarow|inwestycj|dotacj|sprawozdan|interpelac|aktualnosc"
+    r"rekrutac|planowan|zagospodarow|inwestycj|dotacj|sprawozdan|interpelac|aktualnosc|"
+    r"rzeczoznawc|udostepnieni[a-z]* informacji publicznej"
 )
 #: A declaration-like file that is a blank form or guidance, not anybody's;
 #: or nobody's asset declaration: a GDPR clause for those who file them, a
 #: lustration or de minimis statement, the site's easy-to-read and
-#: accessibility texts, which a page titled with a seeker lent them (10-31).
+#: accessibility texts, which a page titled with a seeker lent them (10-31);
+#: or a letter explaining one ("Wyjaśnienia do oświadczenia majątkowego"),
+#: which took slots of Czeladź's, Brzeziny's and Łowicz's councillors (11-13).
 BLANK_FORM = re.compile(
     r"wzor|druk|formularz|instrukcj|zasad|informacj|objasnien|rozporzadzen|ustaw|"
     r"klauzul|przetwarzan\w* danych|lustrac|de minimis|pomoc\w* publiczn|"
-    r"konflikt\w* interes|latw\w* do czytania|dostepnosc|cookie|polityk\w* prywatn"
+    r"konflikt\w* interes|latw\w* do czytania|dostepnosc|cookie|polityk\w* prywatn|"
+    r"wyjasnien"
 )
+#: A letter explaining a declaration, said by the row or heading that names its
+#: writer, or by a link to it: Iłża's dokument 1090, "Wyjaśnienia do
+#: oświadczenia majątkowego - Józef Skrobisz", labels its file "122 kB" (11-13).
+EXPLANATION = re.compile(r"(?:^| )wyjasnien[a-z]*(?: [a-z0-9]+){0,3} oswiadcz")
 #: A page or a row of blank forms, folded: "Wzory oświadczeń majątkowych",
 #: "Druki do pobrania", "Formularz - oświadczenie majątkowe radnego". Narrower
 #: than BLANK_FORM, whose "informacja" or "ustawa" a declarations page's own
@@ -64,6 +79,8 @@ FORMS = re.compile(r"(?:^| )(?:wzor(?:y|u|ow|em)?|formularz\w*|druk(?:i|ow)?)(?=
 #: of 75 candidacies nothing named, as their unnamed declarations (11-13).
 OBLIGED = re.compile(r"(?:^| )(?:lista|listy|wykaz\w*) osob\w* z?obowiazan")
 YEAR = re.compile(r"(?<!\d)(20[12]\d)(?!\d)")
+#: A term's number, raw: "VII" in "Rady Powiatu we Włodawie VII kadencji".
+_ROMAN = re.compile(r"(?=[IVX])X{0,3}(?:IX|IV|V?I{0,3})")
 
 
 def fold(text: object) -> str:
@@ -165,9 +182,17 @@ class Seeker:
         into ``url`` with no separator, a first name too (`_in_address`)."""
         if not self.last:
             return False, False
+        if _vocabulary(self.last):
+            # "członka zarządu" is nobody's surname: Kraśnik gave Tadeusz
+            # Członka another member's file for it (11-13). Such a surname
+            # counts only with a name of theirs beside it.
+            names = (*_first_forms(self.first), *self.own)
+            if _beside(self.last, names).search(text) is None:
+                return False, False
+            return True, self._first_in(text)
         last = _word(self.last).search(text) is not None
         if not last and url and len(self.last) >= 6:
-            last = self.last in url.replace(" ", "")
+            last = _run_into(self.last, self.first).search(url) is not None
         if not last:
             # "Kurka" alone is a surname of its own, "Jana Kurka" Jan Kurek.
             declined = bool(self.declined) and bool(_word(self.declined).search(text))
@@ -250,6 +275,32 @@ def _word(stem_: str) -> re.Pattern[str]:
     return re.compile(r"(?:^| )" + re.escape(stem_) + r"(?:" + endings + r")(?= |$)")
 
 
+@functools.cache
+def _run_into(last: str, first: str) -> re.Pattern[str]:
+    """A surname's stem in an address's words with anything run into its
+    start ("jkowalski", "mariajolantazalewska"), and at its end an ending, then
+    nothing or their own first name or its initial ("salwowskiadam",
+    "swiatczakk"): "kolodziejczyk" is no Kołodziej's (Kłodzko, 11-13),
+    "chmielewski" no Chmiel's, "wojcikpawel" no Jerzy Wójcik's."""
+    endings = "|".join(sorted(_ENDINGS, key=len, reverse=True))
+    own = ""
+    if first:
+        forms = "|".join(re.escape(f) for f in _first_forms(first))
+        own = rf"(?:(?:{forms})(?:{endings})|{re.escape(first[0])})?"
+    return re.compile(rf"{re.escape(last)}(?:{endings}){own}(?![a-z])")
+
+
+@functools.cache
+def _beside(last: str, names: tuple[str, ...]) -> re.Pattern[str]:
+    """A surname's stem with one of ``names`` (stems) beside it, either order."""
+    endings = "|".join(sorted(_ENDINGS, key=len, reverse=True))
+    if not any(names):
+        return re.compile(r"(?!)")
+    given = "(?:" + "|".join(re.escape(n) for n in names if n) + f")(?:{endings})"
+    surname = re.escape(last) + f"(?:{endings})"
+    return re.compile(rf"(?:^| )(?:{given} {surname}|{surname} {given})(?= |$)")
+
+
 #: Words that start with a capital in a BIP label without being anybody's name.
 _NOT_NAMES = frozenset(
     fold(w)
@@ -264,10 +315,59 @@ _NOT_NAMES = frozenset(
     informacji publicznej bip pdf doc docx radni kierownicy pracownicy dyrektorzy
     członkowie""".split()
 )
+#: Words beside a first name in the names of places, not of people: Kazimierz
+#: Dolny, Kazimierz Biskupi, Kazimierza Wielka, Góra Świętej Małgorzaty.
+_PLACE_WORDS = frozenset(
+    fold(w)
+    for w in """dolny dolnym dolnego biskupi biskupim biskupiego wielka wielkiej
+    świętej""".split()
+)
 _TOKEN = re.compile(r"[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]+(?:-[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]+)?")
 #: Words an initial follows in an address or a patron's name, not a person's:
 #: "ul. J. Słowackiego", "Szkoła Podstawowa im. M. Konopnickiej".
 _BEFORE_A_NAMESAKE = frozenset("ul al pl os im ks sw gen prof dr nr".split())
+
+
+@functools.cache
+def _vocabulary(last: str) -> bool:
+    """Whether a surname's stem is a word of a declarations page (`_NOT_NAMES`):
+    Członka, Radny, Starosta, Początek, Koniec."""
+    return any(_word(last).search(word) for word in _NOT_NAMES)
+
+
+def _name_like(token: str) -> bool:
+    """Whether a raw word may be part of a person's name: capitalised and no
+    vocabulary; not a file code's initials ("OM_ŁB_2024A", gmina Bolesławiec,
+    11-13) nor a term's number ("Włodawie VII kadencji")."""
+    return (
+        token[0].isupper()
+        and len(token) > 1
+        and fold(token) not in _NOT_NAMES
+        and not (token.isupper() and len(token) <= 2)
+        and _ROMAN.fullmatch(token) is None
+    )
+
+
+def person_named(text: str, first_names: frozenset[str]) -> bool:
+    """Whether raw ``text`` names a person in full: a first name (a stem in
+    ``first_names``) beside a `_name_like` word, either order ("Dariusz Lis",
+    "KOSIŃSKI Krzysztof"), not after an address's or a patron's abbreviation
+    ("ul. Jana Pawła II") nor in a place's name (`_PLACE_WORDS`)."""
+    tokens = list(_TOKEN.finditer(text or ""))
+    for i, (a, b) in enumerate(zip(tokens, tokens[1:])):
+        if text[a.end() : b.start()].strip():
+            continue
+        if i and fold(tokens[i - 1].group()) in _BEFORE_A_NAMESAKE:
+            continue
+        for given, other in ((a.group(), b.group()), (b.group(), a.group())):
+            if (
+                given[0].isupper()
+                and _name_like(other)
+                and fold(other) not in _PLACE_WORDS
+                and _first_name(_plain(given).lower(), first_names)
+            ):
+                return True
+    return False
 
 
 def initialled_names(text: str) -> list[tuple[str, str]]:
@@ -313,10 +413,7 @@ def names_somebody(
         return False
     previous = False
     for match in _TOKEN.finditer(text or ""):
-        token = match.group()
-        name_like = (
-            token[0].isupper() and len(token) > 1 and fold(token) not in _NOT_NAMES
-        )
+        name_like = _name_like(match.group())
         if name_like and previous:
             return True
         previous = name_like
@@ -442,7 +539,7 @@ def declarants(link: LinkContext, seekers: list[Seeker]) -> set[tuple[str, str]]
     return {
         s.name
         for raw in (link.anchor, link.row)
-        if DECLARATION.search(fold(raw))
+        if DECLARATION.search(fold(raw)) and not EXPLANATION.search(fold(raw))
         for s in seekers
         if all(s.named_in(fold(raw))) and not _joined_to_another(s, [raw])
     }
@@ -484,6 +581,9 @@ class Candidate:
     declaration_like: bool
     first_name: bool
     score: float
+    #: The link says another of the seeker's own names too (`Seeker.own`): a
+    #: middle name, the other half of a double surname.
+    middle: bool = False
 
 
 def _years(text: str) -> list[int]:
@@ -856,8 +956,9 @@ def entries_to_open(
     return chosen
 
 
-#: A system's timestamp in a file's row: the publication record starts there.
-_RECORDED = re.compile(r"\d{4}-\d{2}-\d{2},? \d{1,2}:\d{2}:\d{2}")
+#: A system's timestamp in a file's row, seconds or not: the publication
+#: record starts there.
+_RECORDED = re.compile(r"\d{4}-\d{2}-\d{2},? \d{1,2}:\d{2}(?::\d{2})?")
 
 
 def _before_record(row: str) -> str:
@@ -865,10 +966,48 @@ def _before_record(row: str) -> str:
     the file, not whose it is: Kraków's declaration cards list each version as
     "zobacz 1.11 MB 2024-05-22 13:23:37 AGATA MICHALISZYN 1 (Najnowsza)", and
     that name took every councillor's PDF from them (11-01: none of Kraków's
-    86 candidacies found). Warka's "Wytworzył: Grzegorz Szydło Udostępnił:
-    Fronczek Mariusz (2024-03-13 12:57:47)" keeps its declarant."""
+    86 candidacies found); Czeladź's file tables end each row "2026-08-25
+    14:35 Wolak Beata - Wydział Organizacyjno - Administracyjny" (11-13: none
+    of 21). Warka's "Wytworzył: Grzegorz Szydło Udostępnił: Fronczek Mariusz
+    (2024-03-13 12:57:47)" keeps its declarant."""
     found = _RECORDED.search(row)
     return row[: found.start()] if found else row
+
+
+#: A link's tiers, nearest first: (folded text, raw texts, its address's words).
+_Tiers = tuple[tuple[str, tuple[str, ...], str], ...]
+
+
+def _tiers_name(
+    tiers: _Tiers,
+    seekers: list[Seeker],
+    page_title: str,
+    first_names: frozenset[str],
+    *,
+    initials: bool,
+) -> tuple[list[tuple[Seeker, bool]], bool]:
+    """The seekers the nearest tier naming anybody names (with whether by first
+    name too), and whether the link is somebody else's (`candidates`)."""
+    for i, (text, raws, url) in enumerate(tiers):
+        named, namesake = _named(text, url, seekers, raws, first_names)
+        if named and EXPLANATION.search(text):
+            return [], True  # their letter, no declaration
+        if named:
+            # A surname that says nothing more ("/rzepka.pdf") yields to a
+            # wider tier, or the page's title, naming somebody else of it
+            # ("Michał Rzepka | radny | pobierz").
+            wider = [r for _, rs, _ in tiers[i + 1 :] for r in rs] + [page_title]
+            named = [
+                (s, first)
+                for s, first in named
+                if first
+                or _whose(s, raws, first_names) == "own"
+                or _whose(s, wider, first_names) != "namesake"
+            ]
+            return named, not named
+        if namesake or names_somebody(raws[0], initials=initials):
+            return [], True
+    return [], False
 
 
 def candidates(
@@ -926,6 +1065,9 @@ def candidates(
     # A page about one person nobody seeks ("... - B. Kułacz - Stan majątkowy na
     # 31.12.2025 r."): its files are theirs, whatever the labels say. Unless a
     # seeker could be that person in a form named_in misses ("J. Kaczmarka").
+    # Braniewo's "Dariusz Lis - Oświadczenia majątkowe" gave his files to three
+    # 2014 councillors nothing named, Żywiec's "Marek Czul - ..." its to Maciej
+    # Gibas (11-13).
     # Or a page whose "Imię"/"Nazwisko" fields name its one filer
     # (``owner``, `person_page`), nobody the walk seeks, and no link saying a
     # seeker's declaration led to: bip.warszawa.pl's declaration pages are
@@ -939,7 +1081,11 @@ def candidates(
             not _could_be(seekers, initial, word)
             for initial, word in initialled_names(page_title)
         )
+        or person_named(page_title, first_names)
     )
+    # A letter explaining one's declaration lends nobody its file.
+    if any(fold(part).startswith("wyjasnien") for part in page_title.split("|")):
+        page_people, title_somebody = [], True
     # A page the walk reached through a link saying one seeker's declaration
     # (``lender``, `declarants`) is theirs when its title names nobody:
     # Rybnik's "Pokaż" opens a page titled "Radni" with the person in a form
@@ -950,6 +1096,11 @@ def candidates(
     out: list[Candidate] = []
     for link in links:
         if not is_document_url(link.url) or _AKCESSNET_PAGE.search(link.url):
+            continue
+        # A term's switch, no document: powiat ostrowski's person pages head
+        # "Wybierz kadencję: VII VI V" (?act=kadencja&id=5), and the switches
+        # took each person's three slots (11-13).
+        if _ROMAN.fullmatch(link.anchor.strip()):
             continue
         # The path's words, not the host's: "piotr" in powiat-piotrkowski-api's
         # name is nobody's first name.
@@ -973,34 +1124,22 @@ def candidates(
         site_file = link.frame and not ASSETS.search(named_as)
         around = " ".join(fold(x) for x in (link.anchor, link.row, link.heading))
         around += " " + address
-        named: list[tuple[Seeker, bool]] = []
-        somebody_else = False
         row = _before_record(link.row)
         tiers = (
             (label, (link.anchor, path), address),
             (fold(row), (row,), ""),
             (fold(link.heading), (link.heading,), ""),
         )
-        for i, (text, raws, url) in enumerate(tiers):
-            named, namesake = _named(text, url, seekers, raws, first_names)
-            if named:
-                # A surname that says nothing more ("/rzepka.pdf") yields to a
-                # wider tier, or the page's title, naming somebody else of it
-                # ("Michał Rzepka | radny | pobierz").
-                wider = [r for _, rs, _ in tiers[i + 1 :] for r in rs] + [page_title]
-                named = [
-                    (s, first)
-                    for s, first in named
-                    if first
-                    or _whose(s, raws, first_names) == "own"
-                    or _whose(s, wider, first_names) != "namesake"
-                ]
-                somebody_else = not named
-                break
-            if namesake or names_somebody(raws[0], initials=not page_people):
-                somebody_else = True
-                break
-        if not named and not somebody_else and page_people and not site_file:
+        named, somebody_else = _tiers_name(
+            tiers, seekers, page_title, first_names, initials=not page_people
+        )
+        if FORMS.search(fold(link.row) + " " + fold(link.heading)):
+            # In a row or under a heading of blank forms a file is nobody's,
+            # whoever the heading names besides: powiat ostrowski's header
+            # "Wzory druków: Radni, Członkowie Zarządu" swallows its page, the
+            # person's name too, and took the slots of 10 (11-13).
+            named, somebody_else = [], True
+        elif not named and not somebody_else and page_people and not site_file:
             named = [(s, s.named_in(title)[1] or lent) for s in page_people]
         declaration_like = bool(
             DECLARATION.search(around)
@@ -1025,16 +1164,20 @@ def candidates(
                     declaration_like,
                     first,
                     base + (2 if first else 0),
+                    any(_word(name).search(around) for name in seeker.own if name),
                 )
             )
+        # A page's files that name nobody are the seekers' to look inside when
+        # the page says declarations, not "majątek" alone: Brzeziny's tender
+        # "... sprzedaż składników majątku ruchomego powiatu" went to 18 people,
+        # Grudziądz's list of property appraisers to 14 (11-13).
         unnamed = (
             not named
             and not somebody_else
             and not title_somebody
             and not forms_page
             and not site_file
-            and not FORMS.search(fold(link.row) + " " + fold(link.heading))
-            and (declared or titled)
+            and (declared or bool(DECLARATION.search(title)))
             and bool(ASSETS.search(around) or ASSETS.search(title))
             and is_file_link(link.url)
         )
@@ -1053,15 +1196,18 @@ def choose(
     """What to download for each seeker.
 
     Declaration-like links only. When some of a seeker's links carry their first
-    name too, only those: a namesake's or a relative's form shares the surname.
-    Seekers nothing names get the unit's unnamed declaration files, at most
-    ``unnamed_cap`` of them, for the OCR step to look inside.
+    name too, only those: a namesake's or a relative's form shares the surname;
+    and when some of those carry their middle name too, only those: Grudziądz
+    files two Krzysztof Kosińskis, the seeker's as "krzysztof roman kosinski"
+    (11-13). Seekers nothing names get the unit's unnamed declaration files, at
+    most ``unnamed_cap`` of them, for the OCR step to look inside.
     """
     picked: dict[str, list[Candidate]] = {}
     for seeker in seekers:
         own = [c for c in found if c.key == seeker.key and c.declaration_like]
         firsts = [c for c in own if c.first_name]
-        ranked = sorted(firsts or own, key=lambda c: -c.score)
+        middles = [c for c in firsts if c.middle]
+        ranked = sorted(middles or firsts or own, key=lambda c: -c.score)
         urls: list[Candidate] = []
         for c in ranked:
             if same_file(c.url) not in {same_file(u.url) for u in urls}:

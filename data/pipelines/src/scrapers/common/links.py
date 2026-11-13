@@ -428,7 +428,11 @@ def extract_link_contexts(
     for node in soup.descendants:
         if isinstance(node, Tag):
             if node.name in _HEADINGS or _bold_span(node):
-                last = node
+                # Not an empty one: gmina Bolesławiec's "<strong>Leszek
+                # Berny</strong><strong>&nbsp;</strong>" left his files with
+                # no heading (11-13).
+                if any(piece.strip() for piece in node.strings):
+                    last = node
             elif node.name == "a" and last is not None:
                 headings[id(node)] = last
     frames = _frame_elements(soup)
