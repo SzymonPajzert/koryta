@@ -116,6 +116,13 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   robots.txt hides by the app's own addresses (`<office>,a,<id>,artykul.html`,
   `e,pobierz,get.html?id=<id>`) are left out, and an API robots.txt closes is
   not read around by rendering.
+- Gdynia's BIP, its own React app "um-bip" (bip.um.gdynia.pl), is read the same
+  way through the API its `/js/config.js` names (`umbip.py`): the main page as
+  its menu shows it, two levels deep; a category's subcategories and posts; a
+  declarations post as a table, a row a declarant (name, position, files). A
+  host counts as um-bip when its first page is the app's shell and config.js
+  names the API. Every row names its declarant, so a file there that names no
+  seeker is somebody else's, never a declaration that names nobody.
 - Warsaw's declarations (bip.warszawa.pl: the city's, 18 district councils',
   the boards' and the staff's, 22,125 behind one search page whose pages past
   the first a script draws) are asked for by GET, each seeker's surname within

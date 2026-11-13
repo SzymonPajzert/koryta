@@ -33,8 +33,9 @@ nothing of the candidacy but that, by its key:
 - ``error``: the unit's search failed unexpectedly (retried by default).
 
 Politeness is the blind crawl's: robots.txt, one request per host per
-``--rate`` seconds, the same User-Agent and fetch. Madkom's BIPs are read
-through the API their pages are drawn from (``madkom``), FINN's registers
+``--rate`` seconds, the same User-Agent and fetch. Madkom's BIPs and Gdynia's
+um-bip app are read through the API their pages are drawn from (``madkom``,
+``umbip``), FINN's registers
 through the JSON-RPC calls of the e-Urząd app their pages embed (``finn``),
 Wrota Lubelszczyzny's document lists through the JSON their pages are drawn
 from (``wrota``), SISCO eDc's attachment tables through the call their pages'
@@ -80,6 +81,7 @@ from jobs.bip_crawler import (
     person_page,
     sisco,
     softres,
+    umbip,
     wrota,
     zeto,
 )
@@ -524,6 +526,17 @@ def _declarations_box(drawn: HttpResult) -> list[LinkContext]:
     return extract_link_contexts(fragment, drawn.url, drawn.content_type)[1]
 
 
+def _named_only(page: HttpResult, found: list[Candidate]) -> list[Candidate]:
+    """``found`` on ``page`` without the files that name nobody, when every
+    file's row there names its declarant: a um-bip declarations post
+    (`umbip.names_every_declarant`), where such a file is somebody else's,
+    never a declaration that names nobody ("Domańska-Ożga", no first name,
+    among Gdynia's 300 officials a year)."""
+    if umbip.names_every_declarant(page.content):
+        return [c for c in found if c.key]
+    return found
+
+
 def _declaration_like(url: str) -> bool:
     words = url_words(url)
     return bool(DECLARATION.search(words) or ASSETS.search(words))
@@ -585,6 +598,19 @@ def load_known_urls(path: Path) -> dict[str, list[str]]:
             ):
                 known[host_of(url)].append(url)
     return dict(known)
+
+
+class _DrawnApp(Protocol):
+    """A BIP app whose pages the walk draws from the API they are drawn from
+    (`madkom.Madkom`, `umbip.UmBip`): a host's first page probes it."""
+
+    def knows(self, url: str) -> bool: ...
+
+    def probe(self, page: HttpResult) -> bool: ...
+
+    def busy(self, url: str) -> HttpResult | None: ...
+
+    def page(self, url: str) -> HttpResult | str | None: ...
 
 
 class DocIndex(Protocol):
@@ -666,6 +692,9 @@ class PeopleSearch:
         self._write_lock = threading.Lock()
         #: Madkom's BIPs, read through the API their pages are drawn from.
         self.madkom = Madkom(self._get, robots_allowed)
+        #: Gdynia's um-bip, read through the API its pages are drawn from.
+        self.umbip = umbip.UmBip(self._get)
+        self._apps: tuple[_DrawnApp, ...] = (self.madkom, self.umbip)
         #: FINN's registers, read through the e-Urząd app their pages embed.
         self.eurzad = finn.Eurzad(self._post)
         #: Wrota Lubelszczyzny's document lists, read through their JSON.
@@ -748,22 +777,23 @@ class PeopleSearch:
             self.sleep(max(0.05, self.limiter.next_available_in(host)))
 
     def _get_page(self, url: str) -> HttpResult | str:
-        """A page of the walk: on a Madkom BIP drawn from its API (`madkom`), at
-        a call or two instead of a render's dozen; elsewhere fetched. A host's
-        first page tells which it is."""
-        if self.madkom.knows(url):
-            if not self.robots_allowed(url):
-                return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
-            page = self.madkom.page(url)
-            return self._get(url) if page is None else page
+        """A page of the walk: on a Madkom BIP or Gdynia's um-bip drawn from
+        its API (`madkom`, `umbip`), at a call or two instead of a render's
+        dozen; elsewhere fetched. A host's first page tells which it is."""
+        for app in self._apps:
+            if app.knows(url):
+                if not self.robots_allowed(url):
+                    return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
+                page = app.page(url)
+                return self._get(url) if page is None else page
         result = self._get(url)
         if isinstance(result, HttpResult) and result.ok:
-            if self.madkom.probe(result):
-                page = self.madkom.page(result.url)
-                if page is not None:
-                    return page
-            elif (busy := self.madkom.busy(result.url)) is not None:
-                return busy  # its API said "not now": the shell is no page yet
+            for app in self._apps:
+                if app.probe(result):
+                    page = app.page(result.url)
+                    return result if page is None else page
+                if (busy := app.busy(result.url)) is not None:
+                    return busy  # its API said "not now": the shell is no page yet
         return result
 
     @staticmethod
@@ -1127,9 +1157,9 @@ class PeopleSearch:
         follow = links
         if (
             self.render is not None
-            # A Madkom page the API does not draw (a form, a calculator) has
-            # nothing a render would show.
-            and not self.madkom.knows(result.url)
+            # A Madkom or um-bip page the API does not draw (a form, a
+            # calculator) has nothing a render would show.
+            and not any(app.knows(result.url) for app in self._apps)
             and host_of(result.url) not in self._render_off
             and (
                 _app_shell(result.content, links) or _empty_declarations(result.content)
@@ -1164,6 +1194,7 @@ class PeopleSearch:
         folded_title = fold(title)
         if DECLARATION.search(folded_title) or ASSETS.search(folded_title):
             out.declaration_pages += 1
+        mine = len(out.found)
         out.found.extend(
             candidates(
                 result.url,
@@ -1176,6 +1207,7 @@ class PeopleSearch:
                 owner=who,
             )
         )
+        out.found[mine:] = _named_only(result, out.found[mine:])
         self._read_eurzad(out, result, seekers, prefer)
         self._read_wrota(out, result, seekers, prefer)
         self._read_sisco(out, result, title, seekers)
