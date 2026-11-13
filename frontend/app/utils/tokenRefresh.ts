@@ -115,6 +115,36 @@ export async function idTokenResultIfReachable(
   }
 }
 
+/** The status of the error page for a page that could not be opened for want
+ * of a network: 408, a request that got no answer in time. Not a 5xx:
+ * Sentry records every one the app shows, and a reader offline is nothing to
+ * fix. app/error.vue says what it means. */
+export const NO_CONNECTION_STATUS = 408;
+
+/** What a guard returns when `idTokenResultIfReachable` could not read the
+ * reader's claims: the navigation stops without an error, and the reader
+ * stays where they are, as after a link that went nowhere. A guard that
+ * failed the navigation instead is how KORYTA-PL-M7 reached Sentry.
+ *
+ * On the page's first load there is nowhere to stay. The /admin pages are
+ * not rendered on the server (`routeRules`), and Nuxt's router answers a
+ * guard that stops their first navigation with a 404, "Page Not Found", which
+ * would tell an administrator that their page does not exist. There the
+ * error page says there is no connection instead: Nuxt shows the first error
+ * it is given, and the 404 comes second. */
+export function abortWithoutNetwork() {
+  if (useNuxtApp().isHydrating) {
+    // In `message`, not `statusMessage`: h3 warns of a status line with
+    // letters outside ASCII, and app/error.vue words the page itself.
+    showError({
+      statusCode: NO_CONNECTION_STATUS,
+      message:
+        "Brak połączenia z siecią: nie udało się odświeżyć tokenu logowania (auth/network-request-failed).",
+    });
+  }
+  return abortNavigation();
+}
+
 /** The `.catch` for a token promise nothing awaits: lets a network failure
  * go, where it would have been reported as an unhandled rejection, and
  * throws anything else on, so that it still is. */

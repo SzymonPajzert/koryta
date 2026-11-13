@@ -12,16 +12,21 @@ import {
   restoreOnline,
 } from "../networkFailure";
 
-const { getCurrentUser, abortNavigation, navigateTo } = vi.hoisted(() => ({
-  getCurrentUser: vi.fn(),
-  // As Nuxt's own: `false` for a navigation stopped without an error, the
-  // error handed back (rather than thrown) for one refused.
-  abortNavigation: vi.fn((error?: unknown) => error ?? false),
-  navigateTo: vi.fn((to: unknown) => ({ to })),
-}));
+const { getCurrentUser, abortNavigation, navigateTo, showError } = vi.hoisted(
+  () => ({
+    getCurrentUser: vi.fn(),
+    // As Nuxt's own: `false` for a navigation stopped without an error, the
+    // error handed back (rather than thrown) for one refused.
+    abortNavigation: vi.fn((error?: unknown) => error ?? false),
+    navigateTo: vi.fn((to: unknown) => ({ to })),
+    // The error page, and what it was given to say.
+    showError: vi.fn(),
+  }),
+);
 mockNuxtImport("getCurrentUser", () => getCurrentUser);
 mockNuxtImport("abortNavigation", () => abortNavigation);
 mockNuxtImport("navigateTo", () => navigateTo);
+mockNuxtImport("showError", () => showError);
 
 /** Somebody signed in whose token reads go as `results` say, in turn. */
 const signedIn = (...results: Array<() => Promise<unknown>>) => {
@@ -43,11 +48,19 @@ describe.each([
 ])("%s middleware without a network", (_, middleware) => {
   const run = () => (middleware as unknown as () => Promise<unknown>)();
 
+  let wasHydrating = false;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    wasHydrating = useNuxtApp().isHydrating;
+    // A link followed on a page that has been up for a while.
+    useNuxtApp().isHydrating = false;
   });
 
-  afterEach(restoreOnline);
+  afterEach(() => {
+    useNuxtApp().isHydrating = wasHydrating;
+    restoreOnline();
+  });
 
   it("waits for the browser to be back online, then lets the reader in", async () => {
     goOffline();
@@ -78,6 +91,30 @@ describe.each([
     );
 
     await expect(run()).resolves.toBe(false);
+    expect(abortNavigation).toHaveBeenCalledExactlyOnceWith();
+    expect(showError).not.toHaveBeenCalled();
+  });
+
+  // The /admin pages are not rendered on the server, and Nuxt's router turns
+  // a guard that stops one's first navigation into a 404: the administrator
+  // was told the page did not exist. The error page says what happened
+  // instead; Nuxt keeps the first error it is shown, so the 404 never is.
+  it("puts up the error page saying there is no connection on the page's first load", async () => {
+    useNuxtApp().isHydrating = true;
+    getCurrentUser.mockResolvedValue(
+      signedIn(
+        () => Promise.reject(networkRequestFailed()),
+        () => Promise.reject(networkRequestFailed()),
+      ),
+    );
+
+    await expect(run()).resolves.toBe(false);
+    expect(showError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        statusCode: 408,
+        message: expect.stringContaining("Brak połączenia z siecią"),
+      }),
+    );
     expect(abortNavigation).toHaveBeenCalledExactlyOnceWith();
   });
 

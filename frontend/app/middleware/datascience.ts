@@ -1,5 +1,8 @@
 import type { User } from "firebase/auth";
-import { idTokenResultIfReachable } from "~/utils/tokenRefresh";
+import {
+  abortWithoutNetwork,
+  idTokenResultIfReachable,
+} from "~/utils/tokenRefresh";
 
 /** Pages for the datascience group - the jobs' progress, /admin/procesy.
  * Neither wider nor narrower than `admin`, but beside it: the group takes in
@@ -9,8 +12,8 @@ export default defineNuxtRouteMiddleware(async () => {
   const user: User | null = await getCurrentUser();
   if (!user) return navigateTo("/login", { replace: true });
   const idTokenResult = await idTokenResultIfReachable(user);
-  // No network to refresh the token with: stay put, as `admin` does.
-  if (!idTokenResult) return abortNavigation();
+  // No network to refresh the token with, even after waiting for one.
+  if (!idTokenResult) return abortWithoutNetwork();
   if (!idTokenResult.claims.datascience) {
     return abortNavigation(
       createError({
