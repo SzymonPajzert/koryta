@@ -12,12 +12,15 @@ import { emptyActivityCounts } from "~~/shared/activity";
 import {
   CAMPAIGN_STATS_DAYS,
   COMMUNITY_STATS_DAYS,
-  campaignTopics,
   type Audience,
   type AudienceMember,
-  type CampaignTopic,
   type MailPreferences,
 } from "~~/shared/campaigns";
+import {
+  accountConsent,
+  mailPreferences,
+  subscriberConsent,
+} from "~~/shared/campaignConsent";
 import { SUBSCRIBER_PREFIX } from "~~/shared/newsletterSignup";
 
 /** `listUsers` hands out at most 1000 accounts per page. */
@@ -141,7 +144,9 @@ async function listAccounts(): Promise<UserRecord[]> {
  *
  * The field mask is not an optimisation: the document is writable by its owner
  * with no constraint on shape, so this takes only booleans where booleans are
- * expected, and an odd value counts as no answer rather than a yes.
+ * expected, and an odd value counts as no answer rather than a yes - by
+ * `mailPreferences`, which the release of held campaign mail reads them with
+ * too (shared/campaignConsent.ts).
  */
 export async function readMailPreferences(
   db: Firestore,
@@ -159,23 +164,6 @@ export async function readMailPreferences(
     }
   }
   return found;
-}
-
-function mailPreferences(
-  data: Record<string, unknown> | undefined,
-): MailPreferences {
-  const preferences: MailPreferences = {};
-  const newsletter = data?.newsletter;
-  if (newsletter && typeof newsletter === "object") {
-    const topics: Partial<Record<CampaignTopic, boolean>> = {};
-    for (const topic of campaignTopics) {
-      const choice = (newsletter as Record<string, unknown>)[topic];
-      if (typeof choice === "boolean") topics[topic] = choice;
-    }
-    preferences.newsletter = topics;
-  }
-  if (typeof data?.teamMail === "boolean") preferences.teamMail = data.teamMail;
-  return preferences;
 }
 
 /** An auth-service time - an HTTP date, or an ISO one for the refresh time -
@@ -207,11 +195,9 @@ function toMember(
 
   return {
     uid: account.uid,
-    email: account.email ?? null,
-    emailVerified: account.emailVerified,
-    disabled: account.disabled,
+    // Address, roles and choices as the release reads them too.
+    ...accountConsent(account, preferences),
     displayName: account.displayName ?? null,
-    admin: claims?.admin === true,
     newAdmin: isNewAdmin(claims),
     owner: claims?.owner === true,
     createdAt: isoTime(account.metadata.creationTime),
@@ -220,7 +206,6 @@ function toMember(
     activity: contribution
       ? { counts: { ...contribution.counts }, total: contribution.total }
       : { counts: emptyActivityCounts(), total: 0 },
-    preferences,
   };
 }
 
@@ -231,18 +216,14 @@ function subscriberMember(subscriber: Subscriber): AudienceMember {
   return {
     kind: "subscriber",
     uid: `${SUBSCRIBER_PREFIX}${subscriber.id}`,
-    email: subscriber.email,
-    emailVerified: true,
-    disabled: false,
+    ...subscriberConsent(subscriber),
     displayName: null,
-    admin: false,
     newAdmin: false,
     owner: false,
     createdAt: null,
     lastSignInAt: null,
     lastSeenAt: null,
     activity: { counts: emptyActivityCounts(), total: 0 },
-    preferences: { newsletter: subscriber.topics },
   };
 }
 

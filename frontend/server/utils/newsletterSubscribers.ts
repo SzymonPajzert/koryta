@@ -3,6 +3,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { Firestore } from "firebase-admin/firestore";
 import { mailTokenMatches, mailToken } from "~~/server/utils/mailTokens";
 import { campaignTopics, type CampaignTopic } from "~~/shared/campaigns";
+import { confirmedSubscriber } from "~~/shared/campaignConsent";
 import {
   CONFIRMATION_DAYS,
   SUBSCRIBERS,
@@ -158,7 +159,9 @@ export async function confirmSubscription(
   return "confirmed";
 }
 
-/** Every confirmed subscriber, for the campaign audience. */
+/** Every confirmed subscriber, for the campaign audience. Each is read by
+ * `confirmedSubscriber`, as the release of held campaign mail reads one
+ * (shared/campaignConsent.ts). */
 export async function confirmedSubscribers(
   db: Firestore,
 ): Promise<Subscriber[]> {
@@ -166,20 +169,11 @@ export async function confirmedSubscribers(
     .collection(SUBSCRIBERS)
     .where("status", "==", "confirmed")
     .get();
-  return snapshot.docs.map((doc) => {
-    const data = doc.data();
-    const topics: Partial<Record<CampaignTopic, boolean>> = {};
-    for (const topic of campaignTopics) {
-      if (typeof data.topics?.[topic] === "boolean") {
-        topics[topic] = data.topics[topic];
-      }
-    }
-    return {
-      id: doc.id,
-      email: String(data.email ?? ""),
-      status: "confirmed",
-      topics,
-    };
+  return snapshot.docs.flatMap((doc) => {
+    const subscriber = confirmedSubscriber(doc.data());
+    return subscriber
+      ? [{ id: doc.id, status: "confirmed" as const, ...subscriber }]
+      : [];
   });
 }
 

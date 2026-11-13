@@ -27,6 +27,7 @@ import {
   CAMPAIGN_DAILY_LIMIT,
   HANDED_OVER_AT,
   HELD_STATE,
+  WITHDRAWN_STATE,
   utcDayStart,
 } from "~~/shared/campaignPacing";
 import { taskSlug, uniqueTaskId } from "~~/shared/tasks";
@@ -155,12 +156,14 @@ type SendArgs = {
  * Eligibility is decided here again, from `members` the server read itself:
  * the page only offers eligible people, but what it posts is the browser's
  * word. One `mail` document per campaign and person, so a second press - or a
- * later send to a wider group - never reaches anybody twice. The one document
- * written again is a message whose delivery failed: the extension never
- * retries, so without this its recipient could never be sent the campaign.
+ * later send to a wider group - never reaches anybody twice. The documents
+ * written again are messages that never arrived: one whose delivery failed,
+ * since the extension never retries, and one withdrawn before it went.
  *
  * Every message is written held back, and `releaseCampaignMail` lets them out
- * a batch a minute; `queue` says how many wait and how many more go today.
+ * a batch a minute, asking again first whether each reader may still be
+ * written to (shared/campaignConsent.ts); `queue` says how many wait and how
+ * many more go today.
  */
 export async function queueCampaign(
   db: Firestore,
@@ -215,6 +218,10 @@ async function queueOne(
       ...mailDocument(member.email!, mail),
       kind: "campaign",
       campaign: args.campaign.id,
+      // What the reader agreed to be written to about, which the release
+      // checks again before the message goes: the campaign's own topic may be
+      // changed after the send, and this message's footer would not be.
+      topic: args.campaign.topic,
       uid: member.uid,
       created_at: Timestamp.now(),
       // The extension leaves this alone until releaseCampaignMail lets it out
@@ -229,11 +236,12 @@ async function queueOne(
       }
       // Sent, held, or on its way: writing over any of those could mail it
       // twice. A failed one never went out, and the extension will not try
-      // it again, so it is written afresh - with today's text, which is what
-      // anybody new would get.
-      if (deliveryStateOf(existing.data()) !== "ERROR") return "duplicate";
+      // it again, and a withdrawn one never went either, so those are written
+      // afresh - with today's text, which is what anybody new would get.
+      const state = deliveryStateOf(existing.data());
+      if (state !== "ERROR" && state !== WITHDRAWN_STATE) return "duplicate";
       tx.set(ref, message);
-      return "requeued";
+      return state === "ERROR" ? "requeued" : "queued";
     });
   } catch (error) {
     console.error(
@@ -422,9 +430,10 @@ export async function campaignDeliveries(
       : "queued";
     deliveries[data.uid] = {
       state,
-      // Messages from before the batches went out as they were written.
+      // Messages from before the batches went out as they were written. A
+      // held one has not been handed over yet, and a withdrawn one never was.
       queuedAt:
-        delivery.state === HELD_STATE
+        delivery.state === HELD_STATE || delivery.state === WITHDRAWN_STATE
           ? null
           : (isoTime(data.released_at) ?? isoTime(data.created_at)),
       finishedAt: isoTime(delivery.endTime),
