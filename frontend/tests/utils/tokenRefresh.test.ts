@@ -6,6 +6,7 @@ import {
   idTokenWhenOnline,
   ignoreNetworkFailure,
   isNetworkRequestFailed,
+  NETWORK_WAIT_MS,
   retryOnceOnline,
 } from "../../app/utils/tokenRefresh";
 import {
@@ -27,7 +28,10 @@ async function settled(promise: Promise<unknown>) {
   return done;
 }
 
-afterEach(restoreOnline);
+afterEach(() => {
+  restoreOnline();
+  vi.useRealTimers();
+});
 
 describe("isNetworkRequestFailed", () => {
   it("tells Firebase failing to reach its servers from everything else", () => {
@@ -91,6 +95,47 @@ describe("retryOnceOnline", () => {
   });
 });
 
+/** A request has a time it may take, and a wait for the network with no end
+ * outlasted it: /admin/procesy said it was loading for as long as the browser
+ * was offline, where it used to say the refresh had failed. */
+describe("retryOnceOnline with a limit", () => {
+  it("stops waiting at the limit and fails as the first read did", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    goOffline();
+    const failure = networkRequestFailed();
+    const read = vi
+      .fn()
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce("token");
+
+    const token = retryOnceOnline(read, 5_000);
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(await settled(token)).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await settled(token)).toBe(true);
+    await expect(token).rejects.toBe(failure);
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads once more when the browser is back online in time", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    goOffline();
+    const read = vi
+      .fn()
+      .mockRejectedValueOnce(networkRequestFailed())
+      .mockResolvedValueOnce("token");
+
+    const token = retryOnceOnline(read, 5_000);
+    await vi.advanceTimersByTimeAsync(4_000);
+    backOnline();
+
+    await expect(token).resolves.toBe("token");
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
 describe("idTokenWhenOnline", () => {
   it("is the user's token, read once more once the browser is back", async () => {
     goOffline();
@@ -105,6 +150,22 @@ describe("idTokenWhenOnline", () => {
     backOnline();
     await expect(token).resolves.toBe("token");
     expect(getIdToken).toHaveBeenCalledTimes(2);
+  });
+
+  it("waits no longer than NETWORK_WAIT_MS for a request with no limit of its own", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    goOffline();
+    const failure = networkRequestFailed();
+    const getIdToken = vi.fn().mockRejectedValue(failure);
+
+    const token = idTokenWhenOnline({ getIdToken } as unknown as User);
+    await vi.advanceTimersByTimeAsync(NETWORK_WAIT_MS - 1);
+    expect(await settled(token)).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await settled(token)).toBe(true);
+    await expect(token).rejects.toBe(failure);
+    expect(getIdToken).toHaveBeenCalledTimes(1);
   });
 });
 

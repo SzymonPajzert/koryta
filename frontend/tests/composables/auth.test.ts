@@ -33,7 +33,10 @@ beforeEach(() => {
   answered = 0;
 });
 
-afterEach(restoreOnline);
+afterEach(() => {
+  restoreOnline();
+  vi.useRealTimers();
+});
 
 /** Somebody signed in whose token could not be refreshed for want of a
  * network the first time, and could the second. */
@@ -86,6 +89,35 @@ describe("authRequest", () => {
     await expect(answer).resolves.toEqual({ ok: true });
     expect(answered).toBe(1);
     expect(getIdToken).toHaveBeenCalledTimes(2);
+  });
+
+  // The wait counts against the request's `timeout`. With no end to it,
+  // /admin/procesy said it was loading for as long as the browser was
+  // offline; at the timeout the request fails as it did before it waited,
+  // and the page says the refresh failed.
+  it("fails a request still offline at its timeout with the token's error", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    goOffline();
+    const failure = networkRequestFailed();
+    const getIdToken = vi.fn().mockRejectedValue(failure);
+    vi.mocked(useCurrentUser).mockReturnValueOnce(
+      ref({ getIdToken } as unknown as User),
+    );
+
+    let outcome: unknown = "pending";
+    authRequest("/api/test/answers", { method: "GET", timeout: 5_000 }).then(
+      (value) => (outcome = value),
+      (error) => (outcome = error),
+    );
+    await vi.advanceTimersByTimeAsync(4_999);
+    await flushPromises();
+    expect(outcome).toBe("pending");
+
+    await vi.advanceTimersByTimeAsync(1);
+    await flushPromises();
+    expect(outcome).toBe(failure);
+    expect(answered).toBe(0);
+    expect(getIdToken).toHaveBeenCalledTimes(1);
   });
 });
 

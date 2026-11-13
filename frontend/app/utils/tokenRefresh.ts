@@ -20,14 +20,34 @@ export function isNetworkRequestFailed(error: unknown): boolean {
   );
 }
 
-/** Resolves once the browser says it is online: at once if it already does,
- * and on the server, which has no `onLine` to ask. */
-function whenOnline(): Promise<void> {
+/** How long a request with no timeout of its own waits for the browser to be
+ * back online before it fails the way it did before it waited at all. A
+ * laptop woken from sleep is back on its network within seconds; past this
+ * the reader is better served by the page saying the request failed than by
+ * a spinner. */
+export const NETWORK_WAIT_MS = 10_000;
+
+/** Resolves `true` once the browser says it is online: at once if it already
+ * does, and on the server, which has no `onLine` to ask. With `waitAtMost`,
+ * resolves `false` if the browser still says offline after that many
+ * milliseconds. */
+function whenOnline(waitAtMost?: number): Promise<boolean> {
   if (typeof window === "undefined" || window.navigator.onLine !== false) {
-    return Promise.resolve();
+    return Promise.resolve(true);
   }
   return new Promise((resolve) => {
-    window.addEventListener("online", () => resolve(), { once: true });
+    const timer =
+      waitAtMost === undefined
+        ? undefined
+        : setTimeout(() => {
+            window.removeEventListener("online", online);
+            resolve(false);
+          }, waitAtMost);
+    function online() {
+      clearTimeout(timer);
+      resolve(true);
+    }
+    window.addEventListener("online", online, { once: true });
   });
 }
 
@@ -44,21 +64,33 @@ function whenOnline(): Promise<void> {
  * instead. A browser that says it is online already gets its second try at
  * once.
  *
- * Every other error, and a second failure, reach the caller as before. */
-export async function retryOnceOnline<T>(read: () => Promise<T>): Promise<T> {
+ * With `waitAtMost`, the wait ends there: a browser still offline after that
+ * many milliseconds gets the first failure, as it did before there was a
+ * wait. Every other error, and a second failure, reach the caller as
+ * before. */
+export async function retryOnceOnline<T>(
+  read: () => Promise<T>,
+  waitAtMost?: number,
+): Promise<T> {
   try {
     return await read();
   } catch (error) {
     if (!isNetworkRequestFailed(error)) throw error;
-    await whenOnline();
+    if (!(await whenOnline(waitAtMost))) throw error;
     return await read();
   }
 }
 
 /** The reader's ID token for a request. Offline, the request could not have
- * gone out either; it goes once the browser is back online. */
-export function idTokenWhenOnline(user: User): Promise<string> {
-  return retryOnceOnline(() => user.getIdToken());
+ * gone out either; it goes once the browser is back online, if that is
+ * within `waitAtMost` - the request's own timeout, where it has one. If it is
+ * not, the token read fails as it did before there was a wait, and whoever
+ * shows the request's failure still does. */
+export function idTokenWhenOnline(
+  user: User,
+  waitAtMost: number = NETWORK_WAIT_MS,
+): Promise<string> {
+  return retryOnceOnline(() => user.getIdToken(), waitAtMost);
 }
 
 /** The reader's token and its claims, or `null` when Firebase could not be
@@ -68,7 +100,10 @@ export function idTokenWhenOnline(user: User): Promise<string> {
  * let in, and have nothing to do with the failure but pass it on:
  * `computedAsync` hands an error to `reportError`, an error in a route guard
  * fails the navigation, and Sentry hears of both. Claims that could not be
- * read count as none, the same as before they were read. */
+ * read count as none, the same as before they were read.
+ *
+ * Unlike a request's token, it waits for the network with no limit: there is
+ * no failure here to show in time, only claims to read once they can be. */
 export async function idTokenResultIfReachable(
   user: User,
 ): Promise<IdTokenResult | null> {

@@ -167,7 +167,9 @@ async function waitForAuthReady() {
  *
  * A token that needs a refresh while the browser is offline holds the
  * request until it is back online (`idTokenWhenOnline`); the request could
- * not have gone out before that anyway.
+ * not have gone out before that anyway. It waits no longer than `timeout`,
+ * or `NETWORK_WAIT_MS` without one, and then fails with the token's error,
+ * as it did at once before it waited.
  */
 export async function authRequest<T>(
   url: string,
@@ -177,7 +179,8 @@ export async function authRequest<T>(
     query?: unknown;
     /** Milliseconds to wait for an answer before failing. Without one, a
      * request whose answer never comes waits for as long as the connection
-     * stays open - for a poll, which nobody is watching, that can be hours. */
+     * stays open - for a poll, which nobody is watching, that can be hours.
+     * Offline it is also the longest the token waits for the network. */
     timeout?: number;
     /** The statuses a GET is sent again after, once, in place of ofetch's
      * own list. That list has 429 in it, and a request a limit turned down is
@@ -192,7 +195,7 @@ export async function authRequest<T>(
   if (user.value) {
     headers.set(
       "Authorization",
-      `Bearer ${await idTokenWhenOnline(user.value)}`,
+      `Bearer ${await idTokenWhenOnline(user.value, options.timeout)}`,
     );
   }
 
