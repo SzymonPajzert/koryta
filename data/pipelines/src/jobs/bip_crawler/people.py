@@ -312,10 +312,12 @@ class _Frontier:
         depth: int,
         prefer: re.Pattern[str] | None = None,
         bonus: float = 0.0,
+        page: str = "",
     ) -> None:
         """Queue a page's links to other pages; files are for the download.
         ``bonus`` lifts those a declarations page leads to, after the cut, so a
-        section of tenders it links stays out (`DECLARATIONS_BONUS`)."""
+        section of tenders it links stays out (`DECLARATIONS_BONUS`); ``page``
+        is that page's address, whose pager leads to more of it (`_pager`)."""
         # ESC's VelaBIP links a page's older versions, <page>/<n>, each beside
         # a comparison with it, <page>/porownaj/<n>/<m> (`is_low_value_url`):
         # copies of the page. A list's pages, /lista/<slug>/<n>, have none.
@@ -326,18 +328,20 @@ class _Frontier:
         }
         for link in links:
             target = normalize_url(link.url)
-            page, _, version = target.rpartition("/")
+            # Not ``page``: that is the address of the page these links are on.
+            versioned, _, version = target.rpartition("/")
             if (
                 self.has(target)
                 or _is_file(target)
                 or is_low_value_url(target)
-                or (version.isdigit() and page in compared)
+                or (version.isdigit() and versioned in compared)
                 or not self.in_scope(target)
             ):
                 continue
             score = link_score(link, seekers, depth, prefer)
             if score > -3:
-                if says_declarations(link):
+                says = says_declarations(link)
+                if says or (bonus and _pager(page, link)):
                     self.declared.add(target)
                 owners = declarants(link, seekers)
                 # On a declarations page a link that is one seeker's full name
@@ -346,8 +350,11 @@ class _Frontier:
                 # publiczna - szczegóły", whose files say only "za rok 2025"),
                 # and one to a term or a year its next level (Strzegom:
                 # "Oświadczenia majątkowe" > "Kadencja 2024-2029" > "Michał
-                # CZAPLA" > files "2024", "2025"): declarations pages both.
-                if not owners and bonus:
+                # CZAPLA" > files "2024", "2025"): declarations pages both. So
+                # does a name in a menu that says declarations, wherever it is
+                # met: Czeladź's "Oświadczenia majątkowe" > "Zbigniew Szaleniec"
+                # opens a page titled "Oświadczenie majątkowe" alone (11-13).
+                if not owners and (bonus or says):
                     owners = named_by_label(link, seekers)
                     if owners or _TERM.search(fold(link.anchor)):
                         self.declared.add(target)
@@ -356,10 +363,46 @@ class _Frontier:
                 self.add(target, score + bonus, depth, link.url)
 
 
-#: A link to a term's or a year's part of a declarations section.
-_TERM = re.compile(r"^\W*(?:(?:[ivx]+ )?kadencj\w*|rok|za)?\W*(?:19|20)\d\d\b|kadencj")
+#: A link to a term's or a year's part of a declarations section, or to one
+#: declaration under its month in roman numerals: Grudziądz files each as an
+#: article "III 2026 - roczne", "II 2024 - 2 miesiące przed końcem" (11-13).
+_TERM = re.compile(
+    r"^\W*(?:(?:[ivx]+ )?kadencj\w*|rok|za|[ivx]{1,4})?\W*(?:19|20)\d\d\b|kadencj"
+)
 #: ESC's VelaBIP comparing two versions of the page before "/porownaj".
 _COMPARE = re.compile(r"^(.+)/porownaj/\d+/\d+$")
+#: Query parameters a list numbers its pages by: SkyCMS's ?Page=4, Joomla's
+#: ?start=20, Liferay's _<portlet>_cur=2.
+_PAGE_NUMBER = re.compile(r"(?:^|_)(?:page|paged|strona|cur|start|limitstart)$")
+#: A pager link's label, folded: a number, a step ("Następna", "« Poprzednia
+#: strona"), or an arrow, which folds to nothing. Not a menu's "Władze Gminy"
+#: at doc.php?strona=1 beside its doc.php?strona=19 (biuletyn.net).
+_PAGER_LABEL = re.compile(
+    r"(?:strona )?\d{1,4}|(?:\w+ )?(?:nastepn|poprzedn|ostatn|pierwsz|dalej|wstecz"
+    r"|koniec|next|prev|last|first)\w*(?: strona)?|"
+)
+
+
+def _pager(page: str, link: LinkContext) -> bool:
+    """Whether ``link`` is another page of the list ``page`` is: the same
+    address with only its page number changed, under a pager's label. Powiat
+    opolski's councillors stand six to a page, ?Page=1 to 6, titled "Radni
+    Powiatu - strona 4", and only the first was read as declarations (11-13).
+    Not a calendar's "12": its address is another."""
+    if not page or not _PAGER_LABEL.fullmatch(fold(link.anchor)):
+        return False
+    a, b = urlsplit(page), urlsplit(link.url)
+    if (a.netloc.lower(), a.path.rstrip("/")) != (b.netloc.lower(), b.path.rstrip("/")):
+        return False
+    ours = dict(parse_qsl(a.query, keep_blank_values=True))
+    theirs = dict(parse_qsl(b.query, keep_blank_values=True))
+    changed = {k for k in ours.keys() | theirs.keys() if ours.get(k) != theirs.get(k)}
+    return (
+        len(changed) == 1
+        and bool(_PAGE_NUMBER.search((key := changed.pop()).lower()))
+        and theirs.get(key, "1").isdigit()
+    )
+
 
 _FRAME = re.compile(rb"<frame\b[^>]*?\bsrc\s*=\s*[\"']?([^\"' >]+)", re.I)
 
@@ -1142,7 +1185,7 @@ class PeopleSearch:
             # declarations, and its links ranked below every menu (11-01).
             says = led or DECLARATION.search(folded_title + " " + fold(where))
             bonus = DECLARATIONS_BONUS if says else 0.0
-            frontier.follow(follow, seekers, depth + 1, prefer, bonus)
+            frontier.follow(follow, seekers, depth + 1, prefer, bonus, result.url)
 
     def _read_eurzad(
         self,
