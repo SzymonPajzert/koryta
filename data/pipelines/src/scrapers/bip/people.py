@@ -18,7 +18,7 @@ import functools
 import re
 import unicodedata
 from collections import Counter
-from collections.abc import Container, Iterable
+from collections.abc import Callable, Container, Iterable
 from dataclasses import dataclass
 
 from entities.util import decode_url
@@ -57,6 +57,12 @@ BLANK_FORM = re.compile(
 #: than BLANK_FORM, whose "informacja" or "ustawa" a declarations page's own
 #: heading can say; and not "druku", as any page's "wersja do druku" says.
 FORMS = re.compile(r"(?:^| )(?:wzor(?:y|u|ow|em)?|formularz\w*|druk(?:i|ow)?)(?= |$)")
+#: A list of the people who must file, folded: Łódź's "Lista osób zobowiązanych
+#: do składania oświadczeń majątkowych", its files "Stan na dzień 09.11.2026 r."
+#: (BZK_lista_091126_20261112.pdf), the names and posts of the city's staff and
+#: its companies' boards. Its page says declarations, so its files went to each
+#: of 75 candidacies nothing named, as their unnamed declarations (11-13).
+OBLIGED = re.compile(r"(?:^| )(?:lista|listy|wykaz\w*) osob\w* z?obowiazan")
 YEAR = re.compile(r"(?<!\d)(20[12]\d)(?!\d)")
 
 
@@ -435,10 +441,10 @@ def declarants(link: LinkContext, seekers: list[Seeker]) -> set[tuple[str, str]]
     Brzózka Oświadczenie majątkowe 2026-04-30 Pokaż")."""
     return {
         s.name
-        for said in (fold(link.anchor), fold(link.row))
-        if DECLARATION.search(said)
+        for raw in (link.anchor, link.row)
+        if DECLARATION.search(fold(raw))
         for s in seekers
-        if all(s.named_in(said))
+        if all(s.named_in(fold(raw))) and not _joined_to_another(s, [raw])
     }
 
 
@@ -449,7 +455,11 @@ def named_by_label(link: LinkContext, seekers: list[Seeker]) -> set[tuple[str, s
     words = label.split()
     if not 2 <= len(words) <= 4 or any(c.isdigit() for c in label):
         return set()
-    return {s.name for s in seekers if all(s.named_in(label))}
+    return {
+        s.name
+        for s in seekers
+        if all(s.named_in(label)) and not _joined_to_another(s, [link.anchor])
+    }
 
 
 def says_declarations(link: LinkContext) -> bool:
@@ -664,6 +674,74 @@ def _whose(seeker: Seeker, raws: Iterable[str], first_names: frozenset[str]) -> 
     return "neutral" if verdicts else ""
 
 
+#: Two words a hyphen joins, nothing between, in lower-cased `_plain` text: a
+#: double surname ("goralczyk-niewiadomska_malgorzata_260423.pdf"). Not a
+#: third joined on: a slug's "malgorzata-niewiadomska-cudak" is no surname.
+_JOINED = re.compile(r"(?<![a-z0-9‐–-])([a-z]{3,})[‐–-]([a-z]{3,})(?![a-z0-9‐–-])")
+#: Two capitalised words a hyphen with spaces joins: "Góralczyk - Niewiadomska
+#: Małgorzata", as Łódź lists her; a double surname when a first name is beside.
+_SPACED = re.compile(
+    r"(?<![A-Za-z])([A-Z][a-z]{2,}|[A-Z]{3,}) [-–] ([A-Z][a-z]{2,}|[A-Z]{3,})"
+    r"(?![A-Za-z])"
+)
+#: Words parted by something besides hyphens: where hyphens alone part them
+#: ("malgorzata-niewiadomska.pdf"), a hyphen joins no surname.
+_PARTED = re.compile(r"[a-z0-9][^a-z0-9-]+[a-z0-9]")
+_EXTENSION = re.compile(r"\.[a-z0-9]{1,5}$")
+_LETTERS = re.compile(r"[A-Za-z]+")
+
+
+def _double_surnames(raw: str, given: Callable[[str], bool]) -> list[tuple[str, str]]:
+    """The pairs of words a raw text joins into a double surname, lower case;
+    ``given`` tells a first name, which one with spaces needs beside it."""
+    pairs: list[tuple[str, str]] = []
+    for segment in _plain(raw).split("/"):
+        lower = _EXTENSION.sub("", segment.lower())
+        if _PARTED.search(lower):
+            pairs += _JOINED.findall(lower)
+        for match in _SPACED.finditer(segment):
+            beside = _LETTERS.findall(segment[: match.start()])[-1:]
+            beside += _LETTERS.findall(segment[match.end() :])[:1]
+            if any(given(word.lower()) for word in beside):
+                pairs.append((match.group(1).lower(), match.group(2).lower()))
+    return pairs
+
+
+def _joined_to_another(
+    seeker: Seeker, raws: Iterable[str], first_names: frozenset[str] = frozenset()
+) -> bool:
+    """Whether ``raws`` join the surname of a seeker whose own is double to a
+    part that is not their other one: another person's double surname. Łódź's
+    app lists Góralczyk - Niewiadomska Małgorzata (MOPS) beside the councillor
+    Niewiadomska-Cudak Małgorzata, and two of the councillor's three files
+    were the other's (11-13). A seeker of one surname may have taken a second:
+    Łódź's councillor Bartosiak files as Bartosiak-Sikorzyńska."""
+    parts = [stem(p) for p in re.split(r"[-\s]+", seeker.surname) if p]
+    if len(parts) < 2:
+        return False
+
+    def given(word: str) -> bool:
+        return _first_name(word, first_names) or any(
+            _word(form).search(word) for form in _first_forms(seeker.first) if form
+        )
+
+    for raw in raws:
+        for a, b in _double_surnames(str(raw or ""), given):
+            for mine, other in ((a, b), (b, a)):
+                if not _word(seeker.last).search(mine):
+                    continue
+                if not (
+                    any(_word(p).search(other) for p in parts)
+                    or given(other)
+                    or other in _NOT_NAMES
+                    or OFFICE.search(other)
+                    or DECLARATION.search(other)
+                    or ASSETS.search(other)
+                ):
+                    return True
+    return False
+
+
 def _named(
     text: str,
     url: str,
@@ -679,7 +757,8 @@ def _named(
     kept = [
         (s, first)
         for s, first in named
-        if first or _whose(s, raws, first_names) != "namesake"
+        if (first or _whose(s, raws, first_names) != "namesake")
+        and not _joined_to_another(s, raws, first_names)
     ]
     return kept, len(kept) < len(named)
 
@@ -840,7 +919,10 @@ def candidates(
     # /artykul/wzor-oswiadczenia-majatkowego-dla-radnego, ~250 candidacies
     # left unconfirmed with nothing but forms).
     page_path = _DIGITS.sub(" ", fold(decode_url(path_of(page_url))))
-    forms_page = bool(FORMS.search(title) or FORMS.search(page_path))
+    # So is a list of the people who must file (Łódź's, `OBLIGED`).
+    forms_page = any(
+        rule.search(text) for rule in (FORMS, OBLIGED) for text in (title, page_path)
+    )
     # A page about one person nobody seeks ("... - B. Kułacz - Stan majątkowy na
     # 31.12.2025 r."): its files are theirs, whatever the labels say. Unless a
     # seeker could be that person in a form named_in misses ("J. Kaczmarka").
@@ -880,7 +962,7 @@ def candidates(
         named_as = (
             fold(link.anchor) + " " + _DIGITS.sub(" ", fold(path.rsplit("/", 1)[-1]))
         )
-        if BLANK_FORM.search(named_as):
+        if BLANK_FORM.search(named_as) or OBLIGED.search(named_as):
             continue
         # A file in the site's frame (a menu, the header or footer, a sidebar:
         # `LinkContext.frame`) stands on every page: no page lends it, and it

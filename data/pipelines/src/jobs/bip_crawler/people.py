@@ -39,6 +39,7 @@ through the JSON-RPC calls of the e-Urząd app their pages embed (``finn``),
 Wrota Lubelszczyzny's document lists through the JSON their pages are drawn
 from (``wrota``), SISCO eDc's attachment tables through the call their pages'
 script makes (``sisco``), BUK Softres's file buttons as links (``softres``),
+TYPO3's declarations app through its search, a seeker at a time (``edge``),
 other pages a script draws are rendered (``render``).
 """
 
@@ -73,6 +74,7 @@ from conductor import setup_context
 from jobs.bip_crawler import (
     accordion,
     doclist,
+    edge,
     finn,
     liferay,
     person_page,
@@ -1025,6 +1027,8 @@ class PeopleSearch:
                 for s in seekers
                 if s.last
             ]
+        # Łódź's declarations app: its list's search, asked for each seeker (`edge`).
+        links = links + edge.search_links(result.content, result.url, seekers)
         # A person a <details>, the files inside under their name (`accordion`).
         if owners := accordion.persons(result.content, result.url):
             links = [

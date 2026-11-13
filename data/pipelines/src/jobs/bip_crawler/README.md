@@ -121,6 +121,11 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   the first a script draws) are asked for by GET, each seeker's surname within
   the district or kind of filer the page's address keeps to (`liferay.py`);
   each district's row in `unit_starts.csv` gives that address.
+- TYPO3's declarations app (EdgeFinancialDisclosure: Łódź files ~2,600 people
+  there, 20 a page in alphabetical order) is searched for each seeker: on the
+  app's list page the walk fills its GET form with the longest part of the
+  seeker's surname as the list spells it (`edge.py`) and opens the people the
+  answer lists.
 - Other pages a script draws (next to no links and a `<script>`) are rendered
   in headless Chromium, `--render-workers` (2) at once, pictures and styles
   skipped, one turn of the host's rate for every request a render makes there
@@ -145,7 +150,9 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
 - A declarations page's files that name nobody (one file for the whole council)
   go to the people nothing named, at most three, when they say "majątkowe" and
   are not blank forms, nor on a page whose "Imię"/"Nazwisko" fields name
-  somebody nobody seeks (one filer's page: Warsaw's "Pobierz" files).
+  somebody nobody seeks (one filer's page: Warsaw's "Pobierz" files), nor a list
+  of the people obliged to file ("Lista osób zobowiązanych do składania
+  oświadczeń majątkowych").
 - Every candidacy ends the run `found` (a file a link names them in came down),
   `unconfirmed` (only files that name nobody came down: the OCR step has to
   find the person in them), or `not_found` with a reason: `no_seed`,

@@ -116,18 +116,20 @@ _FRAME_ROLES = frozenset({"navigation", "banner", "contentinfo"})
 _SECTIONS = ("main", "article", "section")
 #: The words a frame's id or class is made of, besides where it stands:
 #: Lwówek Śląski's "MenuLeft", biuletyn.net's "menu-lewe-1-poziom", ibip.pl's
-#: "right_menu", "topbar", "stopka". A word more and it is no frame's name:
-#: Kraków's declarations stand in a "nav-container", Lubicz's in a
-#: "footer-bg", Toruń's under each file's "header", and a "dropdown-menu" may
-#: be a file's own.
+#: "right_menu", "topbar", "stopka", Łódź's "aside" and "aside-nav" (a
+#: ``<div>`` in its ``<main>``, beside the content). A word more and it is no
+#: frame's name: Kraków's declarations stand in a "nav-container", Lubicz's in
+#: a "footer-bg", Toruń's under each file's "header", and a "dropdown-menu"
+#: may be a file's own. "nav" names a frame only beside a frame's word:
+#: Bootstrap's "nav" alone may be a content's tabs.
 _FRAME_NAMES = frozenset(
-    "menu navbar navigation nawigacja sidebar topbar footer stopka".split()
+    "menu navbar navigation nawigacja sidebar topbar footer stopka aside".split()
 )
 _FRAME_SIDES = frozenset(
     """left right top bottom main side mobile primary secondary lewe lewa lewy
     prawe prawa prawy gora gorne gorna gorny dol dolne dolna dolny glowne glowna
     glowny boczne boczna boczny pion poziom przedmiotowe przedmiotowy podmiotowe
-    podmiotowy""".split()
+    podmiotowy nav""".split()
 )
 _NAME_WORD = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|[0-9]+")
 
