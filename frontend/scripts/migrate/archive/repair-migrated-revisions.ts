@@ -62,14 +62,30 @@ async function migrate() {
   );
 
   // The edges the revisions belong to, for the fields the backfill stripped.
-  // One read of the collection beats 621 point reads.
+  // One read of the collection beats 621 point reads, and those two fields
+  // are all it is read for.
   const edges = new Map<string, FirebaseFirestore.DocumentData>();
-  const edgesSnap = await db.collection("edges").get();
+  const edgesSnap = await db
+    .collection("edges")
+    .select("source", "target")
+    .get();
   for (const doc of edgesSnap.docs) edges.set(doc.id, doc.data());
   console.log(`Loaded ${edges.size} edges.`);
 
-  const revisionsSnap = await db.collection("revisions").get();
-  console.log(`Scanning ${revisionsSnap.docs.length} revisions.`);
+  // Every revision's `node_id`, and in whole only the ones stored as a
+  // reference - none, once the migration has run. On the 2026-11-12 export
+  // (218,658 revisions) the whole collection in one read was what ran
+  // check:archived-migrations' Firestore emulator out of a 4 GB heap; the ids
+  // alone fit.
+  const idsSnap = await db.collection("revisions").select("node_id").get();
+  console.log(`Scanning ${idsSnap.docs.length} revisions.`);
+  const toRepair = idsSnap.docs
+    .filter((doc) => isReference(doc.get("node_id")))
+    .map((doc) => doc.ref);
+  const revisionDocs: FirebaseFirestore.DocumentSnapshot[] = [];
+  for (let i = 0; i < toRepair.length; i += 300) {
+    revisionDocs.push(...(await db.getAll(...toRepair.slice(i, i + 300))));
+  }
 
   let batch = db.batch();
   let pending = 0;
@@ -77,9 +93,9 @@ async function migrate() {
   let restored = 0;
   let unrestorable = 0;
 
-  for (const doc of revisionsSnap.docs) {
+  for (const doc of revisionDocs) {
     const data = doc.data();
-    if (!isReference(data.node_id)) continue;
+    if (!data || !isReference(data.node_id)) continue;
 
     const targetId = data.node_id.id;
     const update: Record<string, unknown> = { node_id: targetId };
