@@ -26,6 +26,13 @@ SERVERS = {
     # machine with another User-Agent gets the pages.
     "91.224.198.130": "E-LINE SYSTEMDOBIP.PL",
     "176.119.35.31": "E-LINE SYSTEMDOBIP.PL",
+    # SkyCMS's server (11-13): bip.gminaboleslawiec.pl and the websites and
+    # BIPs of Głuchołazy, Walce, Ujazd, Pakosławice and Tułowice (39
+    # candidacies) answer the crawler's name 403, robots.txt too, and a browser
+    # 200; the robots.txt a browser sees names 157 bots, not us. 65 of the
+    # hosts below sit on this address too, listed one by one after the same
+    # refusal.
+    "176.119.62.218": "SkyCMS",
 }
 
 #: Hosts, without www.
@@ -138,6 +145,16 @@ HOSTS = {
     "bip.dobrodzien.pl": "Dobrodzień, 1 candidacies",
     "bip.swierczow.pl": "Świerczów, 1 candidacies",
     "bip.dobrzenwielki.pl": "Dobrzeń Wielki, 1 candidacies",
+    # Łódź's firewall resets the crawler's connection (curl 56) on every address
+    # with a cHash or an [action] parameter: every person page of its
+    # declarations search, every list page after the first. A browser gets
+    # 200 and is never challenged; robots.txt 404 (11-13).
+    "bip.uml.lodz.pl": "Łódź, 75 candidacies",
+    # Gdynia's BIP reads its declarations from a data API (/contents/posts/)
+    # whose files are on legacy.um.gdynia.pl: both answer the crawler 403 and
+    # a browser 200 (11-13).
+    "api.um.gdynia.pl": "Gdynia, 34 candidacies",
+    "legacy.um.gdynia.pl": "Gdynia, 34 candidacies",
 }
 
 

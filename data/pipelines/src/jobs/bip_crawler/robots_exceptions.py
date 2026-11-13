@@ -90,6 +90,11 @@ FILES: dict[str, str] = {
     "bip.lututowgmina.pl": "Lututów: forbids /container/, 3 candidacies",
     "bip.czerwin.pl": "Czerwin: forbids /pliki/, 2 candidacies",
     "bip.tworog.pl": "Tworóg: forbids /api/download/*, 2 candidacies",
+    # 11-13, round 1: the old BIP's open article pages link its declarations
+    # under /pliki/; with them the walk found 14 of 15, 8 without.
+    "powiat-leszczynski.archiwum.bip.net.pl": (
+        "powiat leszczyński (archive): forbids /pliki/, 6 candidacies"
+    ),
 }
 #: Hosts whose robots.txt keeps out every crawler but search engines, or all: (b).
 SITES: dict[str, str] = {
@@ -223,6 +228,15 @@ SITES: dict[str, str] = {
     "zelechlinek.pl": "Żelechlinek: search engines only, 1 candidacy",
     "ugrejowiec.bip.e-zeto.eu": "Rejowiec: search engines only, 1 candidacy",
     "bip.pietrowicewielkie.pl": "Pietrowice Wielkie: Disallow: / to all, 1 candidacy",
+    # 11-13, round 1: walks past these found what robots.txt kept out:
+    # Zakopane 10 of 10, Żółkiewka 3 of 3 (e-zeto.eu, like those above), powiat
+    # kolbuszowski 26 of 26 with its old BIP's archive, Lubenia 7 of 7.
+    "bip.zakopane.eu": "Zakopane: search engines only, 10 candidacies",
+    "ugzolkiewka.bip.e-zeto.eu": "Żółkiewka: search engines only, 3 candidacies",
+    "archiwum.bip.powiat.kolbuszowski.pl": (
+        "powiat kolbuszowski (old BIP archive): Disallow: / to all, 26 candidacies"
+    ),
+    "bip.lubenia.pl": "Lubenia: Disallow: / to all, 7 candidacies",
 }
 
 
