@@ -3,6 +3,7 @@ import { authRequest } from "~/composables/auth";
 import type {
   Audience,
   CampaignContent,
+  CampaignQueue,
   CampaignRecord,
   Delivery,
   SendOutcome,
@@ -82,14 +83,17 @@ export function useMailing() {
     return answer.outcome;
   }
 
+  /** What became of each picked person, and how much mail now waits for its
+   * batch. */
   async function send(id: string, uids: string[]) {
     const answer = await authRequest<{
       outcomes: Record<string, SendOutcome>;
       campaign: CampaignRecord;
+      queue: CampaignQueue;
     }>("/api/admin/mail/send", { body: { id, uids }, timeout: 120_000 });
     put(answer.campaign);
     await loadDeliveries(id);
-    return answer.outcomes;
+    return { outcomes: answer.outcomes, queue: answer.queue };
   }
 
   return {
