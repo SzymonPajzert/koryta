@@ -16,9 +16,11 @@ declarations upload.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from datetime import datetime, timezone
+from pathlib import Path
 
 from analysis.bip_people_of_interest import BipPeopleOfInterest
 from entities.bip import BipPersonOfInterest
@@ -71,6 +73,23 @@ def read_list(ctx: Context) -> list[PersonRow]:
             flush=True,
         )
     return [person_row(p) for p in pipeline.read_list(ctx)]
+
+
+def read_list_file(path: Path) -> list[PersonRow]:
+    """The list from a file as the night writes it, a JSON object a line, with
+    no shared cache: walks side by side from one checkout would otherwise each
+    restore the newest list over the copy the others are reading."""
+    names = {f.name for f in fields(BipPersonOfInterest)}
+    with path.open(encoding="utf-8") as lines:
+        return [
+            person_row(
+                BipPersonOfInterest(
+                    **{k: v for k, v in json.loads(line).items() if k in names}
+                )
+            )
+            for line in lines
+            if line.strip()
+        ]
 
 
 def candidacies(store: BipPeopleStore, ctx: Context) -> list[PersonRow]:

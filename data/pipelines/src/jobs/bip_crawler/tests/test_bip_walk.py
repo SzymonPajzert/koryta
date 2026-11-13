@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from jobs.bip_crawler import build_parser
 from jobs.bip_crawler.people import apply_unit_starts, selected
+from jobs.bip_crawler.people_list import read_list_file
 from jobs.bip_crawler.walk import (
     MemoryDocIndex,
     chosen,
@@ -159,3 +162,23 @@ def test_walk_tries_a_start_as_a_unit_starts_row_would() -> None:
     ]
     with pytest.raises(SystemExit, match="one unit"):
         tried_starts({"021203", "020800"}, "https://bip.example/", None)
+
+
+def test_walk_reads_a_saved_list_keeping_the_units_zeros(tmp_path) -> None:  # noqa: ANN001
+    saved = tmp_path / "people.jsonl"
+    row = {
+        "key": "k1",
+        "full_name": "Mariola Szczęsna",
+        "first_name": "Mariola",
+        "last_name": "SZCZĘSNA",
+        "teryt": "021203",
+        "unit_level": "gmina",
+        "office": "Burmistrz",
+        "election_year": 2018,
+        "priority": 1,
+        "a_field_from_a_newer_night": True,
+    }
+    saved.write_text(json.dumps(row, ensure_ascii=False) + "\n\n", encoding="utf-8")
+    (person,) = read_list_file(saved)
+    assert (person.key, person.unit, person.priority) == ("k1", "021203", 1)
+    assert person.last_name == "SZCZĘSNA" and person.status == "pending"
