@@ -22,7 +22,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from jobs.bip_crawler import found, reset, robots_exceptions, sent, state, walk
+from jobs.bip_crawler import found, reset, robots_exceptions, sent, signers, state, walk
 from jobs.bip_crawler.coordinator import BipCoordinator, CoordinatorOptions
 from jobs.bip_crawler.identity import Agents
 from jobs.bip_crawler.people import run_people_mode, server_of
@@ -640,6 +640,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     found.add_parser(sub)
     state.add_parser(sub)
+    signers.add_parser(sub)
 
     add_walk_parsers(sub)
     add_reset_parser(sub)
