@@ -64,7 +64,7 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Pilot wysłał 40 wiadomości naraz i Mailgun odrzucił 11 z nich. Teraz wiadomości kampanii czekają w kolejce i wychodzą po 20 co minutę, najwyżej 90 dziennie, a reszta następnego dnia. Kto wypisze się, zanim przyjdzie jego kolej, kampanii już nie dostanie: w kolumnie „Ta kampania” ma wtedy „Wycofano przed wysyłką”.",
     steps: [
-      "Na /admin/mailing wyślij kampanię do ponad 20 osób: zaraz po wysyłce wszyscy mają w kolumnie „Ta kampania” „W kolejce”.",
+      "Gdy funkcja releaseCampaignMail jest już wdrożona, przy najbliższej wysyłce kampanii do ponad 20 osób z /admin/mailing: zaraz po wysyłce wszyscy mają w kolumnie „Ta kampania” „W kolejce”.",
       "Odśwież stronę po minucie: 20 osób ma „Wysłano”, a po następnej minucie kolejne.",
     ],
     link: "/admin/mailing",
