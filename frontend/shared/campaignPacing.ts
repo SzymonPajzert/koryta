@@ -25,9 +25,17 @@
  * sets PENDING. */
 export const HELD_STATE = "HELD";
 
+/** `delivery.state` of a held campaign message that will never go: by the
+ * time its batch came, or its reader unsubscribed, they could no longer be
+ * written to (shared/campaignConsent.ts). The extension leaves it alone as it
+ * does HELD, the release never picks it up, and it counts as nothing handed
+ * over. A later send writes it afresh, as it does a failed one. */
+export const WITHDRAWN_STATE = "WITHDRAWN";
+
 /** When a message was handed to the mail extension, which is what both limits
  * count. The extension stamps it on every message it takes up, whatever sent
- * it, and the release on every one it lets out; a held message has none. */
+ * it, and the release on every one it lets out; a held or withdrawn message
+ * has none. */
 export const HANDED_OVER_AT = "delivery.startTime";
 
 /** The most messages, of any kind, handed over within `CAMPAIGN_BATCH_GAP_MS`:

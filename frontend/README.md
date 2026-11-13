@@ -387,12 +387,13 @@ accounts: the pilot first, then everybody else. The rules are in
   signed-in readers are shown (`components/mail/OptInPrompt.vue`). Confirmed
   addresses only, as for notifications. The server decides this again for each
   recipient before queueing: the page's checkboxes are a suggestion.
-- **Once per person** — each message is `mail/campaign_<id>_<uid>`, written in
+- **Once per person** - each message is `mail/campaign_<id>_<uid>`, written in
   a transaction, so sending a campaign again only reaches whoever has not had
-  it. The one exception is a message whose delivery failed (`delivery.state`
-  ERROR): the extension never retries, so a send writes it afresh, with the
-  campaign's current text, and counts it as "requeued". One that went out, or
-  still waits, is never written again. The owner's tests are
+  it. The exceptions are messages that never arrived. One whose delivery
+  failed (`delivery.state` ERROR) is written afresh, with the campaign's
+  current text, and counted as "requeued", since the extension never retries;
+  one withdrawn before it went (below) is written afresh as a new one. One that
+  went out, or still waits, is never written again. The owner's tests are
   `mail/campaignTest_<id>_<ms>`, "[Test]" in the subject.
 - **In batches** - a send writes every message with `delivery.state` HELD,
   which the extension leaves alone. `releaseCampaignMail`
@@ -412,6 +413,17 @@ accounts: the pilot first, then everybody else. The rules are in
   firebase deploy --only functions:releaseCampaignMail --project koryta-pl
   ```
 
+- **Asked again** - a held message can wait for days, so right before it
+  leaves `releaseCampaignMail` reads its reader afresh (the account, its
+  `users/{uid}` switches, or the subscriber entry) and applies the send's own
+  rules (`shared/campaignConsent.ts`, which the audience reads through too). A
+  reader who left the topic or team mail, lost their account or its address,
+  or stopped being an administrator in the meantime is not sent it: the
+  message is marked WITHDRAWN, "Wycofano przed wysyłką" on the page, and
+  counts toward nothing. Leaving through `/wypisz` withdraws the reader's held
+  mail at once. Since the function reads Firebase Authentication as well as
+  Firestore, its service account needs `firebaseauth.users.get`, which
+  Editor and Firebase Authentication Viewer both carry.
 - **Leaving** — every message links to `/wypisz` with the reader's token
   (`mailTokens/{uid}`, server-only, made on the first send) and carries
   `List-Unsubscribe` and `List-Unsubscribe-Post` headers, so a mail client's own

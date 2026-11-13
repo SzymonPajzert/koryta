@@ -628,7 +628,9 @@ export function renderCampaign(args: CampaignRender): CampaignMail {
 /** Where a queued message is, as the Trigger Email extension records it on the
  * `mail` document - or `queued` while nothing has picked it up yet: a message
  * still held back for its batch (shared/campaignPacing.ts), or any message
- * while the extension is not installed. */
+ * while the extension is not installed. `WITHDRAWN` is the site's own: a held
+ * message whose reader could no longer be written to by the time it was to
+ * go (shared/campaignConsent.ts), so it never went. */
 export const deliveryStates = [
   "queued",
   "PENDING",
@@ -636,6 +638,7 @@ export const deliveryStates = [
   "RETRY",
   "SUCCESS",
   "ERROR",
+  "WITHDRAWN",
 ] as const;
 
 export type DeliveryState = (typeof deliveryStates)[number];
@@ -647,10 +650,12 @@ export const deliveryStateLabels: Record<DeliveryState, string> = {
   RETRY: "Ponowna próba",
   SUCCESS: "Wysłano",
   ERROR: "Błąd",
+  WITHDRAWN: "Wycofano przed wysyłką",
 };
 
 /** What became of one requested recipient when a campaign was sent. */
 export type SendOutcome =
+  /** A new message, or one withdrawn before it went and written afresh. */
   | "queued"
   /** Had been sent it, and the delivery failed (`delivery.state` ERROR): it
    * is queued again. */
@@ -688,7 +693,7 @@ export type CampaignRecord = CampaignContent & {
   createdBy: string;
   /** Everybody it was queued for, ever. One campaign reaches one person
    * once, so sending it again only reaches the people added since - and
-   * anybody whose delivery failed. */
+   * anybody whose message failed, or was withdrawn before it went. */
   recipients: string[];
   /** Who left a topic through this campaign's link. */
   unsubscribed: string[];
@@ -699,7 +704,7 @@ export type CampaignRecord = CampaignContent & {
 export type Delivery = {
   state: DeliveryState;
   /** When the message was handed to the extension. Null while it is held
-   * back for its batch. */
+   * back for its batch, and for good once it is withdrawn. */
   queuedAt: string | null;
   finishedAt: string | null;
   error: string | null;

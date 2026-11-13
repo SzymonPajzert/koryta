@@ -7,6 +7,12 @@ import {
   emptyActivityCounts,
   type ActivityCounts,
 } from "../../../shared/activity";
+import { campaignEligibility, campaignTopics } from "../../../shared/campaigns";
+import {
+  confirmedSubscriber,
+  loadConsent,
+  type AccountRecord,
+} from "../../../shared/campaignConsent";
 
 const { mockListUsers, mockLoadRollups, mockSubscribers } = vi.hoisted(() => ({
   mockListUsers: vi.fn(),
@@ -232,6 +238,96 @@ describe("loadAudience", () => {
     const { members } = await loadAudience(db, { now: NOW });
     expect(members.map((m) => m.uid).sort()).toEqual(["a", "b"]);
     expect(mockListUsers).toHaveBeenLastCalledWith(1000, "next");
+  });
+});
+
+describe("the release of held campaign mail", () => {
+  it("judges every reader as the send does, from the same records", async () => {
+    // The send picks recipients from this audience; the release asks again
+    // with loadConsent right before a held message goes. Fed the same
+    // records, the two must never disagree about anybody.
+    const accounts: AccountRecord[] = [
+      account("fan"),
+      account("admin", { customClaims: { admin: true } }),
+      account("quiet-admin", { customClaims: { admin: true, newAdmin: true } }),
+      account("unverified", { emailVerified: false }),
+      account("blocked", { disabled: true }),
+      account("no-address", { email: undefined }),
+      account("odd"),
+      account("ania"),
+    ];
+    userDocs = {
+      fan: { newsletter: { callsToAction: true, recentPeople: false } },
+      "quiet-admin": { teamMail: false, newsletter: { recentPeople: true } },
+      unverified: { newsletter: { callsToAction: true } },
+      blocked: { newsletter: { callsToAction: true } },
+      odd: {
+        newsletter: { callsToAction: "yes", recentPeople: 1 },
+        teamMail: "no",
+      },
+    };
+    const subscriberDocs: Record<string, Record<string, unknown>> = {
+      abc: {
+        email: "bez.konta@example.com",
+        status: "confirmed",
+        topics: { callsToAction: true, recentPeople: "tak" },
+      },
+      // Also an account: both write to it as the account.
+      def: {
+        email: "ania@example.com",
+        status: "confirmed",
+        topics: { callsToAction: true, recentPeople: true },
+      },
+    };
+    mockListUsers.mockResolvedValue({ users: accounts });
+    mockSubscribers.mockResolvedValue(
+      Object.entries(subscriberDocs).map(([id, data]) => ({
+        id,
+        status: "confirmed",
+        ...confirmedSubscriber(data)!,
+      })),
+    );
+
+    const { members } = await loadAudience(db, { now: NOW });
+    type Ref = { path: string; id: string };
+    const consent = await loadConsent(
+      {
+        db: {
+          collection: (name: string) => ({
+            doc: (id: string): Ref => ({ path: `${name}/${id}`, id }),
+          }),
+          getAll: async (...args: unknown[]) =>
+            (args.filter((arg) => (arg as Ref).path) as Ref[]).map((ref) => ({
+              id: ref.id,
+              data: () =>
+                ref.path.startsWith("users/")
+                  ? userDocs[ref.id]
+                  : subscriberDocs[ref.id],
+            })),
+        },
+        auth: {
+          getUsers: async (ids) => ({
+            users: accounts.filter((a) =>
+              ids.some((id) =>
+                "uid" in id ? id.uid === a.uid : id.email === a.email,
+              ),
+            ),
+          }),
+        },
+      },
+      [...members.map((member) => member.uid), "sub_def"],
+    );
+
+    expect(members.map((member) => member.uid)).not.toContain("sub_def");
+    expect(consent.has("sub_def")).toBe(false);
+    for (const member of members) {
+      for (const topic of campaignTopics) {
+        expect(
+          campaignEligibility(consent.get(member.uid)!, topic),
+          `${member.uid} about ${topic}`,
+        ).toEqual(campaignEligibility(member, topic));
+      }
+    }
   });
 });
 
