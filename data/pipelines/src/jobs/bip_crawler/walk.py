@@ -5,6 +5,8 @@ size a chunk, without touching what the crawl keeps.
     koryta_scrape_bip walk 020800,021203 --no-render
     koryta_scrape_bip walk 246201 --person bieda --json /tmp/bytom.json
     koryta_scrape_bip walk 021203 --start https://bip.lwowekslaski.pl/
+    koryta_scrape_bip walk 021203 --trace --out /tmp/w --json /tmp/w/report.json
+    koryta_scrape_bip walk 160302 --as-browser bip.x.pl --pass-robots bip.y.pl
     koryta_scrape_bip plan                           # what the next chunk takes
     koryta_scrape_bip plan --poi-retry robots --poi-units @units.txt
 
@@ -18,8 +20,13 @@ from one checkout with --list, which reads a saved copy of the list instead of
 restoring the newest into the checkout), and shows each
 candidacy's outcome and the files that named them before a chunk takes the
 unit. --start and --declarations try an address for the one unit walked, as a
-row in unit_starts.csv would, before it goes in the file. Known URLs
-(--known-urls) are left out unless given: the chunk's file is 0.7 GB.
+row in unit_starts.csv would, before it goes in the file; --as-browser,
+--pass-robots and --pass-robots-files try an entry of identity.py or
+robots_exceptions.py the same way, for that walk only. --trace prints a line
+for each page read and each answer that kept something from the walk (robots,
+a refusal, "not now", an error status); --out keeps the files, which `files`
+opens (`inspect`). Known URLs (--known-urls) are left out unless given: the
+chunk's file is 0.7 GB.
 
 ``plan`` says what ``crawl --people-of-interest`` with the same selection flags
 would search, by outcome, priority and unit. It reads the crawl's Postgres and
@@ -30,20 +37,22 @@ from __future__ import annotations
 
 import argparse
 import faulthandler
+import functools
+import ipaddress
 import json
 import shutil
 import sys
 import tempfile
 import unicodedata
 from collections import Counter
-from collections.abc import Collection, Iterable
+from collections.abc import Callable, Collection, Iterable
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 from conductor import setup_context
 from jobs.bip_crawler import robots_exceptions
-from jobs.bip_crawler.identity import Agents
+from jobs.bip_crawler.identity import BROWSER_AGENT, Agents
 from jobs.bip_crawler.people import people_search, selected, server_of
 from jobs.bip_crawler.people_list import (
     list_policy,
@@ -51,6 +60,8 @@ from jobs.bip_crawler.people_list import (
     read_list,
     read_list_file,
 )
+from scrapers.bip.classify import host_of
+from scrapers.bip.people import is_file_link
 from scrapers.common.fetch import use_ca_bundle
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import DocRow, PersonRow, with_outcomes
@@ -118,6 +129,8 @@ def report(rows: list[PersonRow], store: MemoryBipPeopleStore) -> dict[str, Any]
                 "key": row.key,
                 "unit": row.unit,
                 "name": f"{row.first_name} {row.last_name}",
+                "first_name": row.first_name,
+                "last_name": row.last_name,
                 "election_year": row.election_year,
                 "priority": row.priority,
                 "status": row.status,
@@ -172,6 +185,88 @@ def tried_starts(
     ]
 
 
+def _host(value: str) -> str:
+    """A host as identity.py and robots_exceptions.py hold it: lower case, no
+    www.; a URL gives its own."""
+    if "://" in value:
+        return host_of(value)
+    return value.strip().lower().removeprefix("www.").split("/")[0]
+
+
+def _address(value: str) -> bool:
+    try:
+        ipaddress.ip_address(value.strip())
+    except ValueError:
+        return False
+    return True
+
+
+def tried_agents(agents: Agents, tried: Collection[str]) -> Callable[[str], str]:
+    """``agents`` asking ``tried`` as a browser, for one walk: a host as an
+    entry in identity.HOSTS is asked, an address as one in identity.SERVERS
+    (every host that resolves to it)."""
+    if not tried:
+        return agents
+    servers = {t.strip() for t in tried if _address(t)}
+    hosts = {_host(t) for t in tried if not _address(t)}
+    resolve = functools.cache(agents.resolve)
+
+    def agent_for(host: str) -> str:
+        bare = host.lower().removeprefix("www.")
+        if bare in hosts or (servers and resolve(host) in servers):
+            return BROWSER_AGENT
+        return agents(host)
+
+    return agent_for
+
+
+def tried_robots(
+    allowed: Callable[[str], bool], sites: Collection[str], files: Collection[str]
+) -> Callable[[str], bool]:
+    """``allowed`` letting past robots.txt, for one walk, any page of the hosts
+    in ``sites`` and the file links of those in ``files``, as entries in
+    robots_exceptions.SITES and FILES do."""
+    whole = {_host(h) for h in sites}
+    linked = {_host(h) for h in files}
+    if not whole and not linked:
+        return allowed
+
+    def passes(url: str) -> bool:
+        host = host_of(url)
+        return host in whole or (host in linked and is_file_link(url)) or allowed(url)
+
+    return passes
+
+
+def tried_exceptions(args: argparse.Namespace) -> dict[str, list[str]]:
+    """The exceptions ``args`` try (`access`), by flag."""
+    flags = ("as_browser", "pass_robots", "pass_robots_files")
+    return {f: getattr(args, f) for f in flags if getattr(args, f, None)}
+
+
+def access(
+    args: argparse.Namespace, user_agent: str
+) -> tuple[Callable[[str], str], Callable[[str], bool], Callable[[str], bool]]:
+    """How a walk asks the hosts, as a chunk does (`identity`,
+    `robots_exceptions`) with the exceptions ``args`` try: a host's User-Agent,
+    whether robots.txt lets a URL through, and whether its host did not answer
+    for robots.txt."""
+    agents = tried_agents(Agents(user_agent, server_of), args.as_browser or ())
+    robots = RobotsCache(user_agent, agent_for=agents)
+    allowed = tried_robots(
+        robots_exceptions.allowed(robots.allowed),
+        args.pass_robots or (),
+        args.pass_robots_files or (),
+    )
+    for flag, tried in tried_exceptions(args).items():
+        print(f"tried for this walk only: --{flag.replace('_', '-')} {' '.join(tried)}")
+    return agents, allowed, robots.unreachable
+
+
+def _trace(line: str) -> None:
+    print(f"trace {line}", flush=True)
+
+
 def cmd_walk(args: argparse.Namespace) -> int:
     # The package imports this module, so its name comes in at call time.
     from jobs.bip_crawler import USER_AGENT  # noqa: PLC0415
@@ -192,8 +287,7 @@ def cmd_walk(args: argparse.Namespace) -> int:
         f"walking {len(rows)} candidacies in {len({r.unit for r in rows})} units",
         flush=True,
     )
-    agents = Agents(USER_AGENT, server_of)
-    robots = RobotsCache(USER_AGENT, agent_for=agents)
+    agents, allowed, unreachable = access(args, USER_AGENT)
     store = MemoryBipPeopleStore()
     out = args.out or Path(tempfile.mkdtemp(prefix="bip-walk-"))
     try:
@@ -204,11 +298,12 @@ def cmd_walk(args: argparse.Namespace) -> int:
             store,
             MemoryDocIndex(),
             LocalBundleStore(out),
-            robots_exceptions.allowed(robots.allowed),
-            robots.unreachable,
+            allowed,
+            unreachable,
             agents,
             USER_AGENT,
             starts,
+            trace=_trace if args.trace else None,
         ) as search:
             search.run(rows)
     finally:
@@ -217,12 +312,19 @@ def cmd_walk(args: argparse.Namespace) -> int:
         if args.stacks:
             faulthandler.cancel_dump_traceback_later()
     result = report(rows, store)
+    tried = {"start": [args.start] if args.start else [], **tried_exceptions(args)}
+    tried["declarations"] = args.declarations or []
+    result["tried"] = {flag: what for flag, what in tried.items() if what}
+    if args.out is not None:
+        result["out"] = str(args.out.resolve())  # where `files` finds them
     print_report(result)
     if args.json:
         args.json.write_text(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         print(f"report: {args.json}")
+        if args.out is not None:
+            print(f"its files: koryta_scrape_bip files {args.json}")
     return 0
 
 
