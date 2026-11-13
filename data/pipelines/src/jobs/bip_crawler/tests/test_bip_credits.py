@@ -282,6 +282,39 @@ def test_a_page_that_says_majatek_alone_pools_no_unnamed_file():
     assert led.key == ""
 
 
+def test_a_request_for_public_information_pools_no_unnamed_file():
+    # Brzostek's request about its mayor's declarations holds the request and
+    # the answer, filed under case codes that name nobody: they went to six
+    # seekers as their unnamed files, the burmistrz among them (11-13).
+    page = (
+        "https://bip.brzostek.pl/58-wniosek-o-udostepnienie-informacji-publicznej-"
+        "dot-oswiadczen-majatkowych-skladanych-za-2024-i-2025-r-przez-burmistrza-"
+        "brzostku-zastepce-burmistrza-skarbnika-sekretarza.html"
+    )
+    title = (
+        "Wniosek o udostępnienie informacji publicznej dot. oświadczeń majątkowych "
+        "składanych za 2024 i 2025 r. przez Burmistrza Brzostku"
+    )
+    files = "https://bip.brzostek.pl/files/file_add/download/"
+    links = [
+        LinkContext(
+            files + "5729_wniosek-so1431582026.pdf",
+            "Wniosek SO.1431.58.2026.pdf",
+            heading="Załączniki",
+        ),
+        LinkContext(
+            files + "5728_odpowiedz-so1431582026.pdf",
+            "Odpowiedź SO.1431.58.2026.pdf",
+            heading="Załączniki",
+        ),
+    ]
+    kowalski = Seeker.of("k", "Zbigniew", "Kowalski")
+    assert candidates(page, title, links, [kowalski], first_names=NAMES) == []
+    assert candidates(page, title, links, [kowalski], declared=True) == []
+    # The address alone says it too, when the title is lost.
+    assert candidates(page, "", links, [kowalski], declared=True) == []
+
+
 def test_a_page_about_somebody_nobody_seeks_lends_and_pools_nothing():
     # Braniewo gave Dariusz Lis's files to three 2014 councillors nothing
     # named; Żywiec Marek Czul's to Maciej Gibas (11-13).
