@@ -10,6 +10,9 @@ import {
   utcDayStart,
 } from "../../shared/campaignPacing";
 
+/** Firestore's gRPC status for a precondition that no longer holds. */
+const FAILED_PRECONDITION = 9;
+
 /** Hands the next batch of held campaign mail to the mail extension, as far
  * as the batch gap and the day's allowance let it (shared/campaignPacing.ts),
  * and says how many messages went.
@@ -18,6 +21,12 @@ import {
  * document it has just been given - PENDING, no attempts yet - so it sends the
  * message on that write. `released_at` is what the gap and the day are counted
  * from; nothing but a release writes it.
+ *
+ * Each message is written only as it was read. A run that read it HELD just
+ * before another run let it out would otherwise set PENDING again over a
+ * message the extension is sending or has sent, and it would go out twice.
+ * One changed message fails the whole batch, and the next minute's run reads
+ * afresh.
  */
 export async function releaseHeldMail(
   db: Firestore,
@@ -43,12 +52,31 @@ export async function releaseHeldMail(
   if (batch.length === 0) return 0;
   const writes = db.batch();
   for (const doc of batch) {
-    writes.update(doc.ref, {
-      delivery: { startTime: now, state: "PENDING", attempts: 0, error: null },
-      released_at: now,
-    });
+    writes.update(
+      doc.ref,
+      {
+        delivery: {
+          startTime: now,
+          state: "PENDING",
+          attempts: 0,
+          error: null,
+        },
+        released_at: now,
+      },
+      { lastUpdateTime: doc.updateTime },
+    );
   }
-  await writes.commit();
+  try {
+    await writes.commit();
+  } catch (error) {
+    if ((error as { code?: unknown } | null)?.code !== FAILED_PRECONDITION) {
+      throw error;
+    }
+    logger.info(
+      "Campaign mail: released nothing, a message changed after this run read it",
+    );
+    return 0;
+  }
   return batch.length;
 }
 
@@ -62,8 +90,13 @@ export const releaseCampaignMail = onSchedule(
   {
     schedule: "every 1 minutes",
     region: "europe-west1",
-    // One run at a time, so two cannot both find the same gap free.
+    // One run at a time, so two cannot both find the same gap free: one
+    // instance, taking one request - a 2nd gen function otherwise takes 80 at
+    // once. Cloud Run can still run two for a moment, around a deploy for
+    // one, so releaseHeldMail never writes over a message another run has
+    // let out.
     maxInstances: 1,
+    concurrency: 1,
   },
   async () => {
     // On the first run rather than when the module loads, so a test can
