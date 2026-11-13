@@ -209,6 +209,16 @@
             >
               {{ audiencePresetLabels[choice] }}
             </v-chip>
+            <!-- Whoever this campaign failed to reach, to send it to again. -->
+            <v-chip
+              v-if="failedCount > 0 && wariant === 'a'"
+              value="failed"
+              size="small"
+              filter
+              data-preset="failed"
+            >
+              Błąd wysyłki: {{ failedCount }}
+            </v-chip>
           </v-chip-group>
           <v-spacer />
           <v-text-field
@@ -308,6 +318,13 @@
               >
                 {{ item.delivery.error }}
               </div>
+              <div
+                v-if="item.failed && item.selectable"
+                class="text-caption text-medium-emphasis"
+                data-audience-resendable
+              >
+                Można wysłać ponownie
+              </div>
               <div v-if="item.returned" class="text-caption">
                 Na stronie po wysyłce
               </div>
@@ -346,12 +363,26 @@
             </div>
           </div>
         </div>
+        <v-btn
+          v-if="failedCount > 0 && wariant === 'b'"
+          variant="tonal"
+          :prepend-icon="mdiSend"
+          :disabled="busy !== null"
+          class="mb-3"
+          data-campaign-resend
+          @click="resendFailed"
+        >
+          Wyślij ponownie do
+          {{ polishCountingGenitive(failedCount, "osoby", "osób") }}
+        </v-btn>
         <p class="text-caption text-medium-emphasis mb-3">
-          „W kolejce” znaczy, że rozszerzenie Trigger Email jeszcze nie wzięło
-          wiadomości - dopóki nie jest zainstalowane, tak zostaje. „Na stronie
-          po wysyłce” liczy każde wejście zalogowanej osoby, także otwartą
-          wcześniej kartę. Wizyty z linków w wiadomości są w Plausible pod UTM
-          Campaign „{{ current.id }}”.
+          „W kolejce” znaczy, że wiadomość czeka na swoją turę: wychodzą po
+          {{ CAMPAIGN_BATCH_SIZE }} na minutę i najwyżej
+          {{ CAMPAIGN_DAILY_LIMIT }} dziennie. „Na stronie po wysyłce” liczy
+          każde wejście zalogowanej osoby, także otwartą wcześniej kartę. Wizyty
+          z linków w wiadomości są w Plausible pod UTM Campaign „{{
+            current.id
+          }}”.
         </p>
         <v-table v-if="history.length > 0" density="compact">
           <thead>
@@ -378,10 +409,28 @@
           Wysłać „{{ form.subject }}”?
         </v-card-title>
         <v-card-text>
-          Kampania pójdzie do
-          {{ polishCountingGenitive(selected.length, "osoby", "osób") }}. Każda
-          dostanie ją raz: wysłanie jej później do kolejnych osób pominie te,
-          które już ją mają. Wysłanej wiadomości nie da się cofnąć.
+          <p>
+            <template v-if="selectedRetries === selected.length">
+              Kampania pójdzie ponownie do
+              {{ polishCountingGenitive(selected.length, "osoby", "osób") }}, po
+              błędzie wysyłki.
+            </template>
+            <template v-else>
+              Kampania pójdzie do
+              {{ polishCountingGenitive(selected.length, "osoby", "osób")
+              }}<template v-if="selectedRetries > 0">
+                (do {{ selectedRetries }} z nich ponownie, po błędzie
+                wysyłki)</template
+              >.
+            </template>
+            Każda dostanie ją raz: wysłanie jej później do kolejnych osób
+            pominie te, które już ją mają. Wysłanej wiadomości nie da się
+            cofnąć.
+          </p>
+          <p class="text-medium-emphasis mt-3" data-campaign-send-pace>
+            Wiadomości wychodzą po {{ CAMPAIGN_BATCH_SIZE }} na minutę, najwyżej
+            {{ CAMPAIGN_DAILY_LIMIT }} dziennie.
+          </p>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -437,7 +486,12 @@ import {
   type Eligibility,
   type IneligibleReason,
   type SendOutcome,
+  type CampaignQueue,
 } from "~~/shared/campaigns";
+import {
+  CAMPAIGN_BATCH_SIZE,
+  CAMPAIGN_DAILY_LIMIT,
+} from "~~/shared/campaignPacing";
 
 definePageMeta({
   // `admin` as well, though every owner is one: it is what lights the Admin
@@ -450,6 +504,10 @@ useHead({ title: "Mailing (Admin) - koryta.pl" });
 const route = useRoute();
 const router = useRouter();
 const { user } = useAuthState();
+
+// TEMP(wariant): the board round's two ways to pick whoever a campaign failed
+// to reach - a chip among the presets (a), a button under the results (b).
+const wariant = computed(() => (route.query.wariant === "b" ? "b" : "a")); // TEMP(wariant)
 const {
   audience,
   campaigns,
@@ -631,6 +689,9 @@ type Row = AudienceMember & {
   activityTotal: number;
   eligibility: Eligibility;
   received: boolean;
+  /** Was sent this campaign and the delivery failed, so it never arrived: a
+   * send writes it again. */
+  failed: boolean;
   delivery: Delivery | null;
   /** Seen on the site after this campaign's message was queued for them. */
   returned: boolean;
@@ -640,22 +701,32 @@ type Row = AudienceMember & {
 const rows = computed<Row[]>(() =>
   members.value.map((member) => {
     const eligibility = campaignEligibility(member, form.topic);
-    const received = current.value?.recipients.includes(member.uid) ?? false;
     const delivery = deliveries.value[member.uid] ?? null;
+    const failed = delivery?.state === "ERROR";
+    const received =
+      !failed && (current.value?.recipients.includes(member.uid) ?? false);
     return {
       ...member,
       name: member.displayName || member.email || member.uid,
       activityTotal: member.activity.total,
       eligibility,
       received,
+      failed,
       delivery,
+      // A message that never arrived brought nobody back.
       returned:
+        !failed &&
         !!delivery?.queuedAt &&
         !!member.lastSeenAt &&
         member.lastSeenAt > delivery.queuedAt,
       selectable: eligibility.eligible && !received,
     };
   }),
+);
+
+/** Whoever the open campaign failed to reach and may still be sent it. */
+const failedCount = computed(
+  () => rows.value.filter((row) => row.failed && row.selectable).length,
 );
 
 const search = ref<string | null>("");
@@ -668,17 +739,28 @@ const filteredRows = computed(() => {
 });
 
 const selected = ref<string[]>([]);
-const preset = ref<AudiencePreset | null>(null);
+/** A preset, or "failed": whoever the campaign failed to reach. */
+const preset = ref<AudiencePreset | "failed" | null>(null);
 
-function applyPreset(value: AudiencePreset | null) {
+function applyPreset(value: AudiencePreset | "failed" | null) {
   preset.value = value;
   const now = new Date();
   selected.value = value
     ? rows.value
-        .filter((row) => row.selectable && presetIncludes(value, row, now))
+        .filter(
+          (row) =>
+            row.selectable &&
+            (value === "failed" ? row.failed : presetIncludes(value, row, now)),
+        )
         .map((row) => row.uid)
     : [];
 }
+
+/** How many of the ticked people the campaign failed to reach before. */
+const selectedRetries = computed(() => {
+  const ticked = new Set(selected.value);
+  return rows.value.filter((row) => row.failed && ticked.has(row.uid)).length;
+});
 
 // A topic change can make somebody ineligible; never keep them ticked.
 watch(rows, () => {
@@ -829,19 +911,34 @@ async function test() {
   }
 }
 
+/** When what a send queued goes out: within minutes, or partly on later days
+ * once the day's allowance is spent. */
+function paceNote(queue: CampaignQueue): string {
+  if (queue.waiting === 0) return "";
+  if (queue.waiting <= queue.leftToday) {
+    return `Wychodzą po ${CAMPAIGN_BATCH_SIZE} na minutę.`;
+  }
+  return `Dziś wyjdzie jeszcze ${queue.leftToday}, pozostałe ${queue.waiting - queue.leftToday} w kolejnych dniach.`;
+}
+
 async function sendNow() {
   confirmOpen.value = false;
   busy.value = "send";
   try {
     const campaign = await persist();
-    const outcomes = await send(campaign.id, selected.value);
+    const { outcomes, queue } = await send(campaign.id, selected.value);
     const values = Object.values(outcomes);
-    const queued = values.filter((o) => o === "queued").length;
+    const requeued = values.filter((o) => o === "requeued").length;
+    const queued = values.filter((o) => o === "queued").length + requeued;
     const skipped = values.length - queued;
     notify(
-      skipped > 0
-        ? `Wysłano do kolejki: ${queued}. Pominięto: ${skipped} - szczegóły w wynikach.`
-        : `Wysłano do kolejki: ${queued}.`,
+      [
+        `Wysłano do kolejki: ${queued}${requeued > 0 ? `, w tym ponownie: ${requeued}` : ""}.`,
+        skipped > 0 ? `Pominięto: ${skipped} - szczegóły w wynikach.` : "",
+        paceNote(queue),
+      ]
+        .filter(Boolean)
+        .join(" "),
       skipped > 0 && queued === 0 ? "error" : "success",
     );
     selected.value = [];
@@ -851,6 +948,15 @@ async function sendNow() {
   } finally {
     busy.value = null;
   }
+}
+
+/** TEMP(wariant) b: ticks whoever the campaign failed to reach, and asks. */
+function resendFailed() {
+  preset.value = null;
+  selected.value = rows.value
+    .filter((row) => row.failed && row.selectable)
+    .map((row) => row.uid);
+  confirmOpen.value = true;
 }
 </script>
 
