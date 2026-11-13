@@ -243,6 +243,20 @@ koryta_scrape_bip reset @unfound-keys.txt --dry-run     # count; delete nothing
 koryta_scrape_bip reset @unfound-keys.txt --backup reset-2026-11-13.json
 ```
 
+### `sent`
+
+What the declarations upload sent the site from the files stored for some
+candidacies: every extract of them in `bip_decl_sent` (a crop of a page, or a
+file that gave none), with the name read on the crop. Run it before a `reset`,
+while `bip_poi_docs` still holds the files: the extracts of files a fix takes
+back are for Szymon to withdraw. It reads the crawl's Postgres and writes
+nothing there.
+
+```bash
+koryta_scrape_bip sent @unfound-keys.txt                       # count and list
+koryta_scrape_bip sent @unfound-keys.txt --csv withdraw-2026-11-13.csv
+```
+
 ### On predator: `run_chunk.sh`
 
 The people mode runs in chunks from `run_chunk.sh` beside this file: a crawl

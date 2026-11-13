@@ -22,7 +22,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from jobs.bip_crawler import found, reset, robots_exceptions, state, walk
+from jobs.bip_crawler import found, reset, robots_exceptions, sent, state, walk
 from jobs.bip_crawler.coordinator import BipCoordinator, CoordinatorOptions
 from jobs.bip_crawler.identity import Agents
 from jobs.bip_crawler.people import run_people_mode, server_of
@@ -461,6 +461,24 @@ def add_reset_parser(sub: argparse._SubParsersAction) -> None:
     reset_cmd.set_defaults(func=reset.cmd_reset)
 
 
+def add_sent_parser(sub: argparse._SubParsersAction) -> None:
+    """`sent` (`sent.py`): what the site got from candidacies' stored files."""
+    sent_cmd = sub.add_parser(
+        "sent",
+        help="list the extracts the declarations upload sent of the files stored "
+        "for these candidacies, to withdraw before a reset; writes nothing",
+    )
+    sent_cmd.add_argument(
+        "keys",
+        type=_units,
+        help="candidacy keys, comma-separated, or @FILE with one a line",
+    )
+    sent_cmd.add_argument(
+        "--csv", type=Path, default=None, help="also write the extracts here"
+    )
+    sent_cmd.set_defaults(func=sent.cmd_sent)
+
+
 def add_walk_parsers(sub: argparse._SubParsersAction) -> None:
     """`walk` and `plan` (`walk.py`): try the people mode on a few units, and
     size a chunk, without touching what the crawl keeps."""
@@ -625,6 +643,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_walk_parsers(sub)
     add_reset_parser(sub)
+    add_sent_parser(sub)
     return parser
 
 
