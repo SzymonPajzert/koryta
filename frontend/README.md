@@ -406,11 +406,34 @@ accounts: the pilot first, then everybody else. The rules are in
   50 seconds, and campaign mail stops for the UTC day once 90 have gone. The
   other 10 are kept for the notifications, newsletter confirmations and test
   mails that come after, which are never held. The send answers how many wait
-  and how many more go today. Cloud Functions are deployed by hand; until this
-  one is, a campaign waits in `mail` and nothing is lost:
+  and how many more go today.
+
+  Cloud Functions are deployed by hand, and autopush runs the server from main
+  against the same Firestore as koryta.pl. So once a change to this lands on
+  main, every campaign sent from either site waits in `mail` until the
+  function runs: nothing is lost, but nothing goes. Deploy it right after the
+  merge, before anybody sends a campaign:
 
   ```bash
   firebase deploy --only functions:releaseCampaignMail --project koryta-pl
+  ```
+
+  Then check that it runs. The first command below prints `ACTIVE 1 1` (one
+  instance, taking one request at a time); the second `state: ENABLED`, a
+  `lastAttemptTime` under a minute old and no `status` code. While nothing is
+  held the function logs nothing; once a send waits, the third shows
+  `Campaign mail: released N` every minute until the queue is empty, and any
+  error, such as the service account not being allowed to read users:
+
+  ```bash
+  gcloud functions describe releaseCampaignMail --region europe-west1 \
+    --project koryta-pl \
+    --format='value(state,serviceConfig.maxInstanceCount,serviceConfig.maxInstanceRequestConcurrency)'
+  gcloud scheduler jobs describe firebase-schedule-releaseCampaignMail-europe-west1 \
+    --location europe-west1 --project koryta-pl \
+    --format='yaml(state,lastAttemptTime,status)'
+  gcloud functions logs read releaseCampaignMail --region europe-west1 \
+    --project koryta-pl --limit 20
   ```
 
 - **Asked again** - a held message can wait for days, so right before it
@@ -420,9 +443,11 @@ accounts: the pilot first, then everybody else. The rules are in
   reader who left the topic or team mail, lost their account or its address,
   or stopped being an administrator in the meantime is not sent it: the
   message is marked WITHDRAWN, "Wycofano przed wysyłką" on the page, and
-  counts toward nothing. Leaving through `/wypisz` withdraws the reader's held
-  mail at once. Since the function reads Firebase Authentication as well as
-  Firestore, its service account needs `firebaseauth.users.get`, which
+  counts toward nothing. Leaving through `/wypisz`, or a mail client's
+  unsubscribe button, withdraws the reader's held mail at once; a switch
+  turned off on `/profil` is a write from the browser, so it is the release
+  that catches it. Since the function reads Firebase Authentication as well
+  as Firestore, its service account needs `firebaseauth.users.get`, which
   Editor and Firebase Authentication Viewer both carry.
 - **Leaving** — every message links to `/wypisz` with the reader's token
   (`mailTokens/{uid}`, server-only, made on the first send) and carries
