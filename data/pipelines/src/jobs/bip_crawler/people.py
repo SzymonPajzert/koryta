@@ -74,6 +74,7 @@ from jobs.bip_crawler import (
     accordion,
     doclist,
     finn,
+    liferay,
     person_page,
     sisco,
     softres,
@@ -1007,13 +1008,16 @@ class PeopleSearch:
         title, links = extract_link_contexts(
             result.content, result.url, result.content_type
         )
-        # A person's page that names them in a field alone (`person_page`).
-        if who := person_page.name(result.content):
-            title = f"{who} | {title}"
+        # A person's page that names them in a field alone (`person_page`):
+        # the title carries the name, a drawn page's title too (below).
+        who = person_page.name(result.content)
         # Files offered as form buttons, under the position's name (`softres`).
         links = links + softres.files(result.content, result.url)
         # Documents a Vue component draws from JSON, under the subject (`doclist`).
         links = links + doclist.links(result.content, result.url, self._get)
+        # Warsaw's declarations search, asked for each seeker within the
+        # district or kind of filer its address keeps to (`liferay`).
+        links = links + liferay.search_links(result.content, result.url, seekers)
         # A Madkom list too long to read: its search box, asked for each seeker.
         if base := search_base(result.content):
             links = links + [
@@ -1081,6 +1085,8 @@ class PeopleSearch:
                         )
                     )
                     follow = links + drawn_links
+        if who:
+            title = f"{who} | {title}"
         folded_title = fold(title)
         if DECLARATION.search(folded_title) or ASSETS.search(folded_title):
             out.declaration_pages += 1
@@ -1093,6 +1099,7 @@ class PeopleSearch:
                 first_names=self.first_names,
                 lender=lender,
                 declared=led,
+                owner=who,
             )
         )
         self._read_eurzad(out, result, seekers, prefer)

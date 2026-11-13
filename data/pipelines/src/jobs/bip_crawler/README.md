@@ -116,6 +116,11 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   robots.txt hides by the app's own addresses (`<office>,a,<id>,artykul.html`,
   `e,pobierz,get.html?id=<id>`) are left out, and an API robots.txt closes is
   not read around by rendering.
+- Warsaw's declarations (bip.warszawa.pl: the city's, 18 district councils',
+  the boards' and the staff's, 22,125 behind one search page whose pages past
+  the first a script draws) are asked for by GET, each seeker's surname within
+  the district or kind of filer the page's address keeps to (`liferay.py`);
+  each district's row in `unit_starts.csv` gives that address.
 - Other pages a script draws (next to no links and a `<script>`) are rendered
   in headless Chromium, `--render-workers` (2) at once, pictures and styles
   skipped, one turn of the host's rate for every request a render makes there
@@ -139,7 +144,8 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   through a link it took for a page is not fetched twice.
 - A declarations page's files that name nobody (one file for the whole council)
   go to the people nothing named, at most three, when they say "majątkowe" and
-  are not blank forms.
+  are not blank forms, nor on a page whose "Imię"/"Nazwisko" fields name
+  somebody nobody seeks (one filer's page: Warsaw's "Pobierz" files).
 - Every candidacy ends the run `found` (a file a link names them in came down),
   `unconfirmed` (only files that name nobody came down: the OCR step has to
   find the person in them), or `not_found` with a reason: `no_seed`,
