@@ -109,6 +109,10 @@ class Seeker:
     form: str = ""
     own: tuple[str, ...] = ()
     declined: str = ""
+    #: The surname as the list spells it, a double one whole, for a search box
+    #: that wants whole words ("Mendelewska", not the stem "mendelewsk":
+    #: `liferay`).
+    surname: str = ""
 
     @classmethod
     def of(
@@ -132,7 +136,17 @@ class Seeker:
         )
         # A woman's Stolarek does not decline: "Anny Stolarek".
         declined = "" if fold(first_name).endswith("a") else _declined(folded)
-        return cls(key, stem(first_name, min_a=4), stem(longest), form, own, declined)
+        # "Malinowska - Grupińska" as "Malinowska-Grupińska".
+        surname = re.sub(r"\s*-\s*", "-", " ".join((last_name or "").split()))
+        return cls(
+            key,
+            stem(first_name, min_a=4),
+            stem(longest),
+            form,
+            own,
+            declined,
+            surname,
+        )
 
     @property
     def name(self) -> tuple[str, str]:
@@ -787,6 +801,7 @@ def candidates(
     first_names: frozenset[str] = frozenset(),
     lender: tuple[str, str] | None = None,
     declared: bool = False,
+    owner: str = "",
 ) -> list[Candidate]:
     """Document links on one page that name one of the seekers, or that name nobody.
 
@@ -801,6 +816,8 @@ def candidates(
     whole council, or labels like "za 2023") come back with an empty ``key``.
     A file in the site's menus, header, footer or sidebars (``frame``) is
     nobody's by where it stands: only its own words make it somebody's.
+    ``owner`` is the one filer the page's fields name (`person_page`): when
+    nobody sought, their files are nobody else's either.
     """
     title = fold(page_title)
     in_title, namesake_titled = _named(title, "", seekers, [page_title], first_names)
@@ -827,8 +844,15 @@ def candidates(
     # A page about one person nobody seeks ("... - B. Kułacz - Stan majątkowy na
     # 31.12.2025 r."): its files are theirs, whatever the labels say. Unless a
     # seeker could be that person in a form named_in misses ("J. Kaczmarka").
+    # Or a page whose "Imię"/"Nazwisko" fields name its one filer
+    # (``owner``, `person_page`), nobody the walk seeks, and no link saying a
+    # seeker's declaration led to: bip.warszawa.pl's declaration pages are
+    # each one person's, and a district's councillors the walk found nothing
+    # for were given another filer's files, labelled "Pobierz"
+    # (skurska_jadwiga_coroczne_2025.pdf), as nobody's (11-13).
     title_somebody = not title_names and (
         namesake_titled
+        or (bool(owner) and lender is None)
         or any(
             not _could_be(seekers, initial, word)
             for initial, word in initialled_names(page_title)
