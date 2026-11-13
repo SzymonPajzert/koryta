@@ -452,15 +452,23 @@ describe("queueCampaign", () => {
 
   it("says how many messages wait, and how many more go out today", async () => {
     const campaign = await draft();
-    const released = (key: string, iso: string) =>
+    // As the extension records a message it took up: campaign mail when its
+    // batch let it out, anything else as soon as it was written.
+    const sent = (key: string, iso: string) =>
       store.set(`mail/${key}`, {
-        delivery: { state: "SUCCESS" },
-        released_at: new Timestamp(Date.parse(iso)),
+        delivery: {
+          state: "SUCCESS",
+          startTime: new Timestamp(Date.parse(iso)),
+        },
       });
     // Mailgun's day starts at midnight UTC: yesterday's does not count.
-    released("x", "2026-10-09T07:00:00Z");
-    released("y", "2026-10-09T11:59:00Z");
-    released("z", "2026-10-08T23:59:00Z");
+    sent("campaign_old_x", "2026-10-09T07:00:00Z");
+    sent("campaign_old_y", "2026-10-09T11:59:00Z");
+    sent("campaign_old_z", "2026-10-08T23:59:00Z");
+    // Mail that is never held counts too: Mailgun's 100 a day cover
+    // everything the site sends.
+    sent("revisionApproved_r1", "2026-10-09T08:00:00Z");
+    sent("newsletterConfirmation_n1", "2026-10-09T09:00:00Z");
 
     const { queue } = await queueCampaign(db, {
       campaign,
@@ -471,9 +479,11 @@ describe("queueCampaign", () => {
       siteUrl: "https://koryta.pl",
       now: NOW,
     });
-    expect(queue).toEqual({ waiting: 2, leftToday: 88 });
+    expect(queue).toEqual({ waiting: 2, leftToday: 86 });
 
-    for (let i = 0; i < 90; i++) released(`spent${i}`, "2026-10-09T10:00:00Z");
+    for (let i = 0; i < 86; i++) {
+      sent(`revisionApproved_spent${i}`, "2026-10-09T10:00:00Z");
+    }
     expect(await campaignQueue(db, NOW)).toEqual({ waiting: 2, leftToday: 0 });
   });
 });
