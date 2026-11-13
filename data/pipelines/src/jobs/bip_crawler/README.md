@@ -193,6 +193,52 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   there, so a second run on the same directory refuses to start
   (`.crawl.lock`).
 
+### `walk`, `page` and `files`: a change tried before a chunk takes it
+
+`walk` searches a few units as a chunk would, with the code of the checkout it
+runs from, and keeps nothing (`walk.py`): no Postgres, no shared cache, its
+files in a scratch folder unless `--out` keeps them. `page` reads one page as
+a unit's walk would, and `files` opens what a walk kept (`inspect.py`). All
+three ask the hosts as a chunk does: identity, robots.txt and its exceptions,
+the rate.
+
+```bash
+koryta_scrape_bip walk 021203 --list people.jsonl --max-unit-minutes 6
+koryta_scrape_bip walk 021203 --start https://bip.lwowekslaski.pl/   # a unit_starts.csv row
+koryta_scrape_bip walk 021203 --trace           # a line a page read, and a line a refusal
+koryta_scrape_bip walk 160302 --as-browser bip.x.pl --pass-robots bip.y.pl
+koryta_scrape_bip walk 021203 --out /tmp/w --json /tmp/w/report.json
+koryta_scrape_bip files /tmp/w/report.json      # whose declaration each credited file is
+koryta_scrape_bip page https://bip.x.pl/oswiadczenia --unit 021203 --led --grep kowalsk
+```
+
+- `--trace` prints each page read (its number, depth, whether a link saying
+  declarations led there, the candidates it gave, the declaration pages so
+  far) and each answer that kept something from the walk: robots.txt, a host
+  that did not answer for it, a refusal, "not now" (429, 503: the host
+  paused), any other error status.
+- `--start`/`--declarations`, `--as-browser HOST|IP`, `--pass-robots HOST` and
+  `--pass-robots-files HOST` try a row of `unit_starts.csv`, an entry of
+  `identity.py` (a host, or every host on a server address) and one of
+  `robots_exceptions.py` (`SITES`, `FILES`) for that walk alone, before it goes
+  in the file. They are for the entries Szymon's rules allow (11-01: a BIP that
+  keeps public declarations from the crawler's own User-Agent; 11-02: robots.txt
+  that forbids the files open pages link, or admits search engines alone), never
+  to get past a bot check.
+- `files` reads the report of a walk run with `--out` and `--json`: for each
+  credited file that came down, its kind and pages, the declarant its text
+  layer names on the form's first lines (as `bip_declarations` reads it) and
+  whether that is the seeker, and for a scan a picture of page 1's top, beside
+  a copy of the file in `OUT/files`. A credited file is only good when it is
+  the seeker's asset declaration: a walk of Lwówek credited "rodo.pdf", a
+  data-protection notice, to three councillors (11-13).
+- `page URL --unit U` prints the page's title, each link with its row, heading
+  and menu path, what the walk does with it (follows it at a score, a file, or
+  leaves it), whom each file credits, and what the download would take for
+  each of the unit's candidacies, or why nothing: "why did this page not
+  credit X" in one call. `--led` reads it as a page a declarations link led
+  to, `--render` draws it in Chromium where the walk would.
+
 ### `found`
 
 Write the candidacies the people mode found a declaration for (status found,

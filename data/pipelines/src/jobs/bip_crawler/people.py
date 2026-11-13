@@ -229,6 +229,19 @@ class UnitSearch:
     opened: Counter[tuple[str, str]] = field(default_factory=Counter)
 
 
+@dataclass(frozen=True)
+class PageView:
+    """What a walk made of one page (`PeopleSearch._read_page`), for
+    `koryta_scrape_bip page`: its title, the links candidates() read, the
+    links it follows, and what a declarations page's own links score above
+    the rest (`DECLARATIONS_BONUS`)."""
+
+    title: str
+    links: list[LinkContext]
+    follow: list[LinkContext]
+    bonus: float
+
+
 #: Hosts no unit's BIP lives on, though a unit's website may link to them.
 _NOT_A_UNITS_BIP = frozenset(
     {"bip.gov.pl", "gov.pl", "epuap.gov.pl", "obywatel.gov.pl", "biznes.gov.pl"}
@@ -648,6 +661,7 @@ class PeopleSearch:
         first_names: frozenset[str] = frozenset(),
         resolve: Callable[[str], str] = lambda host: host,
         agents: Callable[[str], str] | None = None,
+        trace: Callable[[str], None] | None = None,
     ) -> None:
         self.people_store = people_store
         self.bip_queue = bip_queue
@@ -710,9 +724,29 @@ class PeopleSearch:
         #: Hosts whose render asked for more than `RENDER_TURNS` requests: their
         #: pages are read as their HTML for the rest of the run.
         self._render_off: set[str] = set()
+        #: Told a line for each page a walk reads and each answer that kept
+        #: something from it (`walk --trace`): where a walk went, and what
+        #: stopped it, without patching this class.
+        self.trace = trace
+        #: The unit the calling thread searches, for those lines.
+        self._here = threading.local()
+
+    def _tell(self, line: str) -> None:
+        if self.trace is not None:
+            unit = getattr(self._here, "unit", "")
+            self.trace(f"{unit} {line}" if unit else line)
 
     def _past_deadline(self) -> bool:
         return self.deadline is not None and self.clock() > self.deadline
+
+    def _kept_out(self, url: str) -> str:
+        """ROBOTS or UNREACHABLE when robots.txt keeps the crawler from ``url``
+        (UNREACHABLE when the host did not even answer for it), "" otherwise."""
+        if self.robots_allowed(url):
+            return ""
+        no = UNREACHABLE if self.robots_unreachable(url) else ROBOTS
+        self._tell(f"{no}: {url}")
+        return no
 
     # -- one request -----------------------------------------------------------
     def _get(self, url: str, tries: int = NOT_NOW_TRIES) -> HttpResult | str:
@@ -726,8 +760,8 @@ class PeopleSearch:
         Redirects are followed one hop at a time, `MAX_HOPS` at most.
         """
         for _ in range(MAX_HOPS + 1):
-            if not self.robots_allowed(url):
-                return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
+            if no := self._kept_out(url):
+                return no
             result = self._ask(
                 url,
                 functools.partial(
@@ -743,14 +777,21 @@ class PeopleSearch:
             if not (result.location and 300 <= result.status < 400):
                 break
             url = urljoin(result.url, result.location)
-        return REFUSED if _refused(result) else result
+        return self._refusal(result)
+
+    def _refusal(self, result: HttpResult) -> HttpResult | str:
+        """REFUSED for an answer that refuses the crawler (`_refused`), else it."""
+        if not _refused(result):
+            return result
+        self._tell(f"{REFUSED}: {result.url}")
+        return REFUSED
 
     def _post(self, url: str, payload: Payload) -> HttpResult | str:
         """An API call (`finn`, `sisco`), asked as `_get` asks for a page: robots.txt,
         which says the same of any method, the host's rate and its "not now"s;
         no redirect followed."""
-        if not self.robots_allowed(url):
-            return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
+        if no := self._kept_out(url):
+            return no
         call = functools.partial(
             self.post,
             url,
@@ -759,7 +800,7 @@ class PeopleSearch:
             self.agents(host_of(url)),
         )
         result = self._ask(url, call, NOT_NOW_TRIES)
-        return REFUSED if _refused(result) else result
+        return self._refusal(result)
 
     def _ask(
         self, url: str, request: Callable[[], HttpResult], tries: int
@@ -770,12 +811,23 @@ class PeopleSearch:
         for _ in range(max(1, tries)):
             self._wait_turn(host)
             result = request()
+            if self.trace is not None and not 200 <= result.status < 400:
+                self._tell_answer(url, result)
             if result.status not in _NOT_NOW:
                 break
             self.limiter.pause(host, NOT_NOW_PAUSE_S)
             if self._past_deadline():
                 break
         return result
+
+    def _tell_answer(self, url: str, result: HttpResult) -> None:
+        """The trace's line for an answer that is no page: its status (or that
+        none came, and why), and for a "not now" the pause that follows."""
+        said = f"{result.status}" if result.status else "no answer"
+        why = f" ({result.error[:80]})" if result.error else ""
+        if result.status in _NOT_NOW:
+            why += f", not now: {host_of(url)} paused {NOT_NOW_PAUSE_S:.0f} s"
+        self._tell(f"{said}: {url}{why}")
 
     def _wait_turn(self, host: str) -> None:
         while not self.limiter.acquire(host):
@@ -788,8 +840,8 @@ class PeopleSearch:
         fetched. A host's first page tells which it is."""
         for app in self._apps:
             if app.knows(url):
-                if not self.robots_allowed(url):
-                    return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
+                if no := self._kept_out(url):
+                    return no
                 page = app.page(url)
                 return self._get(url) if page is None else page
         result = self._get(url)
@@ -1040,17 +1092,14 @@ class PeopleSearch:
                 unread += 1
                 unread_in_a_row += 1
                 if unread_in_a_row >= NOT_NOW_IN_A_ROW:
+                    self._tell(f"stopped: {unread_in_a_row} pages in a row not now")
                     stopped = True
                     break
                 continue
             unread_in_a_row = 0
             requests += 1
-            if not result.ok or len(result.content) > self.options.max_doc_bytes:
-                down += result.status == 0
-                out.pages += 1
-                continue
-            if not self._is_page(result):
-                out.files[url] = result  # a file behind a page-like link
+            down += result.status == 0
+            if self._unread(out, url, result):
                 continue
             out.read.add(url)
             self._read_page(
@@ -1085,9 +1134,22 @@ class PeopleSearch:
         slash, and AkcessNet's "Disallow: /index.php?job=rejestr" and "/admin/"
         passed that way."""
         linked = frontier.linked.get(url)
-        if not linked or self.robots_allowed(linked):
-            return ""
-        return UNREACHABLE if self.robots_unreachable(linked) else ROBOTS
+        return self._kept_out(linked) if linked else ""
+
+    def _unread(self, out: UnitSearch, url: str, result: HttpResult) -> bool:
+        """Whether an answer is no page to read: an error or a page too large
+        (each a page of the budget), or a file behind a page-like link, kept
+        for the download."""
+        if not result.ok or len(result.content) > self.options.max_doc_bytes:
+            out.pages += 1
+            if result.ok:
+                self._tell(f"too large, {len(result.content):,} bytes: {url}")
+            return True
+        if not self._is_page(result):
+            out.files[url] = result
+            self._tell(f"a file, not a page: {url}")
+            return True
+        return False
 
     def _platform_links(
         self, result: HttpResult, links: list[LinkContext], seekers: list[Seeker]
@@ -1149,12 +1211,13 @@ class PeopleSearch:
         prefer: re.Pattern[str] | None = None,
         led: bool = False,
         lender: tuple[str, str] | None = None,
-    ) -> None:
+    ) -> PageView:
         """Read one page: its candidates, and its links queued. ``led``: a link
         that says declarations led here (`_Frontier.declared`); ``lender``: the
         one seeker whose declaration it said (`_Frontier.lenders`)."""
         out.pages += 1
         out.pages_ok += 1
+        before = len(out.found)
         if depth == 0:
             # A start page that redirected elsewhere brings its host into scope.
             frontier.adopt(host_of(result.url))
@@ -1228,13 +1291,35 @@ class PeopleSearch:
         self._read_wrota(out, result, seekers, prefer)
         self._read_sisco(out, result, title, seekers)
         self._read_bipinfo(out, result, seekers, prefer)
+        # Gdańsk's pages are all titled alike: its councillors' list for a
+        # year, reached from "Oświadczenia - 2024 rok", said nothing of
+        # declarations, and its links ranked below every menu (11-01).
+        says = led or DECLARATION.search(folded_title + " " + fold(where))
+        bonus = DECLARATIONS_BONUS if says else 0.0
         if depth < self.options.max_depth:
-            # Gdańsk's pages are all titled alike: its councillors' list for a
-            # year, reached from "Oświadczenia - 2024 rok", said nothing of
-            # declarations, and its links ranked below every menu (11-01).
-            says = led or DECLARATION.search(folded_title + " " + fold(where))
-            bonus = DECLARATIONS_BONUS if says else 0.0
             frontier.follow(follow, seekers, depth + 1, prefer, bonus, result.url)
+        self._tell_page(out, out.found[before:], result.url, depth, led, lender)
+        return PageView(title, links, follow, bonus)
+
+    def _tell_page(
+        self,
+        out: UnitSearch,
+        new: list[Candidate],
+        url: str,
+        depth: int,
+        led: bool,
+        lender: tuple[str, str] | None,
+    ) -> None:
+        """The trace's line for a page read: its number, its depth, whether a
+        link saying declarations led there and whose, the candidates it gave."""
+        if self.trace is None:
+            return
+        how = (" led" if led else "") + (f" for {' '.join(lender)}" if lender else "")
+        named = sum(1 for c in new if c.key)
+        self._tell(
+            f"page {out.pages} depth {depth}{how}: +{len(new)} candidates "
+            f"({named} named), {out.declaration_pages} declaration pages: {url}"
+        )
 
     def _read_eurzad(
         self,
@@ -1364,6 +1449,8 @@ class PeopleSearch:
         host = host_of(url)
         self._wait_turn(host)
         drawn, asked = self.render(url)
+        said = drawn.error[:80] or drawn.status
+        self._tell(f"rendered ({said}), {asked} more requests to {host}: {url}")
         if asked > RENDER_TURNS:
             self._render_off.add(host)
             logger.warning(
@@ -1431,6 +1518,7 @@ class PeopleSearch:
         past the deadline before it starts (its candidacies stay pending)."""
         if self._past_deadline():
             return None
+        self._here.unit = unit
         try:
             return self._search_and_record(unit, rows)
         except Exception:  # noqa: BLE001 - one unit's surprise is not the run's
@@ -1444,19 +1532,7 @@ class PeopleSearch:
             return {r.key: "not_found:error" for r in rows}
 
     def _search_and_record(self, unit: str, rows: list[PersonRow]) -> dict[str, str]:
-        seekers = [
-            Seeker.of(
-                r.key,
-                r.first_name,
-                r.last_name,
-                str(r.person.get("middle_name") or ""),
-            )
-            for r in rows
-        ]
-        prefer = office_terms(
-            (str(r.person.get("office") or "") for r in rows),
-            (str(r.person.get("unit_name") or "") for r in rows),
-        )
+        seekers, prefer = seekers_of(rows)
         search = self.search_unit(unit, seekers, prefer)
         # A link the walk read as a page is no file: Grójec's year pages name the
         # councillor in full, the PDF on each only by its surname, and choose()
@@ -1614,6 +1690,27 @@ class PeopleSearch:
         return dict(sorted(counts.items()))
 
 
+def seekers_of(rows: list[PersonRow]) -> tuple[list[Seeker], re.Pattern[str] | None]:
+    """A unit's candidacies as the walk seeks them, and the words naming their
+    own council and offices (`office_terms`)."""
+    seekers = [
+        Seeker.of(
+            r.key, r.first_name, r.last_name, str(r.person.get("middle_name") or "")
+        )
+        for r in rows
+    ]
+    prefer = office_terms(
+        (str(r.person.get("office") or "") for r in rows),
+        (str(r.person.get("unit_name") or "") for r in rows),
+    )
+    return seekers, prefer
+
+
+def first_names_of(people: list[PersonRow]) -> frozenset[str]:
+    """Every candidacy's first name as a stem (`PeopleSearch.first_names`)."""
+    return frozenset(stem(p.first_name, min_a=4) for p in people if p.first_name)
+
+
 def _one_hop(url: str, timeout: float, user_agent: str) -> HttpResult:
     """A GET whose redirect `PeopleSearch._get` follows, robots.txt asked first."""
     return http_get(url, timeout, user_agent, follow=False)
@@ -1713,12 +1810,14 @@ def people_search(
     agents: Callable[[str], str] | None,
     user_agent: str,
     starts: list[dict[str, str]] | None = None,
+    trace: Callable[[str], None] | None = None,
 ) -> Iterator[PeopleSearch]:
     """A search set up as ``args`` say: the units' starts, the walk's options,
     the known URLs and the renderer, which closes when the block ends. A chunk
     (`run_people_mode`) and `walk` both search through it, so a walk shows what
     a chunk would do. ``starts`` are rows as in unit_starts.csv, put over its
-    own: a walk tries an address before it goes in the file."""
+    own: a walk tries an address before it goes in the file. ``trace`` is told
+    each page read and each refusal (`PeopleSearch.trace`)."""
     seeds, source, checked = load_seeds(
         ctx, args.xml_cache, getattr(args, "refresh_registry", False)
     )
@@ -1773,11 +1872,10 @@ def people_search(
             known=known,
             render=renderer.render if renderer else None,
             unit_sizes=Counter(p.unit for p in people),
-            first_names=frozenset(
-                stem(p.first_name, min_a=4) for p in people if p.first_name
-            ),
+            first_names=first_names_of(people),
             resolve=server_of,
             agents=agents,
+            trace=trace,
         )
     finally:
         if renderer:

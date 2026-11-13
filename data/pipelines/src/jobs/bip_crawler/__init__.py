@@ -22,7 +22,16 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from jobs.bip_crawler import found, reset, robots_exceptions, sent, signers, state, walk
+from jobs.bip_crawler import (
+    found,
+    inspect,
+    reset,
+    robots_exceptions,
+    sent,
+    signers,
+    state,
+    walk,
+)
 from jobs.bip_crawler.coordinator import BipCoordinator, CoordinatorOptions
 from jobs.bip_crawler.identity import Agents
 from jobs.bip_crawler.people import run_people_mode, server_of
@@ -479,9 +488,45 @@ def add_sent_parser(sub: argparse._SubParsersAction) -> None:
     sent_cmd.set_defaults(func=sent.cmd_sent)
 
 
+def add_exception_args(group: argparse._ActionsContainer) -> None:
+    """The identity and robots.txt exceptions a `walk` or a `page` tries for
+    itself alone (`walk.access`), before one goes in identity.py or
+    robots_exceptions.py; Szymon's rules of 11-01 and 11-02 say which may."""
+    group.add_argument(
+        "--as-browser",
+        action="append",
+        default=None,
+        metavar="HOST|IP",
+        help="ask this host, or every host on this server address, as a browser "
+        "(identity.BROWSER_AGENT), as an entry in identity.py would (again for "
+        "several): only a BIP that keeps public declarations from the crawler's "
+        "own User-Agent (11-01); never to get past a bot check such as "
+        "Cloudflare's challenge",
+    )
+    group.add_argument(
+        "--pass-robots",
+        action="append",
+        default=None,
+        metavar="HOST",
+        help="let any page of this host past its robots.txt, as an entry in "
+        "robots_exceptions.SITES would (again for several): only a BIP whose "
+        "robots.txt admits search engines alone or no crawler at all (11-02, b)",
+    )
+    group.add_argument(
+        "--pass-robots-files",
+        action="append",
+        default=None,
+        metavar="HOST",
+        help="let this host's file links past its robots.txt, as an entry in "
+        "robots_exceptions.FILES would (again for several): only where "
+        "robots.txt forbids the files its open pages link (11-02, a)",
+    )
+
+
 def add_walk_parsers(sub: argparse._SubParsersAction) -> None:
     """`walk` and `plan` (`walk.py`): try the people mode on a few units, and
-    size a chunk, without touching what the crawl keeps."""
+    size a chunk, without touching what the crawl keeps; `page` and `files`
+    (`inspect.py`): one page as a walk reads it, and the files a walk kept."""
     # Beside the crawl's own files, as run_chunk.sh finds them.
     crawl_out = _crawl_out()
     walk_cmd = sub.add_parser(
@@ -526,8 +571,18 @@ def add_walk_parsers(sub: argparse._SubParsersAction) -> None:
         "--out",
         type=Path,
         default=None,
-        help="keep the downloaded files here (default: a scratch folder, deleted)",
+        help="keep the downloaded files here (default: a scratch folder, deleted); "
+        "with --json, `files` opens them",
     )
+    walk_cmd.add_argument(
+        "--trace",
+        action="store_true",
+        help="print a line for each page read (its number, depth, whether a "
+        "declarations link led there, the candidates it gave, the declaration "
+        "pages so far) and each answer that kept something from the walk: "
+        "robots.txt, a refusal, 'not now', an error status",
+    )
+    add_exception_args(walk_cmd)
     walk_cmd.add_argument(
         "--stacks",
         type=float,
@@ -559,6 +614,66 @@ def add_walk_parsers(sub: argparse._SubParsersAction) -> None:
         "--top", type=int, default=15, help="units listed, most candidacies first"
     )
     plan.set_defaults(func=walk.cmd_plan)
+
+    page = sub.add_parser(
+        "page",
+        help="read one page as a unit's walk would: its links, what each scores, "
+        "and what it credits the unit's candidacies with",
+    )
+    page.add_argument("url", help="the page's address")
+    page.add_argument(
+        "--unit", required=True, help="the unit (TERYT) whose candidacies it seeks"
+    )
+    page.add_argument(
+        "--person",
+        default=None,
+        help="only the candidacies whose name holds this (case and diacritics ignored)",
+    )
+    page.add_argument(
+        "--led",
+        action="store_true",
+        help="as a page a link saying declarations led to (the walk's 'led')",
+    )
+    page.add_argument(
+        "--render",
+        action="store_true",
+        help="draw the page in headless Chromium when the walk would",
+    )
+    page.add_argument(
+        "--grep", default=None, help="only the links whose words or address match"
+    )
+    page.add_argument("--list", type=Path, default=None, help=_LIST_HELP)
+    page.add_argument(
+        "--ca-bundle", type=Path, default=crawl_out / "tls" / "ca-bundle.pem"
+    )
+    add_exception_args(page)
+    page.set_defaults(func=inspect.cmd_page)
+
+    files = sub.add_parser(
+        "files",
+        help="open the files a walk kept (walk --out DIR --json REPORT): their "
+        "pages and whose declaration each says it is",
+    )
+    files.add_argument("report", type=Path, help="the walk's --json")
+    files.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="where the walk kept them (default: the report's --out)",
+    )
+    files.add_argument(
+        "--to",
+        type=Path,
+        default=None,
+        help="where to put each file and a picture of a scan's top (default: "
+        "OUT/files)",
+    )
+    files.add_argument(
+        "--person",
+        default=None,
+        help="only the candidacies whose name holds this (case and diacritics ignored)",
+    )
+    files.set_defaults(func=inspect.cmd_files)
 
 
 def build_parser() -> argparse.ArgumentParser:
