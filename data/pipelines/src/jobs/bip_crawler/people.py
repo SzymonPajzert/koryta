@@ -35,7 +35,8 @@ nothing of the candidacy but that, by its key:
 Politeness is the blind crawl's: robots.txt, one request per host per
 ``--rate`` seconds, the same User-Agent and fetch. Madkom's BIPs and Gdynia's
 um-bip app are read through the API their pages are drawn from (``madkom``,
-``umbip``), FINN's registers
+``umbip``), so are those of bip.info.pl's Angular app, a declarations list's
+articles opened for the seekers alone (``bipinfo``), FINN's registers
 through the JSON-RPC calls of the e-Urząd app their pages embed (``finn``),
 Wrota Lubelszczyzny's document lists through the JSON their pages are drawn
 from (``wrota``), SISCO eDc's attachment tables through the call their pages'
@@ -86,6 +87,7 @@ from jobs.bip_crawler import (
     zeto,
 )
 from jobs.bip_crawler import render as rendering
+from jobs.bip_crawler.bipinfo import BipInfo
 from jobs.bip_crawler.identity import Agents
 from jobs.bip_crawler.madkom import Madkom, search_base, search_url
 from jobs.bip_crawler.people_list import (
@@ -602,7 +604,8 @@ def load_known_urls(path: Path) -> dict[str, list[str]]:
 
 class _DrawnApp(Protocol):
     """A BIP app whose pages the walk draws from the API they are drawn from
-    (`madkom.Madkom`, `umbip.UmBip`): a host's first page probes it."""
+    (`madkom.Madkom`, `umbip.UmBip`, `bipinfo.BipInfo`): a host's first page
+    probes it."""
 
     def knows(self, url: str) -> bool: ...
 
@@ -694,7 +697,9 @@ class PeopleSearch:
         self.madkom = Madkom(self._get, robots_allowed)
         #: Gdynia's um-bip, read through the API its pages are drawn from.
         self.umbip = umbip.UmBip(self._get)
-        self._apps: tuple[_DrawnApp, ...] = (self.madkom, self.umbip)
+        #: bip.info.pl's Angular BIPs, read through theirs.
+        self.bipinfo = BipInfo(self._get, robots_allowed)
+        self._apps: tuple[_DrawnApp, ...] = (self.madkom, self.umbip, self.bipinfo)
         #: FINN's registers, read through the e-Urząd app their pages embed.
         self.eurzad = finn.Eurzad(self._post)
         #: Wrota Lubelszczyzny's document lists, read through their JSON.
@@ -777,9 +782,10 @@ class PeopleSearch:
             self.sleep(max(0.05, self.limiter.next_available_in(host)))
 
     def _get_page(self, url: str) -> HttpResult | str:
-        """A page of the walk: on a Madkom BIP or Gdynia's um-bip drawn from
-        its API (`madkom`, `umbip`), at a call or two instead of a render's
-        dozen; elsewhere fetched. A host's first page tells which it is."""
+        """A page of the walk: on a Madkom BIP, Gdynia's um-bip or one of
+        bip.info.pl's Angular apps drawn from its API (`madkom`, `umbip`,
+        `bipinfo`), at a call or two instead of a render's dozens; elsewhere
+        fetched. A host's first page tells which it is."""
         for app in self._apps:
             if app.knows(url):
                 if not self.robots_allowed(url):
@@ -1083,36 +1089,13 @@ class PeopleSearch:
             return ""
         return UNREACHABLE if self.robots_unreachable(linked) else ROBOTS
 
-    def _read_page(
-        self,
-        out: UnitSearch,
-        result: HttpResult,
-        depth: int,
-        frontier: _Frontier,
-        seekers: list[Seeker],
-        prefer: re.Pattern[str] | None = None,
-        led: bool = False,
-        lender: tuple[str, str] | None = None,
-    ) -> None:
-        """Read one page: its candidates, and its links queued. ``led``: a link
-        that says declarations led here (`_Frontier.declared`); ``lender``: the
-        one seeker whose declaration it said (`_Frontier.lenders`)."""
-        out.pages += 1
-        out.pages_ok += 1
-        if depth == 0:
-            # A start page that redirected elsewhere brings its host into scope.
-            frontier.adopt(host_of(result.url))
-        # A frameset is a redirect too: Świdnica's BIP, www.bip.um.swidnica.pl,
-        # is one <frame> of bip.swidnica.nv.pl (11-05: one page read, nothing).
-        for frame in _frames(result.content, result.url):
-            frontier.adopt(host_of(frame))
-            frontier.add(normalize_url(frame), 100.0, depth, frame)
-        title, links = extract_link_contexts(
-            result.content, result.url, result.content_type
-        )
-        # A person's page that names them in a field alone (`person_page`):
-        # the title carries the name, a drawn page's title too (below).
-        who = person_page.name(result.content)
+    def _platform_links(
+        self, result: HttpResult, links: list[LinkContext], seekers: list[Seeker]
+    ) -> tuple[list[LinkContext], str]:
+        """A page's links as its platform means them: files offered as form
+        buttons or drawn from JSON, search forms asked for each seeker, files
+        under their person's or their card's label; and the page's breadcrumb,
+        which ``links``' files carry when only it says declarations (`zeto`)."""
         # Files offered as form buttons, under the position's name (`softres`).
         links = links + softres.files(result.content, result.url)
         # Documents a Vue component draws from JSON, under the subject (`doclist`).
@@ -1154,10 +1137,43 @@ class PeopleSearch:
                 else x
                 for x in links
             ]
+        return links, where
+
+    def _read_page(
+        self,
+        out: UnitSearch,
+        result: HttpResult,
+        depth: int,
+        frontier: _Frontier,
+        seekers: list[Seeker],
+        prefer: re.Pattern[str] | None = None,
+        led: bool = False,
+        lender: tuple[str, str] | None = None,
+    ) -> None:
+        """Read one page: its candidates, and its links queued. ``led``: a link
+        that says declarations led here (`_Frontier.declared`); ``lender``: the
+        one seeker whose declaration it said (`_Frontier.lenders`)."""
+        out.pages += 1
+        out.pages_ok += 1
+        if depth == 0:
+            # A start page that redirected elsewhere brings its host into scope.
+            frontier.adopt(host_of(result.url))
+        # A frameset is a redirect too: Świdnica's BIP, www.bip.um.swidnica.pl,
+        # is one <frame> of bip.swidnica.nv.pl (11-05: one page read, nothing).
+        for frame in _frames(result.content, result.url):
+            frontier.adopt(host_of(frame))
+            frontier.add(normalize_url(frame), 100.0, depth, frame)
+        title, links = extract_link_contexts(
+            result.content, result.url, result.content_type
+        )
+        # A person's page that names them in a field alone (`person_page`):
+        # the title carries the name, a drawn page's title too (below).
+        who = person_page.name(result.content)
+        links, where = self._platform_links(result, links, seekers)
         follow = links
         if (
             self.render is not None
-            # A Madkom or um-bip page the API does not draw (a form, a
+            # A page of an app the API does not draw (a Madkom form, a
             # calculator) has nothing a render would show.
             and not any(app.knows(result.url) for app in self._apps)
             and host_of(result.url) not in self._render_off
@@ -1211,6 +1227,7 @@ class PeopleSearch:
         self._read_eurzad(out, result, seekers, prefer)
         self._read_wrota(out, result, seekers, prefer)
         self._read_sisco(out, result, title, seekers)
+        self._read_bipinfo(out, result, seekers, prefer)
         if depth < self.options.max_depth:
             # Gdańsk's pages are all titled alike: its councillors' list for a
             # year, reached from "Oświadczenia - 2024 rok", said nothing of
@@ -1281,6 +1298,33 @@ class PeopleSearch:
         out.declaration_pages += 1
         for document in self.wrota.documents(
             listing,
+            seekers,
+            prefer,
+            self.first_names,
+            self.options.per_person,
+            out.opened,
+        ):
+            out.found.extend(
+                candidates(
+                    document.url,
+                    document.title,
+                    list(document.links),
+                    seekers,
+                    first_names=self.first_names,
+                )
+            )
+
+    def _read_bipinfo(
+        self,
+        out: UnitSearch,
+        page: HttpResult,
+        seekers: list[Seeker],
+        prefer: re.Pattern[str] | None,
+    ) -> None:
+        """The articles of a bip.info.pl declarations list ``page`` is that may
+        be the seekers', each as a page of its own (`bipinfo`)."""
+        for document in self.bipinfo.documents(
+            page,
             seekers,
             prefer,
             self.first_names,
