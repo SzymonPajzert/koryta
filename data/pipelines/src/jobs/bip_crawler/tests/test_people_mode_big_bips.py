@@ -12,6 +12,8 @@ from collections import Counter
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 from jobs.bip_crawler import people as people_mode
 from jobs.bip_crawler.people import (
     DECLARATIONS_BONUS,
@@ -295,7 +297,16 @@ def test_a_known_page_starts_the_walk(tmp_path):
     assert store.outcomes["lis"].status == "found"
 
 
-def test_a_sitemap_leads_to_the_declarations(tmp_path):
+@pytest.mark.parametrize(
+    "sitemap",
+    [
+        "https://u1.pl/sitemap-index.xml",
+        # CONCEPT Intermedia's SAM3 (bip.powiat.olecko.pl, 11-13), read
+        # against the host: as written it reached none.
+        "/sitemap-index.xml",
+    ],
+)
+def test_a_sitemap_leads_to_the_declarations(tmp_path, sitemap):
     index = (
         "<sitemapindex><sitemap><loc>https://u1.pl/sm-news.xml</loc></sitemap>"
         "<sitemap><loc>https://u1.pl/sm-oswiadczenia.xml.gz</loc></sitemap>"
@@ -310,7 +321,7 @@ def test_a_sitemap_leads_to_the_declarations(tmp_path):
         "https://u1.pl/robots.txt": (
             200,
             "text/plain",
-            b"User-agent: *\nSitemap: https://u1.pl/sitemap-index.xml\n",
+            f"User-agent: *\nSitemap: {sitemap}\n".encode(),
         ),
         "https://u1.pl/sitemap-index.xml": (200, "application/xml", index.encode()),
         "https://u1.pl/sm-oswiadczenia.xml.gz": (

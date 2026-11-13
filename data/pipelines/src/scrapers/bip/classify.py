@@ -25,8 +25,16 @@ _DOC_PATTERNS = [
         r"(?:$|[?#])",
         re.IGNORECASE,
     ),
-    # Lesko's: /zalacznik/9565, the file's name only in its label (11-06).
-    re.compile(r"/zalacznik/\d+(?:$|[/?#])", re.IGNORECASE),
+    # Lesko's: /zalacznik/9565, the file's name only in its label (11-06);
+    # Żywiec's: /zalacznik/get/22517, application/octet-stream (11-13).
+    re.compile(r"/zalacznik/(?:get/)?\d+(?:$|[/?#])", re.IGNORECASE),
+    # CONCEPT Intermedia's SAM3 attachments, a PDF behind an address ending in
+    # .html: /Common/pobierzPlik/id/53981/module_short/port/.../pub.html (11-13).
+    re.compile(r"/Common/pobierzPlik/id/\d+", re.IGNORECASE),
+    # Joomla Phoca Download's, on its category page's own address:
+    # ?download=17628:kowalski-krzysztof, the colon %3A once normalised (11-13).
+    # Not Wrota's ?download=1, the same file asked for as a download.
+    re.compile(r"[?&]download=\d+(?::|%3A)", re.IGNORECASE),
     # Olsztyn's: /attachment/informacja/23871/<sha1>.html, a PDF (11-05).
     re.compile(r"/attachment/[a-z_-]+/\d+/[0-9a-f]{40}\.html(?:$|[?#])", re.IGNORECASE),
     # Strzegom's: /public/get_file.php?id=592024, /public/getFile?id=625335.
@@ -68,10 +76,24 @@ _DOC_CONTENT_TYPES = (
 )
 
 # Pages that never lead to documents and would eat the host's page budget.
+# SAM3's downloadZip is a ZIP of the page's attachments, each linked on its own
+# too. ESC's VelaBIP compares two versions of a page, /<page>/porownaj/2/1:
+# 3.7 MB each, 71 of 315 requests at Łaziska Górne (11-13), and the files on
+# them were taken for a declarations page's.
 _LOW_VALUE_RE = re.compile(
     r"/(?:banners?|view|tags?|search|szukaj|print|drukuj|rss|feed|login"
     r"|logowanie|polityka-prywatnosci|deklaracja-dostepnosci|mapa-strony"
-    r"|sitemap)(?:/|$|\?)",
+    r"|sitemap|downloadZip)(?:/|$|\?)"
+    r"|/porownaj/\d+/\d+(?:$|[?#])",
+    re.IGNORECASE,
+)
+
+# A viewer showing a file, not the file: AkcessNet links each file again as
+# docs.google.com/a/<host>/viewer?url=<file>.pdf, which comes down as a page
+# and took one of a councillor's three picks (11-13, powiat częstochowski).
+_VIEWER_RE = re.compile(
+    r"^https?://docs\.google\.com/(?:a/[^/?#]+/)?(?:viewer|viewerng/viewer|gview)"
+    r"(?:$|[?#/])",
     re.IGNORECASE,
 )
 
@@ -86,6 +108,8 @@ def is_html(content_type: str) -> bool:
 
 
 def is_document_url(url: str) -> bool:
+    if _VIEWER_RE.search(url):
+        return False
     return any(pattern.search(url) for pattern in _DOC_PATTERNS)
 
 

@@ -316,12 +316,22 @@ class _Frontier:
         """Queue a page's links to other pages; files are for the download.
         ``bonus`` lifts those a declarations page leads to, after the cut, so a
         section of tenders it links stays out (`DECLARATIONS_BONUS`)."""
+        # ESC's VelaBIP links a page's older versions, <page>/<n>, each beside
+        # a comparison with it, <page>/porownaj/<n>/<m> (`is_low_value_url`):
+        # copies of the page. A list's pages, /lista/<slug>/<n>, have none.
+        compared = {
+            m[1]
+            for x in links
+            if "/porownaj/" in x.url and (m := _COMPARE.match(normalize_url(x.url)))
+        }
         for link in links:
             target = normalize_url(link.url)
+            page, _, version = target.rpartition("/")
             if (
                 self.has(target)
                 or _is_file(target)
                 or is_low_value_url(target)
+                or (version.isdigit() and page in compared)
                 or not self.in_scope(target)
             ):
                 continue
@@ -348,6 +358,8 @@ class _Frontier:
 
 #: A link to a term's or a year's part of a declarations section.
 _TERM = re.compile(r"^\W*(?:(?:[ivx]+ )?kadencj\w*|rok|za)?\W*(?:19|20)\d\d\b|kadencj")
+#: ESC's VelaBIP comparing two versions of the page before "/porownaj".
+_COMPARE = re.compile(r"^(.+)/porownaj/\d+/\d+$")
 
 _FRAME = re.compile(rb"<frame\b[^>]*?\bsrc\s*=\s*[\"']?([^\"' >]+)", re.I)
 
@@ -777,7 +789,12 @@ class PeopleSearch:
         todo: list[str] = []
         if isinstance(robots, HttpResult) and robots.ok:
             text = robots.content.decode("utf-8", "replace")
-            todo = _SITEMAP.findall("\n".join(robots_lines(text)))
+            # CONCEPT Intermedia's SAM3 writes "Sitemap: /sitemap.xml": asked as
+            # written it reached no host, and nothing else was tried (11-13).
+            todo = [
+                urljoin(base + "/robots.txt", s)
+                for s in _SITEMAP.findall("\n".join(robots_lines(text)))
+            ]
         todo = todo or [base + "/sitemap.xml"]
         seen: set[str] = set()
         found: list[str] = []
@@ -797,7 +814,10 @@ class PeopleSearch:
                     body = gzip.decompress(body)
                 except (OSError, EOFError, zlib.error):
                     continue  # truncated or corrupt: as if unreadable
-            locs = [m.decode("utf-8", "replace") for m in _LOC.findall(body)]
+            locs = [
+                urljoin(result.url, m.decode("utf-8", "replace"))
+                for m in _LOC.findall(body)
+            ]
             if b"<sitemapindex" in body[:4000]:
                 todo = sorted(locs, key=lambda u: not _declaration_like(u)) + todo
             else:
@@ -843,6 +863,13 @@ class PeopleSearch:
                     link = LinkContext(target, "")
                     score = 50 + link_score(link, seekers, 1, prefer)
                     frontier.add(target, score, 1, url)
+                    # An address saying one seeker's declaration lends them its
+                    # page, as such a link does (`_Frontier.lenders`): Winnica's
+                    # SAM3 documents are all titled "Baza dokumentów", the
+                    # declaration their own "Pobierz plik" (11-13).
+                    said = LinkContext(target, url_words(target))
+                    if len(owners := declarants(said, seekers)) == 1:
+                        frontier.lenders[target] = owners.pop()
             found = [
                 c
                 for c in candidates(
