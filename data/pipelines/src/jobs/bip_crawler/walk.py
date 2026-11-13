@@ -13,7 +13,9 @@ would (`people.people_search`: the starts in unit_starts.csv, robots.txt and
 its exceptions, identity, sitemaps, the renderer, a host's rate), with the code
 of the checkout it runs from, into memory. The files go to a scratch folder,
 deleted at the end, and nothing reaches the crawl's Postgres, its bundles or
-the shared cache: it runs beside a chunk, from any workspace, and shows each
+the shared cache: it runs beside a chunk, from any workspace (several at once
+from one checkout with --list, which reads a saved copy of the list instead of
+restoring the newest into the checkout), and shows each
 candidacy's outcome and the files that named them before a chunk takes the
 unit. --start and --declarations try an address for the one unit walked, as a
 row in unit_starts.csv would, before it goes in the file. Known URLs
@@ -43,7 +45,12 @@ from conductor import setup_context
 from jobs.bip_crawler import robots_exceptions
 from jobs.bip_crawler.identity import Agents
 from jobs.bip_crawler.people import people_search, selected, server_of
-from jobs.bip_crawler.people_list import list_policy, outcomes, read_list
+from jobs.bip_crawler.people_list import (
+    list_policy,
+    outcomes,
+    read_list,
+    read_list_file,
+)
 from scrapers.common.fetch import use_ca_bundle
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import DocRow, PersonRow, with_outcomes
@@ -176,7 +183,7 @@ def cmd_walk(args: argparse.Namespace) -> int:
     use_ca_bundle(str(bundle) if bundle else None)
     print(f"certificates: {how}", flush=True)
     ctx, _ = setup_context(policy=list_policy())
-    people = read_list(ctx)
+    people = read_list_file(args.list) if args.list else read_list(ctx)
     rows = chosen(people, args.units, args.keys, args.person)
     if not rows:
         print("no candidacies on the list for those units, keys and names")
@@ -249,7 +256,7 @@ def _most(counts: Counter[str]) -> list[tuple[str, int]]:
 
 def cmd_plan(args: argparse.Namespace) -> int:
     ctx, _ = setup_context(policy=list_policy())
-    people = read_list(ctx)
+    people = read_list_file(args.list) if args.list else read_list(ctx)
     pg = PostgresClient.from_env(max_size=1)
     try:
         searched = read_searched(pg)

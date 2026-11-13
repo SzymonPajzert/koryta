@@ -413,6 +413,13 @@ def add_walk_args(group: argparse._ActionsContainer) -> None:
     )
 
 
+_LIST_HELP = (
+    "read the people of interest from this file (a saved copy of the night's "
+    "jsonl) instead of restoring the shared cache's newest into the checkout, "
+    "which walks side by side would each write over the others'"
+)
+
+
 def add_walk_parsers(sub: argparse._SubParsersAction) -> None:
     """`walk` and `plan` (`walk.py`): try the people mode on a few units, and
     size a chunk, without touching what the crawl keeps."""
@@ -457,6 +464,7 @@ def add_walk_parsers(sub: argparse._SubParsersAction) -> None:
     walk_cmd.add_argument(
         "--json", type=Path, default=None, help="also write the whole report here"
     )
+    walk_cmd.add_argument("--list", type=Path, default=None, help=_LIST_HELP)
     walk_cmd.add_argument(
         "--out",
         type=Path,
@@ -489,6 +497,7 @@ def add_walk_parsers(sub: argparse._SubParsersAction) -> None:
         "reads the crawl's Postgres, writes nothing",
     )
     add_selection_args(plan)
+    plan.add_argument("--list", type=Path, default=None, help=_LIST_HELP)
     plan.add_argument(
         "--top", type=int, default=15, help="units listed, most candidacies first"
     )
