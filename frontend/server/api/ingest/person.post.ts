@@ -1229,7 +1229,16 @@ async function lookupByNameAndJob(
         `its jobs (${holding.map((page) => page.id).join(", ")}); held`,
     );
   }
-  return holding[0];
+  const [page] = holding;
+  // Who the payload is was decided here, on one shared job, and the page's
+  // revision says only what was written: this says why.
+  if (page) {
+    console.info(
+      `[ingest] ${body.name} (${body.rejestrIo ?? "no entry"}): page ` +
+        `${page.id}, of an agreeing name, holds one of its jobs; taken`,
+    );
+  }
+  return page;
 }
 
 /** The page of the person of this name born on this day, if the site has it.
