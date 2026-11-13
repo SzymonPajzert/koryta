@@ -11,7 +11,9 @@
  * extension leaves alone, and the scheduled function `releaseCampaignMail`
  * (functions/src/mail.ts) hands them over a batch at a time. Everything else
  * the site mails - notifications, newsletter confirmations, the owner's tests -
- * is one message at a time and goes out at once.
+ * is one message at a time and goes out at once, so the batches make room for
+ * it: both limits below count every message handed to the extension, not only
+ * campaign mail.
  *
  * Pure, so the server that queues a campaign and the function that releases
  * it share one set of numbers.
@@ -23,7 +25,12 @@
  * sets PENDING. */
 export const HELD_STATE = "HELD";
 
-/** The most campaign messages handed over within `CAMPAIGN_BATCH_GAP_MS`:
+/** When a message was handed to the mail extension, which is what both limits
+ * count. The extension stamps it on every message it takes up, whatever sent
+ * it, and the release on every one it lets out; a held message has none. */
+export const HANDED_OVER_AT = "delivery.startTime";
+
+/** The most messages, of any kind, handed over within `CAMPAIGN_BATCH_GAP_MS`:
  * well under the 26 Mailgun let through in half a minute. */
 export const CAMPAIGN_BATCH_SIZE = 20;
 
@@ -32,9 +39,12 @@ export const CAMPAIGN_BATCH_SIZE = 20;
  * early still sends its batch. */
 export const CAMPAIGN_BATCH_GAP_MS = 50_000;
 
-/** The most campaign messages handed over in one UTC day. Mailgun's Free plan
- * sends 100 a day in all, and the rest is left for the mail that is never
- * held. Raise it with the plan. */
+/** Once this many messages of any kind - campaigns, notifications, newsletter
+ * confirmations, the owner's tests - have been handed over in a UTC day,
+ * campaign mail stops until the next. Mailgun's Free plan sends 100 a day in
+ * all; the 10 above this are kept for the mail that comes after a campaign has
+ * used the day up, which is never held, and which the extension would
+ * otherwise see refused and never try again. Raise it with the plan. */
 export const CAMPAIGN_DAILY_LIMIT = 90;
 
 /** Midnight UTC of the day `now` falls in, where Mailgun's daily count
@@ -45,17 +55,18 @@ export function utcDayStart(now: Date): Date {
   );
 }
 
-/** How many held messages may go now, given how many were handed over within
- * the last `CAMPAIGN_BATCH_GAP_MS` and since midnight UTC. */
-export function releaseRoom(released: {
+/** How many held messages may go now, given how many messages of any kind
+ * were handed over within the last `CAMPAIGN_BATCH_GAP_MS` and since midnight
+ * UTC. */
+export function releaseRoom(handedOver: {
   recently: number;
   today: number;
 }): number {
   return Math.max(
     0,
     Math.min(
-      CAMPAIGN_BATCH_SIZE - released.recently,
-      CAMPAIGN_DAILY_LIMIT - released.today,
+      CAMPAIGN_BATCH_SIZE - handedOver.recently,
+      CAMPAIGN_DAILY_LIMIT - handedOver.today,
     ),
   );
 }

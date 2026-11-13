@@ -397,13 +397,16 @@ accounts: the pilot first, then everybody else. The rules are in
 - **In batches** - a send writes every message with `delivery.state` HELD,
   which the extension leaves alone. `releaseCampaignMail`
   (`functions/src/mail.ts`) runs every minute and sets the next ones to
-  PENDING, which the extension sends: at most 20 within 50 seconds, and at
-  most 90 in a UTC day (`shared/campaignPacing.ts`). The pilot's 40 messages,
-  written at once, got 29 through and 11 refused by Mailgun ("recipient limit
-  (26) exceeded"), and the Free plan sends 100 a day for everything the site
-  mails. The send answers how many wait and how many more go today. Cloud
-  Functions are deployed by hand; until this one is, a campaign waits in
-  `mail` and nothing is lost:
+  PENDING, which the extension sends (`shared/campaignPacing.ts`). The pilot's
+  40 messages, written at once, got 29 through and 11 refused by Mailgun
+  ("recipient limit (26) exceeded"), and the Free plan sends 100 a day for
+  everything the site mails. So both limits count every message the extension
+  has taken up, campaign or not, by its `delivery.startTime`: at most 20 within
+  50 seconds, and campaign mail stops for the UTC day once 90 have gone. The
+  other 10 are kept for the notifications, newsletter confirmations and test
+  mails that come after, which are never held. The send answers how many wait
+  and how many more go today. Cloud Functions are deployed by hand; until this
+  one is, a campaign waits in `mail` and nothing is lost:
 
   ```bash
   firebase deploy --only functions:releaseCampaignMail --project koryta-pl

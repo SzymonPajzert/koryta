@@ -132,8 +132,20 @@ function hold(count: number, prefix = "held") {
 function releasedAt(count: number, when: Date, prefix = "out") {
   for (let i = 0; i < count; i++) {
     mail.set(`campaign_c_${prefix}${i}`, {
-      delivery: { state: "SUCCESS" },
+      delivery: { state: "SUCCESS", startTime: when },
       released_at: when,
+    });
+  }
+}
+
+/** Mail that is never held - revision notifications here - which the
+ * extension took up at `when`. */
+function notifiedAt(count: number, when: Date, prefix = "note") {
+  for (let i = 0; i < count; i++) {
+    mail.set(`revisionApproved_${prefix}${i}`, {
+      kind: "revisionApproved",
+      message: { subject: "Zmiana" },
+      delivery: { state: "SUCCESS", startTime: when },
     });
   }
 }
@@ -196,6 +208,25 @@ describe("releaseHeldMail", () => {
     expect(await releaseHeldMail(db, new Date("2026-11-14T00:00:30Z"))).toBe(
       15,
     );
+  });
+
+  it("counts every message the site sent today toward the day, not only campaign mail", async () => {
+    // Mailgun's 100 a day cover notifications, newsletter confirmations and
+    // test mails too.
+    notifiedAt(80, new Date("2026-11-13T09:00:00Z"));
+    releasedAt(5, new Date("2026-11-13T10:00:00Z"));
+    notifiedAt(30, new Date("2026-11-12T20:00:00Z"), "yesterday");
+    hold(20);
+
+    expect(await releaseHeldMail(db, NOW)).toBe(5);
+    expect(await releaseHeldMail(db, seconds(120))).toBe(0);
+  });
+
+  it("leaves room in a batch for other mail that just went out", async () => {
+    notifiedAt(15, seconds(-20));
+    hold(20);
+
+    expect(await releaseHeldMail(db, NOW)).toBe(5);
   });
 
   it("leaves every other message alone", async () => {
