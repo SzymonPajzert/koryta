@@ -12,6 +12,7 @@ param and the answer's ``result`` JSON in a string:
 - N=0, no params: the client's registers, ``[{symbol, nazwa}]``;
 - N=1, ``[symbol, "1000", page, "DEFAULT", {}]``: a register's records,
   ``{lista: [{id, temat, dataW, aktZal}], liczbaStron}``, a thousand a page;
+  some clients give each record's files with it (``zalaczniki``, below);
 - N=2, ``[id]``: one record, its files ``{zalaczniki: [{id, nazwa}]}``.
 
 A file comes down from ``/<client>/server/pobierz_rejestry_zalacznik/<id>``,
@@ -23,7 +24,10 @@ record's subject ("Oświadczenie majątkowe za 2025 rok radnej Anny
 Piotrowskiej") for its row, the register's name for the page's title. A record
 is opened, a call each, when it may be a seeker's (`entries_to_open`): its
 subject names one by first name too, the council's registers before the
-staff's, where the mayor stands.
+staff's, where the mayor stands. A record whose files came with the list
+needs no call, and their names stand in its subject (`subject`): Strzelin's
+473 records say "Oświadczenie majątkowe" and no more, each person in the
+file's name alone ("Dorota Pawnuk.pdf").
 """
 
 from __future__ import annotations
@@ -60,6 +64,7 @@ MAX_PAGES = 5
 Post = Callable[[str, dict[str, Any]], "HttpResult | str"]
 
 _CLIENT = re.compile(r"https?://eurzad\.finn\.pl/([A-Za-z0-9_-]+)")
+_EXTENSION = re.compile(r"\.(?:pdf|docx?|odt|rtf|xlsx?|ods|jpe?g|png|tiff?|zip)$", re.I)
 
 _T = TypeVar("_T")
 
@@ -73,6 +78,22 @@ def clients(content: bytes, url: str) -> list[str]:
         return []
     text = html.unescape(head.decode("utf-8", "replace")) + " " + url
     return list(dict.fromkeys(m.group(1) for m in _CLIENT.finditer(text)))
+
+
+def attachments(record: dict[str, Any]) -> list[dict[str, Any]]:
+    """The files an answer gives with a record, [] when it gives none."""
+    files = record.get("zalaczniki")
+    if not isinstance(files, list):
+        return []
+    return [z for z in files if isinstance(z, dict) and z.get("id") is not None]
+
+
+def subject(record: dict[str, Any]) -> str:
+    """What a record of a register's list says it is: its subject, and the
+    names of the files the list gave with it, which say whose a bare
+    "Oświadczenie majątkowe" is."""
+    names = [_EXTENSION.sub("", str(z.get("nazwa") or "")) for z in attachments(record)]
+    return " ".join(x for x in (str(record.get("temat") or ""), *names) if x)
 
 
 @dataclass(frozen=True)
@@ -166,13 +187,7 @@ class Eurzad:
 
         def load() -> list[dict[str, Any]] | None:
             data = self._call(client, 2, [record])
-            if not isinstance(data, dict):
-                return None
-            return [
-                z
-                for z in data.get("zalaczniki") or []
-                if isinstance(z, dict) and z.get("id") is not None
-            ]
+            return attachments(data) if isinstance(data, dict) else None
 
         return self._kept(self._files, (client, record), load) or []
 
@@ -198,18 +213,14 @@ class Eurzad:
             for record in self.records(client, str(register.get("symbol")))
         ]
         entries = [
-            Entry(
-                str(record.get("temat") or ""),
-                str(record.get("dataW") or ""),
-                council[k],
-                str(k),
-            )
+            Entry(subject(record), str(record.get("dataW") or ""), council[k], str(k))
             for k, record in rows
         ]
         links: dict[int, list[LinkContext]] = {k: [] for k in range(len(registers))}
         for i in entries_to_open(entries, seekers, first_names, per_person, opened):
             k, record = rows[i]
-            for z in self.files(client, str(record.get("id"))):
+            # The files the list gave with the record, or its own call's.
+            for z in attachments(record) or self.files(client, str(record.get("id"))):
                 links[k].append(
                     LinkContext(
                         f"{EURZAD}/{client}/server/pobierz_rejestry_zalacznik/{z['id']}",
