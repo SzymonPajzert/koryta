@@ -470,6 +470,13 @@ def office_terms(
     return re.compile(r"^(?!.*(?:^| )dzielnic)(?:.*? )?" + words)
 
 
+#: A ``download=`` that says which file, not how to send it: Phoca Download's
+#: ?download=17628:kowalski-krzysztof, each file of a category page on the
+#: page's address. Dropped, the council's files were one, and the first that
+#: came down was every councillor's (11-13, Olsztynek).
+_WHICH_DOWNLOAD = re.compile(r"download=\d+(?::|%3A)", re.I)
+
+
 def same_file(url: str) -> str:
     """A file however its address is spelt: http or https, with www. or without,
     asked for as a download or not (Wrota Lubelszczyzny links each file twice,
@@ -478,7 +485,8 @@ def same_file(url: str) -> str:
     kept = "&".join(
         pair
         for pair in query.split("&")
-        if pair and not pair.lower().startswith("download=")
+        if pair
+        and (not pair.lower().startswith("download=") or _WHICH_DOWNLOAD.match(pair))
     )
     clean = f"{base}?{kept}" if kept else base
     return host_of(clean) + path_of(clean)
