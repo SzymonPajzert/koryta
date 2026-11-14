@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "prosba-o-odczyt-skanow-na-stronie-osoby",
+    title: "Na stronie osoby prośba o odczytanie kilku skanów oświadczeń",
+    description:
+      "Pod „Historią powiązań” niezalogowany czytelnik widzi, ile osób opublikowały w 30 dni odczyty czytelników, i przycisk „Odczytaj skany” do /oswiadczenia. Na stronie opublikowanej dzięki odczytom tytuł brzmi „Ta strona powstała dzięki czytelnikom”.",
+    steps: [
+      "Wyloguj się i otwórz stronę dowolnej osoby: pod „Historią powiązań” jest ramka z liczbą, „Masz minutę?” i przyciskiem „Odczytaj skany”.",
+      "Otwórz stronę osoby z dopiskiem „Strona opublikowana automatycznie” pod jej danymi: w ramce stoi „Ta strona powstała dzięki czytelnikom”.",
+      "Kliknij „Odczytaj skany”: otwiera się /oswiadczenia.",
+      "Zaloguj się: ramki nie ma.",
+    ],
+    area: "public",
+  },
+  {
     id: "lista-wszystkich-osob-zdejmuje-filtry",
     title: "„Lista wszystkich osób” zdejmuje filtry tabeli",
     description:

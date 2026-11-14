@@ -198,7 +198,7 @@ export const GOALS = {
   },
   "cta:shown": {
     description:
-      "The help call to action was scrolled into view. The denominator every cta:* goal has been missing - the section sits well below the fold on „/”, so the page's visitor count is not one.",
+      "A call to action was scrolled into view. `surface` is `home` (the help section on „/”) or `osoba` (the ask under a person's history to read a few declaration scans, signed-out readers only). The denominator every cta:* goal has been missing - neither sits where every visitor sees it, so a page's visitor count is not one.",
     props: ["surface"],
     // Fires from an IntersectionObserver, not from a click. Interactive, it
     // would un-bounce every reader who scrolls past it.
