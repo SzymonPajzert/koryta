@@ -28,6 +28,7 @@
 
     <template #append>
       <v-btn v-if="mdAndUp" text to="/tematy">Tematy</v-btn>
+      <v-btn v-if="mdAndUp" text to="/blog">Blog</v-btn>
       <v-btn v-if="mdAndUp" text to="/o-nas">O nas</v-btn>
       <!-- To the reading of declarations, not to /pomoc: it is the one task
            anybody can start on the spot, without an account, and /pomoc is
