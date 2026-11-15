@@ -637,6 +637,155 @@ export type DeclarationQueue = {
   };
 };
 
+// ---------------------------------------------------------------------------
+// How far the declarations got, in people
+// ---------------------------------------------------------------------------
+
+/** Why nobody has a readable date of a person yet, as the people snapshot
+ * counts them. The first eight are the BIP not letting the crawler through
+ * (`jobs/bip_crawler`'s not_found reasons), the next two a search that went
+ * through and found no declaration of theirs, the last four a file that came
+ * down with no date to read, or nothing tried yet. */
+export const peopleSearchReasons = [
+  "unreachable",
+  "refused",
+  "robots",
+  "throttled",
+  "timeout",
+  "download_failed",
+  "budget",
+  "no_seed",
+  "not_listed",
+  "no_declarations",
+  "no_date_line",
+  "unreadable",
+  "other_page",
+  "pending",
+] as const;
+export type PeopleSearchReason = (typeof peopleSearchReasons)[number];
+
+const headCount = z.number().int().min(0).max(10_000_000);
+
+/**
+ * Where the declarations stand, counted in people: the snapshot the
+ * declarations job sends once a night (`stats/declaration_people`). Only it
+ * can count this, since half of it is on predator - crops cut and not sent,
+ * files not cut, BIPs that would not answer - and the other half is the site's,
+ * which it reads from the night's export.
+ *
+ * Who is counted: the draft pages with a won local
+ * candidacy and a public post, which a declaration can publish, and the pages
+ * a declaration did publish that have one. Every person is in exactly one
+ * stage, so the stages add up to `people`.
+ */
+export const declarationPeopleSchema = z
+  .object({
+    /** When the job counted. */
+    at: z.string().datetime(),
+    /** The export the site's half was read from, YYYY-MM-DD. */
+    exportDay: z.string().refine((value) => isoDay(value), "YYYY-MM-DD"),
+    people: headCount,
+    /** Published because a declaration's birth date matched the page's. */
+    published: headCount,
+    /** A declaration gave another birth date, a day other than a slip of the
+     * pen: a namesake, not the councillor. */
+    namesakes: headCount,
+    /** A declaration gave another birth date that looks like a misreading,
+     * a typo or somebody else's file: an admin's to clear up. */
+    mismatched: headCount,
+    /** The dates match, and the page waits for an admin (`held`). */
+    held: headCount,
+    /** A crop on the site, waiting for readers. */
+    reading: headCount,
+    /** A crop cut on predator, not on the site yet. */
+    cropped: headCount,
+    /** A declaration downloaded, not cut yet. */
+    downloaded: headCount,
+    /** No date to read yet. */
+    searching: headCount,
+    searchingBy: z
+      .array(
+        z.object({ reason: z.enum(peopleSearchReasons), count: headCount }),
+      )
+      .max(peopleSearchReasons.length),
+    /** Namesakes to expect among the people whose date nobody has read yet
+     * (reading, cropped, downloaded, searching), from how often a surname
+     * that common turned out a namesake so far; null when too few have
+     * settled to say. */
+    expectedNamesakes: z
+      .object({ count: headCount, low: headCount, high: headCount })
+      .nullable(),
+    /** The settled people by how many Poles carry their surname (PESEL, the
+     * same sex's form), and how many in each band turned out namesakes. */
+    bySurname: z
+      .array(
+        z.object({
+          min: headCount,
+          max: headCount.nullable(),
+          settled: headCount,
+          namesakes: headCount,
+          remaining: headCount,
+        }),
+      )
+      .max(12),
+    /** The units holding the most people whose BIP would not let the
+     * crawler through. */
+    topUnits: z
+      .array(
+        z.object({
+          teryt: z.string().regex(/^\d{6}$/),
+          name: z.string().min(1).max(200),
+          people: headCount,
+          reason: z.enum(peopleSearchReasons),
+        }),
+      )
+      .max(20),
+    /** People published a day, counted the same way. */
+    publishedByDay: z
+      .array(
+        z.object({
+          day: z.string().refine((value) => isoDay(value), "YYYY-MM-DD"),
+          count: headCount,
+        }),
+      )
+      .max(400),
+  })
+  .refine(
+    (snapshot) =>
+      snapshot.published +
+        snapshot.namesakes +
+        snapshot.mismatched +
+        snapshot.held +
+        snapshot.reading +
+        snapshot.cropped +
+        snapshot.downloaded +
+        snapshot.searching ===
+      snapshot.people,
+    "the stages must add up to `people`",
+  );
+export type DeclarationPeople = z.infer<typeof declarationPeopleSchema>;
+
+/** The people snapshot's stages, grouped the way a reader is told them:
+ * published, under way (a declaration in hand) and still to find, out of
+ * `total`. A namesake is counted apart, outside the total: the declaration
+ * showed that the page is not the councillor's, so there is nobody of theirs
+ * left to publish. */
+export function peopleGroups(snapshot: DeclarationPeople) {
+  const underway =
+    snapshot.held +
+    snapshot.mismatched +
+    snapshot.reading +
+    snapshot.cropped +
+    snapshot.downloaded;
+  return {
+    published: snapshot.published,
+    underway,
+    searching: snapshot.searching,
+    total: snapshot.people - snapshot.namesakes,
+    namesakes: snapshot.namesakes,
+  };
+}
+
 /** `POST /api/declarations/<id>/answer`. */
 export type DeclarationAnswer = {
   verdict: AnswerVerdict;
