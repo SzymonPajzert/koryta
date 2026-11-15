@@ -59,6 +59,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "postep-oswiadczen-w-osobach",
+    title:
+      "Ilu samorządowców sprawdziły oświadczenia: zakładka na głównej i strona /oswiadczenia/postep",
+    description:
+      "Na stronie głównej obok „Mapa” i „Wykres” jest zakładka „Oświadczenia”: ilu samorządowców z płatną posadą opublikowaliśmy dzięki oświadczeniom, ilu jest w toku, ilu bez oświadczenia, i osobno imienników. Prowadzi do /oswiadczenia/postep z pełnymi liczbami i do pierwszego wpisu na blogu. Która zakładka otwiera się pierwsza, zależy od losowania na sesję (po równo dla trzech). Blog jest w menu i w stopce, a /admin/oswiadczenia ma nad wykresem oświadczeń kolorowy pasek osób.",
+    steps: [
+      "Otwórz stronę główną w kilku nowych kartach: raz otwiera się mapa, raz wykres, raz „Oświadczenia”. Kliknij „Oświadczenia”: liczba opublikowanych, pasek, „osobno imiennicy” i słupki dzień po dniu.",
+      "W zakładce kliknij „Pełne dane”: /oswiadczenia/postep z sekcjami „W toku”, „Bez oświadczenia” i „Imiennicy”. „Dowiedz się więcej” prowadzi do wpisu na blogu.",
+      "W menu na górze i w stopce jest „Blog”, a na /eksploruj/statystyki pod opisem link do sprawdzania samorządowców.",
+      "Jako admin otwórz /admin/oswiadczenia: nad „Oświadczenia według stanu” jest pasek osób w tych samych kolorach.",
+    ],
+    link: "/oswiadczenia/postep",
+    area: "public",
+  },
+  {
     id: "bez-liczby-osob-przy-wlascicielach",
     title: "Bez liczby w nawiasie przy właścicielach i spółkach zależnych",
     description:

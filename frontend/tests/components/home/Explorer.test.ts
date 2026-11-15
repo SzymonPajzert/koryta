@@ -3,7 +3,11 @@ import { flushPromises } from "@vue/test-utils";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import Explorer from "../../../app/components/home/Explorer.vue";
 import { brand, contrastRatio, themeColors } from "../../../shared/colors";
-import { HOME_DEFAULT_EXPERIMENT } from "../../../shared/experiments";
+import {
+  assignArm,
+  HOME_DEFAULT_EXPERIMENT,
+} from "../../../shared/experiments";
+import type { DeclarationPeople } from "../../../shared/declarations";
 
 /** Mocked at the composable rather than at the tracker, so the assertions are
  * about which goal the explorer decided to fire. Whether the plausible plugin
@@ -23,8 +27,9 @@ registerEndpoint("/api/stats/progress", () => ({
   toCheck: 30,
 }));
 
-const mount = () =>
+const mount = (people: DeclarationPeople | null = null) =>
   mountSuspended(Explorer, {
+    props: { people },
     global: {
       stubs: {
         // The map is an svg of 380 powiaty, the chart needs apexcharts and both
@@ -33,6 +38,8 @@ const mount = () =>
         CardPeopleList: true,
         HomeTimeline: true,
         HomeTimelineControls: true,
+        OswiadczeniaPeoplePanel: true,
+        OswiadczeniaPeopleSide: true,
       },
     },
   });
@@ -48,18 +55,110 @@ const tabs = (wrapper: Awaited<ReturnType<typeof mount>>, label: string) =>
 const underlined = (wrapper: Awaited<ReturnType<typeof mount>>) =>
   wrapper.findAll(".v-tab--selected").map((tab) => tab.text());
 
+/** A session id that `home-default` puts in `arm`, stored where the
+ * composable looks for it: the split is live, so an unseeded session lands in
+ * any of the three arms. */
+function seatIn(arm: string) {
+  for (let i = 0; i < 10_000; i++) {
+    const id = `test-session-${i}`;
+    if (assignArm(HOME_DEFAULT_EXPERIMENT, id) === arm) {
+      sessionStorage.setItem("koryta:session", id);
+      return;
+    }
+  }
+  throw new Error(`no session id lands in ${arm}`);
+}
+
+/** The night's people snapshot, as small as the panel needs. */
+const PEOPLE: DeclarationPeople = {
+  at: "2026-11-14T06:30:00.000Z",
+  exportDay: "2026-11-14",
+  people: 10,
+  published: 3,
+  namesakes: 1,
+  mismatched: 0,
+  held: 1,
+  reading: 1,
+  cropped: 1,
+  downloaded: 1,
+  searching: 2,
+  searchingBy: [{ reason: "unreachable", count: 2 }],
+  expectedNamesakes: null,
+  bySurname: [],
+  topUnits: [],
+  publishedByDay: [],
+};
+
 beforeEach(() => {
   trackGoal.mockClear();
   setGlobalProp.mockClear();
   sessionStorage.clear();
+  seatIn("map");
+  // happy-dom calls itself automated, and an automated browser sits every
+  // split out; a reader's browser does not.
+  Object.defineProperty(navigator, "webdriver", {
+    value: false,
+    configurable: true,
+  });
 });
 
 describe("HomeExplorer", () => {
-  it("opens on the map while the experiment is dormant", async () => {
+  it("opens on the map in the map's arm", async () => {
     const wrapper = await mount();
 
     expect(wrapper.text()).toContain("Mapa koryciarstwa");
     expect(wrapper.text()).not.toContain("Zmiany na stanowiskach");
+  });
+
+  it("opens on the declarations in their arm", async () => {
+    seatIn("oswiadczenia");
+    const wrapper = await mount(PEOPLE);
+
+    expect(underlined(wrapper)).toEqual(["Oświadczenia", "Oświadczenia"]);
+    expect(wrapper.text()).toContain("Sprawdzanie samorządowców");
+  });
+
+  it("falls back to the map when the declarations have no snapshot", async () => {
+    // Before the job's first night there is no panel to open: the strip keeps
+    // two tabs and the reader gets the map rather than an empty window.
+    seatIn("oswiadczenia");
+    const wrapper = await mount(null);
+
+    expect(tabs(wrapper, "Oświadczenia")).toHaveLength(0);
+    expect(underlined(wrapper)).toEqual(["Mapa", "Mapa"]);
+  });
+
+  it("sits an automated browser out of the split", async () => {
+    // The site's own Playwright suites and any scraper driving Chrome: the
+    // control arm every run, and no reader counted in an arm.
+    seatIn("oswiadczenia");
+    Object.defineProperty(navigator, "webdriver", {
+      value: true,
+      configurable: true,
+    });
+    try {
+      const wrapper = await mount(PEOPLE);
+      expect(underlined(wrapper)).toEqual(["Mapa", "Mapa"]);
+      expect(
+        trackGoal.mock.calls.some((call) => call[0] === "experiment:assigned"),
+      ).toBe(false);
+      expect(setGlobalProp).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(navigator, "webdriver", {
+        value: false,
+        configurable: true,
+      });
+    }
+  });
+
+  it("shows its panels once the arm is set", async () => {
+    // Hidden until then while the split is live, for every arm alike, so no
+    // arm paints the map first. After mounting nothing is held back.
+    const wrapper = await mount(PEOPLE);
+
+    expect(wrapper.get("[data-testid=home-explorer]").classes()).not.toContain(
+      "explorer--pending",
+    );
   });
 
   it("paints the selected tab in something a reader can see", async () => {

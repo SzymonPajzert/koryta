@@ -96,8 +96,10 @@
       </v-col>
     </v-row>
   </HomeSection>
+  <!-- With the night's people count, the explorer's third panel: how far
+       the declarations got, beside the map and the chart. -->
   <HomeSection>
-    <HomeExplorer />
+    <HomeExplorer :people="peopleProgress" />
   </HomeSection>
   <!-- No `v-row`/`v-col` around it: the call to action is a card of its own
        now rather than centred loose text, and the old nest stacked five
@@ -123,6 +125,14 @@
 import { mdiChevronRight } from "@mdi/js";
 import { trackGoal } from "~/composables/analytics";
 import { SOCIAL_CARD } from "~/composables/entitySeo";
+import type { DeclarationPeople } from "~~/shared/declarations";
+
+// The night's count of the declarations in people. Absent before the job's
+// first snapshot, and then the explorer keeps its two panels.
+const { data: peopleData } = await useFetch<{
+  people: DeclarationPeople | null;
+}>("/api/declarations/people", { key: "declarations-people" });
+const peopleProgress = computed(() => peopleData.value?.people ?? null);
 
 useSeoMeta({
   title: "Największy, niezależny agregator koryciarstwa",
