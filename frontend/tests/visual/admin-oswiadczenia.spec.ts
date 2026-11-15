@@ -17,6 +17,7 @@ import {
 import { readyForFullPage } from "./fullPage";
 import { pageTag } from "./pageTags";
 import { expectFitsThePhone } from "./phoneWidth";
+import { SEEDED_DECLARATION_PEOPLE as declarationPeople } from "../../scripts/declarationPeople";
 
 /** /admin/oswiadczenia, how far the reading of BIP declarations has got: the
  * declarations by state, the chain from a candidacy searched to a person
@@ -45,6 +46,10 @@ async function openOverview(page: Page, overview: DeclarationOverview) {
     const path = new URL(request.url()).pathname;
     if (request.method() === "GET" && path === "/api/declarations/overview") {
       return route.fulfill({ json: overview });
+    }
+    // The night's people count, drawn above the declarations by state.
+    if (request.method() === "GET" && path === "/api/declarations/people") {
+      return route.fulfill({ json: { people: declarationPeople } });
     }
     if (request.method() === "GET" && path.endsWith("/images")) {
       return route.fulfill({ json: cropImages() });
