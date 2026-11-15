@@ -7,6 +7,14 @@
           Kto się tym zajmuje i co ostatnio zrobił, a niżej — ile jest w bazie i
           ile z tego ktoś już sprawdził.
         </p>
+        <!-- The declarations' numbers in people have a page of their own. A
+             line, not a third button: two fit beside the title, three wrap. -->
+        <p class="text-body-2 mb-0 mt-1">
+          Oświadczenia majątkowe:
+          <NuxtLink to="/oswiadczenia/postep" class="text-ink-info"
+            >sprawdzanie samorządowców</NuxtLink
+          >
+        </p>
       </div>
       <v-btn to="/eksploruj/szpitale" variant="tonal">
         Rady nadzorcze szpitali
