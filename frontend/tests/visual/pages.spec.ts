@@ -62,6 +62,26 @@ const pages: {
       await expect(page.locator(".apexcharts-svg")).toHaveCount(3);
     },
   },
+  // The first real post: its ::stats and ::chart as a reader gets them.
+  {
+    name: "blog-sprawdzamy-samorzadowcow",
+    path: "/blog/sprawdzamy-samorzadowcow",
+    file: "blog/[slug]",
+    act: async (page) => {
+      await expect(page.locator(".apexcharts-svg")).toHaveCount(1);
+    },
+  },
+  // How far the declarations got, in people, from the night's count the seed
+  // writes (scripts/declarationPeople.ts). The published-a-day columns draw
+  // in the browser after the document arrives.
+  {
+    name: "oswiadczenia-postep",
+    path: "/oswiadczenia/postep",
+    file: "oswiadczenia/postep",
+    act: async (page) => {
+      await expect(page.locator(".apexcharts-svg")).toHaveCount(1);
+    },
+  },
   // Not a page: the path is deliberately unroutable, so this captures
   // app/error.vue's 404 branch. Keep it single-segment - two segments would
   // match pages/[seoType]/[slug].vue and render an entity instead.
