@@ -66,6 +66,8 @@ const sections = [
     items: [
       { title: "O nas", link: "/o-nas" },
       { title: "Tematy", link: "/tematy" },
+      // The only way to /blog on a phone: the app bar's links are desktop's.
+      { title: "Blog", link: "/blog" },
       { title: "Rady szpitali", link: "/eksploruj/szpitale" },
       { title: "Okrągły staż", link: "/eksploruj/staz" },
       { title: "Źródła", link: "/zrodla" },
