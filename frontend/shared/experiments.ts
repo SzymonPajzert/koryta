@@ -8,10 +8,11 @@
  * is spike-driven rather than steady: one Facebook post lands 700 people in an
  * afternoon and whichever arm it happens to weight is the one that "wins".
  *
- * So the registry below ships **dormant** - `home-default` gives every reader
- * the map, exactly what the site does today, and the only thing the experiment
- * machinery does is exist. Turning it on is changing the weights, and the goals
- * are already registered so no data is lost to a forgotten dashboard step.
+ * So the registry shipped **dormant**, every reader on the map, and turning an
+ * experiment on is changing its weights - with the goals already registered so
+ * no data is lost to a forgotten dashboard step. `home-default` went live on
+ * 2026-11-15 as a three-way split; at ~415 home visitors a month that is ~140
+ * readers an arm, so read it in months, not days.
  *
  * Before spending traffic on the split, read `home-explorer:tab` broken down by
  * `tab`, and `home-explorer:pick` broken down by `panel` (`shared/analytics.ts`).
@@ -47,22 +48,21 @@
  *    later visits in a different bucket from their first, which is noise. A
  *    session is the unit the numbers are actually reported in.
  *
- * ## The one thing to fix before activating
+ * ## Why a live split hides the panels until the arm is set
  *
  * `routeRules` caches `/` with `swr: 3600` (`nuxt.config.ts`), so the server
  * renders the home page once an hour and hands the same html to everybody. The
- * arm therefore cannot be decided server-side as things stand, and is resolved
- * after hydration - which means a reader in a non-default arm sees the map for
- * a frame before the tab switches. Control has no such swap, so the flash is an
+ * arm therefore cannot be decided server-side, and is resolved after hydration
+ * - which would have a reader in a non-default arm see the map for a frame
+ * before the tab switched. Control has no such swap, so the flash would be an
  * asymmetry between the arms and would bias the very comparison being run.
  *
- * Two ways out when the time comes, neither free:
- *   - drop `swr` on `/`, and pay a full render per request on a container that
- *     runs at `minInstances: 0`; or
- *   - keep `swr` and vary the cache key on an arm header set by a server
- *     middleware, which is one cache entry per arm and no flash, but puts the
- *     assignment on the server where it has to agree with the client's.
- * Deciding that is part of activating the experiment, not of shipping this.
+ * Of the ways out (drop `swr` on `/`; vary the cache on an arm set by a server
+ * middleware; hide the panels until the browser has the arm) the third was
+ * picked when `home-default` went live: `HomeExplorer` keeps its panels laid
+ * out but unpainted until the arm is set, for every arm alike, so each one
+ * waits the same moment and none shows another's panel. While an experiment is
+ * dormant nothing waits (`experimentIsLive`).
  */
 
 /** One arm of an experiment. `weight` is relative, not a percentage - the
@@ -84,8 +84,10 @@ export type Experiment<Id extends string = string> = {
 
 /** Which panel the home page opens on.
  *
- * All the weight is on `map`, which is what `HomeExplorer` has always defaulted
- * to, so this changes nothing until somebody moves it.
+ * Live since round oswiadczenia-osoby-r2 (2026-11-15): a third each for the
+ * map, the chart and the declarations, `gry` still off. `HomeExplorer` hides
+ * its panels until the arm is set, for every arm alike, so no arm paints
+ * another's panel first (the flash the note at the top describes).
  *
  * `parties` was the second arm and went with its panel: the treemap was removed
  * from the tab strip, and an arm naming a panel that no longer exists is a trap
@@ -103,11 +105,12 @@ export const HOME_DEFAULT_EXPERIMENT = {
     {
       id: "map",
       weight: 1,
-      description: "Mapa koryciarstwa, the panel the page opens on today.",
+      description:
+        "Mapa koryciarstwa, the panel the page opened on before the split.",
     },
     {
       id: "graph",
-      weight: 0,
+      weight: 1,
       description:
         "Stanowiska w czasie, the timeline of how many people each party, województwo or sector had in post.",
     },
@@ -116,6 +119,12 @@ export const HOME_DEFAULT_EXPERIMENT = {
       weight: 0,
       description:
         "The /gry hub. Not built on main - the arm is declared so activating it is a weight change plus a panel, and the goal already exists in Plausible.",
+    },
+    {
+      id: "oswiadczenia",
+      weight: 1,
+      description:
+        "Sprawdzanie samorządowców: how far the asset declarations got, in people, with the ways on to /oswiadczenia, /oswiadczenia/postep and the blog post. Opens only when the night's people snapshot exists; otherwise the reader gets the map.",
     },
   ],
 } as const satisfies Experiment;
@@ -128,6 +137,13 @@ export const EXPERIMENTS = {
 } as const;
 
 export type ExperimentId = keyof typeof EXPERIMENTS;
+
+/** Whether readers are split at all: two arms or more carry weight. A
+ * dormant experiment hands everybody its control, and nothing need wait for
+ * the assignment. */
+export function experimentIsLive(experiment: Experiment): boolean {
+  return experiment.arms.filter((arm) => arm.weight > 0).length > 1;
+}
 
 /** The property name an experiment's arm is reported under.
  *

@@ -1,15 +1,24 @@
 <template>
   <v-container :style="{ background: 'white' }">
-    <v-row>
+    <v-row
+      :class="{ 'explorer--pending': !assigned }"
+      data-testid="home-explorer"
+    >
       <v-col cols="12" class="d-md-none pb-0">
+        <!-- Slim and without the 90 px floor: three uppercase labels at the
+             default padding are wider than a 375 px phone, and the strip
+             clipped the third („OŚWIADCZENI…”) on the map, where most land. -->
         <v-tabs
           v-model="tab"
           :color="TAB_COLOUR"
           grow
           @update:model-value="countSwitch"
         >
-          <v-tab value="map">Mapa</v-tab>
-          <v-tab value="graph">Wykres</v-tab>
+          <v-tab value="map" slim min-width="0">Mapa</v-tab>
+          <v-tab value="graph" slim min-width="0">Wykres</v-tab>
+          <v-tab v-if="people" value="oswiadczenia" slim min-width="0">
+            Oświadczenia
+          </v-tab>
         </v-tabs>
       </v-col>
       <v-col cols="12" md="8">
@@ -21,6 +30,10 @@
           <v-tabs-window-item value="graph">
             <HomeHeading title="Zmiany na stanowiskach" center />
             <HomeTimeline :grouping="grouping" :range="range" />
+          </v-tabs-window-item>
+          <v-tabs-window-item v-if="people" value="oswiadczenia">
+            <HomeHeading title="Sprawdzanie samorządowców" center />
+            <OswiadczeniaPeoplePanel :people="people" />
           </v-tabs-window-item>
         </v-tabs-window>
       </v-col>
@@ -34,6 +47,7 @@
         >
           <v-tab value="map">Mapa</v-tab>
           <v-tab value="graph">Wykres</v-tab>
+          <v-tab v-if="people" value="oswiadczenia">Oświadczenia</v-tab>
         </v-tabs>
 
         <!-- The side panel is the map's result list, and the chart's controls.
@@ -54,7 +68,11 @@
           v-model:grouping="grouping"
           v-model:range="range"
         />
-        <CardPeopleList v-show="tab !== 'graph'" :region="region" />
+        <OswiadczeniaPeopleSide
+          v-if="tab === 'oswiadczenia' && people"
+          :people="people"
+        />
+        <CardPeopleList v-show="tab === 'map'" :region="region" />
       </v-col>
     </v-row>
   </v-container>
@@ -63,12 +81,21 @@
 <script lang="ts" setup>
 import { trackGoal } from "~/composables/analytics";
 import { useExperimentArm } from "~/composables/experiments";
-import { HOME_DEFAULT_EXPERIMENT } from "~~/shared/experiments";
+import {
+  experimentIsLive,
+  HOME_DEFAULT_EXPERIMENT,
+} from "~~/shared/experiments";
 
 import type { TimelineRange } from "~/composables/homeTimeline";
 import type { TimelineGrouping } from "~~/server/api/stats/homeTimeline.get";
 
 import type { Powiat } from "@/composables/entity/regions";
+import type { DeclarationPeople } from "~~/shared/declarations";
+
+/** The night's people snapshot of the declarations: with one, the explorer
+ * gets its third panel. Without one (before the job's first night) the strip
+ * stays at two tabs rather than offering an empty panel. */
+const props = defineProps<{ people?: DeclarationPeople | null }>();
 
 /** What the selected tab is painted in.
  *
@@ -87,11 +114,16 @@ const TAB_COLOUR = "ink-sage";
  * weight today and cannot be assigned, but a weight is one number in a registry
  * and a blank window on the home page is a worse failure than an unhonoured
  * experiment. Anything unrecognised stays on the map. */
-const PANELS = ["map", "graph"] as const;
+const PANELS = ["map", "graph", "oswiadczenia"] as const;
 type Panel = (typeof PANELS)[number];
 
 function isPanel(value: unknown): value is Panel {
   return PANELS.includes(value as Panel);
+}
+
+/** A panel this page can open now: the declarations' needs the snapshot. */
+function canOpen(value: unknown): value is Panel {
+  return isPanel(value) && (value !== "oswiadczenia" || !!props.people);
 }
 
 const tab = ref<Panel>("map");
@@ -109,13 +141,23 @@ const grouping = ref<TimelineGrouping>("party");
 watch(grouping, (value) => trackGoal("home-timeline:grouping", { value }));
 watch(range, (value) => trackGoal("home-timeline:range", { value }));
 
-/** Dormant: every reader is on the `map` arm until the weights in
- * `shared/experiments.ts` move, so this resolves to what the page already did.
- * What it does today is record the arm, which is what makes the split readable
- * on a Growth plan when it is switched on. */
+/** The panel this reader's arm opens on, set once the page is in the
+ * browser: `/` is served from a shared cache, so the server cannot know the
+ * arm. The arm also rides on every later event as a property, which is what
+ * makes the split readable. */
 const arm = useExperimentArm(HOME_DEFAULT_EXPERIMENT);
 watch(arm, (value) => {
-  if (isPanel(value)) tab.value = value;
+  if (canOpen(value)) tab.value = value;
+});
+
+/** While readers are split, the panels stay hidden until the arm is set, for
+ * every arm alike. Shown at once, the server's render would paint the map for
+ * a moment before another arm's panel, and only the map's readers would be
+ * spared that: the very difference the split measures. Registered after
+ * `useExperimentArm`, so by the time this runs the arm is in `tab`. */
+const assigned = ref(!experimentIsLive(HOME_DEFAULT_EXPERIMENT));
+onMounted(() => {
+  assigned.value = true;
 });
 
 /** Counts a switch. It does not perform one - `v-model` already did.
@@ -157,3 +199,10 @@ function pickRegion(picked: Powiat) {
   trackGoal("home-explorer:pick", { panel: "map", value: picked.teryt });
 }
 </script>
+
+<style scoped>
+/* Laid out, so nothing below moves when it shows, and not painted. */
+.explorer--pending {
+  visibility: hidden;
+}
+</style>

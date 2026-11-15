@@ -90,6 +90,11 @@ export function useExperimentArm<Id extends string>(
   const arm = ref(control) as Ref<Id>;
 
   onMounted(() => {
+    // Automated browsers - the site's own test suites, a scraper driving
+    // Chrome - sit every split out: the control arm, and no assignment
+    // reported. A test then sees the page the same way every run, and no robot
+    // is counted as one of an arm's readers.
+    if (navigator.webdriver) return;
     const id = sessionId();
     if (!id) return;
 
