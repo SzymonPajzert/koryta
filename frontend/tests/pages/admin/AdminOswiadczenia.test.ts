@@ -1,14 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mountSuspended } from "@nuxt/test-utils/runtime";
+import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
 import { defineComponent, h, ref } from "vue";
 import OswiadczeniaPage from "../../../app/pages/admin/oswiadczenia.vue";
 import type {
   DeclarationOverview,
+  DeclarationPeople,
   DeclarationPublicationRow,
   DeclarationReviewRow,
   DrainResult,
 } from "../../../shared/declarations";
+import { SEEDED_DECLARATION_PEOPLE as seededPeople } from "../../../scripts/declarationPeople";
+
+/** The night's people count, public and fetched apart from the overview. */
+let peopleAnswer: { people: DeclarationPeople | null } = { people: null };
+registerEndpoint("/api/declarations/people", () => peopleAnswer);
 
 const { mockAuthRequest } = vi.hoisted(() => ({ mockAuthRequest: vi.fn() }));
 
@@ -328,6 +334,30 @@ describe("/admin/oswiadczenia", () => {
       ),
     ).toHaveLength(1);
     expect(page.find("[data-row-panel]").exists()).toBe(false);
+  });
+
+  it("puts the night's people above the declarations by state", async () => {
+    peopleAnswer = { people: seededPeople as DeclarationPeople };
+    clearNuxtData("declarations-people");
+    try {
+      const page = await mountPage();
+      const people = page.get('[data-testid="declarations-people"]');
+      // Everybody counted but the namesakes, who are said apart.
+      expect(people.text()).toContain(
+        "1150 polityków na płatnych stanowiskach",
+      );
+      expect(people.text()).toContain("osobno imiennicy:");
+      // Every stage in the colours of the bar below it.
+      expect(people.find('[data-testid="people-bar"]').exists()).toBe(true);
+      const states = page.get('[data-testid="declarations-states"]');
+      expect(
+        people.element.compareDocumentPosition(states.element) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    } finally {
+      peopleAnswer = { people: null };
+      clearNuxtData("declarations-people");
+    }
   });
 
   it("puts the declarations by state above the chain", async () => {

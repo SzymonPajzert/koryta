@@ -58,6 +58,10 @@
       <v-skeleton-loader type="list-item-two-line@3" />
     </div>
 
+    <!-- Where everybody a declaration can publish stands, in people: the
+         job's nightly count, apart from the overview's own live one. -->
+    <AdminDeclarationsPeople v-if="peopleSnapshot" :people="peopleSnapshot" />
+
     <template v-if="overview">
       <!-- The whole run by state first, then the chain that walks through it
            stage by stage (round bip-admin-r2). -->
@@ -265,6 +269,7 @@ import {
   PRESS_BATCH,
   READERS_TO_AGREE,
   type DeclarationOverview,
+  type DeclarationPeople,
   type DeclarationReviewRow,
   type DrainResult,
 } from "~~/shared/declarations";
@@ -293,6 +298,14 @@ definePageMeta({
 useHead({ title: "Oświadczenia majątkowe (Admin) - koryta.pl" });
 
 const overview = ref<DeclarationOverview | null>(null);
+
+// The night's people count: public, cached, and nothing on this page waits
+// for it.
+const { data: peopleData } = useFetch<{ people: DeclarationPeople | null }>(
+  "/api/declarations/people",
+  { key: "declarations-people", lazy: true },
+);
+const peopleSnapshot = computed(() => peopleData.value?.people ?? null);
 const loading = ref(false);
 const error = ref<string | null>(null);
 /** The clock the rows' times are told against, moved on each load. */
