@@ -116,7 +116,7 @@
       >
         <div class="sec-head">
           <h2 id="op-namesakes" class="op-section__title">
-            Imiennicy
+            Duplikaty
             <span class="op-section__count">{{
               polishNumber(g.namesakes)
             }}</span>

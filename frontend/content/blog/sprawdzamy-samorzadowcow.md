@@ -1,21 +1,22 @@
 ---
 title: "Jak sprawdzamy samorządowców w oświadczeniach majątkowych"
-description: "Data urodzenia z oświadczenia majątkowego mówi, czy samorządowiec z wyborów i członek zarządu z KRS to ta sama osoba. Opublikowaliśmy 815 z 3584 samorządowców, a 156 razy w KRS był imiennik."
+description: "Data urodzenia z oświadczenia majątkowego mówi, czy samorządowiec z wyborów i członek zarządu z KRS to ta sama osoba. Spodziewamy się opublikować tym sposobem 3584 samorządowców."
 date: 2026-11-15
 authors: [Zespół Koryta.pl]
 tags: [oświadczenia majątkowe, samorząd, metoda]
 ---
 
-Koryta.pl łączy posady w publicznych spółkach z polityką. Posady znamy z KRS, start w wyborach z danych PKW. Łączy je imię i nazwisko, a to za mało: Polska ma tysiące Janów Kowalskich.
+Na koryta.pl szukamy połączeń między posadami w publicznych spółkach a polityką. Z KRSu mamy imię, nazwisko i dokładną datę urodzenia osoby, jednak PKW publikuje tylko datę urodzenia. To prowadzi do ryzyka pomyłki dwóch osób jako jednej.
 
-Samorządowiec składa co roku oświadczenie majątkowe z datą urodzenia, a gmina publikuje je w BIP. KRS też zna datę urodzenia członka zarządu. Gdy obie daty się zgadzają, to ta sama osoba i publikujemy jej stronę.
+Na szczęście, samorządowcy co roku składają co roku oświadczenia majątkowe z dokładną datą urodzenia. Gdy obie daty się zgadzają, mamy wysoką pewność że to ta sama osoba i publikujemy jej stronę. Niestety, wiele z oświadczeń jest napisanych ręcznie i nieczytelnych.
 
 ## Jak to działa
 
-1. Robot szuka oświadczeń na stronach BIP gmin, powiatów i województw.
+1. Automatycznie szukamy oświadczeń na stronach BIP gmin, powiatów i województw.
 2. Z oświadczenia wycinamy linię z datą urodzenia.
-3. Datę przepisują czytelnicy na [koryta.pl/oswiadczenia](/oswiadczenia). Wystarczą dwie zgodne odpowiedzi, a czytelnik nie widzi daty z KRS.
-4. Gdy data zgadza się z KRS, strona trafia na koryta.pl. Gdy nie, osoba z KRS to zwykle imiennik.
+3. Jeśli jest ona wydrukowana, czytamy ją automatycznie
+4. Ręcznie napisaną datę przepisują czytelnicy na [koryta.pl/oswiadczenia](/oswiadczenia). Wystarczą dwie zgodne odpowiedzi, by uznać ją za rozczytaną.
+5. Gdy data zgadza się z KRS, strona trafia na koryta.pl. Gdy nie, osoba z KRS to zwykle imiennik.
 
 ## Gdzie jesteśmy
 
@@ -41,11 +42,16 @@ items:
 
 Aktualne liczby są na stronie [Oświadczenia majątkowe](/oswiadczenia/postep).
 
-## Imiennicy i popularne nazwiska
+## Duplikaty i popularne nazwiska
 
-Im popularniejsze nazwisko, tym częściej osoba z KRS to ktoś inny niż samorządowiec o tym samym imieniu i nazwisku. Wśród rzadkich nazwisk nie trafiliśmy dotąd na żadnego imiennika, wśród najczęstszych na co drugiego.
+Im popularniejsze nazwisko, tym większa szansa na przypadkowy duplikat. 
+Potwierdzają to nasze dane; dla popularnych nazwisk częściej osoba z KRS to ktoś inny niż samorządowiec o tym samym imieniu i nazwisku.
 
-::chart{title="Imiennicy wśród sprawdzonych, według popularności nazwiska" source="PESEL, oświadczenia majątkowe z BIP, koryta.pl"}
+Wśród rzadkich nazwisk nie trafiliśmy dotąd na żaden duplikat, wśród najczęstszych zdarza się co drugą osobę.
+
+
+
+::chart{title="Duplikaty wśród sprawdzonych osób, według popularności nazwiska" source="PESEL, oświadczenia majątkowe z BIP, koryta.pl"}
 ---
 categories: [mniej niż 50 osób, 50-999, 1000-4999, 5000-19 999, 20 000 i więcej]
 series:
@@ -55,13 +61,13 @@ unit: "%"
 ---
 ::
 
-Wśród 2570 osób, których daty nikt jeszcze nie przeczytał, spodziewamy się około 394 imienników, od 351 do 435.
+Wśród 2570 osób, których daty urodzenia nikt jeszcze nie przeczytał, spodziewamy się około 394 imienników, od 351 do 435.
 
-## Dlaczego nie wszyscy
+## Dlaczego nie wszyscy mają oświadczenia
 
-Dla 437 osób nie mamy jeszcze daty. Do 137 nie dotarliśmy, bo BIP nie odpowiadał albo nie wpuścił robota. U 161 na BIP nie ma oświadczenia. U 139 oświadczenie jest, ale daty nie da się z niego wyciąć.
+Dla 437 osób nie mamy jeszcze oświadczenia majątkowego. Do 137 nie dotarliśmy, bo BIP nie odpowiadał albo nie wpuścił robota. U 161 na BIP nie ma oświadczenia. U 139 oświadczenie jest, ale daty nie da się z niego wyciąć.
 
-## Jak pomóc
+## Jak możesz pomóc
 
 Przepisz kilka dat na [koryta.pl/oswiadczenia](/oswiadczenia). Nie trzeba zakładać konta, a każda zgodna odpowiedź przybliża publikację.
 
