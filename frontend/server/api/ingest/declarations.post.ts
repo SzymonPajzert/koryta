@@ -36,9 +36,11 @@ import {
  * images go to their own collection so that listing extracts never loads bytes.
  *
  * A reading starts open and readers move it (`/api/declarations/<id>/answer`),
- * except a typed date the job read with high confidence, which settles here.
- * A crop settled either way is then compared with its pages, which is where
- * anything is published (server/utils/declarationPublish.ts).
+ * except a date the job read that settles here (`machineSettles`): a typed one
+ * with high confidence, or one OCR read cleanly that is already the birth date
+ * of a page the crop is for. A crop settled either way is then compared with
+ * its pages, which is where anything is published
+ * (server/utils/declarationPublish.ts).
  */
 export default defineEventHandler(async (event) => {
   // The gate comes before the body: a request with 8 MB of images should not
@@ -172,8 +174,8 @@ export default defineEventHandler(async (event) => {
   const storedExtracts =
     extractRefs.length > 0 ? await db.getAll(...extractRefs) : [];
   /** Crops to compare with their pages once stored: the ones this request
-   * settles - a typed date the job read with high confidence - and the ones
-   * settled already that it names more pages or units for. */
+   * settles (`machineSettles`) and the ones settled already that it names
+   * more pages or units for. */
   const toCompare: string[] = [];
 
   body.extracts.forEach((extract, i) => {
@@ -205,7 +207,12 @@ export default defineEventHandler(async (event) => {
     // while nobody has answered it.
     const writeImages =
       imageHash !== null && !answered && existing?.imageHash !== imageHash;
-    const reading = readingState(extract, existing, now);
+    const reading = readingState(
+      extract,
+      existing,
+      now,
+      personIds.map((pageId) => pages.get(pageId)?.birthDate),
+    );
     const nextPersonIds = unique([
       ...asStrings(existing?.personIds),
       ...personIds,
@@ -405,14 +412,17 @@ function namesItsPerson(
 /** The reading fields: seeded on the first write, so the queue's
  * `status == "open"` query can find the crop (Firestore never matches an
  * absent field), and left alone afterwards except while nobody has answered:
- * a file cut again may come back from `failed` or go there, and a typed date
- * the job reads with high confidence settles the crop without readers. */
+ * a file cut again may come back from `failed` or go there, and a date the
+ * job read settles the crop without readers where `machineSettles` says so,
+ * on a crop sent again too. `pageBirthDates` are the birth dates of the
+ * crop's pages, which an OCR date has to be one of to settle. */
 function readingState(
   extract: DeclarationExtractInput,
   existing: Record<string, unknown> | undefined,
   now: Timestamp,
+  pageBirthDates: readonly unknown[],
 ): Record<string, unknown> {
-  const settled = machineSettles(extract.machine);
+  const settled = machineSettles(extract.machine, pageBirthDates);
   const status =
     extract.outcome === "failed" ? "failed" : settled ? "agreed" : "open";
   const agreed = settled

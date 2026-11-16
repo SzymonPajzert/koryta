@@ -138,15 +138,29 @@ export type MachineReading = z.infer<typeof machineReadingSchema>;
 
 /** The date the job's own reading settles, or null when readers must read.
  *
- * Only a typed date inside the candidacy's exact PKW birth-date window comes
- * as "high": such a date settles without readers, while handwriting and
- * scans go to them. A year alone is never enough: there is
- * no day to compare with the page's. */
+ * A typed date inside the candidacy's exact PKW birth-date window comes as
+ * "high" and settles on its own. A date OCR read cleanly inside that window
+ * settles too, but only when it is the birth date one of the crop's pages
+ * already has (`pageBirthDates`, as the pages store it): readers agreed with
+ * all 1,719 such dates they had settled by 2026-11-15, and Szymon asked for
+ * them to go to the publication queue on 2026-11-16. Any other OCR date,
+ * handwriting and scans go to readers. A year alone is never enough: there
+ * is no day to compare with the page's. */
 export function machineSettles(
   machine: MachineReading | null | undefined,
+  pageBirthDates: readonly unknown[] = [],
 ): string | null {
-  if (machine?.confidence !== "high" || !machine.birthDate) return null;
-  return readingKind(machine.birthDate) === "date" ? machine.birthDate : null;
+  const day = machine?.birthDate;
+  if (!day || readingKind(day) !== "date") return null;
+  if (machine.confidence === "high") return day;
+  const ocrInWindow =
+    machine.method === "ocr" &&
+    machine.confidence === "medium" &&
+    machine.inPkwWindow === "yes";
+  const pageHasIt = pageBirthDates.some(
+    (born) => typeof born === "string" && born.trim() === day,
+  );
+  return ocrInWindow && pageHasIt ? day : null;
 }
 
 const base64Png = z.string().max(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 8);
@@ -465,9 +479,9 @@ export function answerVotes(answer: ReaderAnswer): boolean {
  * „Pomiń” alone: a crop nobody can read would otherwise stay in the queue
  * for good.
  *
- * The job's own reading is not a voice here: a high-confidence one settles
- * the crop at upload (`machineSettles`) and never reaches readers, and any
- * other is a guess readers must not be anchored by.
+ * The job's own reading is not a voice here: one that settles the crop at
+ * upload (`machineSettles`) never reaches readers, and any other is a guess
+ * readers must not be anchored by.
  */
 export function settleReading(
   answers: readonly ReaderAnswer[],
@@ -895,7 +909,8 @@ export type SweepResult = {
 };
 
 /** Who settled a crop's date (`agreed.by`): readers who agreed on it blind,
- * the job off a typed form at upload (`machineSettles`), or an admin on
+ * the job at upload (`machineSettles`: off a typed form, or by OCR when the
+ * date is already the page's; `machine.method` says which), or an admin on
  * /admin/oswiadczenia. */
 export const settledBy = ["readers", "machine", "admin"] as const;
 export type SettledBy = (typeof settledBy)[number];
@@ -914,7 +929,12 @@ export type DeclarationReviewRow = {
   agreed: string | null;
   /** Who settled `agreed`; null while nothing is settled. */
   agreedBy: SettledBy | null;
-  machine: { birthDate: string | null; confidence: string | null } | null;
+  machine: {
+    birthDate: string | null;
+    confidence: string | null;
+    /** How the job read it: `text_layer`, `ocr` or `handwriting`. */
+    method?: string | null;
+  } | null;
   /** The pages, with the date each stores: admins compare them. */
   people: {
     id: string;

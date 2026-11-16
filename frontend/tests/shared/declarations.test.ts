@@ -258,6 +258,39 @@ describe("machineSettles", () => {
     ).toBeNull();
     expect(machineSettles(undefined)).toBeNull();
   });
+
+  const ocr = {
+    birthDate: "1979-07-15",
+    confidence: "medium",
+    method: "ocr",
+    inPkwWindow: "yes",
+  } as const;
+
+  it("settles a clean OCR date that is already a page's birth date", () => {
+    expect(machineSettles(ocr, ["1979-07-15"])).toBe("1979-07-15");
+    expect(machineSettles(ocr, [undefined, " 1979-07-15 "])).toBe("1979-07-15");
+  });
+
+  it("leaves an OCR date no page has to readers", () => {
+    expect(machineSettles(ocr)).toBeNull();
+    expect(machineSettles(ocr, ["1979-07-16"])).toBeNull();
+    expect(machineSettles(ocr, [undefined, null, ""])).toBeNull();
+  });
+
+  it("settles by the page's date only a clean OCR read inside the PKW window", () => {
+    const pages = ["1979-07-15"];
+    expect(machineSettles({ ...ocr, inPkwWindow: "no" }, pages)).toBeNull();
+    expect(machineSettles({ ...ocr, confidence: "low" }, pages)).toBeNull();
+    expect(machineSettles({ ...ocr, method: "handwriting" }, pages)).toBeNull();
+    // A typed date outside the window comes as "medium" too.
+    expect(
+      machineSettles(
+        { ...ocr, method: "text_layer", inPkwWindow: "no" },
+        pages,
+      ),
+    ).toBeNull();
+    expect(machineSettles({ ...ocr, birthDate: "1979" }, ["1979"])).toBeNull();
+  });
 });
 
 describe("agreedName", () => {

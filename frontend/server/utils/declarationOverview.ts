@@ -347,6 +347,7 @@ function reviewRow(
       ? {
           birthDate: data.machine.birthDate ?? null,
           confidence: data.machine.confidence ?? null,
+          method: data.machine.method ?? null,
         }
       : null,
     people: ((data.personIds as string[] | undefined) ?? [])
