@@ -5,17 +5,20 @@
       data-testid="home-explorer"
     >
       <v-col cols="12" class="d-md-none pb-0">
-        <!-- Slim and without the 90 px floor: three uppercase labels at the
-             default padding are wider than a 375 px phone, and the strip
-             clipped the third („OŚWIADCZENI…”) on the map, where most land. -->
+        <!-- Slim, without the 90 px floor, and tracked tighter than the
+             desktop strip (`.explorer__phone-tabs`): „MAPA STANOWISKA
+             OŚWIADCZENIA” at the default spacing needs a 373 px phone, and
+             on a 360 px one, the commonest Android width, the strip clipped
+             the third label on the map, where most readers land. -->
         <v-tabs
           v-model="tab"
           :color="TAB_COLOUR"
           grow
+          class="explorer__phone-tabs"
           @update:model-value="countSwitch"
         >
           <v-tab value="map" slim min-width="0">Mapa</v-tab>
-          <v-tab value="graph" slim min-width="0">Wykres</v-tab>
+          <v-tab value="graph" slim min-width="0">Stanowiska</v-tab>
           <v-tab v-if="people" value="oswiadczenia" slim min-width="0">
             Oświadczenia
           </v-tab>
@@ -32,7 +35,11 @@
             <HomeTimeline :grouping="grouping" :range="range" />
           </v-tabs-window-item>
           <v-tabs-window-item v-if="people" value="oswiadczenia">
-            <HomeHeading title="Sprawdzanie samorządowców" center />
+            <HomeHeading
+              title="Oświadczenia majątkowe"
+              :subtitle="DECLARATIONS_SAY"
+              center
+            />
             <OswiadczeniaPeoplePanel :people="people" />
           </v-tabs-window-item>
         </v-tabs-window>
@@ -46,7 +53,7 @@
           @update:model-value="countSwitch"
         >
           <v-tab value="map">Mapa</v-tab>
-          <v-tab value="graph">Wykres</v-tab>
+          <v-tab value="graph">Stanowiska</v-tab>
           <v-tab v-if="people" value="oswiadczenia">Oświadczenia</v-tab>
         </v-tabs>
 
@@ -59,7 +66,7 @@
              one inside a `<Suspense>`, and the page's boundary has long since
              resolved by the time a reader clicks a tab. Destroyed and
              re-created it therefore came back as nothing at all - the column
-             was empty after map -> wykres -> map. Kept mounted and merely
+             was empty after map -> stanowiska -> map. Kept mounted and merely
              hidden, it never suspends twice. It was never behind a `v-if`
              before this panel existed either: it stood in this column whichever
              panel was open, so this also restores what it used to cost. -->
@@ -106,6 +113,13 @@ const props = defineProps<{ people?: DeclarationPeople | null }>();
  * click by looking less selected, not more. `ink.sage` is the dark companion
  * that module exists to provide, 6.43:1 on this white panel. */
 const TAB_COLOUR = "ink-sage";
+
+/** What the declarations panel is for, under its heading. A no-break space
+ * after each one-letter word, so none is left hanging at a line's end. */
+const DECLARATIONS_SAY =
+  "Szukamy oświadczeń majątkowych samorządowców z płatną posadą " +
+  "w publicznej spółce lub instytucji. Data urodzenia z oświadczenia " +
+  "pokazuje, czy to ta sama osoba co w KRS, czy imiennik.";
 
 /** The panels this component actually renders.
  *
@@ -204,5 +218,14 @@ function pickRegion(picked: Powiat) {
 /* Laid out, so nothing below moves when it shows, and not painted. */
 .explorer--pending {
   visibility: hidden;
+}
+
+/* The three labels fit from a 340 px phone, against 373 px at Vuetify's
+   spacing: a third of the tracking and 6 px either side. */
+.explorer__phone-tabs :deep(.v-tab) {
+  padding-inline: 6px;
+}
+.explorer__phone-tabs :deep(.v-btn__content) {
+  letter-spacing: 0.03em;
 }
 </style>

@@ -1,7 +1,7 @@
 <template>
   <div class="op" data-testid="declarations-people-page">
     <div class="sec-head op-head">
-      <h1 class="op-title">Sprawdzanie samorządowców</h1>
+      <h1 class="op-title">Oświadczenia majątkowe</h1>
       <InfoBubble label="Kogo liczymy">
         <p class="mb-2">
           Liczymy samorządowców, którzy wygrali wybory do rady, na wójta,
@@ -242,7 +242,7 @@ definePageMeta({
 });
 
 useSeoMeta({
-  title: "Sprawdzanie samorządowców",
+  title: "Oświadczenia majątkowe",
   description:
     "Ilu samorządowców z płatną posadą potwierdziliśmy datą urodzenia z oświadczenia majątkowego, a ilu okazało się imiennikami.",
 });

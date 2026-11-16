@@ -39,7 +39,7 @@ items:
 ---
 ::
 
-Aktualne liczby są na stronie [Sprawdzanie samorządowców](/oswiadczenia/postep).
+Aktualne liczby są na stronie [Oświadczenia majątkowe](/oswiadczenia/postep).
 
 ## Imiennicy i popularne nazwiska
 
