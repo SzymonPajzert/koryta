@@ -124,7 +124,7 @@ export const HOME_DEFAULT_EXPERIMENT = {
       id: "oswiadczenia",
       weight: 1,
       description:
-        "Sprawdzanie samorządowców: how far the asset declarations got, in people, with the ways on to /oswiadczenia, /oswiadczenia/postep and the blog post. Opens only when the night's people snapshot exists; otherwise the reader gets the map.",
+        "Oświadczenia majątkowe: how far the asset declarations got, in people, with the ways on to /oswiadczenia, /oswiadczenia/postep and the blog post. Opens only when the night's people snapshot exists; otherwise the reader gets the map.",
     },
   ],
 } as const satisfies Experiment;

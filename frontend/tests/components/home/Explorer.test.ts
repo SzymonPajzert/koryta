@@ -44,7 +44,7 @@ const mount = (people: DeclarationPeople | null = null) =>
     },
   });
 
-/** Both breakpoints render a tab strip bound to the same value, so "the Wykres
+/** Both breakpoints render a tab strip bound to the same value, so "the Stanowiska
  * tab" is two elements. Clicking either has to do the same thing - and firing
  * twice for one reader is exactly the bug the controlled model-value guards
  * against. */
@@ -115,7 +115,7 @@ describe("HomeExplorer", () => {
     const wrapper = await mount(PEOPLE);
 
     expect(underlined(wrapper)).toEqual(["Oświadczenia", "Oświadczenia"]);
-    expect(wrapper.text()).toContain("Sprawdzanie samorządowców");
+    expect(wrapper.text()).toContain("Oświadczenia majątkowe");
   });
 
   it("falls back to the map when the declarations have no snapshot", async () => {
@@ -246,7 +246,7 @@ describe("HomeExplorer", () => {
     const before = wrapper.findComponent({ name: "CardPeopleList" });
     expect(before.exists()).toBe(true);
 
-    await tabs(wrapper, "Wykres")[0]!.trigger("click");
+    await tabs(wrapper, "Stanowiska")[0]!.trigger("click");
     await tabs(wrapper, "Mapa")[0]!.trigger("click");
     await flushPromises();
 
@@ -258,7 +258,7 @@ describe("HomeExplorer", () => {
   it("keeps the underline, both strips and the panel on one tab", async () => {
     // The bug this guards. The strip used to be `:model-value` plus a handler
     // that wrote the emitted value back, and the handler could refuse it - so
-    // the strip underlined „Mapa” while the window showed „Wykres”, and the
+    // the strip underlined „Mapa” while the window showed „Stanowiska”, and the
     // click back was then a no-op: the strip already thought „Mapa” was
     // selected, so it had nothing new to emit and the reader was stuck.
     //
@@ -267,8 +267,8 @@ describe("HomeExplorer", () => {
     const wrapper = await mount();
     expect(underlined(wrapper)).toEqual(["Mapa", "Mapa"]);
 
-    await tabs(wrapper, "Wykres")[0]!.trigger("click");
-    expect(underlined(wrapper)).toEqual(["Wykres", "Wykres"]);
+    await tabs(wrapper, "Stanowiska")[0]!.trigger("click");
+    expect(underlined(wrapper)).toEqual(["Stanowiska", "Stanowiska"]);
     expect(wrapper.text()).toContain("Zmiany na stanowiskach");
 
     await tabs(wrapper, "Mapa")[0]!.trigger("click");
@@ -281,16 +281,16 @@ describe("HomeExplorer", () => {
     // time - so a click on the second has to move the first.
     const wrapper = await mount();
 
-    await tabs(wrapper, "Wykres")[1]!.trigger("click");
+    await tabs(wrapper, "Stanowiska")[1]!.trigger("click");
 
-    expect(underlined(wrapper)).toEqual(["Wykres", "Wykres"]);
+    expect(underlined(wrapper)).toEqual(["Stanowiska", "Stanowiska"]);
     expect(wrapper.text()).toContain("Zmiany na stanowiskach");
   });
 
   it("counts a switch to the chart, and back", async () => {
     const wrapper = await mount();
 
-    await tabs(wrapper, "Wykres")[0]!.trigger("click");
+    await tabs(wrapper, "Stanowiska")[0]!.trigger("click");
     expect(trackGoal).toHaveBeenCalledWith("home-explorer:tab", {
       tab: "graph",
     });
