@@ -119,7 +119,7 @@ const TAB_COLOUR = "ink-sage";
 const DECLARATIONS_SAY =
   "Szukamy oświadczeń majątkowych samorządowców z płatną posadą " +
   "w publicznej spółce lub instytucji. Data urodzenia z oświadczenia " +
-  "pokazuje, czy to ta sama osoba co w KRS, czy imiennik.";
+  "pokazuje, czy to ta sama osoba co w KRS, czy duplikat.";
 
 /** The panels this component actually renders.
  *
