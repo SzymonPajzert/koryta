@@ -584,6 +584,101 @@ describe("api/ingest/declarations", () => {
     expect(mockMatchAndDrain).not.toHaveBeenCalled();
   });
 
+  describe("a date OCR read cleanly", () => {
+    const ocr = {
+      birthDate: "1979-07-15",
+      confidence: "medium",
+      method: "ocr",
+      inPkwWindow: "yes",
+    };
+
+    it("settles the crop when it is already the page's birth date", async () => {
+      stored["nodes/kowalska"] = {
+        type: "person",
+        name: "Anna Kowalska",
+        birthDate: "1979-07-15",
+      };
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+      expect(stored[EXTRACT]).toMatchObject({
+        status: "agreed",
+        agreed: { value: "1979-07-15", kind: "date", by: "machine" },
+        machine: { method: "ocr" },
+        pageMatch: null,
+      });
+      // The picture is kept, for the admin who looks at the crop later.
+      expect(stored[IMAGES]).toBeDefined();
+      expect(mockMatchAndDrain).toHaveBeenCalledTimes(1);
+      expect(mockMatchAndDrain.mock.calls[0]![1]).toEqual([`${SHA}-p0`]);
+    });
+
+    it("leaves it to readers when the page has another date or none", async () => {
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+      expect(stored[EXTRACT]).toMatchObject({ status: "open", agreed: null });
+
+      stored["nodes/kowalska"] = {
+        type: "person",
+        name: "Anna Kowalska",
+        birthDate: "1979-07-16",
+      };
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+      expect(stored[EXTRACT]).toMatchObject({ status: "open", agreed: null });
+      expect(mockMatchAndDrain).not.toHaveBeenCalled();
+    });
+
+    it("settles an open crop sent again once the page has the date", async () => {
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+      stored["nodes/kowalska"] = {
+        type: "person",
+        name: "Anna Kowalska",
+        birthDate: "1979-07-15",
+      };
+
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+
+      expect(stored[EXTRACT]).toMatchObject({
+        status: "agreed",
+        agreed: { value: "1979-07-15", by: "machine" },
+      });
+      expect(mockMatchAndDrain).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves a crop somebody has answered to its readers", async () => {
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+      stored[EXTRACT] = { ...stored[EXTRACT], answerCount: 1 };
+      stored["nodes/kowalska"] = {
+        type: "person",
+        name: "Anna Kowalska",
+        birthDate: "1979-07-15",
+      };
+
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+
+      expect(stored[EXTRACT]).toMatchObject({ status: "open", agreed: null });
+      expect(mockMatchAndDrain).not.toHaveBeenCalled();
+    });
+  });
+
   it("leaves a lower-confidence reading to readers", async () => {
     await send({
       candidacies: [candidacy()],
