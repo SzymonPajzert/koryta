@@ -3,9 +3,11 @@
  * for.
  *
  * Once readers agree on the birth date a crop shows (`recordAnswer`), or the
- * job read a typed one with high confidence at upload, the reading meets the
- * pages for the first time - nothing on the BIP side ever carries a date the
- * site knows. Each page the crop's candidacies name is one of:
+ * job's own reading settles it at upload (`machineSettles`: a typed date read
+ * with high confidence, or an OCR date that is already a page's birth date),
+ * the reading meets the pages for the first time - nothing on the BIP side
+ * ever carries a date the site knows. Each page the crop's candidacies name
+ * is one of:
  *
  * - without a birth date: recorded, nothing else. The pipeline's join proposes
  *   one from the register where the two agree; that is a reviewer's call.
