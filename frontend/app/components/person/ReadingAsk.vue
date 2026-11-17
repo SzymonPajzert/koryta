@@ -26,7 +26,7 @@
       </div>
       <div class="ask-box__words">
         <h3 id="person-reading-ask-title" class="ask-box__title">
-          {{ title }}
+          {{ TITLE }}
         </h3>
         <p class="ask-box__body">{{ BODY }}</p>
       </div>
@@ -53,8 +53,10 @@
  * the birth date off a few scans of asset declarations on /oswiadczenia. No
  * account is needed there, and a date that matches the register publishes
  * the person, so the ask leads with how many were published in the last 30
- * days - and on a page the automation published, says that pages like it come
- * from readers (round osoba-skany-r1, look c; wording from round r2).
+ * days, and says that pages like this one come from readers (round
+ * osoba-skany-r1, look c; wording from rounds r2 and r3). The same title on
+ * every page, however this one was published: the point is the pages like it
+ * (decided 2026-11-17).
  *
  * Person pages are where readers arrive: Google landed 33 a weekday on them in
  * November, and until now none of them was asked anything.
@@ -67,14 +69,11 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { mdiChevronRight } from "@mdi/js";
-import { usePersonDeclarations } from "~/composables/personDeclarations";
 import { trackGoal } from "~/composables/analytics";
 import { useExperimentArm } from "~/composables/experiments";
 import { PERSON_ASK_EXPERIMENT } from "~~/shared/experiments";
 import { polishNumber } from "~/composables/polish";
 import { plural } from "~/utils/jobStyle";
-
-const props = defineProps<{ nodeId: string }>();
 
 /** A no-break space: Polish keeps a one-letter word on the line of the word
  * after it, as `DeclarationNote` does. */
@@ -82,17 +81,10 @@ const NBSP = "\u00a0";
 
 const BODY = `Przepisz daty urodzenia z${NBSP}kilku skanów oświadczeń. Jeśli będą pasować do danych z${NBSP}KRS-u, automatycznie opublikujemy te osoby.`;
 
-const { data: declarations } = usePersonDeclarations(props.nodeId);
-
-/** On a page the automation published, a word about pages like it rather
- * than about this one: since 11-16 an OCR date that matches the page settles
- * its crop without readers, so this very page may owe readers nothing (round
- * osoba-skany-r2). */
-const title = computed(() =>
-  declarations.value?.autoPublished
-    ? "Strony jak ta powstały dzięki czytelnikom"
-    : "Masz minutę?",
-);
+/** About pages like this one rather than this one: since 2026-11-16 an OCR
+ * date that matches the page settles a crop without readers, so a given page
+ * may owe readers nothing. */
+const TITLE = "Strony jak ta powstały dzięki czytelnikom";
 
 /** Which half of the split this reader is in: the control (`bez`) until the
  * browser has settled it, so the server's render never has the box. */

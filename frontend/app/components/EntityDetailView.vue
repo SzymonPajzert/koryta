@@ -197,7 +197,6 @@
                  account restored a moment later must not be counted in it. -->
             <PersonReadingAsk
               v-if="authReady && !user"
-              :node-id="node"
               class="mt-3 mt-sm-6 mb-6"
             />
           </template>

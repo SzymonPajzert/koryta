@@ -62,10 +62,9 @@ export const QA_ITEMS: QaItem[] = [
     id: "prosba-o-odczyt-skanow-na-stronie-osoby",
     title: "Na stronie osoby prośba o odczytanie kilku skanów oświadczeń",
     description:
-      "Pod „Historią powiązań” połowa niezalogowanych czytelników widzi, ile osób strona opublikowała automatycznie w ostatnich 30 dniach, i przycisk „Odczytaj skany” do /oswiadczenia. Druga połowa jej nie widzi, żeby porównać, czy ramka nie zniechęca do reszty strony. Na stronie opublikowanej automatycznie tytuł brzmi „Strony jak ta powstały dzięki czytelnikom”.",
+      "Pod „Historią powiązań” połowa niezalogowanych czytelników widzi, ile osób strona opublikowała automatycznie w ostatnich 30 dniach, i przycisk „Odczytaj skany” do /oswiadczenia. Druga połowa jej nie widzi, żeby porównać, czy ramka nie zniechęca do reszty strony.",
     steps: [
-      "Wyloguj się i otwórz stronę dowolnej osoby w kilku nowych kartach: mniej więcej w co drugiej pod „Historią powiązań” jest ramka z liczbą, „Masz minutę?” i przyciskiem „Odczytaj skany”, w pozostałych jej nie ma. W jednej karcie zostaje to samo.",
-      "Otwórz stronę osoby z dopiskiem „Strona opublikowana automatycznie” pod jej danymi: w ramce stoi „Strony jak ta powstały dzięki czytelnikom”.",
+      "Wyloguj się i otwórz stronę dowolnej osoby w kilku nowych kartach: mniej więcej w co drugiej pod „Historią powiązań” jest ramka z liczbą, „Strony jak ta powstały dzięki czytelnikom” i przyciskiem „Odczytaj skany”, w pozostałych jej nie ma. W jednej karcie zostaje to samo.",
       "Kliknij „Odczytaj skany”: otwiera się /oswiadczenia.",
       "Zaloguj się: ramki nie ma.",
     ],

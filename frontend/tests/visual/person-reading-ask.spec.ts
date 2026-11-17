@@ -18,9 +18,11 @@ import { expectFitsThePhone } from "./phoneWidth";
 
 /** The ask under a person's history to read a few declaration scans, as a
  * reader who is not signed in finds it in the half of the `osoba-skany` split
- * that has it: led by the people published automatically in 30 days, and on
- * such a page saying that pages like it come from readers. Look c of board
- * round osoba-skany-r1 (2026-11-14), worded in rounds r2 and r3 (2026-11-17).
+ * that has it: led by the people published automatically in 30 days, saying
+ * that pages like this one come from readers. Look c of board round
+ * osoba-skany-r1 (2026-11-14), worded in rounds r2 and r3 and given one title
+ * for every page (2026-11-17), so one shot: the page here was published
+ * automatically, which no longer changes the box.
  *
  * The seeded Jan Kowalski, with the declarations of
  * person-declarations.spec.ts; the figure is production's of 2026-11-14,
@@ -33,9 +35,6 @@ const SLUG = { tag: pageTag("[seoType]/[slug]") };
 
 /** /api/stats/activity's `automatic` on 2026-11-14. */
 const READERS_PUBLISHED = 741;
-
-/** No declarations: a page the readings did not publish. */
-const NONE: PersonDeclarations = { autoPublished: null, declarations: [] };
 
 /** A session id that `osoba-skany` puts in its ask's arm. */
 const ASK_SESSION = (() => {
@@ -88,33 +87,17 @@ async function openPerson(
   await openInApp(page, path);
 }
 
-test("osoba-prosba-o-skany", SLUG, async ({ page }, testInfo) => {
+test("osoba-prosba-o-skany-po-odczytach", SLUG, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
-  await openPerson(page, NONE, personMentions);
+  await openPerson(page, personDeclarations, personMentions);
 
   const ask = page.getByTestId("person-reading-ask");
   await expect(ask).toBeVisible({ timeout: 30_000 });
   await expect(ask.getByTestId("person-reading-ask-figure")).toContainText(
     "741",
   );
-  await expect(ask.locator("h3")).toHaveText("Masz minutę?");
-
-  await readyForElementShot(page);
-  await expect(ask).toHaveScreenshot("osoba-prosba-o-skany.png");
-
-  await expectFitsThePhone(page, testInfo);
-});
-
-test("osoba-prosba-o-skany-po-odczytach", SLUG, async ({ page }, testInfo) => {
-  test.setTimeout(120_000);
-  await openPerson(page, personDeclarations, personMentions);
-
-  // The title waits on the declarations, which the browser asks for after
-  // the page is up.
-  const ask = page.getByTestId("person-reading-ask");
   await expect(ask.locator("h3")).toHaveText(
     "Strony jak ta powstały dzięki czytelnikom",
-    { timeout: 30_000 },
   );
 
   await readyForElementShot(page);

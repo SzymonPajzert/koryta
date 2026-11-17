@@ -158,7 +158,7 @@ export const PERSON_ASK_EXPERIMENT = {
       id: "prosba",
       weight: 1,
       description:
-        "The ask under „Historia powiązań” (board round osoba-skany-r3): how many people were published automatically in 30 days, „Masz minutę?” (or „Strony jak ta powstały dzięki czytelnikom” on such a page) and „Odczytaj skany” to /oswiadczenia.",
+        "The ask under „Historia powiązań” (board round osoba-skany-r3): how many people were published automatically in 30 days, „Strony jak ta powstały dzięki czytelnikom” and „Odczytaj skany” to /oswiadczenia.",
     },
   ],
 } as const satisfies Experiment;
