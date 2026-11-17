@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => {
     matchAndDrain: vi.fn(),
     drainPublications: vi.fn(),
     readBody: vi.fn(),
+    restage: vi.fn(),
+    restageCrops: vi.fn(),
   };
 });
 
@@ -59,6 +61,12 @@ vi.mock("../../../../server/utils/declarationDecisions", async (original) => ({
 vi.mock("../../../../server/utils/declarationPublish", () => ({
   matchAndDrain: mocks.matchAndDrain,
   drainPublications: mocks.drainPublications,
+}));
+// Which pages each decision hands the people count, which
+// tests/server/utils/declarationPeopleCount.test.ts runs.
+vi.mock("../../../../server/utils/declarationPeopleCount", () => ({
+  restageDeclarationPeople: mocks.restage,
+  restageCropPeople: mocks.restageCrops,
 }));
 
 const ID = `${"a".repeat(64)}-p0`;
@@ -259,6 +267,49 @@ describe("api/declarations/[id]/settle", () => {
     quiet.mockRestore();
   });
 
+  it("moves the crop's people, and those the pass took up, in the people count", async () => {
+    mocks.state.body = { verdict: "date", value: "1966-05-21" };
+    mocks.matchAndDrain.mockResolvedValue({
+      matched: [{ outcomes: { fx0001: "queued" } }],
+      drain: { published: ["fx0001", "fx0003"] },
+    });
+    await settle(event);
+    expect(mocks.restageCrops).toHaveBeenCalledWith(
+      expect.anything(),
+      [ID],
+      ["fx0001", "fx0003"],
+    );
+
+    mocks.restageCrops.mockClear();
+    mocks.state.body = { verdict: "unreadable" };
+    await settle(event);
+    expect(mocks.restageCrops).toHaveBeenCalledWith(
+      expect.anything(),
+      [ID],
+      [],
+    );
+  });
+
+  it("keeps the decision when the people count cannot be moved", async () => {
+    // The real re-staging, on a database with nothing to read.
+    const { restageCropPeople } = await vi.importActual<
+      typeof import("../../../../server/utils/declarationPeopleCount")
+    >("../../../../server/utils/declarationPeopleCount");
+    mocks.restageCrops.mockImplementationOnce(restageCropPeople);
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.state.body = { verdict: "unreadable" };
+
+    await expect(settle(event)).resolves.toMatchObject({
+      status: "unreadable",
+    });
+    expect(quiet).toHaveBeenCalledWith(
+      expect.stringContaining(ID),
+      expect.any(Error),
+    );
+    expect(mocks.clear).toHaveBeenCalledWith(OVERVIEW);
+    quiet.mockRestore();
+  });
+
   it("drops the cached pages when the comparison published somebody", async () => {
     mocks.state.body = { verdict: "date", value: "1966-05-21" };
     mocks.matchAndDrain.mockResolvedValue({
@@ -289,6 +340,8 @@ describe("api/declarations/[id]/withdraw", () => {
     expect(mocks.clear).toHaveBeenCalledWith(OVERVIEW);
     expect(mocks.clear).not.toHaveBeenCalledWith("nitro:handlers");
     expect(headers()["Cache-Control"]).toBe("private, no-store");
+    // Its people move in the people count.
+    expect(mocks.restageCrops).toHaveBeenCalledWith(expect.anything(), [ID]);
   });
 
   it("drops the cached pages when a public page linked the crop", async () => {
@@ -331,5 +384,7 @@ describe("api/declarations/publish-queued", () => {
     await publishQueued(event);
     expect(mocks.clear).toHaveBeenCalledWith(OVERVIEW);
     expect(mocks.clear).not.toHaveBeenCalledWith("nitro:handlers");
+    // The page it held moves in the people count.
+    expect(mocks.restage).toHaveBeenCalledWith(expect.anything(), ["fx0002"]);
   });
 });

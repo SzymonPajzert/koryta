@@ -196,6 +196,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Each counted person's stage and candidacies, which the people count
+    // moves during the day (server/utils/declarationPeopleCount.ts). Server
+    // only: the pages read the counts through /api/declarations/people.
+    match /declarationPeople/{doc} {
+      allow read, write: if false;
+    }
+
     // Pages captured from someone's browser. Written only by /api/ingest/page
     // and by the extractor, both of which hold admin credentials and so are not
     // subject to these rules at all — the client reads through /api/pages,

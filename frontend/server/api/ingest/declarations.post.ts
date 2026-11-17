@@ -2,9 +2,11 @@ import { createHash } from "node:crypto";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser, requireDatascience } from "~~/server/utils/auth";
+import { restageDeclarationPeople } from "~~/server/utils/declarationPeopleCount";
 import { matchAndDrain } from "~~/server/utils/declarationPublish";
 import { resolveMergedNode } from "~~/server/utils/merge";
 import { pagesWithAPublicPost } from "~~/server/utils/publicPosts";
+import { pagesTouched } from "~~/shared/declarationPeople";
 import { pageIsPublic } from "~~/shared/model";
 import {
   declarationIngestSchema,
@@ -40,7 +42,8 @@ import {
  * with high confidence, or one OCR read cleanly that is already the birth date
  * of a page the crop is for. A crop settled either way is then compared with
  * its pages, which is where anything is published
- * (server/utils/declarationPublish.ts).
+ * (server/utils/declarationPublish.ts). The pages of the crops stored, and
+ * those the comparison moved, move in the people count after it.
  */
 export default defineEventHandler(async (event) => {
   // The gate comes before the body: a request with 8 MB of images should not
@@ -177,6 +180,8 @@ export default defineEventHandler(async (event) => {
    * settles (`machineSettles`) and the ones settled already that it names
    * more pages or units for. */
   const toCompare: string[] = [];
+  /** The pages of the crops stored, whose people the count moves. */
+  const cropPages = new Set<string>();
 
   body.extracts.forEach((extract, i) => {
     const id = extractId(extract.sha256, extract.page);
@@ -228,6 +233,7 @@ export default defineEventHandler(async (event) => {
         nextUnits.length >
           (Array.isArray(existing.units) ? existing.units.length : 0));
     if (reading.status === "agreed" || widened) toCompare.push(id);
+    for (const page of nextPersonIds) cropPages.add(page);
 
     writes.set(
       ref,
@@ -294,12 +300,13 @@ export default defineEventHandler(async (event) => {
   // whatever this did not.
   if (toCompare.length > 0) {
     try {
-      const { drain } = await matchAndDrain(
+      const { matched, drain } = await matchAndDrain(
         db,
         toCompare,
         new Date(),
         publishLimitOf(useRuntimeConfig(event)),
       );
+      for (const page of pagesTouched({ matched, drain })) cropPages.add(page);
       if (drain.published.length > 0) {
         await useStorage("cache").clear("nitro:handlers");
       }
@@ -307,6 +314,7 @@ export default defineEventHandler(async (event) => {
       console.error("[declarations] comparing uploaded readings failed", error);
     }
   }
+  await restageDeclarationPeople(db, [...cropPages]);
   return result;
 });
 

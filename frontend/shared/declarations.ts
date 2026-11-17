@@ -664,14 +664,26 @@ export const peopleSearchReasons = [
 ] as const;
 export type PeopleSearchReason = (typeof peopleSearchReasons)[number];
 
+/** The stages of the people snapshot, in its order. Each person is in one. */
+export const peopleStages = [
+  "published",
+  "namesakes",
+  "mismatched",
+  "held",
+  "reading",
+  "cropped",
+  "downloaded",
+  "searching",
+] as const;
+export type PeopleStage = (typeof peopleStages)[number];
+
 const headCount = z.number().int().min(0).max(10_000_000);
 
 /**
- * Where the declarations stand, counted in people: the snapshot the
- * declarations job sends once a night (`stats/declaration_people`). Only it
- * can count this, since half of it is on predator - crops cut and not sent,
- * files not cut, BIPs that would not answer - and the other half is the site's,
- * which it reads from the night's export.
+ * Where the declarations stand, counted in people (`stats/declaration_people`).
+ * The site counts it whole when the night sends what predator knows
+ * (`declarationFactsIngestSchema`), and moves the people a daytime event
+ * touches (server/utils/declarationPeopleCount.ts, shared/declarationPeople.ts).
  *
  * Who is counted: the draft pages with a won local
  * candidacy and a public post, which a declaration can publish, and the pages
@@ -680,9 +692,9 @@ const headCount = z.number().int().min(0).max(10_000_000);
  */
 export const declarationPeopleSchema = z
   .object({
-    /** When the job counted. */
+    /** When it was last counted, whole or for the people an event touched. */
     at: z.string().datetime(),
-    /** The export the site's half was read from, YYYY-MM-DD. */
+    /** The Warsaw day counted, YYYY-MM-DD. */
     exportDay: z.string().refine((value) => isoDay(value), "YYYY-MM-DD"),
     people: headCount,
     /** Published because a declaration's birth date matched the page's. */
@@ -785,6 +797,62 @@ export function peopleGroups(snapshot: DeclarationPeople) {
     namesakes: snapshot.namesakes,
   };
 }
+
+/** Candidacies one facts body carries at most. */
+export const MAX_FACT_CANDIDACIES = 100_000;
+
+/** One candidacy of the night's list, with what predator knows of its files:
+ * what the site counts the people snapshot from. No names and no dates: the
+ * night reads it from the shared cache. */
+export const declarationFactSchema = z.object({
+  /** BipPersonOfInterest.key. */
+  key: z.string().regex(/^[0-9a-f]{8,64}$/),
+  /** koryta_ids: the pages the list matched the candidacy to. */
+  kids: z.array(z.string().min(1).max(64)).min(1).max(5),
+  teryt: z.string().regex(/^\d{6}$/),
+  unitName: z.string().max(200),
+  /** The election year. */
+  year: z.number().int().min(1990).max(2100),
+  /** What the crawl concluded, and its reason as it gives it. */
+  status: z.enum(candidacyStatuses),
+  reason: z.string().max(40),
+  /** A file of theirs this version of the cutter has not cut. */
+  uncut: z.boolean(),
+  /** A file a link names them in, cut. */
+  cutNamed: z.boolean(),
+  /** A crop of theirs cut, not on the site yet and not skipped for good. */
+  waiting: z.boolean(),
+  /** Living Poles with the surname in the person's sex's form (PESEL). */
+  bearers: z.number().int().min(0).max(100_000_000),
+});
+export type DeclarationFact = z.infer<typeof declarationFactSchema>;
+
+/** `POST /api/ingest/declarations/facts`: the night's facts, which the site
+ * counts the people snapshot from, whole. */
+export const declarationFactsIngestSchema = z.object({
+  /** When the night built it. One older than the site's is refused. */
+  generation: z.string().datetime(),
+  /** When the night's list was built, where known. */
+  listAt: z.string().datetime().nullable(),
+  /** The predator part the facts came from, and when it was written. */
+  part: z.string().max(500),
+  partAt: z.string().datetime(),
+  /** Count an older generation all the same. */
+  force: z.boolean().optional(),
+  candidacies: z.array(declarationFactSchema).max(MAX_FACT_CANDIDACIES),
+});
+export type DeclarationFactsIngest = z.infer<
+  typeof declarationFactsIngestSchema
+>;
+
+/** What the facts ingest answers: the people counted by stage, and the
+ * not_found reasons the site has no word for, counted as `pending`. */
+export type DeclarationFactsResult = {
+  status: "ok";
+  people: number;
+  stages: Record<PeopleStage, number>;
+  unknownReasons: Record<string, number>;
+};
 
 /** `POST /api/declarations/<id>/answer`. */
 export type DeclarationAnswer = {
@@ -986,8 +1054,14 @@ export type PublicationStatus = (typeof publicationStatuses)[number];
  * settled, which holds a draft and leaves a public page without a record),
  * `queued` a draft waiting for its slot, `confirmed` a page that was public
  * already. */
-export type PageOutcome =
-  "no_date" | "different" | "confirmed" | "queued" | "held";
+export const pageOutcomes = [
+  "no_date",
+  "different",
+  "confirmed",
+  "queued",
+  "held",
+] as const;
+export type PageOutcome = (typeof pageOutcomes)[number];
 
 /** What a settled reading said about its pages, summed up on the crop: `same`
  * when any page has the date, else `different` when any has another one. */

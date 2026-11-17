@@ -2,6 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { z } from "zod";
 import { getUser } from "~~/server/utils/auth";
+import { restageCropPeople } from "~~/server/utils/declarationPeopleCount";
 import { compareSettled } from "~~/server/utils/declarationSettled";
 import { claimAnswers, readerIdOf } from "~~/server/utils/declarations";
 import type { DeclarationClaimResult } from "~~/shared/declarations";
@@ -12,10 +13,11 @@ const claimSchema = z.object({ readerId: z.string().max(64) });
  * page waits for the claim before it serves the account's first crop. */
 const PAGES_PER_CLAIM = 1;
 
-/** Crops a claim compares with their pages before it answers. A reader
+/** Crops a claim compares with their pages before it answers, and crops
+ * settled as unreadable whose people it moves in the people count. A reader
  * without an account is served the crops a vote short first, so one claim can
  * settle dozens at once; the sweep the job calls after every upload compares
- * the rest. */
+ * the rest, and the night counts everybody. */
 const CROPS_COMPARED_PER_CLAIM = 10;
 
 /**
@@ -23,7 +25,8 @@ const CROPS_COMPARED_PER_CLAIM = 10;
  * that has just signed in there (`claimAnswers`): /oswiadczenia sends the
  * browser's reader id once the reader signs in, and forgets the id when this
  * answers. They vote from then on, so the crops they settle are compared with
- * their pages as after an answer (`compareSettled`).
+ * their pages as after an answer (`compareSettled`), and the people of those
+ * settled as unreadable move in the people count.
  *
  * A token is required: the answers go to its account. An account whose
  * address nobody confirmed gets a 403 (`claimAnswers`), and the page keeps
@@ -72,6 +75,12 @@ export default defineEventHandler(async (event) => {
     settledOnDay.slice(0, CROPS_COMPARED_PER_CLAIM),
     PAGES_PER_CLAIM,
   );
+  const unreadable = settled
+    .filter(({ settlement }) => settlement.status === "unreadable")
+    .map(({ extractId }) => extractId);
+  if (unreadable.length > 0) {
+    await restageCropPeople(db, unreadable.slice(0, CROPS_COMPARED_PER_CLAIM));
+  }
   if (left > 0) {
     throw createError({
       statusCode: 503,

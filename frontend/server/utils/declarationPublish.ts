@@ -44,6 +44,7 @@ import type { DocumentData, Firestore } from "firebase-admin/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { AuditEntry } from "~~/shared/audit";
 import { isoDay, warsawDate, warsawHour } from "~~/shared/dates";
+import { pagesTouched } from "~~/shared/declarationPeople";
 import {
   DECLARATION_ACTOR,
   nameFitsPage,
@@ -1806,13 +1807,16 @@ export async function matchAndDrain(
  *
  * The ones compared again go least recently compared first: a crop compared
  * to no effect is stamped and goes to the back, so each sweep reaches others.
+ *
+ * Says which pages it compared, put back or took up (`touched`), for the
+ * people count to move them.
  */
 export async function sweepDeclarations(
   db: Firestore,
   now: Date,
   limit: number,
   options: { batch?: number } = {},
-): Promise<SweepResult> {
+): Promise<SweepResult & { touched: string[] }> {
   const size = options.batch ?? SWEEP_BATCH;
   const extracts = db.collection(EXTRACTS);
   const [unmatched, recheck] = await Promise.all([
@@ -1831,11 +1835,16 @@ export async function sweepDeclarations(
   ]);
 
   let changed = 0;
+  const matched: MatchResult[] = [];
   for (const doc of unmatched.docs) {
-    if ((await matchPages(db, doc.id, now)).changed) changed += 1;
+    const match = await matchPages(db, doc.id, now);
+    matched.push(match);
+    if (match.changed) changed += 1;
   }
   for (const doc of recheck.docs) {
-    if ((await matchPages(db, doc.id, now)).changed) {
+    const match = await matchPages(db, doc.id, now);
+    matched.push(match);
+    if (match.changed) {
       changed += 1;
     } else {
       await extracts
@@ -1851,6 +1860,7 @@ export async function sweepDeclarations(
     changed,
     reverted,
     drain,
+    touched: pagesTouched({ matched, drain, reverted }),
   };
 }
 

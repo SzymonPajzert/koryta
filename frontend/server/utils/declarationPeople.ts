@@ -5,15 +5,14 @@ import {
 } from "~~/shared/declarations";
 
 /**
- * Where the declarations stand in people: one document the declarations job
- * rewrites once a night (`DeclarationPeople`). It cannot be counted here: half
- * of it is on predator, where the crawl and the cutter keep what has not been
- * sent, and the site never learns of a person before their crop arrives.
+ * Where the declarations stand in people: one document (`DeclarationPeople`)
+ * the site counts whole from the facts the night sends, and moves during the
+ * day for the people an event touches (server/utils/declarationPeopleCount.ts).
  */
 export const PEOPLE_DOC = "declaration_people";
 
-/** The night's snapshot, or null before the first one, or for one that does
- * not read as one: an old shape is left unsaid rather than half drawn. */
+/** The snapshot, or null before the first count, or for one that does not
+ * read as one: an old shape is left unsaid rather than half drawn. */
 export async function readDeclarationPeople(
   db: Firestore,
 ): Promise<DeclarationPeople | null> {

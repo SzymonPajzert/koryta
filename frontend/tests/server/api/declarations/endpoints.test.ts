@@ -59,6 +59,8 @@ const mocks = vi.hoisted(() => {
     sweepDeclarations: vi.fn(),
     drainPublications: vi.fn(),
     creditFinds: vi.fn(),
+    restage: vi.fn(),
+    restageCrops: vi.fn(),
   };
 });
 
@@ -98,6 +100,21 @@ vi.mock("../../../../server/utils/declarationPublish", () => ({
   drainPublications: mocks.drainPublications,
   creditFinds: mocks.creditFinds,
 }));
+// The people count is tested in
+// tests/server/utils/declarationPeopleCount.test.ts; here only which pages
+// each endpoint hands it, and that a failure there fails nobody.
+vi.mock("../../../../server/utils/declarationPeopleCount", () => ({
+  restageDeclarationPeople: mocks.restage,
+  restageCropPeople: mocks.restageCrops,
+}));
+
+/** The real re-staging, for the one call that is to fail inside it. */
+async function realRestage() {
+  const { restageDeclarationPeople } = await vi.importActual<
+    typeof import("../../../../server/utils/declarationPeopleCount")
+  >("../../../../server/utils/declarationPeopleCount");
+  mocks.restage.mockImplementationOnce(restageDeclarationPeople);
+}
 
 const ID = `${"a".repeat(64)}-p0`;
 const READER = "0f8fad5b-d9cb-469f-a165-70867728950e";
@@ -179,6 +196,53 @@ describe("api/declarations/[id]/answer", () => {
     const result = await answer({} as never);
 
     expect(result).toMatchObject({ ...QUEUE, settled: true });
+  });
+
+  it("moves the pages its comparison touched in the people count", async () => {
+    settles(ON_A_DAY);
+    mocks.matchAndDrain.mockResolvedValue({
+      matched: [{ outcomes: { kowalska: "queued" } }],
+      drain: { published: ["kowalska"], held: [], confirmed: ["nowak"] },
+    });
+
+    await answer({} as never);
+
+    expect(mocks.restage).toHaveBeenCalledWith(mocks.db, ["kowalska", "nowak"]);
+  });
+
+  it("moves the people of a crop it settles as unreadable, and nobody for a year or a dispute", async () => {
+    settles({ status: "unreadable", readers: 3 });
+    await answer({} as never);
+
+    expect(mocks.matchAndDrain).not.toHaveBeenCalled();
+    expect(mocks.restage).toHaveBeenCalledWith(mocks.db, ["kowalska"]);
+
+    mocks.restage.mockClear();
+    for (const settled of [
+      null,
+      { status: "agreed", value: "1979", kind: "year", readers: 2 },
+      { status: "disputed" },
+    ]) {
+      settles(settled);
+      await answer({} as never);
+    }
+    expect(mocks.restage).not.toHaveBeenCalled();
+  });
+
+  it("still answers the reader when the people count cannot be moved", async () => {
+    settles({ status: "unreadable", readers: 3 });
+    // The real re-staging, on a database with nothing to read.
+    await realRestage();
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await answer({} as never);
+
+    expect(result).toMatchObject({ ...QUEUE, settled: true });
+    expect(quiet).toHaveBeenCalledWith(
+      expect.stringContaining("re-staging kowalska"),
+      expect.any(Error),
+    );
+    quiet.mockRestore();
   });
 
   it("takes a reader without an account by their reader id, and never sets publication going", async () => {
@@ -437,6 +501,21 @@ describe("api/declarations/claim", () => {
     expect(options).toEqual({ maxPages: 1 });
   });
 
+  it("moves the people of the crops it settled as unreadable", async () => {
+    mocks.claimAnswers.mockResolvedValue({
+      claimed: 2,
+      settled: [
+        { extractId: "day", settlement: ON_A_DAY },
+        { extractId: "unreadable", settlement: { status: "unreadable" } },
+      ],
+      left: 0,
+    });
+
+    await claim({} as never);
+
+    expect(mocks.restageCrops).toHaveBeenCalledWith(mocks.db, ["unreadable"]);
+  });
+
   it("compares ten crops at most, and leaves the rest to the sweep", async () => {
     mocks.claimAnswers.mockResolvedValue({
       claimed: 12,
@@ -531,11 +610,16 @@ describe("api/declarations/sweep", () => {
       datascience: true,
     });
     const done = { checked: 2, changed: 1, drain: { published: ["kowalska"] } };
-    mocks.sweepDeclarations.mockResolvedValue(done);
+    mocks.sweepDeclarations.mockResolvedValue({
+      ...done,
+      touched: ["kowalska", "nowak"],
+    });
 
-    expect(await sweep({} as never)).toBe(done);
+    // The pages it touched go to the people count, not to the job's log.
+    expect(await sweep({} as never)).toEqual(done);
     expect(mocks.sweepDeclarations.mock.calls[0]![2]).toBe(4);
     expect(mocks.clear).toHaveBeenCalledWith("nitro:handlers");
+    expect(mocks.restage).toHaveBeenCalledWith(mocks.db, ["kowalska", "nowak"]);
   });
 });
 
@@ -559,6 +643,20 @@ describe("api/declarations/publish-queued", () => {
     expect(mocks.drainPublications.mock.calls[0]![2]).toBe(4);
     // Nobody went up, so the cached pages stay.
     expect(mocks.clear).not.toHaveBeenCalledWith("nitro:handlers");
+  });
+
+  it("moves the people it took up in the people count", async () => {
+    mocks.requireAdmin.mockResolvedValue({ uid: "admin", admin: true });
+    mocks.drainPublications.mockResolvedValue({
+      published: ["kowalska"],
+      held: [{ personId: "nowak", reason: "two_pages" }],
+      confirmed: [],
+      failed: [],
+    });
+
+    await publishQueued({} as never);
+
+    expect(mocks.restage).toHaveBeenCalledWith(mocks.db, ["kowalska", "nowak"]);
   });
 
   it("presses past the limit in the name of the admin, a batch at most", async () => {
