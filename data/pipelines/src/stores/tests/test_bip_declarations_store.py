@@ -76,3 +76,17 @@ def test_candidacies_are_the_list_with_the_search_s_outcomes():
         ("other", 0, "pending", 0),
     ]
     assert not any("CREATE TABLE IF NOT EXISTS bip_poi " in s for s in pg.executed)
+
+
+def test_a_store_opened_to_read_creates_nothing():
+    """`facts-part` runs beside a crawl chunk or a cut: no DDL there."""
+    reading = FakePg({"FROM bip_poi": [("draft", "found", "named", 2, CHECKED)]})
+    store = PostgresBipDeclarationStore(reading, LIST, create=False)  # type: ignore[arg-type]
+
+    assert [r.status for r in store.candidacies()] == ["pending", "found", "pending"]
+    assert reading.executed == []
+    creating = FakePg({})
+    PostgresBipDeclarationStore(creating, LIST)  # type: ignore[arg-type]
+    assert any(
+        "CREATE TABLE IF NOT EXISTS bip_decl_cuts" in sql for sql in creating.executed
+    )

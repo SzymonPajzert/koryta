@@ -122,12 +122,17 @@ def _crop(
 
 
 class PostgresBipDeclarationStore(BipDeclarationStore):
-    def __init__(self, pg: PostgresClient, people: Iterable[PersonRow] = ()) -> None:
+    def __init__(
+        self, pg: PostgresClient, people: Iterable[PersonRow] = (), *, create=True
+    ) -> None:
         """`people`: the night's list (`people_list.read_list`), for the cut's
-        order and the upload's candidacies; `status` needs none."""
+        order and the upload's candidacies; `status` needs none.
+        `create=False` takes the tables as they are and runs no DDL: for a
+        run that only reads (`facts-part`), beside a cut or a crawl."""
         self.pg = pg
         self.people = {p.key: p for p in people}
-        self.ensure_schema()
+        if create:
+            self.ensure_schema()
 
     def ensure_schema(self) -> None:
         for statement in _SCHEMA.split(";"):

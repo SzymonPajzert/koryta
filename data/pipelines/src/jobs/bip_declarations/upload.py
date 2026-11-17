@@ -351,9 +351,19 @@ class ListTooOld(RuntimeError):
 class SiteError(RuntimeError):
     """The site refused a request: retrying the same one will not help."""
 
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        #: The HTTP status it answered with; None when no answer said why.
+        self.status = status
+
 
 class SiteUnavailable(RuntimeError):
     """The site did not answer, or not yet: a later run can try again."""
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        #: The HTTP status of the last answer; None when there was none.
+        self.status = status
 
 
 @dataclass
@@ -365,9 +375,17 @@ class Site:
     session: Any = field(default_factory=requests.Session)
     sleep: Callable[[float], None] = time.sleep
 
-    def post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    def post(
+        self,
+        path: str,
+        body: dict[str, Any],
+        *,
+        backoff: tuple[float, ...] = BACKOFF_S,
+    ) -> dict[str, Any]:
+        """The site's answer. One it did not give is asked again after each
+        of `backoff`'s waits, so a try more than there are waits."""
         refreshed = False
-        for attempt in range(len(BACKOFF_S) + 1):
+        for attempt in range(len(backoff) + 1):
             try:
                 response = self.session.post(
                     f"{self.endpoint.rstrip('/')}{path}",
@@ -376,9 +394,9 @@ class Site:
                     timeout=300,
                 )
             except (requests.ConnectionError, requests.Timeout) as exc:
-                if attempt == len(BACKOFF_S):
+                if attempt == len(backoff):
                     raise SiteUnavailable(f"{path}: {exc}") from exc
-                self.sleep(BACKOFF_S[attempt])
+                self.sleep(backoff[attempt])
                 continue
             if response.status_code == 401 and not refreshed:
                 refreshed = True
@@ -388,13 +406,17 @@ class Site:
                     raise SiteError(str(exc)) from exc
                 continue
             if response.status_code == 429 or response.status_code >= 500:
-                if attempt == len(BACKOFF_S):
-                    raise SiteUnavailable(f"{path}: {response.status_code}")
-                self.sleep(BACKOFF_S[attempt])
+                if attempt == len(backoff):
+                    raise SiteUnavailable(
+                        f"{path}: {response.status_code}", response.status_code
+                    )
+                self.sleep(backoff[attempt])
                 continue
             if not response.ok:
                 text = " ".join(response.text.split())[:500]
-                raise SiteError(f"{path}: {response.status_code} {text}")
+                raise SiteError(
+                    f"{path}: {response.status_code} {text}", response.status_code
+                )
             return dict(response.json())
         raise SiteUnavailable(f"{path}: no answer")
 

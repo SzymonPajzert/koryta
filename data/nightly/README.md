@@ -9,6 +9,7 @@ when nobody is still editing, and compares tonight's people with that copy:
 | 04:00       | `scheduledFirestoreExport` copies the site to `gs://koryta-pl-crawled/hostname=koryta.pl/date=<UTC>/` |
 | 04:15       | the instance schedule boots `koryta-nightly` (up to 15 minutes late, the docs say)                     |
 | 04:30       | `koryta-nightly.timer` starts `koryta-nightly.service`: `night.sh`, then `koryta_nightly`              |
+| ~06:30      | `declarations`: the site counts the declarations in people from predator's newest facts                |
 | ~06:30      | the night is over; `poweroff.sh` switches the VM off                                                   |
 | 08:30       | `--stop-by`: no step but `compress` and `tidy` starts after this                                       |
 | 09:00       | the instance schedule stops the VM, if a night hung                                                    |
@@ -35,6 +36,7 @@ order, each with a time limit and its output in the night's log:
 | `people`          | `koryta_people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --max-rejestrio-current 50 --max-published 10 --refresh none` |
 | `company_updates` | `koryta_company_import --max-uploads 200 --max-renames 0`: what tonight's data changes on the companies the export has (below)                     |
 | `scores`          | `koryta_score_import`: the scoring models rebuilt, tonight's new pages included, and their votes reconciled                                        |
+| `declarations`    | `koryta_bip_declarations send-facts`: predator's newest facts, with tonight's list, to the site, which counts the declarations in people (below)   |
 | `tidy`            | export shards and day-named outputs older than a week off the disk                                                                                 |
 
 The VM keeps its disk, so `versioned/`, the download cache, the listing ranges
@@ -324,6 +326,18 @@ import says it sent), so a new hire is in the queue on /eksploruj/nowe the same
 morning rather than after the next export. A model that rates nobody is not
 uploaded: reconciled, it would take back every vote it has.
 
+Declarations: the people a declaration can publish, each in the stage they are
+in, for the home page's tab, /oswiadczenia/postep and /admin/oswiadczenia. The
+site counts them itself, from its own pages and readings and from what predator
+did for each candidacy: the crawl, the cut and the upload run there by hand, and
+after each it writes a facts part to
+`gs://koryta-pl-sharedcache/jobs/bip_declarations/facts/`
+(`koryta_bip_declarations facts-part`), with no names, dates or URLs in it. The
+night's `declarations` step sends the newest part, with tonight's list and how
+many Poles carry each surname (`koryta_bip_declarations send-facts`); the site
+counts everybody then, and moves them between stages during the day as pages
+are published or readings settle (decision on 2026-11-17).
+
 A failed step does not end the night; the steps that depend on it are held:
 
 - `invariants` needs the export; `tests` and `outputs` the reprocess.
@@ -344,6 +358,12 @@ A failed step does not end the night; the steps that depend on it are held:
   not, so that a held night still names the people as what it held - and holds
   nothing back: the people go up however it went. `company_updates` the same,
   after the people: it neither waits for them nor holds the scores.
+- `declarations` waits for nothing and holds nothing: a held night still moves
+  the count. No part from predator yet, or no answer from the site - a 404
+  included, before the site has the endpoint - is partial, and the next night
+  sends again; a refusal, or the site's own error (500) again after a wait,
+  fails the step. The site counts on every try, so there are two at most,
+  which end inside the step's 15 minutes.
 
 ## Runs asked for on the site
 
@@ -544,6 +564,8 @@ shared cache grows by the night's backups as `main`; how long it keeps them is
 - The article crawl.
 - The BIP crawl (`koryta_scrape_bip`, by hand), nor the two pipelines that
   classify and parse what it fetched: they read its Postgres queue.
+- The declarations' crawl, cut and upload: by hand on predator, which writes a
+  facts part after each. The night only hands the newest to the site.
 
 ## Files
 
