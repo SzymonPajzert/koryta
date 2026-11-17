@@ -468,6 +468,79 @@ describe("EmploymentHistory", () => {
     expect(wrapper.text()).not.toContain("psl");
   });
 
+  it("draws the party PKW says backed the run as the backing chip, before the committee", () => {
+    const wrapper = mountHistory([
+      candidacy({
+        party: "PO",
+        committee: "KKW KOALICJA OBYWATELSKA",
+        supported_by:
+          "popierana przez partię polityczną: Polskie Stronnictwo Ludowe",
+        backing_parties: ["PSL"],
+      }),
+    ]);
+
+    const chips = wrapper.findAllComponents(PartyChip);
+    expect(chips.map((chip) => chip.text())).toEqual(["PO", "PSL"]);
+    const backing = chips[1]!.get(".chip");
+    expect(backing.classes()).toContain("chip--backing");
+    expect(backing.attributes("title")).toBe(
+      "Poparcie kandydatury (PKW: popierana przez partię polityczną: Polskie Stronnictwo Ludowe)",
+    );
+    // No word before the chip, as the list's party has none.
+    expect(wrapper.text()).not.toContain("poparcie");
+    expect(wrapper.text().indexOf("PSL")).toBeLessThan(
+      wrapper.text().indexOf("KKW KOALICJA OBYWATELSKA"),
+    );
+  });
+
+  it("names a backer that is no party, after „poparcie”", () => {
+    const wrapper = mountHistory([
+      candidacy({
+        committee: "KWW BURMISTRZA JACKA ORYCHA",
+        supported_by:
+          "popierany przez organizację: Mareckie Stowarzyszenie Gospodarcze",
+      }),
+    ]);
+
+    expect(wrapper.text()).toContain(
+      "poparcie Mareckie Stowarzyszenie Gospodarcze",
+    );
+    expect(wrapper.findComponent(PartyChip).exists()).toBe(false);
+  });
+
+  it("names a party the candidate declared that the list does not", () => {
+    const wrapper = mountHistory([
+      candidacy({
+        party: "PO",
+        party_member: "członek partii politycznej: Nowoczesna",
+        member_parties: ["Nowoczesna"],
+      }),
+    ]);
+
+    expect(wrapper.text()).toContain("członek");
+    const chips = wrapper.findAllComponents(PartyChip);
+    expect(chips.map((chip) => chip.text())).toEqual(["PO", "Nowoczesna"]);
+    expect(chips[1]!.get(".chip").classes()).not.toContain("chip--backing");
+  });
+
+  it("says nothing of a membership in the list's own party, or of none", () => {
+    for (const statement of [
+      {
+        party_member: "członek partii politycznej: PO",
+        member_parties: ["PO"],
+      },
+      { party_member: "nie należy do partii politycznej" },
+    ]) {
+      const wrapper = mountHistory([candidacy({ party: "PO", ...statement })]);
+
+      expect(wrapper.find('[data-testid="edge-statements-e1"]').exists()).toBe(
+        false,
+      );
+      expect(wrapper.text()).not.toContain("członek");
+      expect(wrapper.text()).not.toContain("bez partii");
+    }
+  });
+
   it("leaves a candidacy with neither field as it was", () => {
     const wrapper = mountHistory([candidacy()]);
 

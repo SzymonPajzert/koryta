@@ -46,6 +46,11 @@ export type EdgeNode = {
   /** An `owns` edge from whoever set the other end up, not from a shareholder.
    * See `Edge.founder`. */
   founder?: boolean;
+  /** PKW's statements on a candidacy. See `Edge.party_member`. */
+  party_member?: string;
+  member_parties?: string[];
+  supported_by?: string;
+  backing_parties?: string[];
 };
 
 /** The row's other end, where that end is a company at all.

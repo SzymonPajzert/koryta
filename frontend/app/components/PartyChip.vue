@@ -10,7 +10,7 @@
        screen reader, a copy and paste. Callers put the chip straight after a
        name, and Google's snippet read "Romuald BosakowskiPO". It is never
        drawn: a space at the start of the chip's own line collapses. -->
-  <span class="chip" :style :title>{{ ` ${party}` }}</span>
+  <span class="chip" :class="kind" :style :title>{{ ` ${party}` }}</span>
 </template>
 
 <script setup lang="ts">
@@ -18,9 +18,21 @@ import { computed } from "vue";
 import { OTHER_PARTY, partyChipPaint } from "~~/shared/misc";
 import { ink } from "~~/shared/colors";
 
-const { party } = defineProps<{
+const {
+  party,
+  tie = undefined,
+  note = undefined,
+} = defineProps<{
   party: string;
+  /** How the person is tied to the party, where it is not the plain way: a
+   * backing PKW recorded is drawn as a frame with the party's colour down its
+   * left edge (decision on 2026-11-17), and says so on hover (`note`). */
+  tie?: "backing";
+  /** What to say on hover in place of the default. */
+  note?: string;
 }>();
+
+const kind = computed(() => (tie === "backing" ? "chip--backing" : undefined));
 
 // The ink used to be a three-name map of the parties that get white text, with
 // a near-black fallback, so Konfederacja's #102440 painted #090707 on navy at
@@ -31,14 +43,27 @@ const { party } = defineProps<{
 // `backgroundColor` is left off entirely for a party `shared/misc` has no
 // colour for, so that whatever surface the caller draws on shows through
 // rather than being overridden with the string "undefined".
-const style = computed(() => partyChipPaint(party) ?? { color: ink.strong });
+const style = computed(() => {
+  const paint = partyChipPaint(party);
+  if (tie !== "backing") return paint ?? { color: ink.strong };
+  // The party's own colour as the frame and the stripe, the rest of the fill
+  // left to the surface. „Inne”'s fill is too pale to draw a line in, so its
+  // ink draws it.
+  const line =
+    party === OTHER_PARTY
+      ? paint?.color
+      : (paint?.backgroundColor ?? ink.strong);
+  return { borderColor: line, color: ink.strong };
+});
 
 /** „Inne” names no party, so the chip says what it stands for to whoever
  * stops on it. Every other chip is its own explanation. */
-const title = computed(() =>
-  party === OTHER_PARTY
-    ? "Powiązanie polityczne spoza głównych partii"
-    : undefined,
+const title = computed(
+  () =>
+    note ??
+    (party === OTHER_PARTY
+      ? "Powiązanie polityczne spoza głównych partii"
+      : undefined),
 );
 </script>
 
@@ -61,5 +86,14 @@ const title = computed(() =>
   white-space: nowrap;
   border-radius: 0.3rem;
   font-weight: 550;
+}
+
+/* As tall as a filled chip: the frame takes its width out of the padding, and
+   the stripe all but 2px of its own. */
+.chip--backing {
+  border: 1.5px solid;
+  border-left-width: 6px;
+  padding: calc(0.1rem - 1.5px) calc(0.4rem - 1.5px) calc(0.1rem - 1.5px)
+    calc(0.4rem - 4px);
 }
 </style>
