@@ -221,6 +221,15 @@ export interface Edge extends PageBase<EdgeType> {
   elected?: boolean;
   term?: string;
   by_election?: boolean;
+  /** On a candidacy: what the candidate declared about their own party, as
+   * PKW wrote it, and the site's parties it names. Written by the ingest
+   * alone; see `restated` in server/utils/edges.ts. */
+  party_member?: string;
+  member_parties?: string[];
+  /** On a candidacy: who PKW says backed it, as PKW wrote it, and the site's
+   * parties it names. */
+  supported_by?: string;
+  backing_parties?: string[];
   /** On an `owns` edge: the source set the target up rather than holding
    * shares in it. A foundation or an association has no shareholders, so its
    * founder is who stands behind it; the company page lists it under

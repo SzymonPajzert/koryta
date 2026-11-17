@@ -681,6 +681,17 @@ async function createElection(
   // election PKW may simply have said nothing about - and it says nothing
   // about 70% of the register. See `elected` in shared/api.ts.
   if (election.elected) edgeData.elected = true;
+  // PKW's statements of the candidate's party and of who backed them. Written
+  // without a reviewer, as the result is: PKW records them, and the parties are
+  // read off them through an exact table, as `vouched` committees are.
+  if (election.party_member) edgeData.party_member = election.party_member;
+  if (election.member_parties?.length) {
+    edgeData.member_parties = election.member_parties;
+  }
+  if (election.supported_by) edgeData.supported_by = election.supported_by;
+  if (election.backing_parties?.length) {
+    edgeData.backing_parties = election.backing_parties;
+  }
   if (election.election_year) {
     edgeData.start_date = `${election.election_year}-01-01`;
   }
