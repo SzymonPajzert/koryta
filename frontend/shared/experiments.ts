@@ -132,8 +132,42 @@ export const HOME_DEFAULT_EXPERIMENT = {
 export type HomeDefaultArm =
   (typeof HOME_DEFAULT_EXPERIMENT)["arms"][number]["id"];
 
+/** Whether a reader who is not signed in gets the ask under a person's history
+ * to read a few declaration scans (`PersonReadingAsk`).
+ *
+ * Live from its first rollout, decided on 2026-11-17: half and half, because
+ * the ask might put readers off the rest of the page as much as it brings them
+ * to /oswiadczenia. Control is the page without it, which is also what the
+ * server renders: the box appears only once the browser is in the other arm,
+ * so no reader of the control sees it for a frame.
+ *
+ * Person pages draw ~40-50 signed-out sessions a weekday (November), ~20-25 an
+ * arm: two weeks tell a bounce difference of ten points or so, four weeks
+ * about eight. The read is task evaluate-the-osoba-skany-experiment. */
+export const PERSON_ASK_EXPERIMENT = {
+  id: "osoba-skany",
+  question:
+    "Does the ask to read a few declaration scans, under a person's history, put readers off the rest of the site, and does it bring them to /oswiadczenia?",
+  arms: [
+    {
+      id: "bez",
+      weight: 1,
+      description: "The person page without the ask, as before it.",
+    },
+    {
+      id: "prosba",
+      weight: 1,
+      description:
+        "The ask under „Historia powiązań” (board round osoba-skany-r3): how many people were published automatically in 30 days, „Masz minutę?” (or „Strony jak ta powstały dzięki czytelnikom” on such a page) and „Odczytaj skany” to /oswiadczenia.",
+    },
+  ],
+} as const satisfies Experiment;
+
+export type PersonAskArm = (typeof PERSON_ASK_EXPERIMENT)["arms"][number]["id"];
+
 export const EXPERIMENTS = {
   "home-default": HOME_DEFAULT_EXPERIMENT,
+  "osoba-skany": PERSON_ASK_EXPERIMENT,
 } as const;
 
 export type ExperimentId = keyof typeof EXPERIMENTS;

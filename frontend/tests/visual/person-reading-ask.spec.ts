@@ -13,12 +13,14 @@ import {
 import { logIn, USERS } from "../e2e/helpers/auth";
 import { openInApp } from "./openInApp";
 import { pageTag } from "./pageTags";
+import { PERSON_ASK_EXPERIMENT, assignArm } from "../../shared/experiments";
 import { expectFitsThePhone } from "./phoneWidth";
 
 /** The ask under a person's history to read a few declaration scans, as a
- * reader who is not signed in finds it: led by the people the readers'
- * readings published in 30 days, and on a page they published, saying so.
- * Look c of board round osoba-skany-r1, picked by Szymon on 2026-11-14.
+ * reader who is not signed in finds it in the half of the `osoba-skany` split
+ * that has it: led by the people published automatically in 30 days, and on
+ * such a page saying that pages like it come from readers. Look c of board
+ * round osoba-skany-r1 (2026-11-14), worded in rounds r2 and r3 (2026-11-17).
  *
  * The seeded Jan Kowalski, with the declarations of
  * person-declarations.spec.ts; the figure is production's of 2026-11-14,
@@ -35,6 +37,30 @@ const READERS_PUBLISHED = 741;
 /** No declarations: a page the readings did not publish. */
 const NONE: PersonDeclarations = { autoPublished: null, declarations: [] };
 
+/** A session id that `osoba-skany` puts in its ask's arm. */
+const ASK_SESSION = (() => {
+  for (let i = 0; i < 10_000; i++) {
+    const id = `visual-session-${i}`;
+    if (assignArm(PERSON_ASK_EXPERIMENT, id) === "prosba") return id;
+  }
+  throw new Error("no session id lands in the ask's arm");
+})();
+
+/** Puts the browser in the ask's half of the split. An automated browser sits
+ * every split out (`useExperimentArm`), so the page is told it is not one, and
+ * the session is seated in the arm. Not being automated also wakes the
+ * tracker, so nothing it sends leaves the machine. */
+async function seatInTheAsksArm(page: Page) {
+  await page.addInitScript((session) => {
+    Object.defineProperty(Navigator.prototype, "webdriver", {
+      get: () => false,
+      configurable: true,
+    });
+    sessionStorage.setItem("koryta:session", session);
+  }, ASK_SESSION);
+  await page.route(/plausible\.io/, (route) => route.abort());
+}
+
 /** Jan Kowalski's page with these declarations and articles. */
 async function openPerson(
   page: Page,
@@ -43,6 +69,7 @@ async function openPerson(
 ) {
   const { id, path } = declarationPerson;
   await freezeClock(page);
+  await seatInTheAsksArm(page);
   await page.route(
     (url) => url.pathname === `/api/nodes/${id}/declarations`,
     (route) => route.fulfill({ json: declarations }),
@@ -102,6 +129,8 @@ test("osoba-prosba-o-skany-po-odczytach", SLUG, async ({ page }, testInfo) => {
  * tagged test, and there is nothing here to photograph. */
 test("osoba-prosba-o-skany-zalogowany", async ({ page }) => {
   test.setTimeout(120_000);
+  // In the ask's arm, so only being signed in keeps the box away.
+  await seatInTheAsksArm(page);
   await logIn(page, USERS.normal, declarationPerson.path);
 
   await expect(

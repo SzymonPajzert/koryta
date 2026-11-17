@@ -1,8 +1,10 @@
 <template>
   <!-- An aside, not part of the record: `data-nosnippet` keeps Google from
        quoting the ask in this person's search result, which should be about
-       them. -->
+       them. Drawn only in the experiment's arm that has it, and only once the
+       figure is in, so the box arrives whole. -->
   <section
+    v-if="shown"
     ref="root"
     class="ask px-2"
     aria-labelledby="person-reading-ask-title"
@@ -56,11 +58,19 @@
  *
  * Person pages are where readers arrive: Google landed 33 a weekday on them in
  * November, and until now none of them was asked anything.
+ *
+ * Half of the readers get it (`PERSON_ASK_EXPERIMENT`, decided 2026-11-17), so
+ * whether it puts them off the rest of the page can be measured against the
+ * half that does not. The arm is settled in the browser, and the server
+ * renders the control: the page without the box. The parent mounts this only
+ * for a reader known not to be signed in, so an account never joins the split.
  */
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { mdiChevronRight } from "@mdi/js";
 import { usePersonDeclarations } from "~/composables/personDeclarations";
 import { trackGoal } from "~/composables/analytics";
+import { useExperimentArm } from "~/composables/experiments";
+import { PERSON_ASK_EXPERIMENT } from "~~/shared/experiments";
 import { polishNumber } from "~/composables/polish";
 import { plural } from "~/utils/jobStyle";
 
@@ -84,13 +94,20 @@ const title = computed(() =>
     : "Masz minutę?",
 );
 
-/** The people the declarations' automation published in the last 30 days -
- * every one of them on readers' readings - from the public activity stats.
- * Read during the server render, so the figure is in the page and does not
- * push the box apart when it arrives; the stats are cached for five minutes
- * (`stats-activity`), so the person pages do not each recount them. Shared by
- * key across pages. Without it the box simply leads with its words. */
-const { data: figureData } = await useAsyncData(
+/** Which half of the split this reader is in: the control (`bez`) until the
+ * browser has settled it, so the server's render never has the box. */
+const arm = useExperimentArm(PERSON_ASK_EXPERIMENT);
+
+/** The people the declarations' automation published in the last 30 days,
+ * from the public activity stats, cached for five minutes (`stats-activity`)
+ * and shared by key across pages. Asked only in the ask's arm; the box waits
+ * for it, so the figure never pushes the box apart after it is up. Without it
+ * the box simply leads with its words. */
+const {
+  data: figureData,
+  status: figureStatus,
+  execute: loadFigure,
+} = useAsyncData(
   "person-reading-ask-figure",
   () =>
     $fetch<{ automatic?: number }>("/api/stats/activity", {
@@ -98,9 +115,22 @@ const { data: figureData } = await useAsyncData(
     })
       .then((stats) => stats.automatic ?? 0)
       .catch(() => 0),
-  { default: () => 0 },
+  { server: false, immediate: false, default: () => 0 },
+);
+watch(
+  arm,
+  (value) => {
+    if (value === "prosba" && figureStatus.value === "idle") void loadFigure();
+  },
+  { immediate: true },
 );
 const figure = computed(() => figureData.value ?? 0);
+
+const shown = computed(
+  () =>
+    arm.value === "prosba" &&
+    (figureStatus.value === "success" || figureStatus.value === "error"),
+);
 /** Only that (round osoba-skany-r3): the title and the words beside it say
  * the rest. In the count's own form - „1 opublikowana osoba”, „3 opublikowane
  * osoby”, „941 opublikowanych osób”. */
@@ -118,22 +148,25 @@ function onGo() {
 }
 
 // Counted when the ask is scrolled into view, as the home page's is: on mount
-// it would only restate the pageview.
+// it would only restate the pageview. Watched from when the box is drawn, which
+// in the ask's arm is a moment after the page is up, and never in the other.
 const root = ref<HTMLElement | null>(null);
-onMounted(() => {
-  const el = root.value;
+let observer: IntersectionObserver | null = null;
+watch(root, (el) => {
+  observer?.disconnect();
+  observer = null;
   if (!el || typeof IntersectionObserver === "undefined") return;
-  const observer = new IntersectionObserver(
+  observer = new IntersectionObserver(
     (entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return;
       trackGoal("cta:shown", { surface: "osoba" });
-      observer.disconnect();
+      observer?.disconnect();
     },
     { threshold: 0.6 },
   );
   observer.observe(el);
-  onBeforeUnmount(() => observer.disconnect());
 });
+onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <style scoped>

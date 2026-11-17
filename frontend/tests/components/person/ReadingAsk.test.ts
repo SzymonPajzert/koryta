@@ -4,7 +4,8 @@ import { flushPromises } from "@vue/test-utils";
 import { clearNuxtData } from "#app";
 import { ref } from "vue";
 import PersonReadingAsk from "../../../app/components/person/ReadingAsk.vue";
-import { trackGoal } from "~/composables/analytics";
+import { setGlobalProp, trackGoal } from "~/composables/analytics";
+import { PERSON_ASK_EXPERIMENT, assignArm } from "../../../shared/experiments";
 import type { PersonDeclarations } from "../../../shared/declarations";
 
 const { mockAuthRequest } = vi.hoisted(() => ({ mockAuthRequest: vi.fn() }));
@@ -13,7 +14,10 @@ vi.mock("~/composables/auth", () => ({
   authRequest: mockAuthRequest,
   useAuthState: () => ({ user: ref(null) }),
 }));
-vi.mock("~/composables/analytics", () => ({ trackGoal: vi.fn() }));
+vi.mock("~/composables/analytics", () => ({
+  trackGoal: vi.fn(),
+  setGlobalProp: vi.fn(),
+}));
 
 // The ask counts itself shown from an IntersectionObserver, which happy-dom
 // does not have: this one hands its callback to the test, which says when the
@@ -34,9 +38,34 @@ global.ResizeObserver = class {
   disconnect() {}
 };
 
-/** What /api/stats/activity says the automation published in 30 days. */
+/** What /api/stats/activity says the automation published in 30 days, and
+ * how often it was asked. */
 let automatic = 741;
-registerEndpoint("/api/stats/activity", () => ({ automatic }));
+let statsAsked = 0;
+registerEndpoint("/api/stats/activity", () => {
+  statsAsked += 1;
+  return { automatic };
+});
+
+/** A session id that `osoba-skany` puts in `arm`, stored where the composable
+ * looks for it: the split is live, so an unseeded session lands in either. */
+function seatIn(arm: "bez" | "prosba") {
+  sessionStorage.clear();
+  for (let i = 0; i < 10_000; i++) {
+    const id = `test-session-${i}`;
+    if (assignArm(PERSON_ASK_EXPERIMENT, id) === arm) {
+      sessionStorage.setItem("koryta:session", id);
+      return;
+    }
+  }
+  throw new Error(`no session id lands in ${arm}`);
+}
+
+/** happy-dom calls itself automated, and an automated browser sits every split
+ * out; a reader's browser does not. */
+function automated(value: boolean) {
+  Object.defineProperty(navigator, "webdriver", { value, configurable: true });
+}
 
 /** Published by the automation, so on the readers' readings. */
 const readersPublished: PersonDeclarations = {
@@ -65,20 +94,68 @@ function declarations(byNode: Record<string, PersonDeclarations>) {
 const words = (text: string) =>
   text.replaceAll(String.fromCharCode(0xa0), " ").replace(/\s+/g, " ").trim();
 
+/** Mounted, with the arm settled and, in the ask's arm, the figure in. */
 async function mount(nodeId: string) {
   const ask = await mountSuspended(PersonReadingAsk, { props: { nodeId } });
   await flushPromises();
+  await flushPromises();
   return ask;
 }
+
+const assigned = () =>
+  vi
+    .mocked(trackGoal)
+    .mock.calls.filter(([goal]) => goal === "experiment:assigned")
+    .map(([, props]) => props);
 
 // Each test asks for its own node: the declarations are keyed by it.
 describe("PersonReadingAsk", () => {
   beforeEach(() => {
     vi.mocked(trackGoal).mockClear();
+    vi.mocked(setGlobalProp).mockClear();
     clearNuxtData("person-reading-ask-figure");
     automatic = 741;
+    statsAsked = 0;
     reportInView = null;
     declarations({ nauto: readersPublished });
+    automated(false);
+    seatIn("prosba");
+  });
+
+  it("shows nothing to the half without it, and counts that half in the split", async () => {
+    seatIn("bez");
+    const ask = await mount("nbez");
+
+    expect(ask.find('[data-testid="person-reading-ask"]').exists()).toBe(false);
+    expect(assigned()).toEqual([{ experiment: "osoba-skany", arm: "bez" }]);
+    expect(setGlobalProp).toHaveBeenCalledWith("arm:osoba-skany", "bez");
+    // Nor does that half ask for the figure it will not show.
+    expect(statsAsked).toBe(0);
+    expect(trackGoal).not.toHaveBeenCalledWith("cta:shown", expect.anything());
+  });
+
+  it("counts the half with it in the split", async () => {
+    const ask = await mount("nprosba");
+
+    expect(ask.find('[data-testid="person-reading-ask"]').exists()).toBe(true);
+    expect(assigned()).toEqual([{ experiment: "osoba-skany", arm: "prosba" }]);
+    expect(setGlobalProp).toHaveBeenCalledWith("arm:osoba-skany", "prosba");
+  });
+
+  it("sits an automated browser out of the split", async () => {
+    // The site's own suites and any scraper driving Chrome: the page without
+    // the box, every run, and nobody counted in an arm.
+    automated(true);
+    try {
+      const ask = await mount("nrobot");
+      expect(ask.find('[data-testid="person-reading-ask"]').exists()).toBe(
+        false,
+      );
+      expect(assigned()).toEqual([]);
+      expect(setGlobalProp).not.toHaveBeenCalled();
+    } finally {
+      automated(false);
+    }
   });
 
   it("leads with the people the readings published, and asks for a few scans", async () => {
@@ -153,13 +230,16 @@ describe("PersonReadingAsk", () => {
 
   it("counts itself shown once it is in view, not on mount", async () => {
     await mount("nshown");
-    expect(trackGoal).not.toHaveBeenCalled();
+    // On mount it reports the arm, and nothing about being seen.
+    const shown = () =>
+      vi.mocked(trackGoal).mock.calls.filter(([goal]) => goal === "cta:shown");
+    expect(shown()).toEqual([]);
 
     reportInView?.([{ isIntersecting: false }]);
-    expect(trackGoal).not.toHaveBeenCalled();
+    expect(shown()).toEqual([]);
 
     reportInView?.([{ isIntersecting: true }]);
-    expect(trackGoal).toHaveBeenCalledWith("cta:shown", { surface: "osoba" });
+    expect(shown()).toEqual([["cta:shown", { surface: "osoba" }]]);
   });
 
   it("counts the click as the reading task, from a person's page", async () => {
