@@ -40,11 +40,6 @@ function list(page: Page, title: string) {
 async function shoot(page: Page, card: ReturnType<typeof list>, name: string) {
   // Off the card: the mouse is left where the login button was.
   await page.mouse.move(0, 0);
-  // On a phone a tall card is shot by scrolling, and the fixed app bar and the
-  // feedback launcher land across it. Hidden, as in komisja-rewizyjna.spec.ts.
-  await page.addStyleTag({
-    content: ".v-app-bar, .feedback-fab { visibility: hidden !important; }",
-  });
   await page.evaluate(() => document.fonts.ready);
   await expect(card).toHaveScreenshot(name);
 }

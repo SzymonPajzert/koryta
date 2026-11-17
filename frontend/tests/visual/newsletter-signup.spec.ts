@@ -38,10 +38,6 @@ async function homeForm(page: Page) {
   await input.fill("");
   // Left, so the picture is of the field at rest rather than focused.
   await input.blur();
-  // The feedback button floats over whatever is at the bottom right.
-  await page.addStyleTag({
-    content: ".feedback-fab { visibility: hidden !important; }",
-  });
   await form.scrollIntoViewIfNeeded();
   return form;
 }
