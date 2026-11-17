@@ -33,7 +33,7 @@ order, each with a time limit and its output in the night's log:
 | `invariants`      | `pytest -m e2e src/tests/pipelines`: the database invariants, over tonight's export                                                                |
 | `companies`       | the `people` command and `--companies-only`: the companies its people name that tonight's export has no page for                                   |
 | `people`          | `koryta_people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --max-rejestrio-current 50 --max-published 10 --refresh none` |
-| `company_updates` | `koryta_company_import --max-uploads 1000 --max-renames 0`: what tonight's data changes on the companies the export has (below)                    |
+| `company_updates` | `koryta_company_import --max-uploads 200 --max-renames 0`: what tonight's data changes on the companies the export has (below)                     |
 | `scores`          | `koryta_score_import`: the scoring models rebuilt, tonight's new pages included, and their votes reconciled                                        |
 | `tidy`            | export shards and day-named outputs older than a week off the disk                                                                                 |
 
@@ -304,7 +304,7 @@ the export has (`koryta_company_import`, step `company_updates`): a public
 owner or founder found, sectors, the register's legal form and supervisory
 organ, owner links and seats - what `CompaniesPayloads --only-changed` and a
 hand upload used to send, and the night did not. 663 of the site's 10,674
-companies were waiting on 2026-11-11. At most 1,000 a night
+companies were waiting on 2026-11-11. At most 200 a night
 (`--max-company-uploads`), those turning public first. It holds back, and
 names in its run's warnings for a hand upload, what each hand upload's reader
 held back: a public company the payload would make private, the companies in
