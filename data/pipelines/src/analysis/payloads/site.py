@@ -21,11 +21,13 @@ loses a fact and nobody would see it go.
 import math
 import re
 import typing
+import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+import regex
 
 from scrapers.koryta.download import KorytaEdges, KorytaNodes
 from scrapers.pkw.elections import party_sort_key
@@ -35,6 +37,7 @@ from util.polish import (
     names_agree,
     normalize_person_name,
     spaced_surname,
+    without_diacritics,
 )
 
 #: Fields a node owns rather than states, which a revision never carries. The
@@ -235,16 +238,20 @@ BY_PAGE_ID = "korytaId"
 BY_REGISTER = "rejestrIo"
 BY_NAME_AND_DATE = "name and birth date"
 BY_NAME = "name"
+#: Past the exact name: an agreeing name on a page that already holds one of
+#: the payload's jobs (`lookupByNameAndJob`).
+BY_NAME_AND_JOB = "name and a job the page holds"
 NOT_ON_SITE = "not on koryta.pl"
 #: The answers the ingest refuses with a 409 rather than guess between.
 HELD_SEVERAL = "held: several pages of that name and birth date"
 HELD_UNDATED = "held: a page of that name stores no birth date"
+HELD_JOB = "held: several pages of an agreeing name hold one of its jobs"
 #: And the two it refuses outright: the page the payload names is somebody
 #: born on another day (`refuseAnotherBirthDate`), or the page it reaches
 #: links another register entry than its own (`refuseAnotherEntry`).
 HELD_BORN = "held: the page the payload names stores another birth date"
 HELD_ENTRY = "held: the page the payload reaches links another register entry"
-HELD = (HELD_SEVERAL, HELD_UNDATED, HELD_BORN, HELD_ENTRY)
+HELD = (HELD_SEVERAL, HELD_UNDATED, HELD_JOB, HELD_BORN, HELD_ENTRY)
 #: What identifies a person, as against a name alone.
 IDENTIFIED = (BY_PAGE_ID, BY_REGISTER, BY_NAME_AND_DATE)
 
@@ -299,6 +306,67 @@ def surname_key(name: typing.Any) -> str:
     """The folded last word of a name, which a page's namesakes share."""
     words = normalize_person_name(name if isinstance(name, str) else "").split()
     return words[-1] if words else ""
+
+
+#: Every character but a letter (with its accents), a digit, whitespace or the
+#: hyphen, which the name index reads as a space: `NOT_A_WORD` in
+#: `frontend/shared/search.ts`.
+NOT_A_WORD = regex.compile(r"[^\p{L}\p{M}\p{N}\s-]+")
+
+
+def searchable_text(text: str) -> str:
+    """A name as the name index reads it: composed, lowercased, every run of
+    `NOT_A_WORD` a space, the whitespace flattened to single spaces.
+    `searchableText` in `frontend/shared/search.ts`."""
+    lowered = unicodedata.normalize("NFC", text).lower()
+    return " ".join(NOT_A_WORD.sub(" ", lowered).split())
+
+
+def name_index(name: str) -> set[str]:
+    """The name index of a person's page (`nameChunksLower`), which the
+    ingest's queries for the namesakes of a payload match: every prefix of
+    the whole name, of each of its words where it has two or more, and of
+    each part of a hyphenated word after the first. `generateChunksLower` in
+    `frontend/shared/search.ts`, for a person, whose name has no town in a
+    bracket to index apart.
+
+    Worked out from the name, because the export the snapshot reads leaves
+    the stored index out (`NODE_FIELDS`). A page carries this one: the
+    trigger writes it over any other on the page's next write
+    (`nameChunksToWrite`), and it is what each of the 23,407 person pages of
+    the 2026-11-12 export stored, all but the empty chunk, which no lookup
+    asks for.
+    """
+    text = searchable_text(name)
+    words = text.split(" ")
+    pieces = [text, *(words if len(words) > 1 else [])]
+    pieces += [part for word in words for part in word.split("-")[1:]]
+    return {piece[:end] for piece in pieces for end in range(1, len(piece) + 1)}
+
+
+def namesake_spellings(name: str) -> set[str]:
+    """What `namesakes` in `person.post.ts` asks the name index for, to find
+    the pages of a payload's name: the last word as written, lowercased, the
+    last part of a double surname (`spaced_surname`) and the last word as the
+    index cuts it (`searchable_text`), each also with its Polish letters
+    written plain (`without_diacritics`).
+
+    Plain is added, never taken away: "Krzysztof Żuk" asks for „żuk” and
+    „zuk”, and finds „Krzysztof Jan Zuk”, while "Krzysztof Zuk" asks for
+    „zuk” alone, which is no chunk of „Krzysztof Jan Żuk” (`name_index`).
+    """
+    words = name.strip().lower().split()
+    if not words:
+        return set()
+    surname = words[-1]
+    last_part = (spaced_surname(name).strip().lower().split() or [surname])[-1]
+    cut = [word for word in re.split(r"[\s-]+", searchable_text(name)) if word]
+    indexed = cut[-1] if cut else last_part
+    return {
+        spelling
+        for word in (surname, last_part, indexed)
+        for spelling in (word, without_diacritics(word))
+    }
 
 
 def day_of(value: typing.Any) -> str | None:
@@ -717,7 +785,10 @@ class SiteSnapshot:
         and the date together (`_by_name_and_date`). The name alone only as a
         fallback for a payload with neither, and only onto somebody the site
         has no register link for, because a page carrying a *different* link
-        is a different human however the two are spelled.
+        is a different human however the two are spelled. Past the exact
+        name, the one page of an agreeing name, with no link and no birth
+        date, that already holds one of the payload's jobs
+        (`_by_name_and_job`).
 
         Every branch follows a merge to the page that survived it, as the
         ingest does (`resolveMergedNode`, `lookupNodeDoc`): a tombstone keeps
@@ -791,20 +862,112 @@ class SiteSnapshot:
         Another entry is another number (`links_another_entry`), not another
         string: a page storing its link the way a browser writes it, with the
         person's name after the number, is missed by the register lookup and
-        found here by its own entry's payload."""
+        found here by its own entry's payload.
+
+        Failing both, or where the page they find is somebody else's, the page
+        of an agreeing name that holds one of the payload's jobs
+        (`_by_name_and_job`)."""
         register = field(payload, "rejestrIo")
         name = str(payload.get("name"))
         by_name = self._found(self.people_by_name.get(name))
         if by_name is None:
             by_name = self._found(self.people_by_name.get(spaced_surname(name)))
         if by_name is None:
-            return Resolution(None, NOT_ON_SITE)
+            return self._by_name_and_job(payload)
         stored = day_of(field(by_name, "birthDate"))
         if born is not None and stored is not None and stored != born:
-            return Resolution(None, NOT_ON_SITE)
+            return self._by_name_and_job(payload)
         if links_another_entry(field(by_name, "rejestrIo"), register):
-            return Resolution(None, NOT_ON_SITE)
+            return self._by_name_and_job(payload)
         return Resolution(by_name, BY_NAME)
+
+    def _by_name_and_job(self, payload: typing.Mapping[str, typing.Any]) -> Resolution:
+        """`lookupByNameAndJob`: the one page whose name agrees with the
+        payload's (`names_agree`), which links no register entry and stores no
+        birth date, and which already holds one of the payload's jobs - an
+        employment not removed, at the same company, in the same role, begun
+        on the same day (`edge_identity`). Held where two pages do.
+
+        The page of a person the register had not reached when it was made,
+        often under a middle name the payload leaves out: the night of
+        2026-11-06 made a draft „Krzysztof Żuk” beside the published
+        „Krzysztof Jan Żuk” and filed there the five jobs the page showed.
+
+        Only a job with a start counts, at a company the site has a page for.
+
+        And only a page the ingest's query returns: one whose name index
+        (`name_index`) holds a chunk `namesakes` asks for
+        (`namesake_spellings`). The folded surname finds every page of an
+        agreeing name, and more of them than the index does, which here is
+        the side that stops the night: „Krzysztof Zuk”, written without his
+        Polish letters, asks the index for „zuk”, which „Krzysztof Jan Żuk”
+        is not filed under. The ingest gives that payload a page of its own;
+        planned onto „Krzysztof Jan Żuk”, it would go out as a stored
+        person's, and a page made for one stops the people run. Taken as
+        payload names, the folded surname reached a page the index does not
+        for 9 of the 22,781 names of person pages in the 2026-11-12 export,
+        and for 7,074 of the 11,227 of them written without their Polish
+        letters. A merged page is reached by its own name and index, as the
+        ingest's query reaches the tombstone, and stands for its survivor.
+        """
+        name = payload.get("name")
+        jobs: list[tuple[str, typing.Mapping[str, typing.Any]]] = []
+        for company in _rows(payload.get("companies")):
+            krs = company.get("krs")
+            company_id = self.companies.get(str(krs)) if krs else None
+            if company_id is not None and company.get("start"):
+                jobs.append((company_id, company))
+        if not jobs:
+            return Resolution(None, NOT_ON_SITE)
+
+        asked = namesake_spellings(name if isinstance(name, str) else "")
+        pages: dict[str, dict] = {}
+        for node in self.people_by_surname.get(surname_key(name), ()):
+            if not names_agree(node.get("name"), name):
+                continue
+            if asked.isdisjoint(name_index(str(node.get("name")))):
+                continue
+            page = self._survivor(node)
+            # True off a fresh frame and 1.0 off one read back from disk.
+            if page is None or page.get("deleted") == 1:
+                continue
+            if register_entry(field(page, "rejestrIo")) is not None:
+                continue
+            if field(page, "birthDate") is not None:
+                continue
+            pages[str(page.get("id"))] = page
+
+        holding = [
+            page
+            for page_id, page in pages.items()
+            if any(
+                self._holds_job(page_id, company_id, company)
+                for company_id, company in jobs
+            )
+        ]
+        if len(holding) > 1:
+            return Resolution(None, HELD_JOB)
+        if holding:
+            return Resolution(holding[0], BY_NAME_AND_JOB)
+        return Resolution(None, NOT_ON_SITE)
+
+    def _holds_job(
+        self, page_id: str, company_id: str, company: typing.Mapping[str, typing.Any]
+    ) -> bool:
+        """Whether the page holds the payload's row as a job not removed: the
+        edge `_employment_changes` would place the row as, by `edge_identity`."""
+        row: Edge = {
+            "type": "employed",
+            "name": company.get("role"),
+            "source": page_id,
+            "target": company_id,
+            "start_date": company.get("start"),
+        }
+        identity = edge_identity(row)
+        return any(
+            stored.get("deleted") != 1 and edge_identity(stored) == identity
+            for stored in self.edges.get((page_id, company_id, "employed"), ())
+        )
 
     def _by_name_and_date(
         self, payload: typing.Mapping[str, typing.Any], born: str
