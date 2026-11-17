@@ -330,6 +330,13 @@ every PR). After an intentional UI change, regenerate them on Linux with
 `npm run test:visual:update` and commit the updated PNGs; on failure CI uploads
 a `playwright-visual-report` artifact with the image diffs.
 
+Visual tests run without the layout's chrome: the footer, the signed-in strip
+and the „Zgłoś” button are gone, and the app bar is an empty band
+(`tests/visual/chrome.ts`). The chrome is photographed by
+`tests/visual/chrome.spec.ts`, and two full pages keep it (`chrome: true` in
+`pages.spec.ts`), so a change to a menu or to the footer retakes those few
+baselines rather than every one.
+
 ## Email notifications
 
 The site writes to a contributor when a reviewer acts on something they

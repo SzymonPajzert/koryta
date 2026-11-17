@@ -1,5 +1,6 @@
 import { test, expect } from "./test";
 import type { Page } from "@playwright/test";
+import { WITH_CHROME } from "./chrome";
 import { freezeClock } from "./clock";
 import { expectFitsThePhone } from "./phoneWidth";
 import { pageTag } from "./pageTags";
@@ -13,7 +14,9 @@ import { pageTag } from "./pageTags";
  * `act` is for state a visitor reaches by clicking rather than by url - it
  * runs once the page has settled and before the capture. `inApp` opens the
  * path the way a link inside the site would, under the frozen clock, for a
- * page that prints dates counted from today. */
+ * page that prints dates counted from today. `chrome` keeps the app bar, the
+ * footer and the „Zgłoś” button in the shot, which every other test runs
+ * without (see ./chrome.ts). */
 const pages: {
   name: string;
   path: string;
@@ -22,8 +25,11 @@ const pages: {
   viewports?: string[];
   act?: (page: Page) => Promise<void>;
   inApp?: boolean;
+  chrome?: boolean;
 }[] = [
-  { name: "home", path: "/", file: "index" },
+  // Kept with its chrome, as the long page. Its bar has no search box: the
+  // page opens with its own.
+  { name: "home", path: "/", file: "index", chrome: true },
   { name: "login", path: "/login", file: "login" },
   { name: "zrodla", path: "/zrodla", file: "zrodla" },
   { name: "o-nas", path: "/o-nas", file: "o-nas" },
@@ -68,8 +74,9 @@ const pages: {
     file: "entity/[...path]",
   },
   // For the owners of the sites the article crawler reads: its user agent is
-  // `KorytaCrawler/0.1 (+http://koryta.pl/crawler)`.
-  { name: "crawler", path: "/crawler", file: "crawler" },
+  // `KorytaCrawler/0.1 (+http://koryta.pl/crawler)`. Kept with its chrome, as
+  // the short page: on a desktop the footer sits on the window's bottom edge.
+  { name: "crawler", path: "/crawler", file: "crawler", chrome: true },
   {
     name: "statystyki",
     path: "/eksploruj/statystyki",
@@ -188,8 +195,20 @@ async function openInApp(page: Page, path: string) {
   await page.waitForURL(`**${path}`);
 }
 
-for (const { name, path, file, settled, viewports, act, inApp } of pages) {
-  const tag = file ? [pageTag(file)] : [];
+for (const {
+  name,
+  path,
+  file,
+  settled,
+  viewports,
+  act,
+  inApp,
+  chrome,
+} of pages) {
+  const tag = [
+    ...(file ? [pageTag(file)] : []),
+    ...(chrome ? [WITH_CHROME] : []),
+  ];
   test(name, { tag }, async ({ page }, testInfo) => {
     test.skip(
       !!viewports && !viewports.includes(testInfo.project.name),
