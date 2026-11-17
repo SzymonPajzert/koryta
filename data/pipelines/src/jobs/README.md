@@ -29,6 +29,12 @@
 1. `status`: where the declarations stand over the night's list: candidacies found, their files downloaded, cut,
    cropped and sent, by priority, and the units (TERYT) where nothing was downloaded for anybody (`--units 50`,
    `--units-csv`). It only reads, so it runs beside a cut or a crawl
+1. `people`: the same in people, for the people a declaration can publish (a draft page with a public post, or a
+   page a declaration published): each in one stage, from the night's list, the crawl's Postgres and the newest
+   export of the site. `--send` sends the snapshot to `/api/ingest/declarations/people`, which the home page,
+   /oswiadczenia/postep and /admin/oswiadczenia show. On predator the user timer `koryta-declaration-people` runs it
+   every morning at 07:15 Warsaw through `people.sh`, which fetches the export first unless the morning check has
+   (units in `bip_declarations/systemd/`, installed into `~/.config/systemd/user/`)
 1. Not part of the nightly yet: run it by hand on predator, beside the crawler. It signs in as the people import does
    (`KORYTA_PIPELINE_UID=pipeline-declarations`). `cut.sh` and `stats.sh` beside the code run `cut` and `status` with
    the crawl's Postgres, the credentials for the night's list and the cut's logs, from the checkout they sit in

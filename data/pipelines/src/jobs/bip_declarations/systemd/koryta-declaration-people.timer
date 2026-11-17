@@ -1,0 +1,14 @@
+[Unit]
+Description=Count the BIP declarations in people every morning
+
+[Timer]
+# After the 04:00 Warsaw export, the night's list (in the shared cache by
+# about 06:30) and the morning check's fetch of the export (06:30). The box
+# is Etc/UTC, so the zone is named.
+OnCalendar=*-*-* 07:15:00 Europe/Warsaw
+# Catch up a morning missed while the box was off.
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

@@ -7,6 +7,8 @@ send the crops to the site's readers.
     koryta_bip_declarations upload                        # send what is new or changed
     koryta_bip_declarations status                        # where the declarations stand
     koryta_bip_declarations status --units-csv units.csv  # and every unit with no file
+    koryta_bip_declarations people                        # the same in people
+    koryta_bip_declarations people --send                 # and send it to the site
 
 The crawler's people mode (`koryta_scrape_bip crawl --people-of-interest`)
 downloads the oświadczenia majątkowe of every won local candidacy it finds, into
@@ -34,6 +36,12 @@ a cut or a crawl. On predator `cut` and `status` run through `cut.sh` and
 `stats.sh` next to this file, which bring the crawl's Postgres, the
 credentials for the night's list, and the cut's logs.
 
+`people` counts the people a declaration can publish, each in the stage they
+are in, from the list, the crawl's Postgres and the night's export of the site
+(`people`), and with `--send` hands the site the snapshot its home page,
+/oswiadczenia/postep and /admin/oswiadczenia show. A user timer on predator
+runs it every morning through `people.sh`, which fetches the export first.
+
 Who the candidacies are - their page, whether it shows a birth date, the
 priority - is the night's newest list (`jobs.bip_crawler.people_list`), read
 by `cut`, `upload` and `status` each run, so a draft the night dated is
@@ -48,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import multiprocessing
 import os
 import sys
@@ -61,6 +70,7 @@ from pathlib import Path
 from conductor import setup_context
 from jobs.bip_crawler import DEFAULT_OUT
 from jobs.bip_crawler.people_list import list_policy, read_list
+from jobs.bip_declarations import people
 from jobs.bip_declarations.cutter import FileCut, Ocr, cut_file
 from jobs.bip_declarations.stats import report, write_units_csv
 from jobs.bip_declarations.upload import (
@@ -299,6 +309,67 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+#: Where the morning check and people.sh keep the site's exports, a
+#: `date=<timestamp>` directory each.
+EXPORTS = Path("~/.cache/koryta/firestore-export").expanduser()
+#: An older export is not sent: the site would show a stale count as the
+#: night's.
+MAX_EXPORT_AGE_H = 36
+
+
+def cmd_people(args: argparse.Namespace) -> int:
+    try:
+        export = args.export or people.newest_export(EXPORTS)
+        age = datetime.now(timezone.utc) - people.export_taken(export)
+        age_h = age.total_seconds() / 3600
+        if args.send and age_h > MAX_EXPORT_AGE_H:
+            print(
+                f"the newest export, {export}, is {age_h:.0f} h old; sending nothing",
+                file=sys.stderr,
+            )
+            return 1
+        site_state = people.read_site(export)
+    except people.ExportIncomplete as exc:
+        print(f"no export to count from: {exc}", file=sys.stderr)
+        return 1
+    site = Site(args.endpoint, token_source(args.endpoint)) if args.send else None
+    ctx, _ = setup_context(policy=list_policy())
+    pg = PostgresClient.from_env(max_size=2)
+    try:
+        store = PostgresBipDeclarationStore(pg, people=read_list(ctx))
+        candidacies = store.candidacies()
+        crawl = people.read_crawl(store, candidacies, CUT_VERSION)
+    finally:
+        pg.close()
+    count = people.count_people(
+        candidacies,
+        crawl,
+        site_state,
+        people.read_names(ctx),
+        at=datetime.now(timezone.utc),
+    )
+    print("\n".join(people.report(count)))
+    if args.json:
+        args.json.write_text(
+            json.dumps(count.snapshot, ensure_ascii=False, indent=1) + "\n",
+            encoding="utf-8",
+        )
+        print(f"wrote {args.json}")
+    if site is None:
+        print("sent nothing (--send sends it)")
+        return 0
+    try:
+        answer = site.post(people.INGEST, count.snapshot)
+    except SiteUnavailable as exc:
+        print(f"the site did not answer: {exc}", file=sys.stderr)
+        return EXIT_TRY_LATER
+    except SiteError as exc:
+        print(f"the site refused: {exc}", file=sys.stderr)
+        return 1
+    print(f"sent to {args.endpoint}: {answer}")
+    return 0
+
+
 def _args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="koryta_bip_declarations", description=__doc__.split("\n")[0]
@@ -365,6 +436,23 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
         "--units-csv", type=Path, help="write every such unit to this CSV file"
     )
     status.set_defaults(func=cmd_status)
+    count = sub.add_parser(
+        "people",
+        help="the people a declaration can publish, by stage; --send sends the site "
+        "the snapshot",
+    )
+    count.add_argument(
+        "--export",
+        type=Path,
+        help="a local export of the site, its date=<timestamp> directory (default: "
+        f"the newest complete one under {EXPORTS})",
+    )
+    count.add_argument(
+        "--endpoint", default=os.environ.get("KORYTA_ENDPOINT", DEFAULT_ENDPOINT)
+    )
+    count.add_argument("--send", action="store_true", help="send the site the snapshot")
+    count.add_argument("--json", type=Path, help="write the snapshot to this file too")
+    count.set_defaults(func=cmd_people)
     return parser.parse_args(argv)
 
 

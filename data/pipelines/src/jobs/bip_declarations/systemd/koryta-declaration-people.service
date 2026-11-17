@@ -1,0 +1,21 @@
+[Unit]
+Description=Count the BIP declarations in people and send the site the snapshot
+# Lingering means this can fire before any network exists; people.sh exits 75
+# when it cannot list the exports, and the next morning tries again.
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# The export's fetch, when the morning check has not done it, and a count of
+# about half a minute.
+TimeoutStartSec=30min
+# The declarations runner: a jj workspace beside the repo, which `workspaces
+# prune` leaves alone. Move it onto a newer main between runs (cut.sh says how).
+ExecStart=%h/koryta-bip-declarations/data/pipelines/src/jobs/bip_declarations/people.sh
+# systemd's user manager starts with a minimal PATH; gcloud is in /usr/bin.
+Environment=PATH=%h/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=HOME=%h
+MemoryMax=4G
+Nice=10
+IOSchedulingClass=idle
