@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushPromises } from "@vue/test-utils";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
+import { useRouter } from "#app";
 import Explorer from "../../../app/components/home/Explorer.vue";
 import { brand, contrastRatio, themeColors } from "../../../shared/colors";
 import {
@@ -27,9 +28,12 @@ registerEndpoint("/api/stats/progress", () => ({
   toCheck: 30,
 }));
 
-const mount = (people: DeclarationPeople | null = null) =>
+/** `route` is where the page is: mountSuspended navigates there first, so a
+ * query set on the router beforehand would be gone by the time it mounts. */
+const mount = (people: DeclarationPeople | null = null, route = "/") =>
   mountSuspended(Explorer, {
     props: { people },
+    route,
     global: {
       stubs: {
         // The map is an svg of 380 powiaty, the chart needs apexcharts and both
@@ -285,6 +289,101 @@ describe("HomeExplorer", () => {
 
     expect(underlined(wrapper)).toEqual(["Stanowiska", "Stanowiska"]);
     expect(wrapper.text()).toContain("Zmiany na stanowiskach");
+  });
+
+  describe("a link to a panel", () => {
+    /** Where the url says the page is, as `?widok=`. */
+    const widok = () => useRouter().currentRoute.value.query.widok;
+    const assignedGoals = () =>
+      trackGoal.mock.calls.filter((call) => call[0] === "experiment:assigned");
+    /** A click's `router.replace` settles after more than one tick. */
+    const untilWidok = (value: string) =>
+      vi.waitUntil(() => widok() === value, { timeout: 2000 });
+
+    it("opens the panel ?widok= names, whatever the arm", async () => {
+      const wrapper = await mount(null, "/?widok=stanowiska");
+
+      expect(underlined(wrapper)).toEqual(["Stanowiska", "Stanowiska"]);
+      expect(wrapper.text()).toContain("Zmiany na stanowiskach");
+      // Nothing random chose the panel, so nobody is counted in an arm.
+      expect(assignedGoals()).toHaveLength(0);
+      expect(setGlobalProp).not.toHaveBeenCalled();
+    });
+
+    it("keeps the session out of the split when it comes back without one", async () => {
+      seatIn("graph");
+      (await mount(PEOPLE, "/?widok=oswiadczenia")).unmount();
+
+      const wrapper = await mount(PEOPLE);
+
+      // The control panel, not the chart its arm would have opened.
+      expect(underlined(wrapper)).toEqual(["Mapa", "Mapa"]);
+      expect(assignedGoals()).toHaveLength(0);
+    });
+
+    it("keeps the arm of a session counted before the link", async () => {
+      seatIn("oswiadczenia");
+      (await mount(PEOPLE)).unmount();
+      setGlobalProp.mockClear();
+
+      const wrapper = await mount(PEOPLE, "/?widok=stanowiska");
+
+      // The link still decides the panel; what the session does next still
+      // counts for the arm it was put in.
+      expect(underlined(wrapper)).toEqual(["Stanowiska", "Stanowiska"]);
+      expect(setGlobalProp).toHaveBeenCalledWith(
+        `arm:${HOME_DEFAULT_EXPERIMENT.id}`,
+        "oswiadczenia",
+      );
+    });
+
+    it("leaves an unknown ?widok= to the arm", async () => {
+      seatIn("graph");
+      const wrapper = await mount(null, "/?widok=wykres");
+
+      expect(underlined(wrapper)).toEqual(["Stanowiska", "Stanowiska"]);
+      expect(assignedGoals()).toHaveLength(1);
+    });
+
+    it("leaves the url alone when the arm opens a panel", async () => {
+      // A copied home page address would otherwise take everybody it reaches
+      // out of the split.
+      seatIn("graph");
+      const wrapper = await mount();
+
+      expect(underlined(wrapper)).toEqual(["Stanowiska", "Stanowiska"]);
+      expect(widok()).toBeUndefined();
+    });
+
+    it("names a clicked tab in the url", async () => {
+      const wrapper = await mount(PEOPLE);
+
+      await tabs(wrapper, "Stanowiska")[0]!.trigger("click");
+      await untilWidok("stanowiska");
+
+      await tabs(wrapper, "Oświadczenia")[1]!.trigger("click");
+      await untilWidok("oswiadczenia");
+    });
+
+    it("names the open tab too when it is clicked", async () => {
+      // A reader the arm put on a panel shares it by clicking its tab.
+      const wrapper = await mount();
+      expect(widok()).toBeUndefined();
+
+      await tabs(wrapper, "Mapa")[0]!.trigger("click");
+      await untilWidok("mapa");
+
+      expect(underlined(wrapper)).toEqual(["Mapa", "Mapa"]);
+    });
+
+    it("follows a link to another panel from the same page", async () => {
+      const wrapper = await mount();
+
+      await useRouter().replace({ query: { widok: "stanowiska" } });
+      await flushPromises();
+
+      expect(underlined(wrapper)).toEqual(["Stanowiska", "Stanowiska"]);
+    });
   });
 
   it("counts a switch to the chart, and back", async () => {

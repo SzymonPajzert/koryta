@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "link-do-zakladki-na-glownej",
+    title: "Link do zakładki na głównej",
+    description:
+      "Adres strony głównej mówi, która zakładka jest otwarta. Link otwiera tę zakładkę zamiast losowej.",
+    steps: [
+      "Otwórz /?widok=stanowiska: zawsze otwiera się „Stanowiska”. Tak samo /?widok=oswiadczenia i /?widok=mapa.",
+      "Kliknij zakładkę na głównej: adres kończy się na ?widok= z jej nazwą.",
+    ],
+    link: "/?widok=stanowiska",
+    area: "public",
+  },
+  {
     id: "noc-wysyla-zmiany-firm",
     title: "Noc sama wysyła zmiany firm, które strona już ma",
     description:
