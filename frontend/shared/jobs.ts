@@ -428,7 +428,7 @@ export const JOBS: readonly JobDefinition[] = [
     heartbeatMinutes: 15,
     notes: [
       "Firmę, której nocny krok nie dodał, import osób próbuje dodać jeszcze raz; gdy i jemu się nie uda, zapisuje osobę bez tego zatrudnienia („zatrudnień bez strony firmy”).",
-      "Zmiany firm: do 1000 na noc, najpierw te, które stają się publiczne. Zmian nazw i firm, które stałyby się prywatne, noc nie wysyła - wymienia je w ostrzeżeniach.",
+      "Zmiany firm: do 200 na noc, najpierw te, które stają się publiczne. Zmian nazw i firm, które stałyby się prywatne, noc nie wysyła - wymienia je w ostrzeżeniach.",
       "Podsumowania nocnych uruchomień - każda firma i co z nią zrobiono - są w koryta-pl-sharedcache/jobs/company_import/runs/.",
     ],
   },

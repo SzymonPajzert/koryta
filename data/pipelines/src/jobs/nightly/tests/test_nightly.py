@@ -522,7 +522,7 @@ def test_what_tonights_data_changes_on_the_companies_goes_up_after_the_people(wo
     argv, env = world.command("koryta_company_import")
     assert argv[1:] == [
         "--max-uploads",
-        "1000",
+        "200",
         "--max-renames",
         "0",
         "--max-minutes",
@@ -1417,7 +1417,7 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
         "for, created first" in out
     )
     assert (
-        "koryta_company_import --max-uploads 1000 --max-renames 0 --export <the "
+        "koryta_company_import --max-uploads 200 --max-renames 0 --export <the "
         "export step's>: what tonight's data changes on the companies the site "
         "has, those turning public first; none made private" in out
     )

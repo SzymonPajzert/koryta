@@ -163,7 +163,7 @@ site answers 401.
 
 It reports as `company_import`, as `koryta_uploader --type company` does. It stops as failed (exit 1) when the site
 creates a page - a company the export had - and after 20 refusals in a row; as partial (exit 75) at `--max-uploads`
-(3000, 1000 on the night), at `--max-minutes`, on SIGTERM after the company in hand, on Ctrl+C, and when the site
+(3000, 200 on the night), at `--max-minutes`, on SIGTERM after the company in hand, on Ctrl+C, and when the site
 refused some. `--dry-run` builds and counts, signs in to nothing and writes nothing of its own. Runs nightly as the
 step `company_updates`, after the people - see [data/nightly/README.md](../../../nightly/README.md).
 

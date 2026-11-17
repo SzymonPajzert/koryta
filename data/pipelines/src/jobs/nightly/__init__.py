@@ -72,7 +72,7 @@ The steps, in order (`STEPS`):
                 koryta_company_import: what tonight's data changes on the
                 pages of the companies the export has - sectors, register
                 fields, owners and founders, whether the public owns one -
-                at most --max-company-uploads (1000), those turning public
+                at most --max-company-uploads (200), those turning public
                 first; never a public company made private, and the names
                 the site shows kept, but --max-company-renames (0)
     scores      koryta_score_import: every scoring model rebuilt over the
@@ -1869,10 +1869,11 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-company-uploads",
         type=positive_int,
-        default=1000,
+        default=200,
         help="Companies whose page the night changes at most, the ones turning "
         "public first; the rest wait for the next night. Default: "
-        "%(default)s, more than the 663 changes waiting on 2026-11-11.",
+        "%(default)s, so a night that goes wrong changes no more published "
+        "pages than that (decision on 2026-11-17).",
     )
     parser.add_argument(
         "--max-company-renames",
