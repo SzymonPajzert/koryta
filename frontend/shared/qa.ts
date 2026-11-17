@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "wykres-stanowisk-szybki-po-zalogowaniu",
+    title: "Wykres na głównej szybki także po zalogowaniu",
+    description:
+      "Po zalogowaniu wykres „Zmiany na stanowiskach” ładuje się tak samo szybko jak bez logowania i pokazuje te same liczby.",
+    steps: [
+      "Zaloguj się i otwórz /?widok=stanowiska: wykres pojawia się tak szybko jak w oknie prywatnym.",
+    ],
+    link: "/?widok=stanowiska",
+    area: "contributor",
+  },
+  {
     id: "brak-polaczenia-w-panelu-admina",
     title:
       "Panel admina bez sieci: „Brak połączenia z siecią” zamiast błędu 500",
