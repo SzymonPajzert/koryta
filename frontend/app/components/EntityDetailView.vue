@@ -191,9 +191,12 @@
                  not signed in. A signed-in contributor knows the way to
                  /oswiadczenia and has the app bar's „Działaj z nami”. Half the
                  gap above it on a phone, where it reads as part of the
-                 history (round osoba-skany-r2). -->
+                 history (round osoba-skany-r2). Mounted once Firebase has
+                 said nobody is signed in, not before: mounting is what joins
+                 the half-and-half split (PERSON_ASK_EXPERIMENT), and an
+                 account restored a moment later must not be counted in it. -->
             <PersonReadingAsk
-              v-if="!user"
+              v-if="authReady && !user"
               :node-id="node"
               class="mt-3 mt-sm-6 mb-6"
             />
@@ -500,6 +503,7 @@ import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
 import type { edgeTypeExt } from "~/composables/useEdgeTypes";
 import type { PersonTeaser } from "~~/shared/personTeaser";
 import { useDisplay } from "vuetify";
+import { useIsCurrentUserLoaded } from "vuefire";
 
 definePageMeta({
   affineLink: "0Jk7aUVzpBbKpnGw-NNqZ",
@@ -525,6 +529,9 @@ const type = props.type;
 const route = useRoute();
 
 const { user } = useAuthState();
+/** Whether Firebase has restored, or ruled out, a signed-in reader. Until it
+ * has, `user` is null for everybody, the signed in included. */
+const authReady = useIsCurrentUserLoaded();
 const router = useRouter();
 
 const { smAndDown } = useDisplay();
