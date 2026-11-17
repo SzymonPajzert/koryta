@@ -8,6 +8,7 @@ import {
   HOME_DEFAULT_EXPERIMENT,
 } from "../../../shared/experiments";
 import type { DeclarationPeople } from "../../../shared/declarations";
+import type { HomeTimelineResponse } from "../../../server/api/stats/homeTimeline.get";
 
 /** Mocked at the composable rather than at the tracker, so the assertions are
  * about which goal the explorer decided to fire. Whether the plausible plugin
@@ -27,21 +28,21 @@ registerEndpoint("/api/stats/progress", () => ({
   toCheck: 30,
 }));
 
+/** The map is an svg of 380 powiaty, the chart needs apexcharts and both side
+ * cards need firestore. None of them is what is under test here. */
+const STUBS = {
+  ChartPolandMap: true,
+  CardPeopleList: true,
+  HomeTimeline: true,
+  HomeTimelineControls: true,
+  OswiadczeniaPeoplePanel: true,
+  OswiadczeniaPeopleSide: true,
+};
+
 const mount = (people: DeclarationPeople | null = null) =>
   mountSuspended(Explorer, {
     props: { people },
-    global: {
-      stubs: {
-        // The map is an svg of 380 powiaty, the chart needs apexcharts and both
-        // side cards need firestore. None of them is what is under test here.
-        ChartPolandMap: true,
-        CardPeopleList: true,
-        HomeTimeline: true,
-        HomeTimelineControls: true,
-        OswiadczeniaPeoplePanel: true,
-        OswiadczeniaPeopleSide: true,
-      },
-    },
+    global: { stubs: { ...STUBS } },
   });
 
 /** Both breakpoints render a tab strip bound to the same value, so "the Stanowiska
@@ -285,6 +286,34 @@ describe("HomeExplorer", () => {
 
     expect(underlined(wrapper)).toEqual(["Stanowiska", "Stanowiska"]);
     expect(wrapper.text()).toContain("Zmiany na stanowiskach");
+  });
+
+  it("hands the chart the counts the page fetched", async () => {
+    const timeline: HomeTimelineResponse = {
+      months: ["2026-10", "2026-11"],
+      groupings: {
+        party: [{ key: "PO", label: "PO", counts: [3, 4] }],
+        region: [],
+        category: [],
+      },
+      coverage: {
+        party: { posts: 4, people: 4 },
+        region: { posts: 0, people: 0 },
+        category: { posts: 0, people: 0 },
+      },
+      posts: 4,
+      today: "2026-11",
+    };
+    const wrapper = await mountSuspended(Explorer, {
+      props: { people: null, timeline },
+      global: { stubs: { ...STUBS } },
+    });
+
+    await tabs(wrapper, "Stanowiska")[0]!.trigger("click");
+
+    expect(
+      wrapper.findComponent({ name: "HomeTimeline" }).props("timeline"),
+    ).toEqual(timeline);
   });
 
   it("counts a switch to the chart, and back", async () => {

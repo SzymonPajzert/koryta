@@ -99,7 +99,7 @@
   <!-- With the night's people count, the explorer's third panel: how far
        the declarations got, beside the map and the chart. -->
   <HomeSection>
-    <HomeExplorer :people="peopleProgress" />
+    <HomeExplorer :people="peopleProgress" :timeline="timeline ?? null" />
   </HomeSection>
   <!-- No `v-row`/`v-col` around it: the call to action is a card of its own
        now rather than centred loose text, and the old nest stacked five
@@ -126,12 +126,22 @@ import { mdiChevronRight } from "@mdi/js";
 import { trackGoal } from "~/composables/analytics";
 import { SOCIAL_CARD } from "~/composables/entitySeo";
 import type { DeclarationPeople } from "~~/shared/declarations";
+import type { HomeTimelineResponse } from "~~/server/api/stats/homeTimeline.get";
 
 // The night's count of the declarations in people. Absent before the job's
 // first snapshot, and then the explorer keeps its two panels.
-const { data: peopleData } = await useFetch<{
-  people: DeclarationPeople | null;
-}>("/api/declarations/people", { key: "declarations-people" });
+//
+// The chart's counts come with the page, cached along with it, so its panel
+// draws the moment it opens rather than after a request of its own: a third of
+// readers land on it (`home-default`).
+const [{ data: peopleData }, { data: timeline }] = await Promise.all([
+  useFetch<{ people: DeclarationPeople | null }>("/api/declarations/people", {
+    key: "declarations-people",
+  }),
+  useFetch<HomeTimelineResponse>("/api/stats/homeTimeline", {
+    key: "home-timeline",
+  }),
+]);
 const peopleProgress = computed(() => peopleData.value?.people ?? null);
 
 useSeoMeta({

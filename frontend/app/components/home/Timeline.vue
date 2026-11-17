@@ -4,7 +4,6 @@
     data-testid="home-timeline"
     :title="title"
     :subtitle="subtitle"
-    :loading="status === 'pending'"
     hide-view-toggle-on-mobile
   >
     <template #chart>
@@ -51,18 +50,16 @@
   </StatsChartCard>
 
   <v-alert
-    v-else-if="status !== 'pending'"
+    v-else
     data-testid="home-timeline-empty"
     text="Nie mamy jeszcze dość dat, żeby narysować ten wykres."
     type="info"
     variant="tonal"
   />
-  <v-skeleton-loader v-else type="image" height="340" />
 </template>
 
 <script lang="ts" setup>
 import { computed } from "vue";
-import { authFetch } from "~/composables/auth";
 import { partyColors } from "~~/shared/misc";
 import { OTHER_KEY } from "~~/shared/homeTimeline";
 import {
@@ -105,22 +102,13 @@ import type {
 const props = defineProps<{
   grouping: TimelineGrouping;
   range: TimelineRange;
+  /** All three groupings, fetched by the home page while it renders on the
+   * server: the panel draws the moment it opens, and the picker cuts what is
+   * already in hand. Null when that fetch failed. */
+  timeline: HomeTimelineResponse | null;
 }>();
 
-const ENDPOINT = "/api/stats/homeTimeline";
-
-/** Named rather than keyed on the url: `useFetch` aborts an earlier call that
- * lands on the same key, which would tie this panel to any other caller asking
- * for the same thing.
- *
- * One request for all three groupings. They are three views of one scan, the
- * whole payload is 26 kB, and a request per grouping would make a click on the
- * picker wait on the edge collection. */
-const { data, status } = authFetch<HomeTimelineResponse>(ENDPOINT, {
-  key: "home-timeline",
-});
-
-const lines = computed(() => data.value?.groupings?.[props.grouping] ?? []);
+const lines = computed(() => props.timeline?.groupings[props.grouping] ?? []);
 const hasData = computed(() => lines.value.length > 0);
 
 /** The card says which cut is on screen, not what the panel is - „Stanowiska w
@@ -141,8 +129,8 @@ const title = computed(
  * „Partie” and finding half the people missing is owed the reason on the chart
  * rather than in a footnote nobody reaches. */
 const subtitle = computed(() => {
-  const coverage = data.value?.coverage?.[props.grouping];
-  const posts = data.value?.posts;
+  const coverage = props.timeline?.coverage[props.grouping];
+  const posts = props.timeline?.posts;
   if (!coverage || !posts) return "";
 
   const what = {
@@ -167,7 +155,7 @@ const subtitle = computed(() => {
 /** The months the picked range covers, as indexes into the response's arrays.
  * Sliced here once rather than per series. */
 const visible = computed(() => {
-  const months = data.value?.months ?? [];
+  const months = props.timeline?.months ?? [];
   const years = timelineRangeYears(props.range);
   if (!years || months.length <= years * 12) return { from: 0, months };
   const from = months.length - years * 12;
