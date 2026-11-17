@@ -32,7 +32,11 @@
           </v-tabs-window-item>
           <v-tabs-window-item value="graph">
             <HomeHeading title="Zmiany na stanowiskach" center />
-            <HomeTimeline :grouping="grouping" :range="range" />
+            <HomeTimeline
+              :timeline="timeline ?? null"
+              :grouping="grouping"
+              :range="range"
+            />
           </v-tabs-window-item>
           <v-tabs-window-item v-if="people" value="oswiadczenia">
             <HomeHeading
@@ -94,15 +98,22 @@ import {
 } from "~~/shared/experiments";
 
 import type { TimelineRange } from "~/composables/homeTimeline";
-import type { TimelineGrouping } from "~~/server/api/stats/homeTimeline.get";
+import type {
+  HomeTimelineResponse,
+  TimelineGrouping,
+} from "~~/server/api/stats/homeTimeline.get";
 
 import type { Powiat } from "@/composables/entity/regions";
 import type { DeclarationPeople } from "~~/shared/declarations";
 
-/** The night's people snapshot of the declarations: with one, the explorer
- * gets its third panel. Without one (before the job's first night) the strip
- * stays at two tabs rather than offering an empty panel. */
-const props = defineProps<{ people?: DeclarationPeople | null }>();
+const props = defineProps<{
+  /** The night's people snapshot of the declarations: with one, the explorer
+   * gets its third panel. Without one (before the job's first night) the strip
+   * stays at two tabs rather than offering an empty panel. */
+  people?: DeclarationPeople | null;
+  /** The chart's counts, fetched with the page. */
+  timeline?: HomeTimelineResponse | null;
+}>();
 
 /** What the selected tab is painted in.
  *

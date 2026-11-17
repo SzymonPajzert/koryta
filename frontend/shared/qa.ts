@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "wykres-stanowisk-bez-ladowania",
+    title: "Wykres na głównej bez ładowania",
+    description:
+      "Liczby do wykresu „Zmiany na stanowiskach” przychodzą razem ze stroną, więc zakładka „Stanowiska” nie czeka już kilka sekund na dane.",
+    steps: [
+      "Otwórz stronę główną i kliknij „Stanowiska”: wykres jest od razu, bez ładowania.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
     id: "noc-wysyla-zmiany-firm",
     title: "Noc sama wysyła zmiany firm, które strona już ma",
     description:

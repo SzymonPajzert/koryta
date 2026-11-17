@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
-import { clearNuxtData } from "#app";
 import Timeline from "../../../app/components/home/Timeline.vue";
 import { OTHER_KEY } from "../../../shared/homeTimeline";
 import type {
@@ -9,13 +8,16 @@ import type {
   TimelineGrouping,
 } from "../../../server/api/stats/homeTimeline.get";
 
-/** What the endpoint answers with. Replaced per test. */
+/** What the home page hands the chart. Replaced per test. */
 let response: HomeTimelineResponse;
 
-registerEndpoint(
-  "/api/stats/homeTimeline",
-  (): HomeTimelineResponse => response,
-);
+/** Requests the chart made of its own. The home page fetches the counts while
+ * it renders on the server, so the panel never waits on one. */
+let asked = 0;
+registerEndpoint("/api/stats/homeTimeline", (): HomeTimelineResponse => {
+  asked += 1;
+  return response;
+});
 
 /** `months` counted forward from a start, so a case can say "two years of
  * data" without writing 24 strings out. */
@@ -65,7 +67,7 @@ function timeline(
   };
 }
 
-/** Mounts and waits for the first response.
+/** Mounts with the counts the page would hand it.
  *
  * `apexchart` is stubbed out: it measures a real element on mount and jsdom
  * gives it none, so the live component throws „Element not found” and takes the
@@ -77,17 +79,10 @@ async function mountTimeline(
   grouping: TimelineGrouping = "party",
   range: "5" | "10" | "all" = "all",
 ) {
-  const wrapper = await mountSuspended(Timeline, {
-    props: { grouping, range },
+  return await mountSuspended(Timeline, {
+    props: { grouping, range, timeline: response },
     global: { stubs: { apexchart: true } },
   });
-  await vi.waitUntil(
-    () =>
-      wrapper.find('[data-testid="home-timeline"]').exists() ||
-      wrapper.find('[data-testid="home-timeline-empty"]').exists(),
-    { timeout: 2000 },
-  );
-  return wrapper;
 }
 
 /** Switches the card to its table view, which is where the numbers are.
@@ -103,8 +98,29 @@ async function showTable(wrapper: Awaited<ReturnType<typeof mountTimeline>>) {
 
 describe("HomeTimeline", () => {
   beforeEach(() => {
-    clearNuxtData();
+    asked = 0;
     response = timeline();
+  });
+
+  it("draws what the page hands it, without a request of its own", async () => {
+    const wrapper = await mountTimeline();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="home-timeline"]').exists()).toBe(true);
+    expect(asked).toBe(0);
+  });
+
+  it("says so rather than waiting when the page has no counts", async () => {
+    // The page's own fetch failed: there is nothing to wait for any more.
+    const wrapper = await mountSuspended(Timeline, {
+      props: { grouping: "party", range: "all", timeline: null },
+      global: { stubs: { apexchart: true } },
+    });
+
+    expect(wrapper.find('[data-testid="home-timeline-empty"]').exists()).toBe(
+      true,
+    );
+    expect(wrapper.find(".v-skeleton-loader").exists()).toBe(false);
   });
 
   it("says so rather than drawing an empty chart when a grouping has no lines", async () => {
