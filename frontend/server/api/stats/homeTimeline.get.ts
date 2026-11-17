@@ -1,7 +1,12 @@
 import { getFirestore, FieldPath } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
+import type { H3Event } from "h3";
 import { editorFreshCachedEventHandler } from "~~/server/utils/handlers";
 import { fetchEdgeEndpointNodes } from "~~/server/utils/edgeNodes";
+import {
+  readHomeTimeline,
+  writeHomeTimeline,
+} from "~~/server/utils/homeTimelineSnapshot";
 import { asArray, pageIsPublic } from "~~/shared/model";
 import { canonicalParty, partyColors, partyMergedLabels } from "~~/shared/misc";
 import { categoryTitle, isSector } from "~~/shared/companyCategories";
@@ -147,8 +152,8 @@ async function seatsByCompany(
  * The whole collection, because a monthly count is a fact about every post open
  * in that month and no query returns "the ones open in March 2016". That is the
  * same scan /api/edges/serviceMilestones does, for the same reason, and it is
- * why the result is cached for a day rather than computed per request: the
- * numbers only move when somebody publishes a page.
+ * why the result is stored and counted again once a day rather than per
+ * request: the numbers only move when somebody publishes a page.
  *
  * Both ends are checked against the nodes rather than trusted from the edge.
  * The publish rule already refuses an edge whose ends are not both live and
@@ -162,165 +167,202 @@ async function seatsByCompany(
  * quarter of the posts, most of them companies nobody has classified yet rather
  * than companies known to be private.
  */
-const cachedTimeline = defineCachedFunction(
-  async (today: string): Promise<HomeTimelineResponse> => {
-    const db = getFirestore(getApp(), "koryta-pl");
+async function countTimeline(
+  db: FirebaseFirestore.Firestore,
+  today: string,
+): Promise<HomeTimelineResponse> {
+  const edges: (Edge & { id: string })[] = [];
+  let scanned = 0;
+  let cursor: { startDate: string; id: string } | null = null;
 
-    const edges: (Edge & { id: string })[] = [];
-    let scanned = 0;
-    let cursor: { startDate: string; id: string } | null = null;
+  for (;;) {
+    let q = db
+      .collection("edges")
+      .where("type", "==", "employed")
+      .where("published", "==", true)
+      // Not the order this view wants - it wants none - but it is the index
+      // `edges` already carries for these two filters, and it gives the scan
+      // a cursor to resume from. `__name__` is spelled out because a raw
+      // `startAfter` is checked against the *declared* orders; see
+      // /api/edges/recentEmployments for the full story.
+      .orderBy("start_date", "desc")
+      .orderBy(FieldPath.documentId(), "desc")
+      .limit(SCAN_PAGE);
+    if (cursor) q = q.startAfter(cursor.startDate, cursor.id);
 
-    for (;;) {
-      let q = db
-        .collection("edges")
-        .where("type", "==", "employed")
-        .where("published", "==", true)
-        // Not the order this view wants - it wants none - but it is the index
-        // `edges` already carries for these two filters, and it gives the scan
-        // a cursor to resume from. `__name__` is spelled out because a raw
-        // `startAfter` is checked against the *declared* orders; see
-        // /api/edges/recentEmployments for the full story.
-        .orderBy("start_date", "desc")
-        .orderBy(FieldPath.documentId(), "desc")
-        .limit(SCAN_PAGE);
-      if (cursor) q = q.startAfter(cursor.startDate, cursor.id);
+    const snap = await q.get();
+    scanned += snap.size;
+    if (snap.empty) break;
 
-      const snap = await q.get();
-      scanned += snap.size;
-      if (snap.empty) break;
-
-      for (const doc of snap.docs) {
-        const edge = { id: doc.id, ...(doc.data() as Edge) };
-        // An explicit null start_date is a value the index sorts (last, going
-        // down) rather than one it drops, and it cannot be a cursor either - so
-        // it is skipped without moving the cursor past it.
-        if (typeof edge.start_date !== "string") continue;
-        cursor = { startDate: edge.start_date, id: edge.id };
-        if (edge.deleted === true || !edge.source || !edge.target) continue;
-        edges.push(edge);
-      }
-
-      if (snap.size < SCAN_PAGE || scanned >= MAX_SCAN) break;
+    for (const doc of snap.docs) {
+      const edge = { id: doc.id, ...(doc.data() as Edge) };
+      // An explicit null start_date is a value the index sorts (last, going
+      // down) rather than one it drops, and it cannot be a cursor either - so
+      // it is skipped without moving the cursor past it.
+      if (typeof edge.start_date !== "string") continue;
+      cursor = { startDate: edge.start_date, id: edge.id };
+      if (edge.deleted === true || !edge.source || !edge.target) continue;
+      edges.push(edge);
     }
 
-    const [nodes, seats] = await Promise.all([
-      fetchEdgeEndpointNodes(db, edges, NODE_FIELDS),
-      seatsByCompany(db),
-    ]);
+    if (snap.size < SCAN_PAGE || scanned >= MAX_SCAN) break;
+  }
 
-    const byGrouping: Record<TimelineGrouping, HeldPost[]> = {
-      party: [],
-      region: [],
-      category: [],
+  const [nodes, seats] = await Promise.all([
+    fetchEdgeEndpointNodes(db, edges, NODE_FIELDS),
+    seatsByCompany(db),
+  ]);
+
+  const byGrouping: Record<TimelineGrouping, HeldPost[]> = {
+    party: [],
+    region: [],
+    category: [],
+  };
+  const regionNames = new Map<string, string>();
+  let posts = 0;
+
+  for (const edge of edges) {
+    const person = nodes.get(edge.source);
+    if (person?.type !== "person" || !pageIsPublic(person)) continue;
+    const employer = nodes.get(edge.target);
+    if (!employer || !pageIsPublic(employer)) continue;
+
+    posts += 1;
+    const post = {
+      personId: edge.source,
+      start: edge.start_date!,
+      end: effectiveEnd(edge.end_date),
     };
-    const regionNames = new Map<string, string>();
-    let posts = 0;
 
-    for (const edge of edges) {
-      const person = nodes.get(edge.source);
-      if (person?.type !== "person" || !pageIsPublic(person)) continue;
-      const employer = nodes.get(edge.target);
-      if (!employer || !pageIsPublic(employer)) continue;
+    // `asArray`, not `.parties ?? []`: a node written before 2026-07-28 holds
+    // `{"0": "PiS"}` where the array belongs, and reading it as an array loses
+    // the value silently rather than failing.
+    //
+    // Only the parties the site has a colour for. One it has not is stored and
+    // then invisible everywhere else - no chip, no graph legend - and a chart
+    // is the wrong place to start showing them, a line with no colour of its
+    // own being a line nobody can name.
+    const parties = asArray<string>((person as Person).parties)
+      .filter((party) => typeof party === "string" && party in partyColors)
+      .map(canonicalParty);
+    if (parties.length > 0) byGrouping.party.push({ ...post, groups: parties });
 
-      posts += 1;
-      const post = {
-        personId: edge.source,
-        start: edge.start_date!,
-        end: effectiveEnd(edge.end_date),
-      };
-
-      // `asArray`, not `.parties ?? []`: a node written before 2026-07-28 holds
-      // `{"0": "PiS"}` where the array belongs, and reading it as an array loses
-      // the value silently rather than failing.
-      //
-      // Only the parties the site has a colour for. One it has not is stored and
-      // then invisible everywhere else - no chip, no graph legend - and a chart
-      // is the wrong place to start showing them, a line with no colour of its
-      // own being a line nobody can name.
-      const parties = asArray<string>((person as Person).parties)
-        .filter((party) => typeof party === "string" && party in partyColors)
-        .map(canonicalParty);
-      if (parties.length > 0)
-        byGrouping.party.push({ ...post, groups: parties });
-
-      const seat = seats.get(edge.target);
-      if (seat) {
-        regionNames.set(seat.teryt, seat.name);
-        byGrouping.region.push({ ...post, groups: [seat.teryt] });
-      }
-
-      // Absent and empty differ on this field - absent means nobody has decided,
-      // which is true of most companies - so a post with no sector is left out
-      // of that grouping rather than counted as "other". `coverage` is what says
-      // how many that is. Sectors alone: Skarb Państwa says who owns the
-      // company, beside its sector (`isSector`).
-      const categories = asArray<string>(
-        (employer as Company).categories,
-      ).filter((value) => typeof value === "string" && isSector(value));
-      if (categories.length > 0) {
-        byGrouping.category.push({ ...post, groups: categories });
-      }
+    const seat = seats.get(edge.target);
+    if (seat) {
+      regionNames.set(seat.teryt, seat.name);
+      byGrouping.region.push({ ...post, groups: [seat.teryt] });
     }
 
-    const labels: Record<TimelineGrouping, (key: string) => string> = {
-      party: (key) => partyMergedLabels[key] ?? key,
-      region: (key) => regionNames.get(key) ?? key,
-      category: categoryTitle,
-    };
-    const otherLabels: Record<TimelineGrouping, string> = {
-      party: "Pozostałe partie",
-      region: "Pozostałe województwa",
-      category: "Pozostałe branże",
-    };
-
-    // The month the axis opens on, shared by all three. A sector was first
-    // filed years after the first party was, and three sets of lines cannot
-    // share an axis unless they are all cut to the same one.
-    const from = timelineGroupings
-      .flatMap((grouping) => byGrouping[grouping])
-      .reduce<string | null>(
-        (earliest, post) =>
-          earliest === null || post.start < earliest ? post.start : earliest,
-        null,
-      );
-
-    const groupings = {} as HomeTimelineResponse["groupings"];
-    const coverage = {} as HomeTimelineResponse["coverage"];
-    let months: string[] = [];
-
-    for (const grouping of timelineGroupings) {
-      const built = buildTimeline(byGrouping[grouping], today, {
-        labelOf: labels[grouping],
-        otherLabel: otherLabels[grouping],
-        from: from ?? undefined,
-      });
-      groupings[grouping] = built.series;
-      coverage[grouping] = {
-        posts: byGrouping[grouping].length,
-        people: new Set(byGrouping[grouping].map((post) => post.personId)).size,
-      };
-      if (built.months.length > months.length) months = built.months;
+    // Absent and empty differ on this field - absent means nobody has decided,
+    // which is true of most companies - so a post with no sector is left out
+    // of that grouping rather than counted as "other". `coverage` is what says
+    // how many that is. Sectors alone: Skarb Państwa says who owns the
+    // company, beside its sector (`isSector`).
+    const categories = asArray<string>((employer as Company).categories).filter(
+      (value) => typeof value === "string" && isSector(value),
+    );
+    if (categories.length > 0) {
+      byGrouping.category.push({ ...post, groups: categories });
     }
+  }
 
-    return { months, groupings, coverage, posts, today: today.slice(0, 7) };
-  },
-  {
-    // A day. The series is 300-odd months long and its last point moves when
-    // somebody publishes a page, which is not something a reader of the home
-    // page is waiting on; an editor who wants it fresh passes `?latest`.
-    maxAge: 86400,
-    name: "homeTimeline",
-    getKey: (today: string) => today,
-  },
-);
+  const labels: Record<TimelineGrouping, (key: string) => string> = {
+    party: (key) => partyMergedLabels[key] ?? key,
+    region: (key) => regionNames.get(key) ?? key,
+    category: categoryTitle,
+  };
+  const otherLabels: Record<TimelineGrouping, string> = {
+    party: "Pozostałe partie",
+    region: "Pozostałe województwa",
+    category: "Pozostałe branże",
+  };
+
+  // The month the axis opens on, shared by all three. A sector was first
+  // filed years after the first party was, and three sets of lines cannot
+  // share an axis unless they are all cut to the same one.
+  const from = timelineGroupings
+    .flatMap((grouping) => byGrouping[grouping])
+    .reduce<string | null>(
+      (earliest, post) =>
+        earliest === null || post.start < earliest ? post.start : earliest,
+      null,
+    );
+
+  const groupings = {} as HomeTimelineResponse["groupings"];
+  const coverage = {} as HomeTimelineResponse["coverage"];
+  let months: string[] = [];
+
+  for (const grouping of timelineGroupings) {
+    const built = buildTimeline(byGrouping[grouping], today, {
+      labelOf: labels[grouping],
+      otherLabel: otherLabels[grouping],
+      from: from ?? undefined,
+    });
+    groupings[grouping] = built.series;
+    coverage[grouping] = {
+      posts: byGrouping[grouping].length,
+      people: new Set(byGrouping[grouping].map((post) => post.personId)).size,
+    };
+    if (built.months.length > months.length) months = built.months;
+  }
+
+  return { months, groupings, coverage, posts, today: today.slice(0, 7) };
+}
+
+/** The count this instance has under way. A reader who arrives while it runs
+ * waits on that one rather than starting another 20,000 reads. */
+let counting: Promise<HomeTimelineResponse> | null = null;
+
+/** Counts the timeline and stores it, for every instance to read. */
+function recount(
+  db: FirebaseFirestore.Firestore,
+  today: string,
+): Promise<HomeTimelineResponse> {
+  counting ??= countTimeline(db, today)
+    .then(async (timeline) => {
+      await writeHomeTimeline(db, { countedOn: today, timeline }, new Date());
+      return timeline;
+    })
+    .finally(() => {
+      counting = null;
+    });
+  return counting;
+}
+
+/** The stored timeline, counted again once a Warsaw day.
+ *
+ * Yesterday's count is still served, and the new one runs behind it: the axis
+ * ends on the current month and the lines move only when somebody publishes a
+ * page, so a chart a day old is a better answer than a 7 s wait. Only a
+ * database with no count at all - the first request after this shipped, a
+ * fresh emulator - makes a reader wait for one.
+ */
+export async function storedTimeline(
+  db: FirebaseFirestore.Firestore,
+  today: string,
+  event: Pick<H3Event, "waitUntil">,
+): Promise<HomeTimelineResponse> {
+  const stored = await readHomeTimeline(db);
+  if (!stored) return recount(db, today);
+  if (stored.countedOn < today) {
+    event.waitUntil(
+      recount(db, today).catch((error: unknown) => {
+        console.error("The home timeline could not be counted again:", error);
+      }),
+    );
+  }
+  return stored.timeline;
+}
 
 /** How many people held a post each month, split three ways.
  *
- * Feeds the „Wykres” panel of the home page explorer - the busiest route on the
- * site - so it is cached hard on both sides: a day in `cachedTimeline`, keyed on
- * the Warsaw day, behind the six-hour response cache every public endpoint has.
+ * Feeds the „Stanowiska” panel of the home page explorer. The home page asks
+ * for it while it renders on the server, so the chart has its numbers before
+ * the reader opens the panel. Behind the stored count sits the six-hour
+ * response cache every public endpoint has.
  */
 export default editorFreshCachedEventHandler(
-  async (): Promise<HomeTimelineResponse> => cachedTimeline(warsawDate()),
+  async (event): Promise<HomeTimelineResponse> =>
+    storedTimeline(getFirestore(getApp(), "koryta-pl"), warsawDate(), event),
   { name: "api-stats-homeTimeline" },
 );
