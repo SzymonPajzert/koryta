@@ -1,5 +1,6 @@
 import plLocale from "apexcharts/dist/locales/pl.json";
 import type { ActivityKind } from "~~/shared/activity";
+import { escapeHtml } from "~~/shared/notifications";
 import type { SearchEnding } from "~~/shared/searchLog";
 
 /**
@@ -170,6 +171,74 @@ export function baseChartOptions() {
       labels: { style: { colors: ink.muted, fontFamily: FONT_FAMILY } },
     },
     states: { hover: { filter: { type: "lighten", value: 0.08 } } },
+  };
+}
+
+/** One line of a line chart, as its row in a tooltip shows it. */
+export type TooltipLine = { name: string; color: string };
+
+/** What apexcharts hands a `tooltip.custom`, as far as `rankedTooltip` reads
+ * it: every series' values, and the point under the pointer. */
+type TooltipPoint = {
+  series: (number | null | undefined)[][];
+  dataPointIndex: number;
+};
+
+/** The circle apexcharts puts before each row of its own tooltip. */
+const TOOLTIP_MARKER =
+  '<svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="6" cy="6" r="5" fill="currentColor"/></svg>';
+
+/** A shared tooltip whose rows stand in the order the lines do at the hovered
+ * point, the highest line first.
+ *
+ * apexcharts lists a shared tooltip's rows in series order whatever the values
+ * are, and has no option to sort them. Where that is not the order of the
+ * lines - the home chart's folded „pozostałe” comes last and is often its
+ * highest line - a reader going down the rows goes up and down the chart. So
+ * this writes the tooltip itself, in apexcharts' own markup and classes: its
+ * stylesheet still draws it, and only the order is new.
+ *
+ * The values are counts. Ties keep series order. A line with no value at the
+ * point has no row, as in apexcharts' own tooltip, which is also how a line
+ * hidden from the legend drops out: apexcharts empties its data.
+ *
+ * The lines and the title are asked for each time the tooltip is drawn.
+ * vue3-apexcharts hands every later options update to apexcharts through
+ * JSON, which drops functions, so apexcharts goes on calling the first
+ * tooltip it was given: lines baked into it stay those of the first chart.
+ */
+export function rankedTooltip(
+  lines: () => TooltipLine[],
+  title: (dataPointIndex: number) => string,
+) {
+  // The font apexcharts sets on the same two elements of its own tooltip.
+  const font = escapeHtml(`font-family: ${FONT_FAMILY}; font-size: 12px`);
+  return ({ series, dataPointIndex }: TooltipPoint): string => {
+    const rows = lines()
+      .map((line, index) => ({
+        line,
+        index,
+        value: series[index]?.[dataPointIndex],
+      }))
+      .filter(
+        (row): row is { line: TooltipLine; index: number; value: number } =>
+          typeof row.value === "number",
+      )
+      .sort((a, b) => b.value - a.value || a.index - b.index)
+      .map(
+        ({ line, value }) =>
+          `<div class="apexcharts-tooltip-series-group apexcharts-active" style="display: flex">` +
+          `<span class="apexcharts-tooltip-marker" style="color: ${escapeHtml(line.color)}">${TOOLTIP_MARKER}</span>` +
+          `<div class="apexcharts-tooltip-text" style="${font}">` +
+          `<div class="apexcharts-tooltip-y-group">` +
+          `<span class="apexcharts-tooltip-text-y-label">${escapeHtml(line.name)}: </span>` +
+          `<span class="apexcharts-tooltip-text-y-value">${formatCount(value)}</span>` +
+          `</div></div></div>`,
+      );
+    return (
+      `<div class="apexcharts-tooltip-title" style="${font}">${escapeHtml(title(dataPointIndex))}</div>` +
+      rows.join("")
+    );
   };
 }
 
