@@ -76,7 +76,7 @@ describe("OswiadczeniaPeopleBar", () => {
       const { wrapper, segments } = await segmentsOf(detail);
       const inBar = segments.reduce((sum, s) => sum + s.value, 0);
       expect(inBar).toBe(people.people - people.namesakes);
-      expect(wrapper.text()).toContain("osobno imiennicy:");
+      expect(wrapper.text()).toContain("duplikaty:");
       expect(wrapper.text()).toContain("50");
     }
   });
