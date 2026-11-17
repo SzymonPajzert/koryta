@@ -409,7 +409,7 @@ describe("/eksploruj/nowe", () => {
     await mountPage();
 
     expect(head).toHaveBeenCalledWith(
-      { title: "Eksploruj Nowe - koryta.pl" },
+      { title: "Eksploruj Nowe" },
       { tagPriority: "high" },
     );
   });

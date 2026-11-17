@@ -178,7 +178,7 @@ definePageMeta({
 });
 
 useHead({
-  title: "Kategoryzacja notatek (Admin) - koryta.pl",
+  title: "Kategoryzacja notatek (Admin)",
 });
 
 /** One sitting's worth of cards. The endpoint reads the whole collection to

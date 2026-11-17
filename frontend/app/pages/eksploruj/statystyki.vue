@@ -300,7 +300,7 @@ import {
   status as statusColors,
 } from "~/utils/chartTheme";
 
-useHead({ title: "Statystyki - koryta.pl" });
+useHead({ title: "Statystyki" });
 
 /** One look for all three, the queue last (decision on 2026-11-17). */
 const tiles = [

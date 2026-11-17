@@ -74,7 +74,7 @@ definePageMeta({
   middleware: "auth",
 });
 useHead({
-  title: "Ekstrakcje z artykułów - koryta.pl",
+  title: "Ekstrakcje z artykułów",
 });
 
 /** `?article=` narrows the page to one url, which is how `/zrodla` hands a

@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "jedna-nazwa-w-tytule-obrazek-podgladu",
+    title: "Jedno „Koryta.pl” w tytule karty, obrazek w podglądzie linku",
+    description:
+      "Tytuł karty kończy się jednym „| Koryta.pl”. Link do /o-nas, /pomoc czy /eksploruj/szpitale ma w podglądzie obrazek serwisu.",
+    steps: [
+      "Otwórz /o-nas i /eksploruj/szpitale: karta to „O nas | Koryta.pl” i „Rady nadzorcze szpitali publicznych | Koryta.pl”.",
+      "Wklej https://koryta.pl/pomoc na Facebooku lub Slacku: podgląd ma obrazek serwisu.",
+    ],
+    link: "/o-nas",
+    area: "public",
+  },
+  {
     id: "statystyki-kafelki",
     title: "Statystyki: trzy kafelki pod tytułem",
     description:

@@ -289,7 +289,7 @@ definePageMeta({
 });
 
 useHead({
-  title: "Twój profil - koryta.pl",
+  title: "Twój profil",
 });
 
 const { user, userConfig, logout, isAdmin } = useAuthState();

@@ -375,7 +375,7 @@ definePageMeta({
   fullWidth: true,
 });
 
-useHead({ title: "Zadania (Admin) - koryta.pl" });
+useHead({ title: "Zadania (Admin)" });
 
 const route = useRoute();
 const router = useRouter();

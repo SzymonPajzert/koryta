@@ -409,7 +409,7 @@ import {
   mdiShieldCheckOutline,
 } from "@mdi/js";
 useSeoMeta({
-  title: "O nas - Koryta.pl",
+  title: "O nas",
   description:
     "Przekształcamy rozproszone dane w czytelną mapę powiązań, by każdy obywatel mógł świadomie oceniać jakość zarządzania majątkiem publicznym.",
 });

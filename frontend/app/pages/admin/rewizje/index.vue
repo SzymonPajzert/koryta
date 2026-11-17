@@ -474,7 +474,7 @@ definePageMeta({
   maxWidth: 1100,
 });
 
-useHead({ title: "Rewizje (Admin) - koryta.pl" });
+useHead({ title: "Rewizje (Admin)" });
 
 type SectionId = "kolejka" | "powiazania" | "wpisy";
 const SECTIONS: readonly SectionId[] = ["kolejka", "powiazania", "wpisy"];

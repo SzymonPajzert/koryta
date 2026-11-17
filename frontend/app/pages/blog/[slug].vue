@@ -44,7 +44,7 @@ const siteUrl = useRuntimeConfig().public.siteUrl;
 const image = computed<string>(() => post.value?.image ?? SOCIAL_CARD);
 
 useSeoMeta({
-  title: () => `${post.value?.title} - Koryta.pl`,
+  title: () => post.value?.title,
   description: () => post.value?.description,
   ogTitle: () => post.value?.title,
   ogDescription: () => post.value?.description,
