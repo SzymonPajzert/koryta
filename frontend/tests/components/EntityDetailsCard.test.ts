@@ -192,6 +192,26 @@ describe("EntityDetailsCard", () => {
     expect(title.classes()).toContain("text-wrap");
   });
 
+  it("puts a party only a backing ties the person to after the rest, in the backing chip", async () => {
+    const wrapper = await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: { ...person, parties: ["PO", "PSL"] } as Person,
+        type: "person",
+        backed: { PSL: ["2018"] },
+      },
+    });
+    const chips = wrapper.get(".v-card-title").findAll(".chip");
+
+    expect(chips.map((chip) => chip.text())).toEqual(["PO", "PSL"]);
+    expect(chips[0]!.classes()).not.toContain("chip--backing");
+    expect(chips[1]!.classes()).toContain("chip--backing");
+    expect(chips[1]!.attributes("title")).toBe(
+      "Poparcie kandydatury w wyborach 2018 (PKW)",
+    );
+    // No label, as the parties have none.
+    expect(wrapper.get(".v-card-title").text()).not.toContain("poparcie");
+  });
+
   it("marks an unpublished page as a draft, and says nothing on a live one", async () => {
     const draft = await mountCard(false);
     expect(draft.text()).toContain("szkic");

@@ -124,6 +124,7 @@
           :entity="entity"
           :type="type"
           :extra-locations="searchLocations"
+          :backed="backedParties"
           @published="refreshNode()"
           @voted="emit('voted')"
         />
@@ -493,6 +494,7 @@ import type {
 import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import { predecessorsByEdge } from "~/utils/succession";
 import { employmentTowns } from "~/utils/companyLocation";
+import { backingYears, partiesOnlyBacked } from "~/utils/partyStatements";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
 import type { edgeTypeExt } from "~/composables/useEdgeTypes";
@@ -698,6 +700,18 @@ const searchLocations = computed(() => [
   ...electionLocations.value,
   ...employmentTowns(edges.value),
 ]);
+
+/** The person's parties that only a backing PKW recorded ties them to, with
+ * its years: the header draws those apart from the rest. */
+const backedParties = computed(() => {
+  // The person's own candidacies run from them to a region: `targets`.
+  const candidacies = targets.value.filter((e) => e.type === "election");
+  const backed: Record<string, string[]> = {};
+  for (const party of partiesOnlyBacked(candidacies)) {
+    backed[party] = backingYears(candidacies, party);
+  }
+  return backed;
+});
 
 const owners = computed(() => {
   return sources.value.filter((e) => e.type === "owns");

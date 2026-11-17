@@ -115,4 +115,30 @@ describe("PartyChip", () => {
   it("puts white ink on Konfederacja's navy", () => {
     expect(inkOf("Konfederacja")).toBe(surface.white);
   });
+
+  /** A party only a backing PKW recorded ties the person to: the party's
+   * colour as a frame and a stripe, the ink on the surface, and what it is
+   * said on hover. */
+  it("draws a backing as a frame in the party's colour, unfilled", () => {
+    const chip = mount(PartyChip, {
+      props: { party: "PSL", tie: "backing", note: "Poparcie kandydatury" },
+    }).get(".chip");
+    const style = (chip.element as HTMLElement).style;
+
+    expect(chip.classes()).toContain("chip--backing");
+    expect(style.backgroundColor).toBe("");
+    expect(style.borderColor).toBe(partyColors["PSL"]);
+    expect(style.color).toBe(ink.strong);
+    expect(chip.attributes("title")).toBe("Poparcie kandydatury");
+  });
+
+  it("draws a backing of „Inne” in its ink, its fill being too pale", () => {
+    const chip = mount(PartyChip, {
+      props: { party: OTHER_PARTY, tie: "backing" },
+    }).get(".chip");
+
+    expect((chip.element as HTMLElement).style.borderColor).toBe(
+      inkOf(OTHER_PARTY),
+    );
+  });
 });

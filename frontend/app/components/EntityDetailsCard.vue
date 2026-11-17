@@ -30,10 +30,18 @@
         :node-name="entity?.name"
         @published="emit('published')"
       />
+      <PartyChip v-for="party in listedParties" :key="party" :party="party" />
+      <!-- A party only a backing ties the person to comes after the rest, in
+           the backing's chip, as the candidacy row draws it (decision on
+           2026-11-11: it counts, and looks a bit different). No label, as the
+           parties have none; the chip says what it is on hover (decision on
+           2026-11-17). -->
       <PartyChip
-        v-for="party in personEntity?.parties"
+        v-for="party in backedParties"
         :key="party"
         :party="party"
+        tie="backing"
+        :note="backingNote(party)"
       />
       <v-spacer />
       <!-- One row of controls, in the order they escalate: the two an admin
@@ -211,9 +219,27 @@ const props = withDefaults(
      * table builds those, from what it fetches - so the page derives both
      * from its edges and hands them down. */
     extraLocations?: string[];
+    /** The person's parties their candidacies name only through a backing
+     * PKW recorded, each with the years it did. Derived from the edges by the
+     * page, as `extraLocations` is. */
+    backed?: Record<string, string[]>;
   }>(),
-  { extraLocations: undefined },
+  { extraLocations: undefined, backed: undefined },
 );
+
+const listedParties = computed(() =>
+  (personEntity.value?.parties ?? []).filter((party) => !props.backed?.[party]),
+);
+const backedParties = computed(() =>
+  (personEntity.value?.parties ?? []).filter((party) => props.backed?.[party]),
+);
+
+function backingNote(party: string): string | undefined {
+  const years = props.backed?.[party];
+  return years?.length
+    ? `Poparcie kandydatury w wyborach ${years.join(", ")} (PKW)`
+    : undefined;
+}
 
 /** The page went live from the badge above. The card holds no data of its own
  * - the entity is handed to it - so the only thing it can do is say so.
