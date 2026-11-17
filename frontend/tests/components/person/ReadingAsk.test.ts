@@ -2,18 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
 import { clearNuxtData } from "#app";
-import { ref } from "vue";
 import PersonReadingAsk from "../../../app/components/person/ReadingAsk.vue";
 import { setGlobalProp, trackGoal } from "~/composables/analytics";
 import { PERSON_ASK_EXPERIMENT, assignArm } from "../../../shared/experiments";
-import type { PersonDeclarations } from "../../../shared/declarations";
 
-const { mockAuthRequest } = vi.hoisted(() => ({ mockAuthRequest: vi.fn() }));
-
-vi.mock("~/composables/auth", () => ({
-  authRequest: mockAuthRequest,
-  useAuthState: () => ({ user: ref(null) }),
-}));
 vi.mock("~/composables/analytics", () => ({
   trackGoal: vi.fn(),
   setGlobalProp: vi.fn(),
@@ -67,36 +59,13 @@ function automated(value: boolean) {
   Object.defineProperty(navigator, "webdriver", { value, configurable: true });
 }
 
-/** Published by the automation, so on the readers' readings. */
-const readersPublished: PersonDeclarations = {
-  autoPublished: { at: "2026-11-01T08:15:00.000Z" },
-  declarations: [
-    {
-      url: "https://bip.example.pl/oswiadczenie-2024.pdf",
-      year: 2024,
-      unit: "Strzelin (gmina miejsko-wiejska)",
-      office: "Rada gminy",
-    },
-  ],
-};
-
-/** The declarations endpoint, by node; a node not named answers 404. */
-function declarations(byNode: Record<string, PersonDeclarations>) {
-  mockAuthRequest.mockImplementation(async (url: string) => {
-    const node = /^\/api\/nodes\/([^/]+)\/declarations$/.exec(url)?.[1];
-    const found = node ? byNode[node] : undefined;
-    if (found) return found;
-    throw Object.assign(new Error("Page not found"), { statusCode: 404 });
-  });
-}
-
 /** The words as a reader reads them: no-break spaces are spaces. */
 const words = (text: string) =>
   text.replaceAll(String.fromCharCode(0xa0), " ").replace(/\s+/g, " ").trim();
 
 /** Mounted, with the arm settled and, in the ask's arm, the figure in. */
-async function mount(nodeId: string) {
-  const ask = await mountSuspended(PersonReadingAsk, { props: { nodeId } });
+async function mount() {
+  const ask = await mountSuspended(PersonReadingAsk);
   await flushPromises();
   await flushPromises();
   return ask;
@@ -108,7 +77,6 @@ const assigned = () =>
     .mock.calls.filter(([goal]) => goal === "experiment:assigned")
     .map(([, props]) => props);
 
-// Each test asks for its own node: the declarations are keyed by it.
 describe("PersonReadingAsk", () => {
   beforeEach(() => {
     vi.mocked(trackGoal).mockClear();
@@ -117,14 +85,13 @@ describe("PersonReadingAsk", () => {
     automatic = 741;
     statsAsked = 0;
     reportInView = null;
-    declarations({ nauto: readersPublished });
     automated(false);
     seatIn("prosba");
   });
 
   it("shows nothing to the half without it, and counts that half in the split", async () => {
     seatIn("bez");
-    const ask = await mount("nbez");
+    const ask = await mount();
 
     expect(ask.find('[data-testid="person-reading-ask"]').exists()).toBe(false);
     expect(assigned()).toEqual([{ experiment: "osoba-skany", arm: "bez" }]);
@@ -135,7 +102,7 @@ describe("PersonReadingAsk", () => {
   });
 
   it("counts the half with it in the split", async () => {
-    const ask = await mount("nprosba");
+    const ask = await mount();
 
     expect(ask.find('[data-testid="person-reading-ask"]').exists()).toBe(true);
     expect(assigned()).toEqual([{ experiment: "osoba-skany", arm: "prosba" }]);
@@ -147,7 +114,7 @@ describe("PersonReadingAsk", () => {
     // the box, every run, and nobody counted in an arm.
     automated(true);
     try {
-      const ask = await mount("nrobot");
+      const ask = await mount();
       expect(ask.find('[data-testid="person-reading-ask"]').exists()).toBe(
         false,
       );
@@ -159,12 +126,14 @@ describe("PersonReadingAsk", () => {
   });
 
   it("leads with the people the readings published, and asks for a few scans", async () => {
-    const ask = await mount("nplain");
+    const ask = await mount();
 
     expect(
       words(ask.get('[data-testid="person-reading-ask-figure"]').text()),
     ).toBe("741 opublikowanych osób");
-    expect(ask.get("h3").text()).toBe("Masz minutę?");
+    expect(ask.get("h3").text()).toBe(
+      "Strony jak ta powstały dzięki czytelnikom",
+    );
     expect(words(ask.text())).toContain(
       "Przepisz daty urodzenia z kilku skanów oświadczeń. Jeśli będą pasować do danych z KRS-u, automatycznie opublikujemy te osoby.",
     );
@@ -177,17 +146,9 @@ describe("PersonReadingAsk", () => {
     );
   });
 
-  it("says pages like it come from readers on a page the automation published", async () => {
-    const ask = await mount("nauto");
-
-    expect(ask.get("h3").text()).toBe(
-      "Strony jak ta powstały dzięki czytelnikom",
-    );
-  });
-
   it("writes a large figure the Polish way", async () => {
     automatic = 12345;
-    const ask = await mount("nlarge");
+    const ask = await mount();
 
     expect(
       words(ask.get('[data-testid="person-reading-ask-figure"]').text()),
@@ -195,22 +156,22 @@ describe("PersonReadingAsk", () => {
   });
 
   it("puts the label in the count's own form", async () => {
-    const label = async (count: number, node: string) => {
+    const label = async (count: number) => {
       automatic = count;
       clearNuxtData("person-reading-ask-figure");
-      const ask = await mount(node);
+      const ask = await mount();
       return words(ask.get('[data-testid="person-reading-ask-figure"]').text());
     };
 
-    expect(await label(1, "none")).toBe("1 opublikowana osoba");
-    expect(await label(3, "nthree")).toBe("3 opublikowane osoby");
-    expect(await label(12, "ntwelve")).toBe("12 opublikowanych osób");
-    expect(await label(22, "ntwentytwo")).toBe("22 opublikowane osoby");
+    expect(await label(1)).toBe("1 opublikowana osoba");
+    expect(await label(3)).toBe("3 opublikowane osoby");
+    expect(await label(12)).toBe("12 opublikowanych osób");
+    expect(await label(22)).toBe("22 opublikowane osoby");
   });
 
   it("leads with its words when there is no figure", async () => {
     automatic = 0;
-    const ask = await mount("nzero");
+    const ask = await mount();
 
     expect(ask.find('[data-testid="person-reading-ask-figure"]').exists()).toBe(
       false,
@@ -221,7 +182,7 @@ describe("PersonReadingAsk", () => {
   });
 
   it("is kept out of search snippets", async () => {
-    const ask = await mount("nsnippet");
+    const ask = await mount();
 
     expect(
       ask.get('[data-testid="person-reading-ask"]').attributes(),
@@ -229,7 +190,7 @@ describe("PersonReadingAsk", () => {
   });
 
   it("counts itself shown once it is in view, not on mount", async () => {
-    await mount("nshown");
+    await mount();
     // On mount it reports the arm, and nothing about being seen.
     const shown = () =>
       vi.mocked(trackGoal).mock.calls.filter(([goal]) => goal === "cta:shown");
@@ -243,7 +204,7 @@ describe("PersonReadingAsk", () => {
   });
 
   it("counts the click as the reading task, from a person's page", async () => {
-    const ask = await mount("nclick");
+    const ask = await mount();
 
     await ask.get('[data-testid="person-reading-ask-go"]').trigger("click");
 
