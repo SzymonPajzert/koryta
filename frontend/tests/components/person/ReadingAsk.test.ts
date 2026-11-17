@@ -89,7 +89,7 @@ describe("PersonReadingAsk", () => {
     ).toBe("741 osób opublikowanych w 30 dni dzięki czytelnikom");
     expect(ask.get("h3").text()).toBe("Masz minutę?");
     expect(words(ask.text())).toContain(
-      "Przepisz datę urodzenia z kilku skanów oświadczeń. To bardzo nam pomaga, a konto nie jest potrzebne.",
+      "Przepisz daty urodzenia z kilku skanów oświadczeń. Jeśli będą pasować do danych z KRS-u, automatycznie opublikujemy te osoby.",
     );
     const go = ask.get('[data-testid="person-reading-ask-go"]');
     expect(go.text()).toBe("Odczytaj skany");
@@ -100,10 +100,12 @@ describe("PersonReadingAsk", () => {
     );
   });
 
-  it("says so on a page the readers' readings published", async () => {
+  it("says pages like it come from readers on a page the automation published", async () => {
     const ask = await mount("nauto");
 
-    expect(ask.get("h3").text()).toBe("Ta strona powstała dzięki czytelnikom");
+    expect(ask.get("h3").text()).toBe(
+      "Strony jak ta powstały dzięki czytelnikom",
+    );
   });
 
   it("writes a large figure the Polish way", async () => {
