@@ -24,9 +24,10 @@
 
         <div class="mt-3">
           <v-btn
-            v-for="[icon, link] in icons"
-            :key="icon"
+            v-for="[icon, link, label] in icons"
+            :key="link"
             :icon="icon"
+            :aria-label="label"
             size="small"
             variant="text"
             :href="link"
@@ -92,11 +93,20 @@ const sections = [
   },
 ];
 
+// Icon-only buttons: the label is the only name a screen reader gets for each.
 const icons = [
-  [mdiGithub, "https://github.com/SzymonPajzert/koryta"],
-  [mdiTwitter, "https://twitter.com/korytapl"],
-  [mdiFacebook, "https://www.facebook.com/people/Korytapl/61581508966044/"],
-  [mdiFacebook, "https://www.facebook.com/groups/korytapl"],
-  [mdiInstagram, "https://www.instagram.com/szymon.pajzert"],
+  [mdiGithub, "https://github.com/SzymonPajzert/koryta", "GitHub"],
+  [mdiTwitter, "https://twitter.com/korytapl", "X (Twitter)"],
+  [
+    mdiFacebook,
+    "https://www.facebook.com/people/Korytapl/61581508966044/",
+    "Facebook",
+  ],
+  [
+    mdiFacebook,
+    "https://www.facebook.com/groups/korytapl",
+    "Grupa na Facebooku",
+  ],
+  [mdiInstagram, "https://www.instagram.com/szymon.pajzert", "Instagram"],
 ];
 </script>
