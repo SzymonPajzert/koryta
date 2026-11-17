@@ -49,9 +49,10 @@
 <script setup lang="ts">
 /** The ask under a person's history, for a reader who is not signed in: read
  * the birth date off a few scans of asset declarations on /oswiadczenia. No
- * account is needed there, and the readings are what publish the next people,
- * so the ask leads with how many they published in the last 30 days - and on
- * a page the readings published, it says so (round osoba-skany-r1, look c).
+ * account is needed there, and a date that matches the register publishes
+ * the person, so the ask leads with how many were published in the last 30
+ * days - and on a page the automation published, says that pages like it come
+ * from readers (round osoba-skany-r1, look c; wording from round r2).
  *
  * Person pages are where readers arrive: Google landed 33 a weekday on them in
  * November, and until now none of them was asked anything.
@@ -69,13 +70,17 @@ const props = defineProps<{ nodeId: string }>();
 const NBSP = "\u00a0";
 
 const FIGURE_LABEL = `osób opublikowanych w${NBSP}30${NBSP}dni dzięki czytelnikom`;
-const BODY = `Przepisz datę urodzenia z${NBSP}kilku skanów oświadczeń. To bardzo nam pomaga, a${NBSP}konto nie jest potrzebne.`;
+const BODY = `Przepisz daty urodzenia z${NBSP}kilku skanów oświadczeń. Jeśli będą pasować do danych z${NBSP}KRS-u, automatycznie opublikujemy te osoby.`;
 
 const { data: declarations } = usePersonDeclarations(props.nodeId);
 
+/** On a page the automation published, a word about pages like it rather
+ * than about this one: since 11-16 an OCR date that matches the page settles
+ * its crop without readers, so this very page may owe readers nothing (round
+ * osoba-skany-r2). */
 const title = computed(() =>
   declarations.value?.autoPublished
-    ? "Ta strona powstała dzięki czytelnikom"
+    ? "Strony jak ta powstały dzięki czytelnikom"
     : "Masz minutę?",
 );
 

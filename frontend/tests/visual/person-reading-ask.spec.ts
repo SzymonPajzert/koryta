@@ -86,7 +86,7 @@ test("osoba-prosba-o-skany-po-odczytach", SLUG, async ({ page }, testInfo) => {
   // the page is up.
   const ask = page.getByTestId("person-reading-ask");
   await expect(ask.locator("h3")).toHaveText(
-    "Ta strona powstała dzięki czytelnikom",
+    "Strony jak ta powstały dzięki czytelnikom",
     { timeout: 30_000 },
   );
 

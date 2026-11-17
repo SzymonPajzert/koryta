@@ -189,8 +189,14 @@
             <!-- Under the history the reader came for, before the documents
                  and the graph: the one ask on the page, to a reader who is
                  not signed in. A signed-in contributor knows the way to
-                 /oswiadczenia and has the app bar's „Działaj z nami”. -->
-            <PersonReadingAsk v-if="!user" :node-id="node" class="my-6" />
+                 /oswiadczenia and has the app bar's „Działaj z nami”. Half the
+                 gap above it on a phone, where it reads as part of the
+                 history (round osoba-skany-r2). -->
+            <PersonReadingAsk
+              v-if="!user"
+              :node-id="node"
+              class="mt-3 mt-sm-6 mb-6"
+            />
           </template>
           <v-row v-else>
             <v-col
