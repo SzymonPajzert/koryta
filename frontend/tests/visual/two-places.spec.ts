@@ -137,11 +137,8 @@ test("powiazania-dwa-miejsca", PERSON, async ({ page }, testInfo) => {
     relations.getByTestId("edge-draft-publish-visrunkozienice2002"),
   ).toBeVisible();
 
-  // The feedback button floats over the last row on a phone, and the pointer
-  // is left where the login form's button was - over a row, which it borders.
-  await page.addStyleTag({
-    content: ".feedback-fab { visibility: hidden !important; }",
-  });
+  // The pointer is left where the login form's button was - over a row, which
+  // it borders.
   await settle(page);
   await page.evaluate(() => document.fonts.ready);
   await expect(relations).toHaveScreenshot("powiazania-dwa-miejsca.png");
