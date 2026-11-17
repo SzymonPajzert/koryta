@@ -4,7 +4,7 @@
       <div class="d-flex align-center ga-2 mr-auto">
         <v-icon :icon="mdiOfficeBuildingOutline" class="flex-shrink-0" />
         <!-- On the company's own page this card is the heading, so the name
-             is plain text there; everywhere else it is the way through to
+             is the page's h1 there; everywhere else it is the way through to
              the page. `link-plain` because a heading that is already the
              largest thing on the card does not also need to be blue. -->
         <NuxtLink
@@ -15,6 +15,9 @@
           {{ company.name }}
           <v-icon :icon="mdiArrowRight" size="small" />
         </NuxtLink>
+        <h1 v-else-if="!linkToPage" class="text-h6 text-wrap">
+          {{ company.name }}
+        </h1>
         <span v-else class="text-h6 text-wrap">{{ company.name }}</span>
         <!-- Only where this card is the page's own heading. Linked, it is one
              of a list of companies on somebody else's page, and a badge about
