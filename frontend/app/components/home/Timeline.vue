@@ -69,6 +69,7 @@ import {
   categorical,
   formatCount,
   ink,
+  rankedTooltip,
 } from "~/utils/chartTheme";
 import {
   timelineGroupingOptions,
@@ -187,6 +188,17 @@ function monthStart(month: string): number {
   return Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1);
 }
 
+const MONTH_AND_YEAR = new Intl.DateTimeFormat("pl-PL", {
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** `2026-11` as „listopad 2026”. */
+function monthLabel(month: string): string {
+  return MONTH_AND_YEAR.format(new Date(monthStart(month)));
+}
+
 const series = computed(() =>
   lines.value.map((line) => ({
     name: line.label,
@@ -270,7 +282,28 @@ const options = computed(() => ({
     ...baseChartOptions().tooltip,
     shared: true,
     intersect: false,
+    // Still read by apexcharts where it names a month itself, such as the
+    // label a keyboard user hears for a point.
     x: { format: "MMMM yyyy" },
+    // Rows in the order of the lines at the hovered month, not in series
+    // order, which puts „pozostałe” last however high its line is. Both
+    // callbacks read the grouping on screen when the tooltip is drawn, since
+    // apexcharts keeps the first tooltip it was given (see `rankedTooltip`).
+    // The title is capitalised as apexcharts' Polish locale capitalises its
+    // own.
+    custom: rankedTooltip(
+      () =>
+        series.value.map((line, index) => ({
+          name: line.name,
+          color: colors.value[index] ?? ink.muted,
+        })),
+      (index) => {
+        const month = visible.value.months[index];
+        if (!month) return "";
+        const label = monthLabel(month);
+        return label.charAt(0).toUpperCase() + label.slice(1);
+      },
+    ),
   },
 }));
 
@@ -292,13 +325,7 @@ const tableRows = computed(() => {
     const last = index === months.length - 1;
     return {
       month,
-      label: last
-        ? new Intl.DateTimeFormat("pl-PL", {
-            month: "long",
-            year: "numeric",
-            timeZone: "UTC",
-          }).format(new Date(monthStart(month)))
-        : month.slice(0, 4),
+      label: last ? monthLabel(month) : month.slice(0, 4),
       counts: lines.value.map(
         (line) => line.counts[visible.value.from + index] ?? 0,
       ),
