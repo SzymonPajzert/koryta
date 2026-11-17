@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushPromises } from "@vue/test-utils";
-import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
+import {
+  mockNuxtImport,
+  mountSuspended,
+  registerEndpoint,
+} from "@nuxt/test-utils/runtime";
 import { defineComponent, h, type PropType } from "vue";
 import IndexPage from "../../app/pages/index.vue";
 import type { DeclarationPeople } from "../../shared/declarations";
@@ -10,6 +14,10 @@ vi.mock("@plausible-analytics/tracker", () => ({
   init: vi.fn(),
   track: vi.fn(),
 }));
+
+/** What the page asks the head for. Hoisted, as mockNuxtImport is. */
+const { seoMeta } = vi.hoisted(() => ({ seoMeta: vi.fn() }));
+mockNuxtImport("useSeoMeta", () => seoMeta);
 
 /** The night's people count the page fetches for the explorer's third
  * panel: null before the job's first night. */
@@ -29,8 +37,9 @@ const ExplorerStub = defineComponent({
     }),
 });
 
-const mount = () =>
+const mount = (route = "/") =>
   mountSuspended(IndexPage, {
+    route,
     global: {
       stubs: {
         HomeExplorer: ExplorerStub,
@@ -66,6 +75,21 @@ describe("IndexPage", () => {
     expect(wrapper.get("[data-explorer]").attributes("data-people")).toBe(
       "yes",
     );
+  });
+
+  it("keeps a linked panel in og:url, where a shared link is taken from", async () => {
+    // Facebook takes og:url as a post's link: without `?widok=` the people it
+    // reaches would land on a random panel. The canonical stays `/`.
+    await mount("/?widok=stanowiska");
+    expect(seoMeta.mock.calls.at(-1)?.[0].ogUrl).toMatch(
+      /^https?:\/\/[^/]+\/\?widok=stanowiska$/,
+    );
+
+    await mount("/?widok=wykres");
+    expect(seoMeta.mock.calls.at(-1)?.[0].ogUrl).toBeUndefined();
+
+    await mount("/");
+    expect(seoMeta.mock.calls.at(-1)?.[0].ogUrl).toBeUndefined();
   });
 
   it("keeps the explorer at two panels before the first count", async () => {

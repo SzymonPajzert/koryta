@@ -17,9 +17,17 @@
           class="explorer__phone-tabs"
           @update:model-value="countSwitch"
         >
-          <v-tab value="map" slim min-width="0">Mapa</v-tab>
-          <v-tab value="graph" slim min-width="0">Stanowiska</v-tab>
-          <v-tab v-if="people" value="oswiadczenia" slim min-width="0">
+          <v-tab value="map" slim min-width="0" @click="pin('map')">Mapa</v-tab>
+          <v-tab value="graph" slim min-width="0" @click="pin('graph')">
+            Stanowiska
+          </v-tab>
+          <v-tab
+            v-if="people"
+            value="oswiadczenia"
+            slim
+            min-width="0"
+            @click="pin('oswiadczenia')"
+          >
             Oświadczenia
           </v-tab>
         </v-tabs>
@@ -52,9 +60,15 @@
           class="d-none d-md-flex"
           @update:model-value="countSwitch"
         >
-          <v-tab value="map">Mapa</v-tab>
-          <v-tab value="graph">Stanowiska</v-tab>
-          <v-tab v-if="people" value="oswiadczenia">Oświadczenia</v-tab>
+          <v-tab value="map" @click="pin('map')">Mapa</v-tab>
+          <v-tab value="graph" @click="pin('graph')">Stanowiska</v-tab>
+          <v-tab
+            v-if="people"
+            value="oswiadczenia"
+            @click="pin('oswiadczenia')"
+          >
+            Oświadczenia
+          </v-tab>
         </v-tabs>
 
         <!-- The side panel is the map's result list, and the chart's controls.
@@ -88,6 +102,13 @@
 <script lang="ts" setup>
 import { trackGoal } from "~/composables/analytics";
 import { useExperimentArm } from "~/composables/experiments";
+import { useQueryFilters } from "~/composables/queryFilters";
+import {
+  HOME_PANEL_SLUGS,
+  HOME_PANELS,
+  panelNamedBy,
+  type HomePanel,
+} from "~/composables/homeExplorer";
 import {
   experimentIsLive,
   HOME_DEFAULT_EXPERIMENT,
@@ -121,18 +142,17 @@ const DECLARATIONS_SAY =
   "w publicznej spółce lub instytucji. Data urodzenia z oświadczenia " +
   "pokazuje, czy to ta sama osoba co w KRS, czy duplikat.";
 
-/** The panels this component actually renders.
+/** The panels this component actually renders (`HOME_PANELS`).
  *
  * `home-default` also declares a `gry` arm, for the games hub that lives on
  * another branch - so an arm can name a panel that is not here. It carries no
  * weight today and cannot be assigned, but a weight is one number in a registry
  * and a blank window on the home page is a worse failure than an unhonoured
  * experiment. Anything unrecognised stays on the map. */
-const PANELS = ["map", "graph", "oswiadczenia"] as const;
-type Panel = (typeof PANELS)[number];
+type Panel = HomePanel;
 
 function isPanel(value: unknown): value is Panel {
-  return PANELS.includes(value as Panel);
+  return HOME_PANELS.includes(value as Panel);
 }
 
 /** A panel this page can open now: the declarations' needs the snapshot. */
@@ -140,7 +160,20 @@ function canOpen(value: unknown): value is Panel {
   return isPanel(value) && (value !== "oswiadczenia" || !!props.people);
 }
 
-const tab = ref<Panel>("map");
+/** The panel `?widok=` names, or null when it names none this page can open. */
+function namedPanel(value: unknown): Panel | null {
+  const panel = panelNamedBy(value);
+  return panel && canOpen(panel) ? panel : null;
+}
+
+const route = useRoute();
+const { setQuery } = useQueryFilters();
+
+/** The panel a link opened the page on. It wins over the arm, and the server
+ * renders it, so a link shows its panel from the first paint. */
+const linked = namedPanel(route.query.widok);
+
+const tab = ref<Panel>(linked ?? "map");
 const region = ref<Powiat | undefined>(undefined);
 
 /** The chart's two settings, held here rather than in either component that
@@ -158,21 +191,48 @@ watch(range, (value) => trackGoal("home-timeline:range", { value }));
 /** The panel this reader's arm opens on, set once the page is in the
  * browser: `/` is served from a shared cache, so the server cannot know the
  * arm. The arm also rides on every later event as a property, which is what
- * makes the split readable. */
-const arm = useExperimentArm(HOME_DEFAULT_EXPERIMENT);
+ * makes the split readable.
+ *
+ * A visit on a link to a panel sits the split out: nothing random decided what
+ * it saw first. */
+const arm = useExperimentArm(HOME_DEFAULT_EXPERIMENT, {
+  sitOut: linked !== null,
+});
 watch(arm, (value) => {
-  if (canOpen(value)) tab.value = value;
+  if (!linked && canOpen(value)) tab.value = value;
 });
 
 /** While readers are split, the panels stay hidden until the arm is set, for
  * every arm alike. Shown at once, the server's render would paint the map for
  * a moment before another arm's panel, and only the map's readers would be
  * spared that: the very difference the split measures. Registered after
- * `useExperimentArm`, so by the time this runs the arm is in `tab`. */
-const assigned = ref(!experimentIsLive(HOME_DEFAULT_EXPERIMENT));
+ * `useExperimentArm`, so by the time this runs the arm is in `tab`. A linked
+ * panel waits for no arm. */
+const assigned = ref(
+  !experimentIsLive(HOME_DEFAULT_EXPERIMENT) || linked !== null,
+);
 onMounted(() => {
   assigned.value = true;
 });
+
+// A link to another panel followed on this page: the page is not mounted again
+// for a new query, so the query is followed here.
+watch(
+  () => route.query.widok,
+  (value) => {
+    const panel = namedPanel(value);
+    if (panel) tab.value = panel;
+  },
+);
+
+/** Names the clicked panel in the url, so the address bar links to what is on
+ * screen. On a click only, the open tab's too: a panel the arm opened stays
+ * out of the url, or every copied home page address would take its readers out
+ * of the split. `replace`, so Back leaves the page rather than walking the
+ * tabs. */
+function pin(panel: Panel) {
+  void setQuery({ widok: HOME_PANEL_SLUGS[panel] }, { replace: true });
+}
 
 /** Counts a switch. It does not perform one - `v-model` already did.
  *

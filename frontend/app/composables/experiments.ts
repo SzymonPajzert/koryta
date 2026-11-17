@@ -21,6 +21,9 @@ const SESSION_KEY = "koryta:session";
 /** Prefix for the "already reported this arm" flag, one per experiment. */
 const REPORTED_PREFIX = "koryta:exp-reported:";
 
+/** Prefix for the "this session sits the split out" flag, one per experiment. */
+const SAT_OUT_PREFIX = "koryta:exp-sat-out:";
+
 /** The current session's id, creating one if this is the first call.
  *
  * `sessionStorage` rather than a cookie, and rather than `localStorage`: see
@@ -64,6 +67,28 @@ function claimReport(experimentId: string): boolean {
   }
 }
 
+/** Whether this session stays out of `experimentId`.
+ *
+ * `asked` is a visit that arrived on a link choosing what the split varies,
+ * such as `/?widok=stanowiska`: it did not land on a random arm, so it is left
+ * out, and for the rest of the session, since coming back to the page later it
+ * has still seen the linked panel first. A session already counted in an arm
+ * keeps it: taking it out would lose what it did after being counted. */
+function sitsOut(experimentId: string, asked: boolean): boolean {
+  try {
+    const key = `${SAT_OUT_PREFIX}${experimentId}`;
+    if (sessionStorage.getItem(key)) return true;
+    if (!asked) return false;
+    if (sessionStorage.getItem(`${REPORTED_PREFIX}${experimentId}`)) {
+      return false;
+    }
+    sessionStorage.setItem(key, "1");
+    return true;
+  } catch {
+    return asked;
+  }
+}
+
 /** The arm this reader is in, registered so every later event carries it.
  *
  * Starts on the control arm and stays there through SSR, because `/` is served
@@ -82,9 +107,13 @@ function claimReport(experimentId: string): boolean {
  * The ordering matters: `setGlobalProp` runs before the goal, so
  * `experiment:assigned` carries the arm too and the denominator sits inside the
  * same filter as everything it is a denominator for.
+ *
+ * `sitOut` is for a visit whose link already chose what the split varies; see
+ * `sitsOut`.
  */
 export function useExperimentArm<Id extends string>(
   experiment: Experiment<Id>,
+  options: { sitOut?: boolean } = {},
 ): Ref<Id> {
   const control = experiment.arms[0]!.id;
   const arm = ref(control) as Ref<Id>;
@@ -95,6 +124,7 @@ export function useExperimentArm<Id extends string>(
     // reported. A test then sees the page the same way every run, and no robot
     // is counted as one of an arm's readers.
     if (navigator.webdriver) return;
+    if (sitsOut(experiment.id, options.sitOut ?? false)) return;
     const id = sessionId();
     if (!id) return;
 
