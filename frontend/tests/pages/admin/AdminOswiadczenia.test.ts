@@ -346,7 +346,7 @@ describe("/admin/oswiadczenia", () => {
       expect(people.text()).toContain(
         "1150 polityków na płatnych stanowiskach",
       );
-      expect(people.text()).toContain("osobno imiennicy:");
+      expect(people.text()).toContain("duplikaty:");
       // Every stage in the colours of the bar below it.
       expect(people.find('[data-testid="people-bar"]').exists()).toBe(true);
       const states = page.get('[data-testid="declarations-states"]');

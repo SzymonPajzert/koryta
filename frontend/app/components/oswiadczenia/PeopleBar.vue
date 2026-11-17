@@ -2,7 +2,7 @@
   <div class="pbar" data-testid="people-bar">
     <StatsCompositionBar :segments="segments" :summary="summary" />
     <p v-if="people.namesakes > 0" class="pbar__apart">
-      osobno imiennicy:
+      duplikaty:
       <a
         v-if="detail === 'stages'"
         href="#inna-data"
