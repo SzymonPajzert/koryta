@@ -9,13 +9,21 @@ import {
 import { z } from "zod";
 import { recordAudit } from "../../server/utils/audit";
 import { removeEdgeInBatch } from "../../server/utils/edgeRemoval";
-import { edgeRevisions } from "../../server/utils/edgePublication";
+import {
+  EDGE_PUBLISH_CHUNK,
+  edgeRevisions,
+  fetchEdgesForNode,
+  unpublishEdgeInBatch,
+} from "../../server/utils/edgePublication";
 import { edgeDocumentId, edgeIdentity } from "../../server/utils/edges";
 import {
   createRevisionTransaction,
   withoutInternalFields,
 } from "../../server/utils/revisions";
 import type { EdgeLike } from "../../server/utils/edges";
+import { CONTENT_CHANGED_AT } from "../../shared/lastmod";
+import { sortParties } from "../../shared/misc";
+import { pageIsPublic } from "../../shared/model";
 import { reportRemaining } from "./remaining";
 
 /**
@@ -67,10 +75,25 @@ import { reportRemaining } from "./remaining";
  *     worth keeping on the site before a night gets round to the entry. A
  *     second run finds it by its link and makes no other.
  *
+ * And for a page carrying a press-list line about somebody else. The upload of
+ * 2026-03-26 gave every page of a listed person's first and last name the
+ * list's line, its party and a „mentions” relation to the list:
+ *   - `set_content`: the description, "" for none, in the same approved
+ *     revision as a link.
+ *   - `drop_parties`: the list's party off, in that revision. The parties left
+ *     are pinned with `partiesSource: "manual"`, as a reviewer's edit pins
+ *     them, or the night's set union would put back a party it matched to a
+ *     namesake's candidacy.
+ *   - `remove_mentions`: the relation to the list, removed like a job.
+ *   - `unpublish`: hidden as `/api/nodes/publish` hides a page - its published
+ *     relations first, then the page - for a page with no candidacy of its own
+ *     once the line is gone (decision on 2026-11-17).
+ *
  * WHAT IT WILL NOT DO, each reported and skipped rather than guessed:
  *   - touch a page whose link is not the one the review saw - somebody has
  *     changed it since, so the review is out of date - nor, where it puts a
- *     birth date back, one storing another date than the review saw;
+ *     birth date back, one storing another date than the review saw, nor,
+ *     where it takes a description off, one saying anything else now;
  *   - touch a job that has moved, changed company, or carries a revision a
  *     person wrote: a reviewer's own edit outranks this list;
  *   - remove a job again, or write a link or a birth date the page already
@@ -131,6 +154,14 @@ const newPage = z.object({
   birthDate: z.string().min(1).optional(),
 });
 
+/** The relation to a press list that names somebody else. */
+const mentionRemoval = z.object({
+  edge: z.string().min(1),
+  /** The list's page, as the review saw it. */
+  target: z.string().min(1),
+  reason: z.string().trim().min(1),
+});
+
 export const planSchema = z.object({
   pages: z.array(
     z
@@ -146,6 +177,13 @@ export const planSchema = z.object({
         remove: z.array(removal).default([]),
         move: z.array(move).default([]),
         new_pages: z.array(newPage).default([]),
+        /** The description the page carried when it was reviewed. */
+        expect_content: z.string().nullable().optional(),
+        /** The description to leave, "" for none. */
+        set_content: z.string().optional(),
+        drop_parties: z.array(z.string().min(1)).default([]),
+        remove_mentions: z.array(mentionRemoval).default([]),
+        unpublish: z.boolean().default(false),
       })
       .refine(
         (step) =>
@@ -161,6 +199,11 @@ export const planSchema = z.object({
           step.set_birth_date === undefined ||
           step.expect_birth_date !== undefined,
         "A birth date to write needs the one the review saw (expect_birth_date, null for none).",
+      )
+      .refine(
+        (step) =>
+          step.set_content === undefined || step.expect_content !== undefined,
+        "A description to write needs the one the review saw (expect_content, null for none).",
       ),
   ),
 });
@@ -200,6 +243,9 @@ export type PageVerdict =
       ok: true;
       linkToWrite: string | undefined;
       birthDateToWrite?: string | undefined;
+      contentToWrite?: string | undefined;
+      /** The parties left once the plan's are off, to write pinned. */
+      partiesToWrite?: string[] | undefined;
     }
   | { ok: false; why: string };
 
@@ -209,8 +255,29 @@ function storedBirthDate(stored: Record<string, unknown>): string | null {
     : null;
 }
 
-/** Whether a page is still the one the review saw, and whether its link and
- * birth date still need writing. */
+function storedContent(stored: Record<string, unknown>): string {
+  return typeof stored.content === "string" ? stored.content : "";
+}
+
+/** The page's parties without the plan's, or undefined where there is nothing
+ * to write: none of them is there and the list is already pinned. */
+export function partiesLeft(
+  stored: Record<string, unknown>,
+  drop: readonly string[],
+): string[] | undefined {
+  if (drop.length === 0) return undefined;
+  const held = Array.isArray(stored.parties)
+    ? (stored.parties as string[])
+    : [];
+  const kept = held.filter((party) => !drop.includes(party));
+  if (kept.length === held.length && stored.partiesSource === "manual") {
+    return undefined;
+  }
+  return sortParties(kept);
+}
+
+/** Whether a page is still the one the review saw, and whether its link,
+ * birth date, description and parties still need writing. */
 export function checkPage(
   stored: Record<string, unknown> | undefined,
   step: PageStep,
@@ -245,29 +312,46 @@ export function checkPage(
         `${step.expect_birth_date ?? "none"}: re-review it`,
     };
   }
+  const content = storedContent(stored);
+  const described =
+    step.set_content !== undefined && content === step.set_content;
+  if (
+    step.set_content !== undefined &&
+    !described &&
+    content !== (step.expect_content ?? "")
+  ) {
+    return {
+      ok: false,
+      why: "its description changed since the review: re-review it",
+    };
+  }
   return {
     ok: true,
     linkToWrite: linked ? undefined : step.set_link,
     birthDateToWrite: dated ? undefined : step.set_birth_date,
+    contentToWrite: described ? undefined : step.set_content,
+    partiesToWrite: partiesLeft(stored, step.drop_parties),
   };
 }
 
 export type EdgeVerdict =
   { act: true } | { act: false; done: boolean; why: string };
 
-/** Whether a listed job can be taken off the page now: it is still there, at
- * the company the review saw, and nobody but a pipeline has written it. */
+/** Whether a listed job (or, with `type`, another relation of the page) can be
+ * taken off the page now: it is still there, at the company the review saw,
+ * and nobody but a pipeline has written it. */
 export function checkEdge(
   stored: Record<string, unknown> | undefined,
   pageId: string,
   target: string,
   revisions: readonly { update_automatic?: unknown; update_user?: unknown }[],
+  type: "employed" | "mentions" = "employed",
 ): EdgeVerdict {
   if (!stored) return { act: false, done: false, why: "no such relation" };
   if (stored.deleted === true) {
     return { act: false, done: true, why: "already removed" };
   }
-  if (stored.type !== "employed") {
+  if (stored.type !== type) {
     return { act: false, done: false, why: `a ${String(stored.type)} edge` };
   }
   if (stored.source !== pageId) {
@@ -313,6 +397,10 @@ type Counts = {
   link: number;
   birthDate: number;
   pages: number;
+  content: number;
+  parties: number;
+  mentions: number;
+  hidden: number;
   done: number;
   refused: number;
 };
@@ -363,17 +451,25 @@ async function runPage(
   const page = pageSnap.data();
   const verdict = checkPage(pageSnap.exists ? page : undefined, step);
   const title = `${step.page} ${String(page?.name ?? "?")}${page?.published === true ? " [published]" : ""}`;
+  // Everything the page's step lists, for the count of what a refused page
+  // leaves undone.
+  const listed =
+    step.remove.length + step.move.length + step.remove_mentions.length;
   if (!verdict.ok) {
     say(`  SKIP ${title}: ${verdict.why}`);
-    counts.refused += step.remove.length + step.move.length;
+    counts.refused += listed;
     return;
   }
 
   const batch: WriteBatch = db.batch();
   let writes = 0;
   const lines: string[] = [];
+  // The relations this batch takes off the page, which hiding it then leaves
+  // alone: their removal already takes them off the site.
+  const removed = new Set<string>();
 
-  const { linkToWrite, birthDateToWrite } = verdict;
+  const { linkToWrite, birthDateToWrite, contentToWrite, partiesToWrite } =
+    verdict;
   if (linkToWrite) {
     const others = await pagesLinking(db, linkToWrite, step.page);
     if (others.length > 0) {
@@ -381,11 +477,16 @@ async function runPage(
         `  SKIP ${title}: ${linkToWrite} already has a page ` +
           `(${others.join(", ")}) - merge them instead`,
       );
-      counts.refused += step.remove.length + step.move.length;
+      counts.refused += listed;
       return;
     }
   }
-  if (linkToWrite || birthDateToWrite) {
+  const revised =
+    linkToWrite !== undefined ||
+    birthDateToWrite !== undefined ||
+    contentToWrite !== undefined ||
+    partiesToWrite !== undefined;
+  if (revised) {
     const { revisionRef } = createRevisionTransaction(
       db,
       batch,
@@ -395,9 +496,13 @@ async function runPage(
         ...withoutInternalFields(page!),
         ...(linkToWrite ? { rejestrIo: linkToWrite } : {}),
         ...(birthDateToWrite ? { birthDate: birthDateToWrite } : {}),
+        ...(contentToWrite !== undefined ? { content: contentToWrite } : {}),
+        ...(partiesToWrite !== undefined
+          ? { parties: partiesToWrite, partiesSource: "manual" }
+          : {}),
       },
       // Approved, and published or not as it was: the review is what decided
-      // whose page it is, and nothing about who may see it changes.
+      // whose page it is. Hiding it, where the plan says so, comes last.
       { stored: page, approve: true },
     );
     recordAudit(
@@ -424,9 +529,54 @@ async function runPage(
         `    birth date ${String(page!.birthDate ?? "none")} -> ${birthDateToWrite}`,
       );
     }
+    if (contentToWrite !== undefined) {
+      counts.content++;
+      lines.push(
+        `    description ${contentToWrite ? `-> ${contentToWrite}` : "taken off"}`,
+      );
+    }
+    if (partiesToWrite !== undefined) {
+      counts.parties++;
+      lines.push(
+        `    parties ${JSON.stringify(page!.parties ?? [])} -> ` +
+          `${JSON.stringify(partiesToWrite)}, pinned`,
+      );
+    }
   }
   if (step.set_link && !linkToWrite) counts.done++;
   if (step.set_birth_date && !birthDateToWrite) counts.done++;
+  if (step.set_content !== undefined && contentToWrite === undefined) {
+    counts.done++;
+  }
+  if (step.drop_parties.length > 0 && partiesToWrite === undefined) {
+    counts.done++;
+  }
+
+  for (const item of step.remove_mentions) {
+    const edgeRef = db.collection("edges").doc(item.edge);
+    const snap = await edgeRef.get();
+    const stored = snap.exists ? snap.data() : undefined;
+    const check = checkEdge(
+      stored,
+      step.page,
+      item.target,
+      stored ? await edgeRevisions(db, item.edge) : [],
+      "mentions",
+    );
+    if (!check.act) {
+      if (check.done) counts.done++;
+      else counts.refused++;
+      lines.push(
+        `    ${check.done ? "done" : "SKIP"} ${item.edge}: ${check.why}`,
+      );
+      continue;
+    }
+    await removeEdgeInBatch(db, batch, AUTHOR, edgeRef, stored!, item.reason);
+    removed.add(item.edge);
+    writes++;
+    counts.mentions++;
+    lines.push(`    remove the mention ${item.edge}`);
+  }
 
   for (const item of step.remove) {
     const edgeRef = db.collection("edges").doc(item.edge);
@@ -458,6 +608,7 @@ async function runPage(
       }
     }
     await removeEdgeInBatch(db, batch, AUTHOR, edgeRef, stored!, item.reason);
+    removed.add(item.edge);
     writes++;
     counts.remove++;
     lines.push(`    remove ${item.edge} (${item.entry})`);
@@ -587,6 +738,7 @@ async function runPage(
     const earlier = copied.get(identity);
     if (earlier) {
       await removeEdgeInBatch(db, batch, AUTHOR, edgeRef, stored, item.reason);
+      removed.add(item.edge);
       writes++;
       counts.move++;
       lines.push(
@@ -648,12 +800,63 @@ async function runPage(
       copied.set(identity, created.id);
     }
     await removeEdgeInBatch(db, batch, AUTHOR, edgeRef, stored, item.reason);
+    removed.add(item.edge);
     writes++;
     counts.move++;
     lines.push(
       `    move ${item.edge} -> ${to} ` +
         (created ? `as ${created.id}` : `(already there: ${twin!.id})`),
     );
+  }
+
+  // Last, and as `/api/nodes/publish` hides a page: the relations still
+  // published first, so that none outlives its page, then the page.
+  let hidden = false;
+  if (step.unpublish && !pageIsPublic(page!)) {
+    counts.done++;
+    lines.push("    already hidden");
+  } else if (step.unpublish) {
+    const shown = (await fetchEdgesForNode(db, step.page)).filter(
+      (edge) => pageIsPublic(edge) && !removed.has(edge.id),
+    );
+    if (shown.length > EDGE_PUBLISH_CHUNK) {
+      // Two writes each, on top of the rest: past this the batch could pass
+      // Firestore's 500, and a page has to be done whole or not at all.
+      counts.refused++;
+      lines.push(
+        `    SKIP hiding it: ${shown.length} published relations, ` +
+          "hide it in the admin",
+      );
+    } else {
+      for (const edge of shown) {
+        unpublishEdgeInBatch(
+          db,
+          batch,
+          db.collection("edges").doc(edge.id),
+          AUTHOR,
+        );
+      }
+      batch.update(pageRef, { published: false });
+      recordAudit(
+        db,
+        {
+          action: "unpublish",
+          collection: "nodes",
+          target_id: step.page,
+          user: AUTHOR.uid,
+        },
+        batch,
+      );
+      hidden = true;
+      writes++;
+      counts.hidden++;
+      lines.push(`    hide the page and ${shown.length} published relations`);
+    }
+  }
+  // When the page last visibly changed (shared/lastmod.ts), stamped as the
+  // publish endpoint stamps it.
+  if (revised || hidden) {
+    batch.update(pageRef, { [CONTENT_CHANGED_AT]: new Date().toISOString() });
   }
 
   say(`  ${title}`);
@@ -705,6 +908,10 @@ export async function main(): Promise<void> {
     link: 0,
     birthDate: 0,
     pages: 0,
+    content: 0,
+    parties: 0,
+    mentions: 0,
+    hidden: 0,
     done: 0,
     refused: 0,
   };
@@ -714,7 +921,9 @@ export async function main(): Promise<void> {
     `\n${commit ? "Wrote" : "Would write"}: ${counts.link} links, ` +
       `${counts.birthDate} birth dates, ` +
       `${counts.pages} new pages, ${counts.remove} removals, ` +
-      `${counts.move} moves. ` +
+      `${counts.move} moves, ${counts.content} descriptions, ` +
+      `${counts.parties} party lists, ${counts.mentions} mentions, ` +
+      `${counts.hidden} pages hidden. ` +
       `Already done: ${counts.done}. Skipped: ${counts.refused}.`,
   );
   if (!commit) {
@@ -724,6 +933,10 @@ export async function main(): Promise<void> {
       pages: counts.pages,
       removals: counts.remove,
       moves: counts.move,
+      descriptions: counts.content,
+      parties: counts.parties,
+      mentions: counts.mentions,
+      hidden: counts.hidden,
     });
     say("\nDry run. Re-run with --commit to apply.");
   }

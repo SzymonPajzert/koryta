@@ -5,6 +5,7 @@ import {
   entryOf,
   movedCopy,
   newPerson,
+  partiesLeft,
   planSchema,
   type PageStep,
 } from "../../scripts/migrate/remove-namesake-jobs";
@@ -18,6 +19,9 @@ function step(overrides: Partial<PageStep> = {}): PageStep {
     remove: [],
     move: [],
     new_pages: [],
+    drop_parties: [],
+    remove_mentions: [],
+    unpublish: false,
     ...overrides,
   };
 }
@@ -303,6 +307,137 @@ describe("checkPage's birth dates", () => {
   });
 });
 
+describe("planSchema's press-list lines", () => {
+  it("reads a page with none of them as leaving all of it alone", () => {
+    const plan = planSchema.parse({
+      pages: [{ page: "p", expect_link: null }],
+    });
+    expect(plan.pages[0]).toMatchObject({
+      drop_parties: [],
+      remove_mentions: [],
+      unpublish: false,
+    });
+    expect(plan.pages[0]!.set_content).toBeUndefined();
+  });
+
+  it("takes a description with the one the review saw", () => {
+    expect(() =>
+      planSchema.parse({
+        pages: [
+          {
+            page: "p",
+            expect_link: null,
+            expect_content: "informatyk w MJWPU",
+            set_content: "",
+          },
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it("refuses a description without the one the review saw", () => {
+    // Without it a run could not tell the copied line from a text somebody
+    // wrote since, and would take that off instead.
+    expect(() =>
+      planSchema.parse({
+        pages: [{ page: "p", expect_link: null, set_content: "" }],
+      }),
+    ).toThrow();
+  });
+
+  it("refuses a mention removal without its reason", () => {
+    expect(() =>
+      planSchema.parse({
+        pages: [
+          {
+            page: "p",
+            expect_link: null,
+            remove_mentions: [{ edge: "e", target: "list", reason: " " }],
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+});
+
+describe("checkPage's descriptions and parties", () => {
+  // Tomasz Kowalski of Jarocin: the upload of 03-26 gave his page the line
+  // and the party of a Warsaw namesake on a press list.
+  const line =
+    "informatyk w MJWPU; członek zarządu koła PO Warszawa Targówek, " +
+    "kandydat PO w wyborach samorządowych";
+  const listed = (content: string, parties: string[], pinned = false) => ({
+    ...person(link("421303")),
+    content,
+    parties,
+    ...(pinned ? { partiesSource: "manual" } : {}),
+  });
+  const fix = step({
+    expect_link: link("421303"),
+    expect_content: line,
+    set_content: "",
+    drop_parties: ["PO"],
+  });
+
+  it("takes the line and the list's party off, pinning what is left", () => {
+    expect(checkPage(listed(line, ["PO", "PSL"]), fix)).toEqual({
+      ok: true,
+      linkToWrite: undefined,
+      birthDateToWrite: undefined,
+      contentToWrite: "",
+      partiesToWrite: ["PSL"],
+    });
+  });
+
+  it("writes nothing on a second run", () => {
+    expect(checkPage(listed("", ["PSL"], true), fix)).toEqual({
+      ok: true,
+      linkToWrite: undefined,
+      birthDateToWrite: undefined,
+      contentToWrite: undefined,
+      partiesToWrite: undefined,
+    });
+  });
+
+  it("refuses a page whose description changed since the review", () => {
+    // Somebody wrote this one: it is theirs, not the list's.
+    expect(checkPage(listed("radny Jarocina", ["PO"]), fix).ok).toBe(false);
+  });
+
+  it("leaves the description alone where the plan names none", () => {
+    const verdict = checkPage(
+      listed(line, ["PO"]),
+      step({ expect_link: link("421303") }),
+    );
+    expect(verdict).toMatchObject({ ok: true, contentToWrite: undefined });
+  });
+});
+
+describe("partiesLeft", () => {
+  it("drops the plan's parties and keeps the order the ingest writes", () => {
+    expect(partiesLeft({ parties: ["Inne", "PO", "PSL"] }, ["PO"])).toEqual([
+      "PSL",
+      "Inne",
+    ]);
+  });
+
+  it("pins a list that has lost the party already", () => {
+    // The night's union would otherwise bring it back from a namesake's
+    // candidacy matched to this page.
+    expect(partiesLeft({ parties: ["PSL"] }, ["PO"])).toEqual(["PSL"]);
+  });
+
+  it("has nothing to write once the party is off and the list pinned", () => {
+    expect(
+      partiesLeft({ parties: ["PSL"], partiesSource: "manual" }, ["PO"]),
+    ).toBeUndefined();
+  });
+
+  it("has nothing to write where the plan drops none", () => {
+    expect(partiesLeft({ parties: ["PO"] }, [])).toBeUndefined();
+  });
+});
+
 describe("checkEdge", () => {
   const job = {
     type: "employed",
@@ -312,6 +447,17 @@ describe("checkEdge", () => {
     start_date: "2017-11-10",
   };
   const upload = [{ update_automatic: true, update_user: "uploader" }];
+
+  it("takes the mention of a list when asked for mentions", () => {
+    const mention = { type: "mentions", source: "page1", target: "list1" };
+    expect(checkEdge(mention, "page1", "list1", upload, "mentions")).toEqual({
+      act: true,
+    });
+    expect(checkEdge(mention, "page1", "list1", upload).act).toBe(false);
+    expect(checkEdge(job, "page1", "company1", upload, "mentions").act).toBe(
+      false,
+    );
+  });
 
   it("takes a job an upload wrote", () => {
     expect(checkEdge(job, "page1", "company1", upload)).toEqual({ act: true });
