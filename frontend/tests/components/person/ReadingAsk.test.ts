@@ -86,7 +86,7 @@ describe("PersonReadingAsk", () => {
 
     expect(
       words(ask.get('[data-testid="person-reading-ask-figure"]').text()),
-    ).toBe("741 osób opublikowanych w 30 dni dzięki czytelnikom");
+    ).toBe("741 opublikowanych osób");
     expect(ask.get("h3").text()).toBe("Masz minutę?");
     expect(words(ask.text())).toContain(
       "Przepisz daty urodzenia z kilku skanów oświadczeń. Jeśli będą pasować do danych z KRS-u, automatycznie opublikujemy te osoby.",
@@ -114,7 +114,21 @@ describe("PersonReadingAsk", () => {
 
     expect(
       words(ask.get('[data-testid="person-reading-ask-figure"]').text()),
-    ).toMatch(/^12 345 osób/);
+    ).toBe("12 345 opublikowanych osób");
+  });
+
+  it("puts the label in the count's own form", async () => {
+    const label = async (count: number, node: string) => {
+      automatic = count;
+      clearNuxtData("person-reading-ask-figure");
+      const ask = await mount(node);
+      return words(ask.get('[data-testid="person-reading-ask-figure"]').text());
+    };
+
+    expect(await label(1, "none")).toBe("1 opublikowana osoba");
+    expect(await label(3, "nthree")).toBe("3 opublikowane osoby");
+    expect(await label(12, "ntwelve")).toBe("12 opublikowanych osób");
+    expect(await label(22, "ntwentytwo")).toBe("22 opublikowane osoby");
   });
 
   it("leads with its words when there is no figure", async () => {

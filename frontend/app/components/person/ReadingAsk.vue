@@ -20,7 +20,7 @@
              (a screen reader, a copy): without it the two run together as
              „741osób”. The flex gap draws the visible one. -->
         <span class="ask-figure__value">{{ polishNumber(figure) }}</span
-        >{{ " " }}<span class="ask-figure__label">{{ FIGURE_LABEL }}</span>
+        >{{ " " }}<span class="ask-figure__label">{{ figureLabel }}</span>
       </div>
       <div class="ask-box__words">
         <h3 id="person-reading-ask-title" class="ask-box__title">
@@ -62,6 +62,7 @@ import { mdiChevronRight } from "@mdi/js";
 import { usePersonDeclarations } from "~/composables/personDeclarations";
 import { trackGoal } from "~/composables/analytics";
 import { polishNumber } from "~/composables/polish";
+import { plural } from "~/utils/jobStyle";
 
 const props = defineProps<{ nodeId: string }>();
 
@@ -69,7 +70,6 @@ const props = defineProps<{ nodeId: string }>();
  * after it, as `DeclarationNote` does. */
 const NBSP = "\u00a0";
 
-const FIGURE_LABEL = `osób opublikowanych w${NBSP}30${NBSP}dni dzięki czytelnikom`;
 const BODY = `Przepisz daty urodzenia z${NBSP}kilku skanów oświadczeń. Jeśli będą pasować do danych z${NBSP}KRS-u, automatycznie opublikujemy te osoby.`;
 
 const { data: declarations } = usePersonDeclarations(props.nodeId);
@@ -101,6 +101,17 @@ const { data: figureData } = await useAsyncData(
   { default: () => 0 },
 );
 const figure = computed(() => figureData.value ?? 0);
+/** Only that (round osoba-skany-r3): the title and the words beside it say
+ * the rest. In the count's own form - „1 opublikowana osoba”, „3 opublikowane
+ * osoby”, „941 opublikowanych osób”. */
+const figureLabel = computed(() =>
+  plural(
+    figure.value,
+    "opublikowana osoba",
+    "opublikowane osoby",
+    "opublikowanych osób",
+  ),
+);
 
 function onGo() {
   trackGoal("cta:task", { task: "oswiadczenia", from: "osoba" });
