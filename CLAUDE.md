@@ -21,5 +21,11 @@
    - If the checks fail, do NOT ask for review. Analyze the error, fix the code, and re-run the tests.
    - Only request review once tests pass.
 
+1. Comments
+   Keep code comments short, saying only what will still make sense for someone reading the code.
+   Cite a decision of people by their date ("decision on 2026-11-12"), not by my name
+   or a quote of the reply. The quote, the task id and what the code used to do
+   can go in the commit message if they are needed.
+
 1. Allow modifications
    You can modify those rules, especially if I ask you to do something and it seems like a good thing to keep in mind.
