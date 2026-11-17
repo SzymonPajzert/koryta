@@ -1,33 +1,30 @@
 <template>
   <div class="pa-4">
-    <div class="d-flex align-start flex-wrap ga-4 mb-6">
-      <div class="flex-grow-1">
-        <h1 class="text-h4 mb-1">Statystyki</h1>
-        <p class="text-body-2 text-medium-emphasis mb-0">
-          Kto się tym zajmuje i co ostatnio zrobił, a niżej — ile jest w bazie i
-          ile z tego ktoś już sprawdził.
-        </p>
-        <!-- The declarations' numbers in people have a page of their own. A
-             line, not a third button: two fit beside the title, three wrap. -->
-        <p class="text-body-2 mb-0 mt-1">
-          Oświadczenia majątkowe:
-          <NuxtLink to="/oswiadczenia/postep" class="text-ink-info"
-            >sprawdzanie samorządowców</NuxtLink
-          >
-        </p>
-      </div>
-      <v-btn to="/eksploruj/szpitale" variant="tonal">
-        Rady nadzorcze szpitali
-      </v-btn>
-      <v-btn
-        to="/eksploruj/nowe"
-        color="primary"
-        variant="tonal"
-        :prepend-icon="mdiArrowRight"
-      >
-        Pomóż sprawdzać
-      </v-btn>
+    <div class="mb-6">
+      <h1 class="text-h4 mb-1">Statystyki</h1>
+      <p class="text-body-2 text-medium-emphasis mb-0">
+        Kto się tym zajmuje i co ostatnio zrobił, a niżej — ile jest w bazie i
+        ile z tego ktoś już sprawdził.
+      </p>
     </div>
+
+    <!-- The ways on from here, drawn as one kind of thing: the two pages that
+         count something of their own, then the queue that needs hands. -->
+    <nav class="stats-tiles mb-8" aria-label="Dalej">
+      <NuxtLink
+        v-for="tile in tiles"
+        :key="tile.to"
+        :to="tile.to"
+        class="k-card stats-tile"
+      >
+        <v-icon :icon="tile.icon" size="24" class="stats-tile__icon" />
+        <span class="stats-tile__text">
+          <span class="stats-tile__title">{{ tile.title }}</span>
+          <span class="stats-tile__say">{{ tile.say }}</span>
+        </span>
+        <v-icon :icon="mdiArrowRight" size="20" class="stats-tile__arrow" />
+      </NuxtLink>
+    </nav>
 
     <!-- ------------------------------------------------------------------ -->
     <!-- Who did what comes first. The inventory below it is the same numbers
@@ -274,7 +271,12 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { mdiArrowRight } from "@mdi/js";
+import {
+  mdiAccountCheckOutline,
+  mdiArrowRight,
+  mdiFileDocumentCheckOutline,
+  mdiHospitalBuilding,
+} from "@mdi/js";
 import {
   activityKinds,
   activityKindLabels,
@@ -299,6 +301,28 @@ import {
 } from "~/utils/chartTheme";
 
 useHead({ title: "Statystyki - koryta.pl" });
+
+/** One look for all three, the queue last (decision on 2026-11-17). */
+const tiles = [
+  {
+    to: "/oswiadczenia/postep",
+    icon: mdiFileDocumentCheckOutline,
+    title: "Oświadczenia majątkowe",
+    say: "Sprawdzanie samorządowców",
+  },
+  {
+    to: "/eksploruj/szpitale",
+    icon: mdiHospitalBuilding,
+    title: "Rady nadzorcze szpitali",
+    say: "Kto w nich zasiada, z jakich partii",
+  },
+  {
+    to: "/eksploruj/nowe",
+    icon: mdiAccountCheckOutline,
+    title: "Pomóż sprawdzać",
+    say: "Oceń nowe osoby",
+  },
+];
 
 const { isAdmin, user, userConfig } = useAuthState();
 
@@ -517,6 +541,60 @@ const truncatedMessage = computed(() => {
 </script>
 
 <style scoped>
+/* Three columns on a computer, one on a phone. */
+.stats-tiles {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+}
+
+.stats-tile {
+  align-items: center;
+  color: rgb(var(--v-theme-ink-strong));
+  display: flex;
+  gap: 14px;
+  min-height: 64px;
+  padding: 12px 16px;
+  text-decoration: none;
+}
+
+.stats-tile:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-ink-info));
+  outline-offset: 2px;
+}
+
+.stats-tile__icon {
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+.stats-tile__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stats-tile__title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.stats-tile__say {
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.stats-tile__arrow {
+  color: rgba(var(--v-theme-on-surface), 0.5);
+  transition: transform 0.16s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.stats-tile:hover .stats-tile__arrow {
+  transform: translateX(2px);
+}
+
 .stats-hero {
   /* The one hero figure on the page. Same sans as everything else, and
      proportional figures — tabular-nums makes a big number look loose. */
