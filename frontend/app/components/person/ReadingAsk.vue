@@ -49,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-/** The ask under a person's history, for a reader who is not signed in: read
+/** The ask above a person's history, for a reader who is not signed in: read
  * the birth date off a few scans of asset declarations on /oswiadczenia. No
  * account is needed there, and a date that matches the register publishes
  * the person, so the ask leads with how many were published in the last 30

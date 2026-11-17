@@ -162,6 +162,15 @@
             />
           </template>
           <template v-if="entity?.type === 'person'">
+            <!-- Above the history the reader came for, the one ask on the
+                 page, to a reader who is not signed in: under it, few readers
+                 ever reached it (decided 2026-11-17). A signed-in contributor
+                 knows the way to /oswiadczenia and has the app bar's „Działaj
+                 z nami”. Mounted once Firebase has said nobody is signed in,
+                 not before: mounting is what joins the half-and-half split
+                 (PERSON_ASK_EXPERIMENT), and an account restored a moment
+                 later must not be counted in it. -->
+            <PersonReadingAsk v-if="authReady && !user" class="mb-6" />
             <CardEmploymentHistory
               :edges="edges"
               :can-add="canAddRelations"
@@ -185,19 +194,6 @@
               :person-parties="(entity as Person).parties"
               :relation-count="listedRelationCount"
               class="mt-4"
-            />
-            <!-- Under the history the reader came for, before the documents
-                 and the graph: the one ask on the page, to a reader who is
-                 not signed in. A signed-in contributor knows the way to
-                 /oswiadczenia and has the app bar's „Działaj z nami”. Half the
-                 gap above it on a phone, where it reads as part of the
-                 history (round osoba-skany-r2). Mounted once Firebase has
-                 said nobody is signed in, not before: mounting is what joins
-                 the half-and-half split (PERSON_ASK_EXPERIMENT), and an
-                 account restored a moment later must not be counted in it. -->
-            <PersonReadingAsk
-              v-if="authReady && !user"
-              class="mt-3 mt-sm-6 mb-6"
             />
           </template>
           <v-row v-else>
