@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "statystyki-kafelki",
+    title: "Statystyki: trzy kafelki pod tytułem",
+    description:
+      "Linki do oświadczeń, rad szpitali i „Pomóż sprawdzać” wyglądają tak samo: kafelek z ikoną, nazwą i jednym zdaniem.",
+    steps: [
+      "Otwórz /eksploruj/statystyki: pod opisem są trzy kafelki, „Pomóż sprawdzać” ostatni. Każdy prowadzi na swoją stronę.",
+    ],
+    link: "/eksploruj/statystyki",
+    area: "public",
+  },
+  {
     id: "mapa-strony-bez-daty-24-pazdziernika-1408",
     title: "Mapa strony nie podaje już jednej daty dla tysięcy stron",
     description:
@@ -80,7 +91,7 @@ export const QA_ITEMS: QaItem[] = [
     steps: [
       "Otwórz stronę główną w kilku nowych kartach: raz otwiera się „Mapa”, raz „Stanowiska”, raz „Oświadczenia”. Kliknij „Oświadczenia”: nagłówek „Oświadczenia majątkowe” i dwa zdania, co sprawdzamy, liczba opublikowanych, pasek, „osobno imiennicy” i słupki dzień po dniu.",
       "W zakładce kliknij „Pełne dane”: /oswiadczenia/postep z sekcjami „W toku”, „Bez oświadczenia” i „Imiennicy”. „Dowiedz się więcej” prowadzi do wpisu na blogu.",
-      "W menu na górze i w stopce jest „Blog”, a na /eksploruj/statystyki pod opisem link do sprawdzania samorządowców.",
+      "W menu na górze i w stopce jest „Blog”, a na /eksploruj/statystyki kafelek „Oświadczenia majątkowe”.",
       "Jako admin otwórz /admin/oswiadczenia: nad „Oświadczenia według stanu” jest pasek osób w tych samych kolorach.",
     ],
     link: "/oswiadczenia/postep",
