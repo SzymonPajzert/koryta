@@ -5,13 +5,13 @@
       :to="to"
       class="text-decoration-none text-high-emphasis"
     >
-      <h1 class="text-title-1 font-weight-bold mb-2">
+      <h2 class="heading__title text-title-1 font-weight-bold mb-2">
         {{ title }}
-      </h1>
+      </h2>
     </NuxtLink>
-    <h1 v-else class="text-title-1 font-weight-bold mb-2">
+    <h2 v-else class="heading__title text-title-1 font-weight-bold mb-2">
       {{ title }}
-    </h1>
+    </h2>
 
     <!-- Centred as a block too, not only its lines: at 75% of the column a
          centred heading's subtitle otherwise hangs off its left edge. Its
@@ -36,6 +36,12 @@ defineProps<{
 </script>
 
 <style scoped>
+/* A section title under the page's h1, at the size it had as an h1: no
+   stylesheet defines text-title-1, so the browser's own 2em was its size. */
+.heading__title {
+  font-size: 2em;
+}
+
 .heading__subtitle--center {
   text-wrap: balance;
 }
