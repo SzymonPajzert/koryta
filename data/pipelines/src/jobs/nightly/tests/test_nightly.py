@@ -511,10 +511,9 @@ def test_a_people_dry_run_creates_no_company_either(world):
 
 
 def test_what_tonights_data_changes_on_the_companies_goes_up_after_the_people(world):
-    """Szymon, 2026-11-12: "Can we make uploading the companies part of the
-    nightly as well, similar to the people upload?" The companies the site
-    has, sent as `koryta_company_import` sends them: over the export the
-    night took, under the night's caps, in the step's own time."""
+    """Decision on 2026-11-12: the companies the site has go up after the
+    people, as `koryta_company_import` sends them: over the export the night
+    took, under the night's caps, in the step's own time."""
     assert night.main([]) == 0
 
     ran = world.ran()

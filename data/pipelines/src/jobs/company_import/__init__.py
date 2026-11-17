@@ -16,16 +16,12 @@ of every hand upload held back:
     koryta_company_import --dry-run          # build and count them; send nothing
     koryta_company_import --max-uploads 100  # the first 100, the rest the next run's
 
-Szymon, 2026-11-12: "Can we make uploading the companies part of the nightly as
-well, similar to the people upload?" Until then a change to a company the site
-already had reached its page only through a hand upload - a public founder
-found by hand (`PUBLIC_FOUNDERS`), a public owner the register's history names,
-a new sector rule: seven of them from 2026-09-26 to 11-12. The night created
-the companies its people named (`koryta_people_import --companies-only`) and
-left the rest as they were. On the 2026-11-11 export 663 of the site's 10,674
-companies would have changed: the register's legal form and supervisory organ
-on about 370, PKD codes on 223, an owner link on 219, sectors on 28, and 9
-turned public.
+The night runs it after the people (decision on 2026-11-12), so that a change
+to a company the site already has - a public founder found by hand
+(`PUBLIC_FOUNDERS`), a public owner the register's history names, a new sector
+rule - reaches its page without a hand upload. `koryta_people_import
+--companies-only` creates the companies the night's people name; this updates
+the ones the site has.
 
 The ingest writes a company's page itself, with no reviewer
 (`company.post.ts`), so what goes up at night is what readers see in the
