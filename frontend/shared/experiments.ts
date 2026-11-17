@@ -132,7 +132,7 @@ export const HOME_DEFAULT_EXPERIMENT = {
 export type HomeDefaultArm =
   (typeof HOME_DEFAULT_EXPERIMENT)["arms"][number]["id"];
 
-/** Whether a reader who is not signed in gets the ask under a person's history
+/** Whether a reader who is not signed in gets the ask above a person's history
  * to read a few declaration scans (`PersonReadingAsk`).
  *
  * Live from its first rollout, decided on 2026-11-17: half and half, because
@@ -147,7 +147,7 @@ export type HomeDefaultArm =
 export const PERSON_ASK_EXPERIMENT = {
   id: "osoba-skany",
   question:
-    "Does the ask to read a few declaration scans, under a person's history, put readers off the rest of the site, and does it bring them to /oswiadczenia?",
+    "Does the ask to read a few declaration scans, above a person's history, put readers off the rest of the site, and does it bring them to /oswiadczenia?",
   arms: [
     {
       id: "bez",
@@ -158,7 +158,7 @@ export const PERSON_ASK_EXPERIMENT = {
       id: "prosba",
       weight: 1,
       description:
-        "The ask under „Historia powiązań” (board round osoba-skany-r3): how many people were published automatically in 30 days, „Strony jak ta powstały dzięki czytelnikom” and „Odczytaj skany” to /oswiadczenia.",
+        "The ask above „Historia powiązań” (board round osoba-skany-r3, moved above it on 2026-11-17): how many people were published automatically in 30 days, „Strony jak ta powstały dzięki czytelnikom” and „Odczytaj skany” to /oswiadczenia.",
     },
   ],
 } as const satisfies Experiment;

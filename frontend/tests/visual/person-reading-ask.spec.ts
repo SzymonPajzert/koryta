@@ -4,6 +4,7 @@ import type { NodeMentions } from "../../server/api/nodes/[id]/mentions.get";
 import type { PersonDeclarations } from "../../shared/declarations";
 import { freezeClock } from "./clock";
 import { readyForElementShot } from "./elementShot";
+import { readyForFullPage } from "./fullPage";
 import {
   PLAIN_FAVICON,
   declarationPerson,
@@ -16,20 +17,20 @@ import { pageTag } from "./pageTags";
 import { PERSON_ASK_EXPERIMENT, assignArm } from "../../shared/experiments";
 import { expectFitsThePhone } from "./phoneWidth";
 
-/** The ask under a person's history to read a few declaration scans, as a
+/** The ask above a person's history to read a few declaration scans, as a
  * reader who is not signed in finds it in the half of the `osoba-skany` split
  * that has it: led by the people published automatically in 30 days, saying
  * that pages like this one come from readers. Look c of board round
- * osoba-skany-r1 (2026-11-14), worded in rounds r2 and r3 and given one title
- * for every page (2026-11-17), so one shot: the page here was published
- * automatically, which no longer changes the box.
+ * osoba-skany-r1 (2026-11-14), worded in rounds r2 and r3, given one title for
+ * every page and moved above the history (2026-11-17).
  *
- * The seeded Jan Kowalski, with the declarations of
- * person-declarations.spec.ts; the figure is production's of 2026-11-14,
- * answered by a route handler. The page is reached by a client-side
- * navigation, so its fetches are the browser's own and the handlers answer
- * them. One element a test: the page ends in a graph that settles differently
- * every run. */
+ * The seeded Jan Kowalski, published automatically, with the declarations of
+ * person-declarations.spec.ts and his birth date laid over the page the way
+ * that spec does it; the figure is production's of 2026-11-14, answered by a
+ * route handler. The page is reached by a client-side navigation, so its
+ * fetches are the browser's own and the handlers answer them. The box on its
+ * own, then the whole page around it, with the graph's canvas masked: it
+ * settles differently every run. */
 
 const SLUG = { tag: pageTag("[seoType]/[slug]") };
 
@@ -60,13 +61,21 @@ async function seatInTheAsksArm(page: Page) {
   await page.route(/plausible\.io/, (route) => route.abort());
 }
 
+/** What a server's response says of its own body, which a body rewritten in
+ * the test no longer is. */
+const BODY_HEADERS = new Set([
+  "content-length",
+  "content-encoding",
+  "transfer-encoding",
+]);
+
 /** Jan Kowalski's page with these declarations and articles. */
 async function openPerson(
   page: Page,
   declarations: PersonDeclarations,
   mentions: NodeMentions,
 ) {
-  const { id, path } = declarationPerson;
+  const { id, birthDate, path } = declarationPerson;
   await freezeClock(page);
   await seatInTheAsksArm(page);
   await page.route(
@@ -80,6 +89,24 @@ async function openPerson(
   await page.route(
     (url) => url.pathname === "/api/stats/activity",
     (route) => route.fulfill({ json: { automatic: READERS_PUBLISHED } }),
+  );
+  // The seed gives him no birth date, and a declaration only ever confirms a
+  // page that has one: laid over the server's own answer.
+  await page.route(
+    (url) => url.pathname === `/api/nodes/${id}`,
+    async (route) => {
+      const response = await route.fetch();
+      const json = (await response.json()) as {
+        node: Record<string, unknown>;
+      };
+      json.node.birthDate = birthDate;
+      const headers = Object.fromEntries(
+        Object.entries(response.headers()).filter(
+          ([name]) => !BODY_HEADERS.has(name),
+        ),
+      );
+      await route.fulfill({ status: response.status(), headers, json });
+    },
   );
   await page.route("**/s2/favicons**", (route) =>
     route.fulfill({ contentType: "image/png", body: PLAIN_FAVICON }),
@@ -102,6 +129,61 @@ test("osoba-prosba-o-skany-po-odczytach", SLUG, async ({ page }, testInfo) => {
 
   await readyForElementShot(page);
   await expect(ask).toHaveScreenshot("osoba-prosba-o-skany-po-odczytach.png");
+
+  await expectFitsThePhone(page, testInfo);
+});
+
+/** The whole of the page, for where the box sits: under the person's facts
+ * and above „Historia powiązań”, and everything below. On a computer the
+ * graph's canvas is a flat box (it settles somewhere slightly different every
+ * run, see ./nowe-person-page.spec.ts); a phone shows a button in its place. */
+test("osoba-cala-strona-z-prosba-o-skany", SLUG, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  await openPerson(page, personDeclarations, personMentions);
+
+  const ask = page.getByTestId("person-reading-ask");
+  await expect(ask).toBeVisible({ timeout: 30_000 });
+  await expect(ask.getByTestId("person-reading-ask-figure")).toContainText(
+    "741",
+  );
+  // The box sits right above the history.
+  const history = page.getByTestId("relations-history");
+  const [askBox, historyBox] = await Promise.all([
+    ask.boundingBox(),
+    history.boundingBox(),
+  ]);
+  expect(askBox!.y + askBox!.height).toBeLessThan(historyBox!.y);
+
+  // What the page draws from the browser's own requests: the line under the
+  // facts, and the section of declarations and articles with its site icons.
+  await expect(page.getByTestId("person-declarations-pointer")).toBeVisible({
+    timeout: 30_000,
+  });
+  const list = page.getByTestId("node-mentions");
+  await expect(list.locator("h3")).toHaveText("Prasa i dokumenty", {
+    timeout: 30_000,
+  });
+  await list.scrollIntoViewIfNeeded();
+  const icons = list.locator("img.v-img__img");
+  await expect(icons).toHaveCount(4);
+  await expect
+    .poll(() =>
+      icons.evaluateAll((images) =>
+        images.every(
+          (img) =>
+            (img as HTMLImageElement).complete &&
+            (img as HTMLImageElement).naturalWidth > 0,
+        ),
+      ),
+    )
+    .toBe(true);
+
+  const canvas = page.locator(".graph-panel__canvas");
+  await readyForFullPage(page);
+  await expect(page).toHaveScreenshot(
+    "osoba-cala-strona-z-prosba-o-skany.png",
+    { fullPage: true, mask: [canvas], maskColor: "#f2f1ed" },
+  );
 
   await expectFitsThePhone(page, testInfo);
 });
