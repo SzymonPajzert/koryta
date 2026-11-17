@@ -137,6 +137,11 @@ class EdgeSemantics:
     #: to another document. Mirrors `annotations` in server/utils/edges.ts:
     #: a candidacy's `elected`, and a job's `end_date`.
     annotations: tuple[str, ...] = ()
+    #: Annotations only the ingest writes, as its latest reading of the
+    #: source, which a different reading replaces rather than conflicts with.
+    #: Mirrors `restated` in server/utils/edges.ts: PKW's statements of a
+    #: candidate's party and of who backed them.
+    restated: tuple[str, ...] = ()
 
 
 EDGE_SEMANTICS: dict[str, EdgeSemantics] = {
@@ -158,6 +163,7 @@ EDGE_SEMANTICS: dict[str, EdgeSemantics] = {
         ("position", "start_date", "party", "committee", "term"),
         True,
         ("elected",),
+        ("party_member", "member_parties", "supported_by", "backing_parties"),
     ),
     "connection": EdgeSemantics(
         "authored", ("name", "content", "start_date", "end_date"), False
@@ -337,6 +343,9 @@ def field(edge: typing.Mapping[str, typing.Any], name: str) -> typing.Any:
             return None
         if name in FOLDED_FIELDS:
             return " ".join(value.lower().split())
+    if isinstance(value, np.ndarray):
+        # A list off a frame read back from disk, compared as the list it was.
+        return value.tolist()
     return value
 
 
@@ -344,6 +353,30 @@ def semantics(edge_type: typing.Any) -> EdgeSemantics:
     if isinstance(edge_type, str):
         return EDGE_SEMANTICS.get(edge_type, UNKNOWN_SEMANTICS)
     return UNKNOWN_SEMANTICS
+
+
+def describing(edge_type: typing.Any) -> tuple[str, ...]:
+    """The fields that say something about an edge without saying which one
+    it is: its annotations, then the ones it restates."""
+    rules = semantics(edge_type)
+    return (*rules.annotations, *rules.restated)
+
+
+def learns(
+    stored: typing.Mapping[str, typing.Any],
+    incoming: typing.Mapping[str, typing.Any],
+    name: str,
+) -> bool:
+    """Whether writing `incoming` would change what the stored edge says about
+    one of the fields that describe it: a blank filled in, or a restated field
+    read differently. `learns` in server/utils/edges.ts."""
+    after = field(incoming, name)
+    if after is None:
+        return False
+    before = field(stored, name)
+    if before is None:
+        return True
+    return name in semantics(incoming.get("type")).restated and before != after
 
 
 def edge_identity(edge: typing.Mapping[str, typing.Any]) -> tuple:
@@ -395,7 +428,7 @@ def edge_relation(
     """
     added = 0
     rules = semantics(incoming.get("type"))
-    for name in (*rules.discriminators, *rules.annotations):
+    for name in (*rules.discriminators, *describing(incoming.get("type"))):
         before = field(stored, name)
         after = field(incoming, name)
         if before is None:
@@ -403,6 +436,9 @@ def edge_relation(
                 added += 1
             continue
         if after is not None and before != after:
+            if name in rules.restated:
+                added += 1
+                continue
             if narrows(name, before, after):
                 continue
             if specifies(name, before, after):
@@ -435,9 +471,9 @@ def fills_annotations(
     def adds(name: str) -> bool:
         return field(stored, name) is None and field(incoming, name) is not None
 
-    return any(adds(name) for name in rules.annotations) and not any(
-        adds(name) for name in rules.discriminators
-    )
+    return any(
+        learns(stored, incoming, name) for name in describing(incoming.get("type"))
+    ) and not any(adds(name) for name in rules.discriminators)
 
 
 def preferred_copy(
@@ -451,13 +487,17 @@ def preferred_copy(
     live one, then one needing no write, then by id.
     """
     identity = edge_identity(edge)
-    annotations = semantics(edge.get("type")).annotations
+    rules = semantics(edge.get("type"))
+
+    def disagreements(stored: dict, names: tuple[str, ...]) -> int:
+        return sum(field(stored, name) != field(edge, name) for name in names)
 
     def rank(copy: tuple[dict, str]) -> tuple:
         stored, relation = copy
         return (
             0 if edge_identity(stored) == identity else 1,
-            sum(field(stored, name) != field(edge, name) for name in annotations),
+            disagreements(stored, rules.annotations),
+            disagreements(stored, rules.restated),
             1 if stored.get("deleted") == 1 else 0,
             0 if relation == "same" else 1,
             str(stored.get("id")),
@@ -1383,6 +1423,13 @@ class SiteSnapshot:
             # upload would store.
             if election.get("elected") is True:
                 edge["elected"] = True
+            # PKW's statements, as `createElection` writes them.
+            for name in ("party_member", "supported_by"):
+                if election.get(name):
+                    edge[name] = election[name]
+            for name in ("member_parties", "backing_parties"):
+                if len(_as_list(election.get(name))):
+                    edge[name] = _as_list(election.get(name))
             if election.get("election_year"):
                 edge["start_date"] = f"{election['election_year']}-01-01"
 

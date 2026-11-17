@@ -336,6 +336,58 @@ describe("api/ingest/person", () => {
     );
   });
 
+  it("stores PKW's statements of membership and backing on a new candidacy", async () => {
+    mockReadBody.mockResolvedValue({
+      name: "Test Person",
+      parties: [],
+      companies: [],
+      elections: [
+        {
+          election_year: "2024",
+          election_type: "Wójt",
+          teryt: "1465",
+          party_member: "nie należy do partii politycznej",
+          supported_by:
+            "popierany przez partię polityczną: Prawo i Sprawiedliwość",
+          backing_parties: ["PiS"],
+        },
+      ],
+    });
+
+    mockGet.mockReset();
+    mockDoc.mockReset();
+    mockDoc.mockReturnValue({
+      id: "new-doc-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({
+      id: "person-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
+    });
+    const edgeRef = { id: "edge-id" };
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce(edgeRef);
+
+    await handler({} as any);
+
+    const written = vi.mocked(createRevisionTransaction).mock.calls[1]!;
+    expect(written[3]).toBe(edgeRef);
+    expect(written[4]).toMatchObject({
+      type: "election",
+      party_member: "nie należy do partii politycznej",
+      supported_by: "popierany przez partię polityczną: Prawo i Sprawiedliwość",
+      backing_parties: ["PiS"],
+    });
+    expect(written[4]).not.toHaveProperty("member_parties");
+  });
+
   it("does not record a defeat, which it cannot tell from a blank form", async () => {
     // PKW published no result for 68,728 of its 97,748 candidacy rows, and
     // `useEdgeEdit` writes `elected: false` for every box a human left
@@ -485,6 +537,118 @@ describe("api/ingest/person", () => {
       expect(call[4]).toMatchObject({
         elected: true,
         committee: "KWW Nasza Gmina",
+      });
+    });
+
+    describe("PKW's statements of membership and backing", () => {
+      const backing = {
+        supported_by:
+          "popierana przez partię polityczną: Prawo i Sprawiedliwość",
+        backing_parties: ["PiS"],
+      };
+
+      it("writes them out and leaves an unrecognised committee for a reviewer", async () => {
+        personWithStoredEdges([storedCandidacy]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_year: "2024",
+            committee: "KWW Tomasza Hapunowicza",
+            ...backing,
+          }),
+        );
+
+        await handler({} as any);
+
+        expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
+        const [written] = vi.mocked(createRevisionTransaction).mock.calls;
+        expect(written![3]).toMatchObject({ id: "stored-0" });
+        expect(written![4]).toEqual({ ...storedCandidacy, ...backing });
+        expect(written![5]).toEqual({
+          automatic: true,
+          approve: true,
+          stored: storedCandidacy,
+        });
+        const call = vi.mocked(proposeRevisionTransaction).mock.calls[0]!;
+        expect(call[3]).toMatchObject({ id: "stored-0" });
+        expect(call[4]).toMatchObject({
+          committee: "KWW Tomasza Hapunowicza",
+          ...backing,
+        });
+      });
+
+      it("replaces a statement read differently, on the same candidacy", async () => {
+        // The parties are read off the statement through a table that grows:
+        // one the site did not name went to „Inne” until it did.
+        const stored = {
+          ...storedCandidacy,
+          supported_by: "popierana przez partię polityczną: Polska 2050",
+          backing_parties: ["Inne"],
+        };
+        personWithStoredEdges([stored]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_year: "2024",
+            supported_by: "popierana przez partię polityczną: Polska 2050",
+            backing_parties: ["Polska 2050"],
+          }),
+        );
+
+        await handler({} as any);
+
+        expect(proposeRevisionTransaction).not.toHaveBeenCalled();
+        expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
+        const [written] = vi.mocked(createRevisionTransaction).mock.calls;
+        expect(written![3]).toMatchObject({ id: "stored-0" });
+        expect(written![4]).toEqual({
+          ...stored,
+          backing_parties: ["Polska 2050"],
+        });
+      });
+
+      it("matches a copy still waiting for its committee whatever its statements say", async () => {
+        // The copy holds the statements written out without a reviewer and
+        // no committee, which a reviewer has not approved yet. A different
+        // reading of them is no conflict: were it one, the row would no
+        // longer match the copy, and would be stored beside it.
+        const stored = {
+          ...storedCandidacy,
+          supported_by: "popierana przez partię polityczną: Polska 2050",
+          backing_parties: ["Inne"],
+        };
+        personWithStoredEdges([stored]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_year: "2024",
+            committee: "KWW Nasza Gmina",
+            supported_by: "popierana przez partię polityczną: Polska 2050",
+            backing_parties: ["Polska 2050"],
+          }),
+        );
+
+        await handler({} as any);
+
+        const [written] = vi.mocked(createRevisionTransaction).mock.calls;
+        expect(written![3]).toMatchObject({ id: "stored-0" });
+        expect(written![4]).toEqual({
+          ...stored,
+          backing_parties: ["Polska 2050"],
+        });
+        const call = vi.mocked(proposeRevisionTransaction).mock.calls[0]!;
+        expect(call[3]).toMatchObject({ id: "stored-0" });
+        expect(call[4]).toMatchObject({ committee: "KWW Nasza Gmina" });
+      });
+
+      it("writes nothing when the stored statements say the same", async () => {
+        const stored = { ...storedCandidacy, ...backing };
+        personWithStoredEdges([stored]);
+        mockReadBody.mockResolvedValue(
+          payload({ election_year: "2024", ...backing }),
+        );
+
+        await handler({} as any);
+
+        expect(createRevisionTransaction).not.toHaveBeenCalled();
+        expect(proposeRevisionTransaction).not.toHaveBeenCalled();
       });
     });
 

@@ -42,6 +42,14 @@ type EdgeSemantics = {
    * by one of them having won. Putting it in `discriminators` would hash every
    * winning candidacy to a new id and store it a second time. */
   annotations?: readonly string[];
+  /** Annotations only the ingest writes, as its latest reading of the source:
+   * what PKW says of a candidate's party and of who backed them, and the
+   * parties read off those through a table that keeps growing. A different
+   * reading replaces the stored one. Were it a conflict, as it is for an
+   * annotation, a copy still waiting for its committee to be reviewed would
+   * stop matching, and the row would be stored beside it as a second
+   * candidacy. */
+  restated?: readonly string[];
 };
 
 export const EDGE_SEMANTICS: Record<string, EdgeSemantics> = {
@@ -132,6 +140,12 @@ export const EDGE_SEMANTICS: Record<string, EdgeSemantics> = {
     identicalMeansSame: false,
     enrichable: true,
     annotations: ["elected"],
+    restated: [
+      "party_member",
+      "member_parties",
+      "supported_by",
+      "backing_parties",
+    ],
   },
 
   // Written by hand through /api/edges/create, never by an ingest.
@@ -157,6 +171,17 @@ const UNKNOWN: EdgeSemantics = {
 
 export function edgeSemantics(type: string | undefined) {
   return (type && EDGE_SEMANTICS[type]) || UNKNOWN;
+}
+
+/** The fields that say something about an edge without saying which one it
+ * is: its annotations, then the ones it restates. */
+function describing(type: string | undefined): string[] {
+  const { annotations = [], restated = [] } = edgeSemantics(type);
+  return [...annotations, ...restated];
+}
+
+function restates(type: string | undefined, name: string): boolean {
+  return edgeSemantics(type).restated?.includes(name) ?? false;
 }
 
 export type EdgeLike = Partial<Edge> & Pick<Edge, "source" | "target" | "type">;
@@ -386,10 +411,10 @@ export function edgeRelation(
   stored: EdgeLike,
   incoming: EdgeLike,
 ): EdgeRelation {
-  const { discriminators, annotations } = edgeSemantics(incoming.type);
+  const { discriminators } = edgeSemantics(incoming.type);
 
   let added = 0;
-  for (const name of [...discriminators, ...(annotations ?? [])]) {
+  for (const name of [...discriminators, ...describing(incoming.type)]) {
     const before = field(stored, name);
     const after = field(incoming, name);
     if (before === null) {
@@ -397,6 +422,10 @@ export function edgeRelation(
       continue;
     }
     if (after !== null && JSON.stringify(before) !== JSON.stringify(after)) {
+      if (restates(incoming.type, name)) {
+        added++;
+        continue;
+      }
       if (narrows(name, before, after)) continue;
       if (specifies(name, before, after)) {
         added++;
@@ -436,6 +465,10 @@ export function enrichedEdge(
       result[key] = value;
       continue;
     }
+    if (restates(incoming.type, key) && field(incoming, key) !== null) {
+      result[key] = value;
+      continue;
+    }
     if (field(stored as EdgeLike, key) !== null) continue;
     if (field(incoming, key) === null) continue;
     // The raw value, not `field`'s: folding is for comparing, and what gets
@@ -464,12 +497,30 @@ export function addsOnlyAnnotations(
   stored: Record<string, unknown>,
   incoming: EdgeLike,
 ): boolean {
-  const { discriminators, annotations } = edgeSemantics(incoming.type);
-  if (!annotations?.length) return false;
+  const { discriminators } = edgeSemantics(incoming.type);
+  const described = describing(incoming.type);
+  if (!described.length) return false;
 
   const adds = (name: string) =>
     field(stored as EdgeLike, name) === null && field(incoming, name) !== null;
-  return annotations.some(adds) && !discriminators.some(adds);
+  return (
+    described.some((name) => learns(stored as EdgeLike, incoming, name)) &&
+    !discriminators.some(adds)
+  );
+}
+
+/** Whether writing `incoming` would change what the stored edge says about
+ * one of the fields that describe it: a blank filled in, or a restated field
+ * read differently. */
+function learns(stored: EdgeLike, incoming: EdgeLike, name: string): boolean {
+  const after = field(incoming, name);
+  if (after === null) return false;
+  const before = field(stored, name);
+  if (before === null) return true;
+  return (
+    restates(incoming.type, name) &&
+    JSON.stringify(before) !== JSON.stringify(after)
+  );
 }
 
 /** Whether the incoming office says which seat a stored candidacy was for,
@@ -503,7 +554,7 @@ export function addsOnlyRecordedFacts(
   stored: Record<string, unknown>,
   incoming: EdgeLike,
 ): boolean {
-  const { discriminators, annotations = [] } = edgeSemantics(incoming.type);
+  const { discriminators } = edgeSemantics(incoming.type);
   const office = namesOffice(stored as EdgeLike, incoming);
   const adds = (name: string) =>
     field(stored as EdgeLike, name) === null && field(incoming, name) !== null;
@@ -511,7 +562,10 @@ export function addsOnlyRecordedFacts(
   // records outright; any other one added is a judgement.
   const judged = (name: string) =>
     adds(name) && !(name === "position" && office);
-  return (annotations.some(adds) || office) && !discriminators.some(judged);
+  const recorded = describing(incoming.type).some((name) =>
+    learns(stored as EdgeLike, incoming, name),
+  );
+  return (recorded || office) && !discriminators.some(judged);
 }
 
 /** The stored edge with what PKW records outright written in and nothing else:
@@ -530,18 +584,14 @@ export function withRecordedFacts(
   stored: Record<string, unknown>,
   incoming: EdgeLike,
 ): Record<string, unknown> | undefined {
-  const { annotations = [] } = edgeSemantics(incoming.type);
   const result: Record<string, unknown> = { ...stored };
   let added = false;
   if (namesOffice(stored as EdgeLike, incoming)) {
     result.position = incoming.position;
     added = true;
   }
-  for (const name of annotations) {
-    if (
-      field(stored as EdgeLike, name) === null &&
-      field(incoming, name) !== null
-    ) {
+  for (const name of describing(incoming.type)) {
+    if (learns(stored as EdgeLike, incoming, name)) {
       result[name] = (incoming as Record<string, unknown>)[name];
       added = true;
     }
@@ -717,7 +767,7 @@ export type EdgeCopy = {
  *   restatement on a removed edge rather than beside it;
  * - then one that agrees with the row about its annotations, a win with a win
  *   and a blank with a blank, since an annotation is the one thing two such
- *   copies still differ in;
+ *   copies still differ in, and then about what it restates;
  * - then a live copy before a removed one, then one that needs no write, then
  *   by id, so a dry run predicts the real one.
  *
@@ -731,14 +781,17 @@ export function preferredCopy<C extends EdgeCopy>(
   copies: readonly C[],
 ): C | undefined {
   const identity = edgeIdentity(edge);
-  const annotations = edgeSemantics(edge.type).annotations ?? [];
-  const rank = (copy: C): number[] => [
-    edgeIdentity(copy.stored as EdgeLike) === identity ? 0 : 1,
-    annotations.filter(
+  const { annotations = [], restated = [] } = edgeSemantics(edge.type);
+  const disagreements = (copy: C, names: readonly string[]) =>
+    names.filter(
       (name) =>
         JSON.stringify(field(copy.stored as EdgeLike, name)) !==
         JSON.stringify(field(edge, name)),
-    ).length,
+    ).length;
+  const rank = (copy: C): number[] => [
+    edgeIdentity(copy.stored as EdgeLike) === identity ? 0 : 1,
+    disagreements(copy, annotations),
+    disagreements(copy, restated),
     copy.stored.deleted === true ? 1 : 0,
     copy.relation === "same" ? 0 : 1,
   ];

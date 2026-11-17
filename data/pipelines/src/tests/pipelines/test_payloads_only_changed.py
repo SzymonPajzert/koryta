@@ -9,6 +9,7 @@ a payload matter more than the ones that drop it.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -547,6 +548,43 @@ def test_a_candidacy_already_marked_won_is_dropped():
     won = dict(CANDIDACY, elected=True)
 
     assert snapshot.changes(payload(elections=[won])) == []
+
+
+#: What PKW says of a 2024 candidate on a voters' committee's list.
+BACKING = {
+    "supported_by": "popierana przez partię polityczną: Prawo i Sprawiedliwość",
+    "backing_parties": ["PiS"],
+}
+
+
+def test_a_candidacy_that_would_learn_who_backed_it_is_kept():
+    """Every stored candidacy predates the ingest accepting PKW's statements,
+    and nothing else about it changes."""
+    snapshot = SiteSnapshot(nodes(), edges(STORED_CANDIDACY))
+    backed = dict(CANDIDACY, **BACKING)
+
+    assert snapshot.changes(payload(elections=[backed])) == [ENRICHED_CANDIDACY]
+
+
+def test_a_candidacy_whose_statements_are_stored_is_dropped():
+    # Off a frame read back from disk, a list is an array.
+    stored = {**STORED_CANDIDACY, **BACKING, "backing_parties": np.array(["PiS"])}
+    snapshot = SiteSnapshot(nodes(), edges(stored))
+    backed = dict(CANDIDACY, **BACKING)
+
+    assert snapshot.changes(payload(elections=[backed])) == []
+
+
+def test_a_statement_read_differently_is_written_onto_the_same_candidacy():
+    """The parties are read off a statement through a table that grows: one the
+    site did not name went to „Inne” until it did. The ingest replaces the
+    stored reading, on the copy that holds it, also where that copy still waits
+    for a reviewer to approve its committee."""
+    stored = {**STORED_CANDIDACY, **BACKING, "backing_parties": ["Inne"]}
+    snapshot = SiteSnapshot(nodes(), edges(stored))
+    backed = dict(CANDIDACY, **BACKING, committee="KWW Tomasza Hapunowicza")
+
+    assert snapshot.changes(payload(elections=[backed])) == [ENRICHED_CANDIDACY]
 
 
 #: Marcin Witko's 2010 in Tomaszów Mazowiecki, as the 10-12 night stored it: a

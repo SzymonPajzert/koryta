@@ -196,6 +196,18 @@ const electionRequestSchema = z.object({
    * Accepted here or zod strips it, which is what happened to `committee` for
    * as long as it went undeclared. */
   elected: z.boolean().optional(),
+  /** What the candidate declared about their own party, as PKW wrote it
+   * („członek partii politycznej: Prawo i Sprawiedliwość”, „nie należy do
+   * partii politycznej”), and the site's parties it names
+   * (`scrapers/pkw/affiliations.py`). */
+  party_member: z.string().optional(),
+  member_parties: z.array(z.string()).optional(),
+  /** Who PKW says backed the candidacy, as it wrote it („popierana przez
+   * partię polityczną: Prawo i Sprawiedliwość”, or an association), and the
+   * site's parties it names. Recorded on any list, a voters' committee's
+   * too. */
+  supported_by: z.string().optional(),
+  backing_parties: z.array(z.string()).optional(),
   election_year: z.string().optional(),
   election_type: z.enum(electionPositionValues),
   teryt: z.string().optional(),
@@ -206,6 +218,10 @@ export type ElectionRequest = {
   committee?: string;
   party_from_committee?: boolean;
   elected?: boolean;
+  party_member?: string;
+  member_parties?: string[];
+  supported_by?: string;
+  backing_parties?: string[];
   election_year?: string;
   election_type: ElectionPosition;
   teryt?: string;

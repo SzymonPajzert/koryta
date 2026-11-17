@@ -213,6 +213,15 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       // Copied only where set, like nothing above: every other edge would
       // otherwise carry `founder: undefined` into each graph response.
       ...(edge.founder ? { founder: true } : {}),
+      // PKW's statements, on the few candidacies that have them, the same way.
+      ...(edge.party_member ? { party_member: edge.party_member } : {}),
+      ...(edge.member_parties?.length
+        ? { member_parties: edge.member_parties }
+        : {}),
+      ...(edge.supported_by ? { supported_by: edge.supported_by } : {}),
+      ...(edge.backing_parties?.length
+        ? { backing_parties: edge.backing_parties }
+        : {}),
     };
     return result;
   });
