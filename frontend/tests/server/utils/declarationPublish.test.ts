@@ -2435,6 +2435,8 @@ describe("sweepDeclarations", () => {
 
     expect(result).toMatchObject({ checked: 1, changed: 1 });
     expect(result.drain.published).toEqual([]);
+    // For the people count to move.
+    expect(result.touched).toEqual(["kowalska", "kowalska-2"]);
     for (const id of ["kowalska", "kowalska-2"]) {
       expect(read(`declarationPublications/${id}`)).toMatchObject({
         status: "held",
@@ -2510,6 +2512,7 @@ describe("a publication a stale write undid", () => {
     const result = await sweepDeclarations(firestore, LATER, 3);
 
     expect(result.reverted).toEqual({ restored: ["kowalska"], held: [] });
+    expect(result.touched).toEqual(["kowalska"]);
     const page = read("nodes/kowalska")!;
     expect(page.published).toBe(true);
     expect((page.revision_id as { path: string }).path).toBe(

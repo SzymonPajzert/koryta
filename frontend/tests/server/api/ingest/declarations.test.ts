@@ -25,7 +25,8 @@ function snapshot(path: string) {
 
 /** `where(...).where(...).get()` over `stored`, for the employment lookup the
  * reader queue's order needs (`pagesWithAPublicPost`): equality and `in`, on
- * one collection, which is all of Firestore this endpoint asks for. */
+ * one collection, which is all of Firestore this endpoint asks for. `select`
+ * hands back every field. */
 function query(
   collection: string,
   filters: { field: string; op: string; value: unknown }[] = [],
@@ -33,6 +34,7 @@ function query(
   return {
     where: (field: string, op: string, value: unknown) =>
       query(collection, [...filters, { field, op, value }]),
+    select: () => query(collection, filters),
     get: async () => {
       const docs = Object.entries(stored)
         .filter(([path]) => path.startsWith(`${collection}/`))
@@ -56,8 +58,9 @@ const mockDb = {
     where: (field: string, op: string, value: unknown) =>
       query(collection).where(field, op, value),
   })),
-  getAll: vi.fn(async (...refs: { path: string }[]) =>
-    refs.map((ref) => snapshot(ref.path)),
+  // A field mask, last, is read as every field.
+  getAll: vi.fn(async (...refs: { path?: string }[]) =>
+    refs.flatMap((ref) => (ref.path ? [snapshot(ref.path)] : [])),
   ),
   batch: vi.fn(() => {
     const pending: { path: string; data: Record<string, unknown> }[] = [];
@@ -82,23 +85,25 @@ vi.mock("firebase-admin/firestore", () => ({
 }));
 vi.mock("firebase-admin/app", () => ({ getApp: vi.fn() }));
 
-const { mockGetUser, mockMatchAndDrain, mockCacheClear } = vi.hoisted(() => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  globalThis.createError = (err: any) =>
-    Object.assign(new Error(err.message), err);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  globalThis.defineEventHandler = (fn: any) => fn;
-  const mockCacheClear = vi.fn();
-  globalThis.useStorage = vi.fn(() => ({ clear: mockCacheClear }));
-  return {
-    mockGetUser: vi.fn().mockResolvedValue({
-      uid: "pipeline-bip-declarations",
-      datascience: true,
-    }),
-    mockMatchAndDrain: vi.fn(),
-    mockCacheClear,
-  };
-});
+const { mockGetUser, mockMatchAndDrain, mockCacheClear, mockRestage } =
+  vi.hoisted(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    globalThis.createError = (err: any) =>
+      Object.assign(new Error(err.message), err);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    globalThis.defineEventHandler = (fn: any) => fn;
+    const mockCacheClear = vi.fn();
+    globalThis.useStorage = vi.fn(() => ({ clear: mockCacheClear }));
+    return {
+      mockGetUser: vi.fn().mockResolvedValue({
+        uid: "pipeline-bip-declarations",
+        datascience: true,
+      }),
+      mockMatchAndDrain: vi.fn(),
+      mockCacheClear,
+      mockRestage: vi.fn(),
+    };
+  });
 
 // What a settled crop does to its pages is tested in
 // tests/server/utils/declarationPublish.test.ts; here only that the upload
@@ -107,6 +112,11 @@ const { mockGetUser, mockMatchAndDrain, mockCacheClear } = vi.hoisted(() => {
 // as the site reads it.
 vi.mock("../../../../server/utils/declarationPublish", () => ({
   matchAndDrain: mockMatchAndDrain,
+}));
+// Which pages the upload hands the people count, which
+// tests/server/utils/declarationPeopleCount.test.ts runs.
+vi.mock("../../../../server/utils/declarationPeopleCount", () => ({
+  restageDeclarationPeople: mockRestage,
 }));
 
 // `requireDatascience` stays real; only the token lookup is faked.
@@ -538,6 +548,56 @@ describe("api/ingest/declarations", () => {
       status: "agreed",
       pageMatch: null,
     });
+  });
+
+  it("moves the people of the crops it stores, and those its comparison touched", async () => {
+    mockMatchAndDrain.mockResolvedValueOnce({
+      matched: [{ outcomes: { kowalska: "queued" } }],
+      drain: { published: ["nowak"] },
+    });
+    await send({
+      candidacies: [candidacy()],
+      extracts: [
+        extract({
+          outcome: "read",
+          images: undefined,
+          machine: { birthDate: "1979-07-15", confidence: "high" },
+        }),
+      ],
+    });
+
+    expect(mockRestage).toHaveBeenCalledWith(mockDb, ["kowalska", "nowak"]);
+  });
+
+  it("still answers the upload when the people count cannot be moved", async () => {
+    // The real re-staging, on a database it cannot read.
+    const { restageDeclarationPeople } = await vi.importActual<
+      typeof import("../../../../server/utils/declarationPeopleCount")
+    >("../../../../server/utils/declarationPeopleCount");
+    mockRestage.mockImplementationOnce((_db, pages) =>
+      restageDeclarationPeople(
+        {
+          ...mockDb,
+          getAll: async () => {
+            throw new Error("unavailable");
+          },
+        } as never,
+        pages,
+      ),
+    );
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await send({
+      candidacies: [candidacy()],
+      extracts: [extract()],
+    });
+
+    expect(result.extracts.created).toBe(1);
+    expect(quiet).toHaveBeenCalledWith(
+      expect.stringContaining("re-staging kowalska"),
+      expect.any(Error),
+    );
+    quiet.mockRestore();
   });
 
   it("compares a settled crop again when it is sent for one more page", async () => {

@@ -1195,6 +1195,11 @@
       "collectionGroup": "declarationExtractImages",
       "fieldPath": "name",
       "indexes": []
+    },
+    {
+      "collectionGroup": "declarationPeople",
+      "fieldPath": "entries",
+      "indexes": []
     }
   ]
 }

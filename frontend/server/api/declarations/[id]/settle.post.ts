@@ -9,7 +9,9 @@ import {
   afterDecision,
   decisionRequest,
 } from "~~/server/utils/declarationDecisionRequest";
+import { restageCropPeople } from "~~/server/utils/declarationPeopleCount";
 import { matchAndDrain } from "~~/server/utils/declarationPublish";
+import { pagesTouched } from "~~/shared/declarationPeople";
 import { parseTypedDate, publishLimitOf } from "~~/shared/declarations";
 
 const settleSchema = z.discriminatedUnion("verdict", [
@@ -44,7 +46,8 @@ const PAGES_PER_DECISION = 1;
  *
  * Either decision leaves the crop confirming no page, so a public page that
  * linked it stops showing it, and the pages' cached answers are dropped then,
- * as they are when the pass published somebody.
+ * as they are when the pass published somebody. The crop's people, and those
+ * the pass took up, move in the people count.
  */
 export default defineEventHandler(async (event): Promise<DecidedExtract> => {
   const { uid, id, db } = await decisionRequest(event);
@@ -61,30 +64,37 @@ export default defineEventHandler(async (event): Promise<DecidedExtract> => {
           }
         : { verdict: "unreadable" },
   });
-  const published = decided.compare && (await compareWithPages(event, db, id));
-  await afterDecision(db, id, published);
+  const compared = decided.compare
+    ? await compareWithPages(event, db, id)
+    : { published: false, touched: [] };
+  await restageCropPeople(db, [id], compared.touched);
+  await afterDecision(db, id, compared.published);
   return decided;
 });
 
 /** The decided crop meets its pages; whether the pass after it published
- * anybody. The decision is stored whatever happens here, and the sweep the
- * job calls after every upload compares a crop this did not. */
+ * anybody, and the pages the two touched. The decision is stored whatever
+ * happens here, and the sweep the job calls after every upload compares a
+ * crop this did not. */
 async function compareWithPages(
   event: H3Event,
   db: Firestore,
   extractId: string,
-): Promise<boolean> {
+): Promise<{ published: boolean; touched: string[] }> {
   try {
-    const { drain } = await matchAndDrain(
+    const { matched, drain } = await matchAndDrain(
       db,
       [extractId],
       new Date(),
       publishLimitOf(useRuntimeConfig(event)),
       { maxPages: PAGES_PER_DECISION },
     );
-    return drain.published.length > 0;
+    return {
+      published: drain.published.length > 0,
+      touched: pagesTouched({ matched, drain }),
+    };
   } catch (error) {
     console.error(`[declarations] comparing ${extractId} failed`, error);
-    return false;
+    return { published: false, touched: [] };
   }
 }
