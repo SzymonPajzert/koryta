@@ -62,7 +62,6 @@
 
 <script lang="ts" setup>
 import { computed } from "vue";
-import { authFetch } from "~/composables/auth";
 import { partyColors } from "~~/shared/misc";
 import { OTHER_KEY } from "~~/shared/homeTimeline";
 import {
@@ -115,8 +114,13 @@ const ENDPOINT = "/api/stats/homeTimeline";
  *
  * One request for all three groupings. They are three views of one scan, the
  * whole payload is 26 kB, and a request per grouping would make a click on the
- * picker wait on the edge collection. */
-const { data, status } = authFetch<HomeTimelineResponse>(ENDPOINT, {
+ * picker wait on the edge collection.
+ *
+ * `useFetch`, not `authFetch`: the chart counts published posts only, so every
+ * reader gets the same answer. `authFetch` sends a signed-in reader's request
+ * with `latest=true`, which skips the six-hour cache and Cloud CDN, so on an
+ * instance just started they waited for the whole count. */
+const { data, status } = useFetch<HomeTimelineResponse>(ENDPOINT, {
   key: "home-timeline",
 });
 
