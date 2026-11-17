@@ -29,10 +29,20 @@
 1. `status`: where the declarations stand over the night's list: candidacies found, their files downloaded, cut,
    cropped and sent, by priority, and the units (TERYT) where nothing was downloaded for anybody (`--units 50`,
    `--units-csv`). It only reads, so it runs beside a cut or a crawl
-1. Not part of the nightly yet: run it by hand on predator, beside the crawler. It signs in as the people import does
-   (`KORYTA_PIPELINE_UID=pipeline-declarations`). `cut.sh` and `stats.sh` beside the code run `cut` and `status` with
-   the crawl's Postgres, the credentials for the night's list and the cut's logs, from the checkout they sit in
-   (`~/koryta-bip-declarations` on predator)
+1. `facts-part`: what the crawl, the cut and the upload did for each candidacy of the night's list - the search's
+   status and reason, a file not cut, a named file cut, a crop waiting for the upload - as a write-once part in the
+   shared cache (`jobs/bip_declarations/facts/`, `stores.bip_declaration_facts`), with no names, dates, hashes or
+   URLs. It only reads Postgres, with no DDL. `run_chunk.sh` runs it after every crawl chunk, and `cut` and a real
+   `upload` write a part when they end; one not written there is said and changes nothing else
+1. `send-facts`: the night's step `declarations`. The newest part, with the night's list and how many Poles carry
+   each surname (PESEL), to `/api/ingest/declarations/facts`, where the site counts the declarations in people for
+   the home page, /oswiadczenia/postep and /admin/oswiadczenia. Exit 75 when there is no part it can read yet, PESEL's
+   tables do not read, or the site does not answer or take it yet (404); 1 when the site refuses it, or fails the
+   count (500) again after a wait; `--dry-run` sends nothing
+1. Only `send-facts` is part of the nightly: run the rest by hand on predator, beside the crawler. It signs in as
+   the people import does (`KORYTA_PIPELINE_UID=pipeline-declarations`). `cut.sh` and `stats.sh` beside the code run
+   `cut` and `status` with the crawl's Postgres, the credentials for the night's list and the cut's logs, from the
+   checkout they sit in (`~/koryta-bip-declarations` on predator)
 
 ## krs_scrape_bulletin
 1. Reads KRS bulletin for updates on dates we haven't scraped yet

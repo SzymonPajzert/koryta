@@ -666,6 +666,12 @@ class Client:
         chosen_blobs = sorted(user_blobs[chosen_user], key=lambda b: b.name)
         return chosen_blobs[-1]
 
+    def latest_backup_datetime(self, filename: str) -> str:
+        """The `datetime=` of the backup a restore of `filename` takes now: its
+        writer's local time, which the name does not say (the nightly VM
+        writes Warsaw time)."""
+        return _backup_datetime(self._latest_backup_blob(filename))
+
     def download_backup(self, filename: str) -> io.BytesIO:
         """Downloads the latest versioned backup for a filename from GCS.
 

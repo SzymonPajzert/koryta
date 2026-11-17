@@ -39,6 +39,7 @@ GOOD = {
     "koryta_people_import": 0,
     "koryta_company_import": 0,
     "koryta_score_import": 0,
+    "koryta_bip_declarations": 0,
     "compressor": 0,
     # The held pipelines' rebuilds, as `koryta <Name>`.
     **{f"koryta {name}": 0 for name in night.REBUILT_ON_CHANGE},
@@ -287,6 +288,7 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "koryta_people_import",
         "koryta_company_import",
         "koryta_score_import",
+        "koryta_bip_declarations",
     ]
     assert set(world.steps().values()) == {("succeeded", "")} | {
         ("succeeded", FRESH),
@@ -1299,10 +1301,11 @@ def test_the_scores_do_not_wait_on_how_the_people_went(world):
     assert world.steps()["people"] == ("failed", "kod wyjścia 1")
     assert world.steps()["company_updates"] == ("succeeded", "")
     assert world.steps()["scores"] == ("succeeded", "")
-    assert world.ran()[-3:] == [
+    assert world.ran()[-4:] == [
         "koryta_people_import",
         "koryta_company_import",
         "koryta_score_import",
+        "koryta_bip_declarations",
     ]
 
 
@@ -1312,6 +1315,35 @@ def test_a_failed_score_upload_fails_the_night(world):
     assert night.main([]) == night.EXIT_FAILED
 
     assert world.steps()["scores"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["tidy"][0] == "succeeded"
+
+
+def test_the_declarations_facts_go_up_whatever_holds_the_people(world):
+    world.export = STALE
+
+    assert night.main([]) == night.EXIT_TRY_LATER
+
+    assert world.steps()["people"][0] == "held"
+    assert world.steps()["declarations"] == ("succeeded", "")
+    argv, _ = world.command("koryta_bip_declarations")
+    assert argv[1:] == ["send-facts"]
+
+
+def test_no_declarations_facts_yet_is_partial_and_a_refusal_fails_the_night(world):
+    # No part from predator yet, or the site without the endpoint (404).
+    world.codes["koryta_bip_declarations"] = night.EXIT_TRY_LATER
+
+    assert night.main([]) == 0
+
+    assert world.steps()["declarations"] == ("partial", "zostało na następny raz")
+
+    world.commands.clear()
+    world.objects.clear()
+    world.codes["koryta_bip_declarations"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["declarations"] == ("failed", "kod wyjścia 1")
     assert world.steps()["tidy"][0] == "succeeded"
 
 
@@ -1422,6 +1454,10 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
         "has, those turning public first; none made private" in out
     )
     assert "koryta_score_import" in out
+    assert (
+        "declarations at most 15 min: koryta_bip_declarations send-facts: "
+        "predator's newest facts part, with tonight's list, to the site" in out
+    )
     assert "koryta_scrape_krs_paid --scope fallback --max-calls 50" in out
     assert (
         "koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25"

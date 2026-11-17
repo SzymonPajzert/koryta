@@ -78,6 +78,11 @@ The steps, in order (`STEPS`):
     scores      koryta_score_import: every scoring model rebuilt over the
                 day's newest export and the pages the people step has just
                 created, and its votes reconciled with the site's
+    declarations
+                koryta_bip_declarations send-facts: the newest facts part
+                predator wrote after a crawl chunk, a cut or an upload, with
+                tonight's list, to the site, which counts the declarations in
+                people from them
     tidy        old export shards and day-named outputs off the disk
 
 Every step but `export` and `tidy` is a process of its own - the jobs and the
@@ -109,6 +114,13 @@ night; only the steps that depend on it are held:
   up whatever it did, and the uploader still creates on the way a company it
   could not. `company_updates` the same: after the people, which it neither
   waits for nor holds, as nothing it sends is anything they read.
+
+`declarations` holds nothing back, and nothing holds it: the facts are
+predator's, the list is the newest there is, and the site counts with its pages
+as they are, so a held night still moves the count. No part yet, or no answer
+from the site - a 404 included, before the site has the endpoint - is partial
+(75), and the next night sends again. A refusal, or the site's own error (500)
+again after a wait, fails it: a bug in the count shows on the night.
 
 `companies` plans tonight's people as the people step plans them - one argv
 for both (`people_argv`), the same outputs on disk, nothing sent in between -
@@ -498,6 +510,10 @@ STEPS = (
     # and the hand uploads' pace: 290 companies in 3 minutes on 2026-10-29.
     Step("company_updates", "zmiany firm", 30),
     Step("scores", "oceny", 30),
+    # The list, PESEL's tables and one request, which the site answers once it
+    # has counted: two tries at most, which end inside this limit
+    # (`jobs.bip_declarations.FACTS_BACKOFF_S`).
+    Step("declarations", "oświadczenia", 15),
     Step("tidy", "porządki", 5, always=True),
 )
 STEP_NAMES = tuple(step.name for step in STEPS)
@@ -1547,6 +1563,10 @@ class Night:
             argv += ["--refresh", name]
         return self.judge_job(*self.process(step, argv))
 
+    def step_declarations(self, step: Step) -> tuple[str, str, int | None]:
+        argv = [bin_path("koryta_bip_declarations"), "send-facts"]
+        return self.judge_job(*self.process(step, argv))
+
     def step_compress(self, step: Step) -> tuple[str, str, int | None]:
         compressor = os.environ.get("KORYTA_COMPRESSOR")
         if not compressor:
@@ -1626,6 +1646,9 @@ class Night:
             "those turning public first; none made private",
             "scores": "koryta_score_import: every scoring model, tonight's new "
             "pages included",
+            "declarations": "koryta_bip_declarations send-facts: predator's newest "
+            "facts part, with tonight's list, to the site, which counts the "
+            "declarations in people",
             "compress": "compressor -incremental -hostname "
             + " / ".join(COMPRESSED_HOSTS),
             "tidy": f"remove export shards and day-named outputs older than "
