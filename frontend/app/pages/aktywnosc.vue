@@ -233,7 +233,7 @@ definePageMeta({
   maxWidth: 800,
 });
 
-useHead({ title: "Aktywność - koryta.pl" });
+useHead({ title: "Aktywność" });
 
 /** The toggle's value for "no kind filter", kept out of the url. */
 const ALL_KINDS = "wszystko";

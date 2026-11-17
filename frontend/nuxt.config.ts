@@ -36,6 +36,13 @@ export default defineNuxtConfig({
         {
           charset: "utf-8",
         },
+        // The site card for every page that names no image of its own, so a
+        // shared link never renders bare. Same file as SOCIAL_CARD in
+        // composables/entitySeo.ts; nuxt-seo-utils makes it absolute on the
+        // server, which is what link previews read.
+        { property: "og:image", content: "/social-card.png" },
+        { name: "twitter:image", content: "/social-card.png" },
+        { name: "twitter:card", content: "summary_large_image" },
       ],
       htmlAttrs: {
         lang: "pl",
@@ -43,6 +50,14 @@ export default defineNuxtConfig({
       link: [
         { rel: "preconnect", href: "https://cdn.jsdelivr.net" },
         { rel: "preconnect", href: "https://firestore.googleapis.com" },
+        // Google takes a site's search result icon from this tag on the home
+        // page rather than guessing /favicon.ico.
+        {
+          rel: "icon",
+          type: "image/x-icon",
+          href: "/favicon.ico",
+          sizes: "32x32",
+        },
       ],
       style: [],
       script: [],

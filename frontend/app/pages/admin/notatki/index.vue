@@ -282,7 +282,7 @@ definePageMeta({
   fullWidth: true,
 });
 
-useHead({ title: "Notatki (Admin) - koryta.pl" });
+useHead({ title: "Notatki (Admin)" });
 
 const route = useRoute();
 const { setQuery, stringFilter, numberFilter } = useQueryFilters({

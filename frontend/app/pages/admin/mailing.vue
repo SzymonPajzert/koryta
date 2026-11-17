@@ -445,7 +445,7 @@ definePageMeta({
   middleware: ["admin", "owner"],
 });
 
-useHead({ title: "Mailing (Admin) - koryta.pl" });
+useHead({ title: "Mailing (Admin)" });
 
 const route = useRoute();
 const router = useRouter();

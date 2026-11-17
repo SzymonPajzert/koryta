@@ -406,7 +406,7 @@ definePageMeta({
 });
 
 useHead({
-  title: "Panel administracyjny - koryta.pl",
+  title: "Panel administracyjny",
 });
 
 const subpages = [

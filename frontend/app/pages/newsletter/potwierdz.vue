@@ -90,7 +90,7 @@ import { mdiCheckCircle } from "@mdi/js";
  * message, and a page that confirmed on load would confirm for the filter.
  * The link's token is the whole authorisation, so nobody has to sign in. */
 useHead({
-  title: "Potwierdź zapis na newsletter - koryta.pl",
+  title: "Potwierdź zapis na newsletter",
   meta: [{ name: "robots", content: "noindex" }],
 });
 

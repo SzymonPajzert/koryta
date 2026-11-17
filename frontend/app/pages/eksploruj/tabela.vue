@@ -158,7 +158,7 @@ import { activeTabelaFilters, tabelaFiltersChanged } from "~~/shared/analytics";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
-  title: "Eksploruj - Tabela - koryta.pl",
+  title: "Eksploruj - Tabela",
   // Marks the page for the `overflow-x` override below. Set through the head
   // rather than a stylesheet because it has to come off again when the reader
   // navigates away - no other page wants a sideways scrollbar.

@@ -295,7 +295,7 @@ definePageMeta({
   maxWidth: 1100,
 });
 
-useHead({ title: "Oświadczenia majątkowe (Admin) - koryta.pl" });
+useHead({ title: "Oświadczenia majątkowe (Admin)" });
 
 const overview = ref<DeclarationOverview | null>(null);
 

@@ -329,7 +329,7 @@ definePageMeta({
 // and the tab is the queue's.
 useHead(
   {
-    title: "Eksploruj Nowe - koryta.pl",
+    title: "Eksploruj Nowe",
   },
   { tagPriority: "high" },
 );

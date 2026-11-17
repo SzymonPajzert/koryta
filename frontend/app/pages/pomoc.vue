@@ -540,7 +540,7 @@ definePageMeta({
 });
 
 useSeoMeta({
-  title: "Jak możesz pomóc - Koryta.pl",
+  title: "Jak możesz pomóc",
   description:
     "Sześć sposobów, żeby pomóc: zgłoś nam coś w minutę, dopisz brakującą osobę albo spółkę, sprawdzaj kolejkę, dołącz do zespołu, wesprzyj finansowo albo przyślij poprawkę do kodu. Przy każdej rzeczy piszemy, czy trzeba konta.",
 });

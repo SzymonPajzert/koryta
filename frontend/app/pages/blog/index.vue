@@ -52,7 +52,7 @@ const posts = computed(() => data.value ?? []);
 const description =
   "Analizy zespołu Koryta.pl: co wynika z danych o osobach i instytucjach, które opisujemy.";
 useSeoMeta({
-  title: "Blog - Koryta.pl",
+  title: "Blog",
   description,
   ogTitle: "Blog - Koryta.pl",
   ogDescription: description,

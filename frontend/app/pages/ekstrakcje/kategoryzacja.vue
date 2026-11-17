@@ -207,7 +207,7 @@ definePageMeta({
   middleware: "auth",
 });
 useHead({
-  title: "Kategoryzacja faktów - koryta.pl",
+  title: "Kategoryzacja faktów",
 });
 
 // One page of the unreviewed backlog at a time — enough swipes that few
