@@ -243,8 +243,8 @@
     </ClientOnly>
 
     <!-- The way on to the rest of what a reader can do. „Działaj z nami” in
-         the app bar and on the home page bring readers here rather than to
-         /pomoc, so this is how they find everything else. Outside ClientOnly,
+         the app bar, on the home page and in the footer bring readers here
+         rather than to /pomoc, so this is how they find everything else. Outside ClientOnly,
          so the server render carries it. Gone once everything is read: the
          card that says so has its own button to /pomoc. -->
     <p v-if="!allRead" class="ow-more" data-testid="declaration-more-help">

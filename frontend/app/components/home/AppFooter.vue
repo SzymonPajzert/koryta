@@ -80,8 +80,9 @@ const sections = [
       { title: "Kontakt", link: "/o-nas#kontakt" },
       // The app bar only carries this above 960px, so on a phone, on any page
       // but the home page, the footer is the whole of how somebody finds
-      // their way to helping.
-      { title: "Działaj z nami", link: "/pomoc" },
+      // their way to helping. It goes where the app bar's and the home page's
+      // do (decision on 2026-11-17); /oswiadczenia links /pomoc at its foot.
+      { title: "Działaj z nami", link: "/oswiadczenia" },
     ],
   },
   {

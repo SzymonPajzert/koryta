@@ -52,9 +52,9 @@ test.describe("Home", () => {
     }).toPass({ timeout: 30_000 });
   });
 
-  // The app bar's „Działaj z nami” goes the same way as the home page's; the
-  // footer's still goes to /pomoc, which /oswiadczenia links to at its foot.
-  test("the app bar's Działaj z nami leads to oswiadczenia", async ({
+  // The app bar's and the footer's „Działaj z nami” go the same way as the
+  // home page's; /oswiadczenia links /pomoc at its foot.
+  test("the app bar's and the footer's Działaj z nami lead to oswiadczenia", async ({
     page,
   }) => {
     await expect(
@@ -62,7 +62,7 @@ test.describe("Home", () => {
     ).toHaveAttribute("href", "/oswiadczenia");
     await expect(
       page.locator("footer").getByRole("link", { name: "Działaj z nami" }),
-    ).toHaveAttribute("href", "/pomoc");
+    ).toHaveAttribute("href", "/oswiadczenia");
   });
 
   test("koryta.pl/start redirects to oswiadczenia", async ({ page }) => {
