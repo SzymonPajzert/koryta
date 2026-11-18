@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "procesy-kroki-nocy-w-harmonogramie",
+    title: "Procesy: „Import firm” i „Oceny modeli” w „Według harmonogramu”",
+    description:
+      "Oba uruchamia noc, a stały w „Na żądanie”. Kroki nocy bez własnej godziny mają w wierszu „co noc” zamiast „jeszcze bez harmonogramu”.",
+    steps: [
+      "Otwórz /admin/procesy: „Import firm” i „Oceny modeli” są w „Według harmonogramu”, obok „Import osób na stronę”, i jak on mają po prawej „co noc”.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
     id: "poparcie-pkw-na-kandydaturach",
     title: "Poparcie i członkostwo z PKW na kandydaturach",
     description:

@@ -65,6 +65,13 @@
             następne: {{ nextRun }}
           </span>
           <span
+            v-else-if="definition.nightStep"
+            class="job-head__next text-medium-emphasis"
+            data-row-night
+          >
+            co noc
+          </span>
+          <span
             v-else-if="definition.kind === 'scheduled'"
             class="job-head__next text-medium-emphasis"
             data-row-unscheduled
@@ -412,6 +419,15 @@ const emptyText = computed(() => {
 @media (min-width: 960px) {
   .job-head {
     flex-wrap: nowrap;
+  }
+
+  /* As wide as „następne: 19.11, 04:30”, so that the last run's time lines
+   * up down the list whether the row gives its next start or says „co noc”.
+   * Not on a phone, where the side wraps and a box this wide would leave
+   * „co noc” in the middle of its line. */
+  .job-head__next {
+    min-width: 10.5em;
+    text-align: end;
   }
 
   .job-head__detail {

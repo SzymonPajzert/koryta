@@ -112,7 +112,7 @@ const overview = (): JobsOverview => ({
       ],
     },
     {
-      // Triggered like the captures, but a run it reported itself.
+      // A run it reported itself, unlike the captures: one started by hand.
       id: "company_import",
       record: {
         lastRunId: "co-run",
@@ -329,8 +329,6 @@ describe("/admin/procesy", () => {
         .map((row) => row.attributes("data-job"));
     expect(jobsIn("triggered")).toEqual([
       "capture_extraction",
-      "company_import",
-      "score_import",
       "extraction_import",
       "people_request",
     ]);
@@ -342,7 +340,9 @@ describe("/admin/procesy", () => {
       "krs_register_owners",
       "compressor",
       "firestore_export",
+      "company_import",
       "people_import",
+      "score_import",
     ]);
     expect(jobsIn("ongoing")).toEqual(["article_crawl"]);
     expect(jobsIn("others")).toEqual(["people_upload"]);
@@ -653,7 +653,7 @@ describe("/admin/procesy", () => {
     expect(failed.text()).toContain("wklejone na /zrodla");
   });
 
-  it("shows a triggered import as runs it reported, not as captures", async () => {
+  it("shows an import as runs it reported, not as captures", async () => {
     const page = await mountPage();
     const row = rowOf(page, "company_import");
     expect(row.get("[data-health-detail]").text()).toBe(
@@ -661,7 +661,8 @@ describe("/admin/procesy", () => {
     );
     // When it started and how long it took, where a capture says only when.
     expect(row.get("[data-row-last]").text()).toBe("1.10, 15:00 · 4 min");
-    // No schedule to have, and none missing.
+    // A step of the night: no start of its own to give, and none missing.
+    expect(row.get("[data-row-night]").text()).toBe("co noc");
     expect(row.find("[data-row-next]").exists()).toBe(false);
     expect(row.find("[data-row-unscheduled]").exists()).toBe(false);
 

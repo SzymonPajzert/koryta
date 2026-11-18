@@ -272,7 +272,7 @@ describe("jobsStatus: one job", () => {
   it("refuses a job nobody knows, and names the ones there are", async () => {
     const { reports } = memoryReports([]);
     await expect(jobsStatus(reports, { job: "nope" }, NOW)).rejects.toThrow(
-      /There is no job nope: .* The jobs: capture_extraction, company_import/,
+      /There is no job nope: .* The jobs: capture_extraction, extraction_import/,
     );
   });
 });
