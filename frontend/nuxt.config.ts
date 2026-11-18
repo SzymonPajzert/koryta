@@ -435,7 +435,15 @@ export default defineNuxtConfig({
     // easier to say and to type than /oswiadczenia. 302 rather than 301,
     // because a browser keeps a 301 for good, and /start should be free to
     // point at whatever the first task is next.
-    "/start": { redirect: { to: "/oswiadczenia", statusCode: 302 } },
+    //
+    // `utm_campaign=start` tells these arrivals apart in Plausible
+    // (Campaigns). Not `ref`: Plausible takes `ref` as the visit's source over
+    // the referrer, so Instagram, Facebook and wykop would all read „start”.
+    // The link's own query wins over this one (Nitro merges it in), so a
+    // mail's utm_campaign stays the mail's.
+    "/start": {
+      redirect: { to: "/oswiadczenia?utm_campaign=start", statusCode: 302 },
+    },
 
     // Nitro only injects a Cache-Control route rule for public assets mounted
     // under a sub-path (it zeroes maxAge for anything at the site root), so

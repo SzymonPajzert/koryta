@@ -69,11 +69,25 @@ test.describe("Home", () => {
     const response = await page.goto("/start", {
       waitUntil: "domcontentloaded",
     });
-    expect(new URL(page.url()).pathname).toBe("/oswiadczenia");
+    const url = new URL(page.url());
+    expect(url.pathname).toBe("/oswiadczenia");
+    // What Plausible files these arrivals under, in Campaigns.
+    expect(url.searchParams.get("utm_campaign")).toBe("start");
     expect(response?.request().redirectedFrom()?.url()).toMatch(/\/start$/);
     await expect(
       page.getByTestId("declaration-more-help").getByRole("link"),
     ).toHaveAttribute("href", "/pomoc");
+  });
+
+  test("koryta.pl/start keeps the tags a link brings", async ({ page }) => {
+    await page.goto(
+      "/start?utm_source=newsletter&utm_medium=email&utm_campaign=pilot",
+      { waitUntil: "domcontentloaded" },
+    );
+    const url = new URL(page.url());
+    expect(url.pathname).toBe("/oswiadczenia");
+    expect(url.searchParams.get("utm_source")).toBe("newsletter");
+    expect(url.searchParams.get("utm_campaign")).toBe("pilot");
   });
 
   test("the search fills most of its line on a desktop", async ({ page }) => {
