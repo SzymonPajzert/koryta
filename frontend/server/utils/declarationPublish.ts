@@ -89,6 +89,7 @@ import {
 import { unnamedLocal } from "./edges";
 import { peopleImportRunning } from "./jobs";
 import { resolveMergedNode } from "./merge";
+import { requeueQuietly } from "./readingQueue";
 import { applyRevision, holdsRevision, nodeRevisions } from "./revisions";
 
 /** How long a page may stay `publishing` before the next pass takes it up
@@ -1779,9 +1780,20 @@ export async function restoreReverted(
 // After an answer, an upload, and on the job's schedule
 // ---------------------------------------------------------------------------
 
-/** Compares the crops just settled with their pages, then takes up the queue
- * once. What both the answer that settles a crop and the upload of crops that
- * come settled do. */
+/** The pages a comparison that wrote something reached: their people's
+ * other crops have a new place in the readers' queue (`requeueCrops`). */
+function pagesNewlyReached(matched: readonly MatchResult[]): string[] {
+  return unique(
+    matched
+      .filter((match) => match.changed)
+      .flatMap((match) => Object.keys(match.outcomes)),
+  );
+}
+
+/** Compares the crops just settled with their pages, moves the other crops
+ * of the people they reached to their new place in the readers' queue, then
+ * takes up the publication queue once. What both the answer that settles a
+ * crop and the upload of crops that come settled do. */
 export async function matchAndDrain(
   db: Firestore,
   extractIds: readonly string[],
@@ -1790,8 +1802,13 @@ export async function matchAndDrain(
   options: { maxPages?: number } = {},
 ): Promise<{ matched: MatchResult[]; drain: DrainResult }> {
   const matched: MatchResult[] = [];
-  for (const id of unique(extractIds)) {
-    matched.push(await matchPages(db, id, now));
+  try {
+    for (const id of unique(extractIds)) {
+      matched.push(await matchPages(db, id, now));
+    }
+  } finally {
+    // Even when a comparison fails: those before it reached their people.
+    await requeueQuietly(db, pagesNewlyReached(matched));
   }
   return { matched, drain: await drainPublications(db, now, limit, options) };
 }
@@ -1802,8 +1819,10 @@ export async function matchAndDrain(
  * comparison failed, or a crop an upload named more pages for - and those
  * marked to be compared again (`pageRecheck`), which left a page without a
  * birth date or with another one, in case the nightly import or a reviewer
- * has changed that since. Then it puts back what a stale write took down
- * (`restoreReverted`) and takes up the queue.
+ * has changed that since. The other crops of the people a comparison reached
+ * move to their new place in the readers' queue. Then it puts back what a
+ * stale write took down (`restoreReverted`) and takes up the publication
+ * queue.
  *
  * The ones compared again go least recently compared first: a crop compared
  * to no effect is stamped and goes to the back, so each sweep reaches others.
@@ -1836,21 +1855,26 @@ export async function sweepDeclarations(
 
   let changed = 0;
   const matched: MatchResult[] = [];
-  for (const doc of unmatched.docs) {
-    const match = await matchPages(db, doc.id, now);
-    matched.push(match);
-    if (match.changed) changed += 1;
-  }
-  for (const doc of recheck.docs) {
-    const match = await matchPages(db, doc.id, now);
-    matched.push(match);
-    if (match.changed) {
-      changed += 1;
-    } else {
-      await extracts
-        .doc(doc.id)
-        .update({ pageCheckedAt: Timestamp.fromDate(now) });
+  try {
+    for (const doc of unmatched.docs) {
+      const match = await matchPages(db, doc.id, now);
+      matched.push(match);
+      if (match.changed) changed += 1;
     }
+    for (const doc of recheck.docs) {
+      const match = await matchPages(db, doc.id, now);
+      matched.push(match);
+      if (match.changed) {
+        changed += 1;
+      } else {
+        await extracts
+          .doc(doc.id)
+          .update({ pageCheckedAt: Timestamp.fromDate(now) });
+      }
+    }
+  } finally {
+    // Even when a comparison fails: those before it reached their people.
+    await requeueQuietly(db, pagesNewlyReached(matched));
   }
 
   const reverted = await restoreReverted(db, now);

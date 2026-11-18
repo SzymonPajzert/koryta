@@ -5,10 +5,15 @@ import { getUser, requireDatascience } from "~~/server/utils/auth";
 import { restageDeclarationPeople } from "~~/server/utils/declarationPeopleCount";
 import { matchAndDrain } from "~~/server/utils/declarationPublish";
 import { resolveMergedNode } from "~~/server/utils/merge";
-import { pagesWithAPublicPost } from "~~/server/utils/publicPosts";
+import {
+  pagesReached,
+  pageTiers,
+  type QueuedPage,
+} from "~~/server/utils/readingQueue";
 import { pagesTouched } from "~~/shared/declarationPeople";
 import { pageIsPublic } from "~~/shared/model";
 import {
+  cropPriority,
   declarationIngestSchema,
   extractId,
   isPng,
@@ -17,7 +22,6 @@ import {
   MAX_REQUEST_IMAGE_BYTES,
   pngSize,
   publishLimitOf,
-  readingPriority,
   type DeclarationCandidacyInput,
   type DeclarationExtractInput,
   type DeclarationIngestResult,
@@ -77,7 +81,7 @@ export default defineEventHandler(async (event) => {
   // --- candidacies -------------------------------------------------------
   /** Every live page met on the way, by its id: how soon readers see its
    * crops. */
-  const pages = new Map<string, LivePage>();
+  const pages = new Map<string, QueuedPage>();
   const people = await livePeople(
     db,
     body.candidacies.flatMap((candidacy) => candidacy.kids),
@@ -166,8 +170,17 @@ export default defineEventHandler(async (event) => {
   }
 
   // Every page this request names is known by now, so the order readers are
-  // shown their crops in can be settled once for all of them.
-  const order = await readingOrder(db, pages);
+  // shown their crops in can be settled once for all of them: each page's
+  // tier, and whether a reading has reached the pages the crops are for.
+  const order = await pageTiers(db, pages.values());
+  const reached = await pagesReached(
+    db,
+    body.extracts.flatMap((extract) =>
+      extract.candidacies.flatMap(
+        (key) => candidacyByKey.get(key)?.personIds ?? [],
+      ),
+    ),
+  );
 
   const extractRefs = body.extracts.map((extract) =>
     db
@@ -251,8 +264,13 @@ export default defineEventHandler(async (event) => {
           ...candidacies.map((c) => c.key),
         ]),
         personIds: nextPersonIds,
-        priority: Math.min(
-          ...personIds.map((pageId) => order.get(pageId) ?? 3),
+        priority: cropPriority(
+          personIds.map((pageId) => ({
+            tier: order.get(pageId) ?? 3,
+            read: reached.has(pageId),
+            birthDate: pages.get(pageId)?.birthDate,
+          })),
+          extract.machine?.birthDate,
         ),
         units: nextUnits,
         linkNamed: extract.linkNamed ?? null,
@@ -334,48 +352,13 @@ type StoredCandidacy = {
   files: number;
 };
 
-/** A live person page, as far as the order readers are shown its crops in
- * depends on it (`readingPriority`). Whether a draft also has a paid public
- * post takes the graph, so it is asked of every page at once, once they are
- * all known (`readingOrder`). */
-type LivePage = { id: string; published: boolean; birthDate: unknown };
-
-/** How soon readers should be shown each of these pages' crops.
- *
- * One pass, after the candidacies have named every page this request is for
- * and before the first crop is written: a crop takes the lowest of its pages'
- * numbers, as the `priority` it is written with above. The employment lookup
- * is what has to be batched - one query per 30 pages rather than one per page
- * - and a published page needs none of it, since its crops come last either
- * way.
- */
-async function readingOrder(
-  db: FirebaseFirestore.Firestore,
-  pages: Map<string, LivePage>,
-): Promise<Map<string, 0 | 1 | 2 | 3>> {
-  const drafts = [...pages.values()].filter((page) => !page.published);
-  const paid =
-    drafts.length > 0
-      ? await pagesWithAPublicPost(
-          db,
-          drafts.map((page) => page.id),
-        )
-      : new Set<string>();
-  return new Map(
-    [...pages.values()].map((page) => [
-      page.id,
-      readingPriority(page, paid.has(page.id)),
-    ]),
-  );
-}
-
 /** Each kid's live person page, followed through merges: a page that is gone,
  * deleted or not a person maps to nothing. Every page found is also put in
  * `pages`. */
 async function livePeople(
   db: FirebaseFirestore.Firestore,
   ids: readonly string[],
-  pages: Map<string, LivePage>,
+  pages: Map<string, QueuedPage>,
 ): Promise<Map<string, string | undefined>> {
   const wanted = unique(ids);
   const answer = new Map<string, string | undefined>();

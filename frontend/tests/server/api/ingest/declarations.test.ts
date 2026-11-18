@@ -23,10 +23,11 @@ function snapshot(path: string) {
   };
 }
 
-/** `where(...).where(...).get()` over `stored`, for the employment lookup the
- * reader queue's order needs (`pagesWithAPublicPost`): equality and `in`, on
+/** `where(...).where(...).get()` over `stored`, for what the reader queue's
+ * order needs: the employment lookup (`pagesWithAPublicPost`) and the crops
+ * that name a page (`pagesReached`). Equality, `in` and `array-contains`, on
  * one collection, which is all of Firestore this endpoint asks for. `select`
- * hands back every field. */
+ * hands back every field, and `limit` is never reached. */
 function query(
   collection: string,
   filters: { field: string; op: string; value: unknown }[] = [],
@@ -35,15 +36,18 @@ function query(
     where: (field: string, op: string, value: unknown) =>
       query(collection, [...filters, { field, op, value }]),
     select: () => query(collection, filters),
+    limit: () => query(collection, filters),
     get: async () => {
       const docs = Object.entries(stored)
         .filter(([path]) => path.startsWith(`${collection}/`))
         .filter(([, data]) =>
           filters.every(({ field, op, value }) => {
             const held = (data ?? {})[field];
-            return op === "in"
-              ? (value as unknown[]).includes(held)
-              : held === value;
+            if (op === "in") return (value as unknown[]).includes(held);
+            if (op === "array-contains") {
+              return Array.isArray(held) && held.includes(value);
+            }
+            return held === value;
           }),
         )
         .map(([path]) => snapshot(path));
@@ -345,6 +349,81 @@ describe("api/ingest/declarations", () => {
           },
         ),
       ).toBe(0);
+    });
+
+    it("puts the crops of a person a reading has reached last", async () => {
+      // Another of her declarations, settled and compared with her page.
+      const read = (fields: Record<string, unknown>) => ({
+        "declarationExtracts/read": {
+          status: "agreed",
+          agreed: { value: "1979-07-15", kind: "date", by: "readers" },
+          personIds: ["kowalska"],
+          pageOutcomes: { kowalska: "queued" },
+          ...fields,
+        },
+      });
+      expect(await priorityOf({ birthDate: "1979-07-15" }, read({}))).toBe(4);
+      // Read as another day, it reached her all the same.
+      expect(
+        await priorityOf(
+          { birthDate: "1979-07-15" },
+          read({ pageOutcomes: { kowalska: "different" } }),
+        ),
+      ).toBe(4);
+      // A year alone, a reading an admin took back, and one never compared
+      // reach nobody.
+      for (const fields of [
+        { agreed: { value: "1979", kind: "year", by: "readers" } },
+        { status: "withdrawn" },
+        { pageOutcomes: {} },
+      ]) {
+        expect(
+          await priorityOf({ birthDate: "1979-07-15" }, read(fields)),
+        ).toBe(0);
+      }
+    });
+
+    it("puts a crop the job read another date off half a tier back", async () => {
+      const withMachine = async (
+        node: Record<string, unknown>,
+        birthDate: string,
+      ) => {
+        stored = {
+          "nodes/kowalska": { type: "person", name: "Anna Kowalska", ...node },
+          "nodes/wodociagi": {
+            type: "place",
+            name: "Wodociągi Strzelin",
+            isPublic: true,
+          },
+          "edges/kowalska-job": {
+            type: "employed",
+            name: "Rada Nadzorcza",
+            source: "kowalska",
+            target: "wodociagi",
+            start_date: "2020-03-01",
+          },
+        };
+        await send({
+          candidacies: [candidacy()],
+          extracts: [
+            extract({
+              machine: { birthDate, confidence: "low", method: "ocr" },
+            }),
+          ],
+        });
+        return stored[EXTRACT]!.priority;
+      };
+      // Most likely somebody else's: still ahead of an undated draft.
+      expect(await withMachine({ birthDate: "1979-07-15" }, "1981-02-03")).toBe(
+        0.5,
+      );
+      // The page's own date, or a page with no date to contradict.
+      expect(await withMachine({ birthDate: "1979-07-15" }, "1979-07-15")).toBe(
+        0,
+      );
+      expect(await withMachine({}, "1981-02-03")).toBe(1);
+      // A year alone says nothing of the day.
+      expect(await withMachine({ birthDate: "1979-07-15" }, "1981")).toBe(0);
     });
 
     it("leaves a page whose post somebody removed behind", async () => {

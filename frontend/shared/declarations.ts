@@ -11,8 +11,8 @@
  *
  * The declaration is evidence against the register, so nothing on the BIP
  * side ever carries a date the site already knows: not the upload, not the
- * reading task. The two meet only here, after the reading is settled.
- * Readers read blind.
+ * reading task. The two meet only on the server, never in what a reader is
+ * shown before typing. Readers read blind.
  */
 import { z } from "zod";
 import { isoDay } from "./dates";
@@ -914,8 +914,8 @@ export type DeclarationFinds = {
 };
 
 /** How soon readers should be shown a person page's crops, lowest first - the
- * `priority` /api/ingest/declarations writes on a crop and
- * /api/declarations/next orders the readers' queue by.
+ * tier of the `priority` /api/ingest/declarations writes on a crop
+ * (`cropPriority`) and /api/declarations/next orders the readers' queue by.
  *
  * The interest is in drafts nobody has verified yet, and among them in the
  * ones a reading could actually publish:
@@ -933,7 +933,9 @@ export type DeclarationFinds = {
  *   crop is still worth a reading: a settled one is linked on the page.
  *
  * The crawl orders drafts the other way round, as it looks for the dates the
- * pages lack. Only whether a page has a date is read here, never the date.
+ * pages lack. Only whether a page has a date is read here, never the date;
+ * what a crop's own machine reading says of it moves the crop within its
+ * tier (`cropPriority`).
  *
  * `hasPublicPost` is `isPublicEmployment` over the page's own employment
  * edges, which only a caller with the graph can answer
@@ -946,6 +948,88 @@ export function readingPriority(
   if (pageIsPublic(page)) return 3;
   if (!hasPublicPost) return 2;
   return page.birthDate ? 0 : 1;
+}
+
+/** The queue's last tier, past every page's (`readingPriority`): a crop
+ * whose every page a reading has reached already (`readingReached`).
+ * Reading another of their declarations publishes nobody: after a match it
+ * repeats the date, and a page read as another day is held whatever the
+ * next reading finds (`conflicting_reading`). On 2026-11-17 almost a third
+ * of all answers (31%) had gone to such crops. They are still served once
+ * nothing else is left, as a second declaration read as another day holds a
+ * matched page too. */
+export const READ_PRIORITY = 4;
+
+/** How far back within its tier a crop goes when the job's own reading of
+ * it is a full date the page's birth date contradicts: readers settled 92%
+ * of such crops as another person's date (2026-11-17). Half a tier, so it
+ * stays ahead of the next one, and a person's crop that may still be theirs
+ * is served before it. */
+const CONTRADICTED_BY_PAGE = 0.5;
+
+/** One page a crop is for, as its `priority` depends on it. */
+export type QueuePage = {
+  /** `readingPriority` of the page. */
+  tier: 0 | 1 | 2 | 3;
+  /** Whether a reading has reached the page (`readingReached`). */
+  read: boolean;
+  /** The page's birth date, as the page stores it. */
+  birthDate: unknown;
+};
+
+/**
+ * The `priority` a crop is written with, which /api/declarations/next orders
+ * the queue by: the lowest of its pages', each page's being its tier
+ * (`readingPriority`), `READ_PRIORITY` once a reading has reached it, and
+ * half a tier later where the job read a full date off the crop that is not
+ * the page's birth date. A crop with no live page orders as a public one.
+ */
+export function cropPriority(
+  pages: readonly QueuePage[],
+  machineDate: unknown,
+): number {
+  if (pages.length === 0) return 3;
+  const machine =
+    typeof machineDate === "string" && readingKind(machineDate) === "date"
+      ? machineDate
+      : null;
+  return Math.min(
+    ...pages.map((page) => {
+      if (page.read) return READ_PRIORITY;
+      const born =
+        typeof page.birthDate === "string" ? page.birthDate.trim() : "";
+      const contradicted = machine !== null && born !== "" && born !== machine;
+      return page.tier + (contradicted ? CONTRADICTED_BY_PAGE : 0);
+    }),
+  );
+}
+
+/**
+ * Whether a reading has reached the page: one of these crops (any of the
+ * page's, as stored) settled on a full date and was compared with the page,
+ * whatever the comparison found (`pageOutcomes`): a match, another day, or
+ * no date on the page to compare with. A year alone, a crop still read, one
+ * readers could not agree on and one an admin took back reach nobody.
+ */
+export function readingReached(
+  crops: readonly {
+    status?: unknown;
+    agreed?: unknown;
+    pageOutcomes?: unknown;
+  }[],
+  pageId: string,
+): boolean {
+  return crops.some((crop) => {
+    if (crop.status !== "agreed") return false;
+    const agreed = crop.agreed as { kind?: unknown } | null | undefined;
+    if (agreed?.kind !== "date") return false;
+    const outcomes = crop.pageOutcomes;
+    return (
+      !!outcomes &&
+      typeof outcomes === "object" &&
+      typeof (outcomes as Record<string, unknown>)[pageId] === "string"
+    );
+  });
 }
 
 /** Why a page whose date matches was not published automatically. Each is

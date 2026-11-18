@@ -16,6 +16,10 @@ import {
   waitsForAdmin,
 } from "../../../server/utils/declarationDecisions";
 import {
+  requeueCropPeople,
+  requeueCrops,
+} from "../../../server/utils/readingQueue";
+import {
   DECLARATION_ACTOR,
   publishLimitOf,
 } from "../../../shared/declarations";
@@ -256,6 +260,10 @@ class FakeQuery {
   limit(max: number) {
     return new FakeQuery({ ...this.state, max });
   }
+  /** Every field comes back. */
+  select() {
+    return this;
+  }
   async get() {
     return run(this.state);
   }
@@ -297,8 +305,11 @@ function writer() {
 
 const db = {
   collection: (name: string) => new FakeCollection(name),
-  getAll: async (...refs: FakeDocRef[]) =>
-    refs.map((ref) => snapshot(ref.path)),
+  // A field mask, last, is read as every field.
+  getAll: async (...refs: unknown[]) =>
+    refs
+      .filter((ref): ref is FakeDocRef => ref instanceof FakeDocRef)
+      .map((ref) => snapshot(ref.path)),
   batch: () => {
     const batch = writer();
     return { ...batch, commit: async () => commit(batch.pending) };
@@ -2481,6 +2492,134 @@ describe("sweepDeclarations", () => {
         }
       ).millis,
     ).toBe(later.getTime());
+  });
+});
+
+describe("the readers' queue after a reading", () => {
+  /** Another declaration of hers, cut and waiting for readers. */
+  function open(id: string, fields: Data = {}) {
+    put(`declarationExtracts/${id}`, {
+      status: "open",
+      priority: 0,
+      answerCount: 0,
+      rand: 0.5,
+      personIds: ["kowalska"],
+      units: [UNIT],
+      ...fields,
+    });
+  }
+  const priorityOf = (id: string) =>
+    read(`declarationExtracts/${id}`)?.priority;
+
+  it("sends her other crops to the last tier once a reading reaches her, and leaves another person's", async () => {
+    kowalska();
+    open("hers-2022");
+    open("hers-2021", { priority: 0.5, machine: { birthDate: "1981-02-03" } });
+    // A council's file that names Jan Nowak too, who has no reading yet and
+    // no paid post on his draft.
+    person("nowak", {}, { name: "Jan Nowak" });
+    open("theirs", { personIds: ["kowalska", "nowak"] });
+
+    await matchAndDrain(firestore, ["kowalska-crop"], NOON, 0);
+
+    expect(read("declarationExtracts/kowalska-crop")).toMatchObject({
+      pageMatch: "same",
+    });
+    expect(priorityOf("hers-2022")).toBe(4);
+    expect(priorityOf("hers-2021")).toBe(4);
+    expect(priorityOf("theirs")).toBe(2);
+
+    // Nothing left to move.
+    const before = writes;
+    expect(await requeueCrops(firestore, ["kowalska", "nowak"])).toBe(0);
+    expect(writes).toBe(before);
+  });
+
+  it("sends a crop of two people last once both have a reading", async () => {
+    kowalska();
+    person("nowak", {}, { name: "Jan Nowak" });
+    // His own declaration, read and compared some time ago.
+    extract("nowak-crop", {
+      personIds: ["nowak"],
+      pageMatch: "same",
+      pageOutcomes: { nowak: "queued" },
+    });
+    open("theirs", { personIds: ["kowalska", "nowak"] });
+
+    await matchAndDrain(firestore, ["kowalska-crop"], NOON, 0);
+
+    expect(priorityOf("theirs")).toBe(4);
+  });
+
+  it("counts a reading of another day as reaching her too", async () => {
+    kowalska();
+    extract("kowalska-crop", {
+      agreed: { value: "1980-01-01", kind: "date", by: "readers", readers: 2 },
+    });
+    open("hers-2022");
+
+    await matchAndDrain(firestore, ["kowalska-crop"], NOON, 0);
+
+    expect(read("declarationExtracts/kowalska-crop")).toMatchObject({
+      pageMatch: "different",
+    });
+    expect(priorityOf("hers-2022")).toBe(4);
+  });
+
+  it("moves them when the sweep compares the reading", async () => {
+    kowalska();
+    open("hers-2022");
+
+    await sweepDeclarations(firestore, NOON, 0);
+
+    expect(priorityOf("hers-2022")).toBe(4);
+  });
+
+  it("brings them back when an admin takes her only reading back", async () => {
+    kowalska();
+    extract("kowalska-crop", {
+      agreed: { value: "1980-01-01", kind: "date", by: "readers", readers: 2 },
+    });
+    open("hers-2022");
+    open("hers-2021", { machine: { birthDate: "1981-02-03" } });
+    await matchAndDrain(firestore, ["kowalska-crop"], NOON, 0);
+    expect(priorityOf("hers-2022")).toBe(4);
+
+    await decideExtract(firestore, {
+      extractId: "kowalska-crop",
+      uid: ADMIN,
+      decision: { verdict: "withdraw" },
+      now: LATER,
+    });
+    await requeueCropPeople(firestore, "kowalska-crop");
+
+    // A dated draft with a paid post; the job read another day off the
+    // other crop, so it goes half a tier back.
+    expect(priorityOf("hers-2022")).toBe(0);
+    expect(priorityOf("hers-2021")).toBe(0.5);
+  });
+
+  it("never fails what moved it", async () => {
+    kowalska();
+    open("hers-2022");
+    const failing = {
+      ...db,
+      batch: () => ({
+        update: () => {},
+        commit: async () => {
+          throw new Error("UNAVAILABLE");
+        },
+      }),
+    };
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      matchAndDrain(failing as any, ["kowalska-crop"], NOON, 0),
+    ).resolves.toMatchObject({ matched: [{ pageMatch: "same" }] });
+    expect(priorityOf("hers-2022")).toBe(0);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });
 

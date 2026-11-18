@@ -5,6 +5,7 @@ import type { H3Event } from "h3";
 import { EXTRACT_ID_PATTERN } from "~~/shared/declarations";
 import { requireAdmin } from "./auth";
 import { linkedOnAPage, OVERVIEW_CACHE_BASE } from "./declarationDecisions";
+import { requeueCropPeople } from "./readingQueue";
 /** The start of an admin's decision on one crop (settle.post.ts,
  * withdraw.post.ts): the admin, checked before anything is read, the crop's
  * id from the route (a 404 for one that cannot be a crop's), and an answer
@@ -21,14 +22,17 @@ export async function decisionRequest(
   return { uid: admin.uid, id, db: getFirestore(getApp(), "koryta-pl") };
 }
 
-/** After a decision: the pages' cached answers go where a public page linked
- * the crop (`linkedOnAPage`) or the pass after it published somebody, and
- * the overview's always, so the reload shows the decision. */
+/** After a decision: the crop's people's other crops take their place in the
+ * readers' queue again (`requeueCrops`), as a crop taken back may have been
+ * the only reading of a person. The pages' cached answers go where a public
+ * page linked the crop (`linkedOnAPage`) or the pass after it published
+ * somebody, and the overview's always, so the reload shows the decision. */
 export async function afterDecision(
   db: Firestore,
   id: string,
   published = false,
 ): Promise<void> {
+  await requeueCropPeople(db, id);
   if (published || (await linkedOnAPage(db, id))) {
     await useStorage("cache").clear("nitro:handlers");
   }

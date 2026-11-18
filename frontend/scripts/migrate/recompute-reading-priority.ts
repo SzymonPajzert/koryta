@@ -1,17 +1,23 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { readingPriority } from "../../shared/declarations";
+import {
+  cropPriority,
+  readingPriority,
+  readingReached,
+} from "../../shared/declarations";
 import { isPublicEmployment } from "../../shared/stats";
 import type { Edge } from "../../shared/model";
 import { reportRemaining } from "./remaining";
 
 /**
- * One-time migration: recompute `priority` on every open crop, now that the
- * readers' queue puts the people the automation could publish first.
+ * One-time migration: recompute `priority` on every open crop (`cropPriority`
+ * in shared/declarations.ts), now that the readers' queue puts the people the
+ * automation could publish first.
  *
- * `priority` is what /api/declarations/next orders the queue by, and it is
- * written once, by /api/ingest/declarations, from the person pages a crop
- * names. Until 2026-11-04 it said only whether those pages were drafts and
+ * `priority` is what /api/declarations/next orders the queue by. It is
+ * written by /api/ingest/declarations, from the person pages a crop names,
+ * and moved by `requeueCrops` after a reading or an admin's decision. Until
+ * 2026-11-04 it said only whether those pages were drafts and
  * whether they carried a birth date; a draft with no paid public post on it
  * now sits behind both (`readingPriority`), because the automation holds such
  * a page rather than publishing it (`no_public_post` in
@@ -22,6 +28,13 @@ import { reportRemaining } from "./remaining";
  * goes on offering readers the people it offered yesterday. From here on the
  * ingest writes the new number itself.
  *
+ * Since 2026-11-18 the number also says whether a reading has reached every
+ * page the crop is for (`READ_PRIORITY`, the last tier), which on 2026-11-17
+ * was true of 1,634 open crops, and moves a crop half a tier back where the
+ * job read a full date off it that its page contradicts. A reading that
+ * reaches a page moves that page's crops from then on (`requeueCrops` in
+ * server/utils/readingQueue.ts); this moves the ones read before.
+ *
  * Open crops only: `priority` orders the queue, which asks for
  * `status == "open"`, and a settled crop is never offered again. A crop whose
  * pages are all gone is reported and left alone; there is nothing to order it
@@ -30,7 +43,8 @@ import { reportRemaining } from "./remaining";
  * Usage (against the running dev:prod-data emulator):
  *   npx tsx scripts/migrate/recompute-reading-priority.ts            # dry run
  *   npx tsx scripts/migrate/recompute-reading-priority.ts --commit   # apply
- * Against production:
+ * Against production, once production serves the code that writes the same
+ * numbers (an older release would write the old ones over these):
  *   npx tsx scripts/migrate/recompute-reading-priority.ts --prod --commit
  */
 
@@ -65,9 +79,27 @@ async function recompute() {
   const crops = await db
     .collection("declarationExtracts")
     .where("status", "==", "open")
-    .select("personIds", "priority")
+    .select("personIds", "priority", "machine.birthDate")
     .get();
   console.log(`Scanning ${crops.docs.length} open crop(s).`);
+
+  // The pages a reading has reached: every page a settled crop was compared
+  // with, as `requeueCrops` reads it page by page.
+  const settled = await db
+    .collection("declarationExtracts")
+    .where("status", "==", "agreed")
+    .select("status", "agreed.kind", "pageOutcomes")
+    .get();
+  const reached = new Set<string>();
+  for (const doc of settled.docs) {
+    const crop = doc.data();
+    for (const id of Object.keys(crop.pageOutcomes ?? {})) {
+      if (readingReached([crop], id)) reached.add(id);
+    }
+  }
+  console.log(
+    `${settled.docs.length} settled crop(s) have reached ${reached.size} page(s).`,
+  );
 
   const pageIds = new Set<string>();
   for (const doc of crops.docs) {
@@ -146,9 +178,14 @@ async function recompute() {
       noPage++;
       continue;
     }
-    // A crop takes the lowest of its pages', as the ingest writes it.
-    const next = Math.min(
-      ...mine.map((id) => readingPriority(pages.get(id)!, withAPost.has(id))),
+    // As the ingest writes it.
+    const next = cropPriority(
+      mine.map((id) => ({
+        tier: readingPriority(pages.get(id)!, withAPost.has(id)),
+        read: reached.has(id),
+        birthDate: pages.get(id)!.birthDate,
+      })),
+      doc.get("machine.birthDate"),
     );
     if (doc.get("priority") === next) {
       unchanged++;
