@@ -30,6 +30,12 @@ export type ReportFix = {
 export const REPORT_FIXES: ReportFix[] = [
   {
     change:
+      "Na /aktywnosc wszystkie wersje strony z jednego dnia są jednym blokiem „Nowa wersja strony”, w miejscu ostatniej z nich, z godzinami od pierwszej do ostatniej.",
+    fixes: ["oTw8eIwPSbcerxavRcTI"],
+    link: "/aktywnosc",
+  },
+  {
+    change:
       "Noc przelicza statystyki stron po wysłaniu osób, więc w wyszukiwarce linijkę ma każda osoba, także dodana wczoraj: „robert wó” pokazuje ją pod każdym Robertem Wójcikiem.",
     fixes: ["POKUmV90vYG0ImHIKXC7"],
     link: "/",

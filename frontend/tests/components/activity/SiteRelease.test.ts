@@ -46,6 +46,28 @@ describe("ActivitySiteRelease", () => {
     expect(wrapper.get("time").attributes("datetime")).toBe(AT);
   });
 
+  it("gives a day's rollouts as the span from the first to the last", async () => {
+    const day = await mountSuspended(SiteRelease, {
+      props: {
+        at: AT,
+        firstAt: "2026-09-25T07:05:00.000Z",
+        changes: [change("a"), change("b")],
+      },
+    });
+    // A hyphen, never a dash (decision on 2026-10-16).
+    expect(day.get("time").text()).toBe("09:05-15:45");
+
+    // Minutes apart, they read as one moment, as a sitting's line does.
+    const moment = await mountSuspended(SiteRelease, {
+      props: {
+        at: AT,
+        firstAt: "2026-09-25T13:42:00.000Z",
+        changes: [change("a")],
+      },
+    });
+    expect(moment.get("time").text()).toBe("15:45");
+  });
+
   it("names five changes and asks before the rest", async () => {
     const wrapper = await mountRelease(
       ["a", "b", "c", "d", "e", "f", "g"].map((id) => change(id)),

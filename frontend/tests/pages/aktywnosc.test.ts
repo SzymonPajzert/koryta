@@ -823,6 +823,36 @@ describe("/aktywnosc", () => {
       expect(releaseTexts(wrapper)[1]).toContain("1 zmiana");
     });
 
+    it("makes one block of a day's rollouts, where the last of them went live", async () => {
+      // autopush rolls out on every push to main, so a day of merges was a
+      // stack of „Nowa wersja strony” rows (decision on 2026-11-18).
+      serve({
+        7: feed({
+          ...contributorFeed(),
+          siteChanges: [
+            change("szukanie", "2026-09-21T16:10:00.000Z"),
+            change("tabela", "2026-09-21T09:45:00.000Z"),
+            change("mapa", "2026-09-21T09:45:00.000Z"),
+          ],
+        }),
+      });
+      const wrapper = await mountPage();
+
+      expect(releaseTexts(wrapper)).toHaveLength(1);
+      expect(releaseTexts(wrapper)[0]).toContain("3 zmiany");
+      // 09:45 and 16:10 UTC are 11:45 and 18:10 in Warsaw in September.
+      expect(releaseTexts(wrapper)[0]).toContain("11:45-18:10");
+      expect(days(wrapper)[1]).toEqual({
+        label: "Wczoraj",
+        lines: 1,
+        changes: [
+          expect.stringContaining("Zmiana szukanie"),
+          expect.stringContaining("Zmiana tabela"),
+          expect.stringContaining("Zmiana mapa"),
+        ],
+      });
+    });
+
     it("shows the site's changes alone on their own chip", async () => {
       serve({ 7: withReleases() });
       const wrapper = await mountPage();
