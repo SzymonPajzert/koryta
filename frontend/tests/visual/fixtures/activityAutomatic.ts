@@ -242,4 +242,5 @@ export const automaticFeed: ActivityFeed = {
   ],
   newAdmins: [],
   truncated: [],
+  siteChanges: [],
 };
