@@ -79,7 +79,7 @@ export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
   kept_hidden:
     "Administrator zostawił tę stronę ukrytą. Wyjdzie tylko opublikowana ręcznie.",
   pending_proposal:
-    "Na stronie czeka propozycja zmiany. Opublikuj ręcznie wersję z importu, propozycję rozpatrz potem.",
+    "Na stronie czeka propozycja zmiany. Opublikuj ręcznie, a propozycję rozpatrz potem.",
   name_differs:
     "Czytelnicy odczytali z oświadczenia inne imię albo nazwisko niż na stronie.",
   no_public_post:

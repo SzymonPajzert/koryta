@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "okno-publikacji-propozycja-zmiany",
+    title: "Okno publikacji mówi, gdy pokaże czyjąś propozycję zmiany",
+    description:
+      "Strona bez zatwierdzonej wersji wychodzi w najnowszej. Gdy to czyjaś propozycja zmiany, a nie wersja z importu, okno publikacji teraz to mówi.",
+    steps: [
+      "Na /admin/oswiadczenia wybierz powód „czeka propozycja zmiany od osoby” i kliknij „Opublikuj ręcznie” w kilku wierszach. Ramka u góry okna mówi, którą wersję pokaże, czasem „propozycję zmiany z …”. Zamknij okno bez publikacji.",
+    ],
+    link: "/admin/oswiadczenia",
+    area: "admin",
+  },
+  {
     id: "partia-imiennika-w-oknie-publikacji",
     title: "Okno publikacji pokazuje partię kandydatury w dwóch miejscach",
     description:

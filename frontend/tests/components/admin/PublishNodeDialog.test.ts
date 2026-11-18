@@ -523,6 +523,8 @@ describe("PublishNodeDialog.vue", () => {
           id: "rev-new",
           data: { name: "Jan Kowalski" },
           update_time: "2026-08-12T10:00:00Z",
+          update_automatic: true,
+          update_user: "pipeline",
         },
       ],
     };
@@ -530,7 +532,40 @@ describe("PublishNodeDialog.vue", () => {
     wrapper = mountDialog();
     await open(wrapper);
 
-    expect(el("publish-auto-approve")?.textContent).toContain("12.08.2026");
+    const alert = el("publish-auto-approve")?.textContent ?? "";
+    expect(alert).toContain("12.08.2026");
+    expect(alert).not.toContain("propozycję zmiany");
+  });
+
+  it("says so when the version it is about to publish is a person's proposal", async () => {
+    // The newest version is somebody's edit nobody has read: publishing
+    // approves it all the same, as the hold's „czeka propozycja zmiany” knows.
+    revisionsResponse = {
+      approvedRevisionId: null,
+      revisions: [
+        {
+          id: "rev-import",
+          data: { name: "Jan Kowalski" },
+          update_time: "2026-07-09T10:00:00Z",
+          update_automatic: true,
+          update_user: "pipeline",
+        },
+        {
+          id: "rev-person",
+          status: "pending",
+          data: { name: "Jan Kowalski" },
+          update_time: "2026-08-12T10:00:00Z",
+          update_user: "someone",
+        },
+      ],
+    };
+    serveRelations([]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(
+      el("publish-auto-approve")?.textContent.replace(/\s+/g, " "),
+    ).toContain("najnowszą wersję, propozycję zmiany z 12.08.2026");
   });
 
   it("says nothing about approving when every revision is unusable", async () => {
