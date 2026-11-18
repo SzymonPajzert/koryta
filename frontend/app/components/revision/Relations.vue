@@ -319,6 +319,7 @@ import { polishCounting } from "~/composables/polish";
 import { formatDaysAgo } from "~/utils/chartTheme";
 import { revisionStatusIcons } from "~/utils/revisionStatus";
 import type { RowTone } from "~/composables/rowTone";
+import { electionName } from "~~/shared/electionDays";
 import { proposalStatusLabels, type Proposal } from "~~/shared/proposals";
 import { placeClashes, type Candidacy } from "~~/shared/twoPlaces";
 import type {
@@ -494,6 +495,7 @@ const clashes = computed(() => {
           regionId: relation.other.id,
           startDate: relation.startDate,
           position: relation.position,
+          byElection: relation.byElection,
         }
       : undefined;
   const live = relations.value.filter(
@@ -504,13 +506,11 @@ const clashes = computed(() => {
   for (const draft of relations.value.filter((r) => r.state === "draft")) {
     for (const clash of placeClashes([...live, draft], candidacyOf)) {
       if (!clash.rows.includes(draft)) continue;
-      const election = clash.position
-        ? `${clash.year} · ${clash.position}`
-        : clash.year;
+      const election = electionName(clash.election) ?? clash.year;
       const places = clash.rows.map((row) => row.other.name || row.other.id);
       found.set(
         draft.id,
-        `Po publikacji strona pokaże tę osobę w dwóch miejscach w wyborach ${election}: ${places.join(" i ")}.`,
+        `Po publikacji strona pokaże tę osobę w dwóch miejscach naraz (${election}): ${places.join(" i ")}.`,
       );
     }
   }

@@ -431,11 +431,32 @@ describe("api/edges/byNode", () => {
     expect(relations["run"]).toMatchObject({
       startDate: "2002-01-01",
       position: "Samorząd",
+      byElection: false,
     });
     expect(relations["job"]).toMatchObject({
       startDate: null,
       position: null,
+      byElection: false,
     });
+  });
+
+  it("says when a candidacy was in a by-election", async () => {
+    // A contest of its own, which the dialog's two-places check leaves out,
+    // as the publication's hold does.
+    stored["nodes/teryt3003"] = publishedNode("Powiat gnieźnieński");
+    stored["edges/run"] = {
+      source: "node-1",
+      target: "teryt3003",
+      type: "election",
+      name: "kandydatura",
+      start_date: "2016-01-01",
+      position: "Rada gminy",
+      by_election: true,
+    };
+
+    const relations = byId(await callHandler());
+
+    expect(relations["run"]).toMatchObject({ byElection: true });
   });
 
   it("lists several runs in one place newest first", async () => {

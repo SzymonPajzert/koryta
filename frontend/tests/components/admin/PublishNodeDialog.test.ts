@@ -57,6 +57,7 @@ const relation = (overrides: Partial<NodeRelation> = {}): NodeRelation => ({
   published: false,
   startDate: null,
   position: null,
+  byElection: false,
   revisionToApprove: null,
   hasPendingRevision: false,
   publishable: true,
@@ -692,8 +693,10 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
     wrapper = mountDialog();
     await open(wrapper);
 
-    const block = el("publish-place-clash-2002-Samorząd") as HTMLElement;
-    expect(block.textContent).toContain("Wybory 2002 · Samorząd");
+    // Named by the election, not the office: one election's runs can be filed
+    // under several.
+    const block = el("publish-place-clash-local-2002") as HTMLElement;
+    expect(block.textContent).toContain("Samorządowe 2002 - dwa miejsca naraz");
     expect(
       block.querySelector('[data-testid="publish-relation-kozienice-2002"]')
         ?.textContent,
@@ -753,7 +756,9 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
     await click(checkbox("kozienice-2002"));
 
     const warning = el("publish-clash-after") as HTMLElement;
-    expect(warning.textContent).toContain("w wyborach 2002 · Samorząd");
+    expect(warning.textContent).toContain(
+      "w dwóch miejscach naraz (Samorządowe 2002)",
+    );
     expect(warning.textContent).toContain(
       "Powiat gnieźnieński i Powiat kozienicki",
     );
@@ -814,5 +819,95 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
     ).map((head) => head.textContent.trim());
     expect(heads[0]).toContain("2014");
     expect(heads[1]).toContain("2002");
+  });
+
+  /** Page 17p1pbAJ0ZBZqbUjDtOK on the 2026-11-18 export, held for two places:
+   * a gmina council run and a sejmik run of the 2024 local election, in
+   * places neither of which contains the other, beside a 2018 council run.
+   * Each run under an office of its own. */
+  const localElection2024 = () => [
+    candidacy("gmina-2024", "1414", "2024", {
+      position: "Rada gminy",
+      otherName: "Powiat nowodworski",
+    }),
+    candidacy("sejmik-2024", "24", "2024", {
+      position: "Sejmik",
+      otherName: "śląskie",
+    }),
+    candidacy("miasto-2018", "1465", "2018", {
+      position: "Rada miasta",
+      otherName: "Warszawa",
+    }),
+  ];
+
+  it("puts one election's runs in one block, whatever their offices", async () => {
+    serveRelations(localElection2024());
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    const blocks = document.body.querySelectorAll(".place-clash");
+    expect(blocks).toHaveLength(1);
+    const block = el("publish-place-clash-local-2024") as HTMLElement;
+    expect(block.textContent).toContain("Samorządowe 2024 - dwa miejsca naraz");
+    for (const id of ["gmina-2024", "sejmik-2024"]) {
+      expect(
+        block.querySelector(`[data-testid="publish-relation-${id}"]`),
+      ).not.toBeNull();
+    }
+    expect(
+      block.querySelector('[data-testid="publish-relation-miasto-2018"]'),
+    ).toBeNull();
+    expect(el("publish-relation-miasto-2018")).not.toBeNull();
+  });
+
+  it("ticks only the run outside the clash on „Zaznacz wszystkie”", async () => {
+    serveRelations(localElection2024());
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    await click(el("publish-select-all"));
+
+    expect(checkbox("miasto-2018")?.checked).toBe(true);
+    expect(checkbox("gmina-2024")?.checked).toBe(false);
+    expect(checkbox("sejmik-2024")?.checked).toBe(false);
+    expect(el("publish-clash-after")).toBeNull();
+
+    await click(confirmButton());
+
+    expect(publishedIds()).toEqual(["miasto-2018"]);
+  });
+
+  it("warns once both runs of the election are ticked", async () => {
+    serveRelations(localElection2024());
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    await click(checkbox("gmina-2024"));
+    expect(el("publish-clash-after")).toBeNull();
+    await click(checkbox("sejmik-2024"));
+
+    const warning = el("publish-clash-after") as HTMLElement;
+    expect(warning.textContent).toContain(
+      "w dwóch miejscach naraz (Samorządowe 2024): Powiat nowodworski i śląskie",
+    );
+  });
+
+  it("leaves a by-election out of the clash, as the hold does", async () => {
+    serveRelations([
+      candidacy("gniezno-2024", "3003", "2024", { position: "Rada gminy" }),
+      candidacy("kozienice-2024", "1407", "2024", {
+        position: "Rada gminy",
+        byElection: true,
+      }),
+    ]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(document.body.querySelector(".place-clash")).toBeNull();
+
+    await click(el("publish-select-all"));
+
+    expect(checkbox("kozienice-2024")?.checked).toBe(true);
+    expect(el("publish-clash-after")).toBeNull();
   });
 });
