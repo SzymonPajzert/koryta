@@ -90,7 +90,15 @@ export default defineEventHandler(async (event) => {
   const settledUnreadable =
     reader.votes && recorded.settled?.status === "unreadable";
   const [queue] = await Promise.all([
-    queueFor(db, reader.uid, 3, new Set([id, ...(body.holding ?? [])])),
+    // The crop's people are in hand: their next crop waits until this one
+    // has settled, and its place in the queue moves only once it has.
+    queueFor(
+      db,
+      reader.uid,
+      3,
+      new Set([id, ...(body.holding ?? [])]),
+      new Set(recorded.personIds),
+    ),
     settledOnDay
       ? compareSettled(event, db, [id], PAGES_PER_ANSWER)
       : settledUnreadable

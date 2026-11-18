@@ -679,13 +679,27 @@ describe("admitToQueue", () => {
   });
 });
 
+/** A crop of a person of its own, for the tests about the order alone. */
+function ownCrop(id: string, fields: Data = {}) {
+  crop(id, { personIds: [id], ...fields });
+}
+
+/** The ids of the crops a queue holds, the one to read first. */
+function served(queue: {
+  task: { id: string } | null;
+  upcoming: { id: string }[];
+}) {
+  return [queue.task?.id, ...queue.upcoming.map((t) => t.id)].filter(Boolean);
+}
+
 describe("queueFor", () => {
   it("serves drafts first, finishes half-read crops first, and never repeats one", async () => {
-    crop("published", { priority: 3, rand: 0.1 });
-    crop("fresh", { priority: 0, answerCount: 0, rand: 0.2 });
-    crop("half-read", { priority: 0, answerCount: 1, rand: 0.9 });
-    crop("undated-draft", { priority: 1, rand: 0.3 });
-    crop("settled", { status: "agreed", rand: 0.05 });
+    ownCrop("published", { priority: 3, rand: 0.1 });
+    ownCrop("fresh", { priority: 0, answerCount: 0, rand: 0.2 });
+    ownCrop("half-read", { priority: 0, answerCount: 1, rand: 0.9 });
+    ownCrop("undated-draft", { priority: 1, rand: 0.3 });
+    ownCrop("read-already", { priority: 4, rand: 0.01 });
+    ownCrop("settled", { status: "agreed", rand: 0.05 });
     stored.set("declarationAnswers/fresh_a", {
       uid: "a",
       counted: true,
@@ -694,10 +708,11 @@ describe("queueFor", () => {
 
     const queue = await queueFor(firestore, "a", 5);
 
-    expect([queue.task?.id, ...queue.upcoming.map((t) => t.id)]).toEqual([
+    expect(served(queue)).toEqual([
       "half-read",
       "undated-draft",
       "published",
+      "read-already",
     ]);
     expect(queue.task).toMatchObject({
       unit: "Strzelin",
@@ -715,7 +730,7 @@ describe("queueFor", () => {
     expect(JSON.stringify(queue)).not.toMatch(
       /kowalska|birth|\d{4}-\d{2}-\d{2}/,
     );
-    expect(queue.open).toBe(4);
+    expect(queue.open).toBe(5);
     expect(queue.mine.total).toBe(1);
   });
 
@@ -738,39 +753,115 @@ describe("queueFor", () => {
   });
 
   it("leaves out the crops the page already holds", async () => {
-    crop("one", { rand: 0.1 });
-    crop("two", { rand: 0.2 });
+    ownCrop("one", { rand: 0.1 });
+    ownCrop("two", { rand: 0.2 });
     const queue = await queueFor(firestore, "a", 3, new Set(["one"]));
     expect(queue.task?.id).toBe("two");
     expect(queue.upcoming).toEqual([]);
   });
 
   it("serves a reader without an account like any other: never a crop twice, and their own count", async () => {
-    crop("one", { rand: 0.1 });
-    crop("two", { rand: 0.2 });
+    ownCrop("one", { rand: 0.1 });
+    ownCrop("two", { rand: 0.2 });
     await answerAs(stranger(1), "1979-07-15", "one");
 
     const queue = await queueFor(firestore, stranger(1).uid, 3);
 
-    expect([queue.task?.id, ...queue.upcoming.map((t) => t.id)]).toEqual([
-      "two",
-    ]);
+    expect(served(queue)).toEqual(["two"]);
     expect(queue.mine.total).toBe(1);
   });
 
   it("finishes first the crops a vote short, not those only answers without a vote reached", async () => {
-    crop("voted", { rand: 0.9 });
-    crop("unvoted", { rand: 0.1 });
+    ownCrop("voted", { rand: 0.9 });
+    ownCrop("unvoted", { rand: 0.1 });
     await answer("a", "1979-07-15", "voted");
     await answerAs(stranger(1), "1979-07-15", "unvoted");
     await answerAs(stranger(2), "1979-07-15", "unvoted");
 
     const queue = await queueFor(firestore, "b", 3);
 
-    expect([queue.task?.id, ...queue.upcoming.map((t) => t.id)]).toEqual([
-      "voted",
-      "unvoted",
-    ]);
+    expect(served(queue)).toEqual(["voted", "unvoted"]);
+  });
+
+  describe("one crop a person", () => {
+    it("serves the first of a person's crops in the queue's order, and the next person's", async () => {
+      crop("hers-1", { personIds: ["kowalska"], rand: 0.1 });
+      crop("hers-2", { personIds: ["kowalska"], rand: 0.2 });
+      crop("his", { personIds: ["nowak"], rand: 0.3 });
+      crop("hers-3", { personIds: ["kowalska"], rand: 0.4 });
+
+      expect(served(await queueFor(firestore, "a", 5))).toEqual([
+        "hers-1",
+        "his",
+      ]);
+    });
+
+    it("sends every reader to the same crop of a person, until it settles", async () => {
+      crop("hers-1", { personIds: ["kowalska"], rand: 0.1 });
+      crop("hers-2", { personIds: ["kowalska"], rand: 0.2 });
+      crop("his", { personIds: ["nowak"], rand: 0.3 });
+      await answer("a", "1979-07-15", "hers-1");
+
+      // Her crop waits for a second reader: not her next one for this reader.
+      expect(served(await queueFor(firestore, "a", 5))).toEqual(["his"]);
+      // Anybody else is sent to finish it.
+      expect(served(await queueFor(firestore, "b", 5))).toEqual([
+        "hers-1",
+        "his",
+      ]);
+
+      await answer("b", "1979-07-15", "hers-1");
+      // Settled: her next crop is the one to read, the ingest's or a
+      // comparison's number saying where (`requeueCrops`).
+      expect(served(await queueFor(firestore, "c", 5))).toEqual([
+        "hers-2",
+        "his",
+      ]);
+    });
+
+    it("holds a reader's crops without a vote the same way", async () => {
+      crop("hers-1", { personIds: ["kowalska"], rand: 0.1 });
+      crop("hers-2", { personIds: ["kowalska"], rand: 0.2 });
+      crop("his", { personIds: ["nowak"], rand: 0.3 });
+      await answerAs(stranger(1), "1979-07-15", "hers-1");
+
+      expect(served(await queueFor(firestore, stranger(1).uid, 5))).toEqual([
+        "his",
+      ]);
+    });
+
+    it("passes over the people of the crops the page holds, and those it is told of", async () => {
+      crop("hers-1", { personIds: ["kowalska"], rand: 0.1 });
+      crop("hers-2", { personIds: ["kowalska"], rand: 0.2 });
+      crop("his", { personIds: ["nowak"], rand: 0.3 });
+
+      expect(
+        served(await queueFor(firestore, "a", 5, new Set(["hers-1"]))),
+      ).toEqual(["his"]);
+      // The crop just answered may have settled and left the queue.
+      expect(
+        served(
+          await queueFor(
+            firestore,
+            "a",
+            5,
+            new Set(["gone"]),
+            new Set(["kowalska"]),
+          ),
+        ),
+      ).toEqual(["his"]);
+    });
+
+    it("serves a crop of two people while one of them has none in hand", async () => {
+      crop("hers", { personIds: ["kowalska"], rand: 0.1 });
+      crop("theirs", { personIds: ["kowalska", "nowak"], rand: 0.2 });
+      crop("his", { personIds: ["nowak"], rand: 0.3 });
+
+      expect(served(await queueFor(firestore, "a", 5))).toEqual([
+        "hers",
+        "theirs",
+      ]);
+    });
   });
 });
 
