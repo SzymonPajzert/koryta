@@ -177,6 +177,11 @@ describe("api/declarations/[id]/answer", () => {
     expect(ids).toEqual([ID]);
     expect(limit).toBe(4);
     expect(options).toEqual({ maxPages: 1 });
+    // The next crops are of other people: this one settled hers, and her
+    // other crops move in the queue only once the comparison has run.
+    const [, , , exclude, people] = mocks.queueFor.mock.calls[0]!;
+    expect([...exclude]).toEqual([ID]);
+    expect([...people]).toEqual(["kowalska"]);
   });
 
   it("compares nothing for an answer that settles nothing, or settles a year", async () => {

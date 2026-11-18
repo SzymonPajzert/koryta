@@ -285,13 +285,22 @@ export function taskOf(
 /** The crops this reader should read next, most useful first.
  *
  * Drafts the automation could publish first, then the drafts it could not,
- * then published pages (`priority`, written by /api/ingest/declarations - see
- * `LivePage` there for the four tiers), and within a
- * tier the crops one reader already answered: a second reading is what
+ * then published pages, and last the crops of people a reading has reached
+ * already (`priority`, `cropPriority` in shared/declarations.ts), and within
+ * a tier the crops one reader already answered: a second reading is what
  * settles a crop, so readers are sent where one is missing before they start
  * new ones. Only answers that vote count here (`answerCount`), as only they
  * settle anything. A crop this reader answered or skipped is never served
  * again, with an account or under a browser's reader id alike.
+ *
+ * One crop a person: the first of theirs in that order, which every reader
+ * is sent to alike, settles them, and their next one is served only once it
+ * has left the queue. Readers spread over a person's several crops each give
+ * a first reading that waits for a second, where one crop settled is
+ * enough. So a person this reader has a crop of in hand already - one they
+ * answered that waits for another reader, one the page holds (`exclude`),
+ * one of `people` - is passed over, and so is a crop whose people all have
+ * one among those picked here.
  *
  * Pages through the open crops with a cursor rather than an offset, which
  * Firestore bills per skipped document. */
@@ -300,8 +309,11 @@ export async function nextTasks(
   uid: string,
   count: number,
   exclude: ReadonlySet<string> = new Set(),
+  people: ReadonlySet<string> = new Set(),
 ): Promise<DeclarationTask[]> {
   const picked: DocumentSnapshot[] = [];
+  /** People the reader has a crop of in hand, or is about to. */
+  const inHand = new Set(people);
   let cursor: DocumentSnapshot | undefined;
   for (let page = 0; page < 6 && picked.length < count; page++) {
     let query = db
@@ -317,13 +329,30 @@ export async function nextTasks(
     cursor = snapshot.docs.at(-1);
 
     const fresh = snapshot.docs.filter((doc) => !exclude.has(doc.id));
-    if (fresh.length === 0) continue;
-    const mine = await db.getAll(
-      ...fresh.map((doc) => db.collection(ANSWERS).doc(answerId(doc.id, uid))),
+    const mine =
+      fresh.length > 0
+        ? await db.getAll(
+            ...fresh.map((doc) =>
+              db.collection(ANSWERS).doc(answerId(doc.id, uid)),
+            ),
+          )
+        : [];
+    const answered = new Set(
+      fresh.filter((_, i) => mine[i]!.exists).map((doc) => doc.id),
     );
-    fresh.forEach((doc, i) => {
-      if (!mine[i]!.exists && picked.length < count) picked.push(doc);
-    });
+    for (const doc of snapshot.docs) {
+      if (exclude.has(doc.id) || answered.has(doc.id)) {
+        for (const id of personIdsOf(doc)) inHand.add(id);
+      }
+    }
+    for (const doc of fresh) {
+      if (picked.length >= count) break;
+      if (answered.has(doc.id)) continue;
+      const its = personIdsOf(doc);
+      if (its.length > 0 && its.every((id) => inHand.has(id))) continue;
+      for (const id of its) inHand.add(id);
+      picked.push(doc);
+    }
   }
   if (picked.length === 0) return [];
 
@@ -335,17 +364,29 @@ export async function nextTasks(
     .filter((task): task is DeclarationTask => task !== null);
 }
 
-/** What /oswiadczenia needs: the next crops and the counts around them. */
+/** The people a crop is for, as stored. */
+function personIdsOf(doc: DocumentSnapshot): string[] {
+  const ids: unknown = doc.get("personIds");
+  return Array.isArray(ids)
+    ? ids.filter((id): id is string => typeof id === "string" && id !== "")
+    : [];
+}
+
+/** What /oswiadczenia needs: the next crops and the counts around them.
+ * `people` are those the reader has a crop of in hand that `exclude` alone
+ * does not tell: the people of the crop just answered, which may have left
+ * the queue with that answer (`nextTasks`). */
 export async function queueFor(
   db: Firestore,
   uid: string,
   count: number,
   exclude: ReadonlySet<string> = new Set(),
+  people: ReadonlySet<string> = new Set(),
 ): Promise<DeclarationQueue> {
   const today = warsawDate();
   const mine = db.collection(ANSWERS).where("uid", "==", uid);
   const [tasks, open, total, todays, found] = await Promise.all([
-    nextTasks(db, uid, count, exclude),
+    nextTasks(db, uid, count, exclude, people),
     db.collection(EXTRACTS).where("status", "==", "open").count().get(),
     mine.where("counted", "==", true).count().get(),
     mine.where("counted", "==", true).where("day", "==", today).count().get(),
