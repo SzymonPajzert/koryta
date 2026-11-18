@@ -1,5 +1,5 @@
-/** The short line the search box draws under a person, so that two people of
- * one name can be told apart before either is opened.
+/** The short line the search box draws under a person who shares a name with
+ * another hit, so that the two can be told apart before either is opened.
  *
  * Seen 2026-11-10: a reader walking Mielec's town council typed „robert wó”
  * and opened Robert Wójcik of TAURON rather than the Mielec councillor, and
@@ -8,19 +8,18 @@
  * which: `/api/search` sent a person's id, name and type, and the box drew a
  * line under parties only.
  *
- * Where it says, then what: the town or region first, because that is what a
- * reader looking somebody up already knows, then the office or the company.
- * Which of a person's ties it names is `personSearchLine`'s rule.
+ * Under namesakes only, on one line, the town first: decided 2026-11-18 on
+ * board round search-same-name-r1. The town is what a reader looking somebody
+ * up already knows. Then the party of a published person, then the office or
+ * the company: „Mielec · PiS · Rada miasta 2024”. Which tie the line names is
+ * `personSearchLine`'s rule, and which town `lineTown`'s.
  *
  * Nothing here reads anything. The search answers from documents it has
  * already read, so the line has to be stored on the person's own document
- * (`stats.searchLine`), by what already holds a person's ties, the names at
- * their far ends and the revisions that say who wrote them:
- * `/api/stats/computeNodes` reads every node, edge and revision anyway. The
- * edge stats sweeper's `getAll` of every target could keep the two scopes of
- * published and all ties fresh in between at no extra read. Nothing writes it
- * yet: what it says is being decided on the design board first (round
- * search-same-name-r1).
+ * (`stats.searchLine`), by what already holds a person's ties, the nodes at
+ * their far ends, the seat and owner edges of those, and the revisions that
+ * say who wrote them: `/api/stats/computeNodes` reads every node, edge and
+ * revision anyway. Nothing writes it yet.
  */
 
 import { asArray } from "./model";
@@ -52,17 +51,26 @@ export type LineEdge = {
   deleted?: boolean;
 };
 
-/** The node at the far end of a tie, as much of it as the line reads. */
+/** A node the line reads: the far end of a tie, or a region a company sits in
+ * or belongs to. */
 export type LineTarget = {
   type?: string;
   name?: string;
   deleted?: boolean;
+  /** A region's TERYT code: 2 digits a województwo, 4 a powiat or a city
+   * with powiat rights, 7 a gmina. */
+  teryt?: string;
+  /** A company's registered seat: the region its `seat` edge comes from, a
+   * powiat or a city with powiat rights for most of them. */
+  seat?: string;
+  /** The regions that own a company, by their `owns` edges. */
+  owners?: readonly string[];
 };
 
-/** What the line says, stored on the person per scope. */
+/** What the line says, stored on the person per kind of reader. */
 export type SearchLine = {
-  /** The town of the company, or the region of the run: „Jelenia Góra”,
-   * „powiat mielecki”. */
+  /** The town the person is active in („Mielec”), or where no town can be
+   * named, the region („powiat sztumski”, „podlaskie”). */
   where?: string;
   /** The office won, or the company: „Rada miasta”, „TAURON DYSTRYBUCJA”. */
   what?: string;
@@ -87,9 +95,9 @@ const LATEST_ELECTIONS: ReadonlySet<ElectionKey> = new Set(
     .map((option) => option.value),
 );
 
-/** A region's name as a line says it: „Gmina Mielec” is the town, „Powiat
- * mielecki” and „Województwo mazowieckie” lose the capital they carry at the
- * start of a page title. */
+/** A region's name as a line says it: „Gmina Mielec” and „Miasto Warszawa”
+ * are the town, „Powiat mielecki” and „Województwo mazowieckie” lose the
+ * capital they carry at the start of a page title. */
 export function placeName(name: string): string {
   const trimmed = name.replace(/\s+/g, " ").trim();
   const gmina = /^(?:Gmina|Miasto)\s+(.+)$/u.exec(trimmed);
@@ -101,23 +109,102 @@ export function placeName(name: string): string {
   return trimmed;
 }
 
-/** A company's register name as a line says it, and the town its bracket
- * names. Where the name carries a name of its own in quotes, the quotes are
- * the company: „PRZEDSIĘBIORSTWO WODOCIĄGÓW I KANALIZACJI "WODNIK"” is
- * „„WODNIK””. */
-export function companyName(name: string): { what: string; where?: string } {
-  const [called, town] = splitQualifier(name.replace(/\s+/g, " "), "place");
+/** A company's register name as a line says it: without the town its bracket
+ * names, and where it carries a name of its own in quotes, the quotes alone -
+ * „PRZEDSIĘBIORSTWO WODOCIĄGÓW I KANALIZACJI "WODNIK"” is „„WODNIK””. */
+export function companyName(name: string): string {
+  const [called] = splitQualifier(name.replace(/\s+/g, " "), "place");
   const quoted = /["„”]([^"„”]{2,})["„”]/u.exec(called);
-  const what = quoted ? `„${quoted[1]!.trim()}”` : called.trim();
-  return town ? { what, where: town.trim() } : { what };
+  return quoted ? `„${quoted[1]!.trim()}”` : called.trim();
+}
+
+/** The town a region is, or nothing for a region that is no town: a gmina
+ * and a city with powiat rights are one, a powiat and a województwo are not. */
+function regionTown(region: LineTarget | undefined): string | undefined {
+  if (!region?.name || region.deleted === true) return undefined;
+  const code = region.teryt ?? "";
+  if (code.length === 7) return placeName(region.name);
+  if (code.length === 4 && !/^Powiat\s/u.test(region.name.trim())) {
+    return placeName(region.name);
+  }
+  return undefined;
+}
+
+/** Where a tie is: the town, where one can be named, the TERYT code of the
+ * region it lies in, and that region as a line says it. */
+type Place = { town?: string; area?: string; region?: string };
+
+function regionPlace(region: LineTarget | undefined): Place {
+  return {
+    town: regionTown(region),
+    area: region?.teryt,
+    region: region?.name ? placeName(region.name) : undefined,
+  };
+}
+
+/** Where a company is. The town in its name's bracket, which is the seat the
+ * register gives; else its seat, where that is a town; else the one gmina
+ * inside its seat that owns it, or the one town of several - a company a
+ * single gmina owns is that gmina's. Most seats are a powiat, which is no
+ * town: „CECH RZEMIOSŁ RÓŻNYCH W SZTUMIE” has nothing but powiat sztumski. */
+function companyPlace(
+  company: LineTarget,
+  targets: ReadonlyMap<string, LineTarget>,
+): Place {
+  const [, bracket] = splitQualifier(
+    (company.name ?? "").replace(/\s+/g, " "),
+    "place",
+  );
+  const seat = company.seat ? targets.get(company.seat) : undefined;
+  const within = (code: string | undefined) =>
+    !seat?.teryt || (code ?? "").startsWith(seat.teryt);
+  const gminas = (company.owners ?? [])
+    .map((id) => targets.get(id))
+    .filter(
+      (region): region is LineTarget =>
+        region?.teryt?.length === 7 && within(region.teryt),
+    );
+  const towns = gminas.filter((region) => region.teryt!.endsWith("1"));
+  const owner =
+    gminas.length === 1 ? gminas[0] : towns.length === 1 ? towns[0] : undefined;
+  return {
+    town: bracket.trim() || regionTown(seat) || regionTown(owner),
+    area: seat?.teryt ?? owner?.teryt,
+    region: seat?.name ? placeName(seat.name) : undefined,
+  };
 }
 
 function yearOf(date: string | null | undefined): string | undefined {
   return /^(\d{4})/.exec(date ?? "")?.[1];
 }
 
-/** The line for a person, from their ties and the nodes those lead to (keyed
- * by id), or nothing where no tie says anything.
+/** The town a line leads with, for the tie it names.
+ *
+ * The tie's own, where it has one. A run is filed under the powiat it was in,
+ * which is no town - every local run is, „Rada miasta” in Mielec included -
+ * so failing that, the town of the person's latest other tie inside the
+ * same region: a run under „Powiat mielecki” beside a post at a company in
+ * Mielec is Mielec. Failing both, the region itself, which is true if it
+ * says less. */
+function lineTown(
+  subject: LineEdge,
+  byRecency: readonly LineEdge[],
+  placeOf: (edge: LineEdge) => Place,
+): string | undefined {
+  const own = placeOf(subject);
+  if (own.town) return own.town;
+  if (own.area) {
+    for (const tie of byRecency) {
+      if (tie.id === subject.id) continue;
+      const place = placeOf(tie);
+      if (place.town && place.area?.startsWith(own.area)) return place.town;
+    }
+  }
+  return own.region;
+}
+
+/** The line for a person, from their ties and the nodes the line reads
+ * (keyed by id), or nothing where no tie says anything.
  *
  * Which tie, in this order:
  * 1. a seat won in the newest election of its kind - the office they hold now,
@@ -158,18 +245,46 @@ export function personSearchLine(
       edge.type === "employed" && targets.get(edge.target)?.type === "place",
   );
 
-  const runLine = (run: LineEdge): SearchLine => {
-    const where = placeName(targets.get(run.target)!.name!);
-    const year = yearOf(run.start_date)!;
-    const office = run.position?.trim();
-    return run.elected === true && office && office !== "Samorząd"
-      ? { where, what: office, when: year }
-      : { where, what: "wybory", when: year };
+  // Every tie, latest first: posts still held, then by when each ended or
+  // was run, for the town of a tie that names none (`lineTown`).
+  const held = (edge: LineEdge) => {
+    const end = spellDate(edge.end_date);
+    return end === null || end >= today;
   };
-  const postLine = (post: LineEdge, held: boolean): SearchLine => {
-    const company = companyName(targets.get(post.target)!.name!);
-    const ended = held ? undefined : yearOf(post.end_date);
-    return { ...company, ...(ended ? { when: `do ${ended}` } : {}) };
+  const lastSeen = (edge: LineEdge) =>
+    edge.type === "employed"
+      ? held(edge)
+        ? Number.MAX_SAFE_INTEGER
+        : (spellDate(edge.end_date) ?? 0)
+      : Date.parse(`${yearOf(edge.start_date)}-12-31`);
+  const byRecency = [...posts, ...runs].toSorted(
+    (a, b) => lastSeen(b) - lastSeen(a) || a.id.localeCompare(b.id),
+  );
+  const placeOf = (edge: LineEdge): Place => {
+    const target = targets.get(edge.target)!;
+    return edge.type === "employed"
+      ? companyPlace(target, targets)
+      : regionPlace(target);
+  };
+
+  const runLine = (run: LineEdge): SearchLine => {
+    const office = run.position?.trim();
+    return {
+      where: lineTown(run, byRecency, placeOf),
+      what:
+        run.elected === true && office && office !== "Samorząd"
+          ? office
+          : "wybory",
+      when: yearOf(run.start_date)!,
+    };
+  };
+  const postLine = (post: LineEdge, isHeld: boolean): SearchLine => {
+    const ended = isHeld ? undefined : yearOf(post.end_date);
+    return {
+      where: lineTown(post, byRecency, placeOf),
+      what: companyName(targets.get(post.target)!.name!),
+      ...(ended ? { when: `do ${ended}` } : {}),
+    };
   };
 
   const won = runs.filter((run) => run.elected === true);
@@ -185,18 +300,17 @@ export function personSearchLine(
 
   // Held as the teaser counts it: no end, or an end still ahead.
   const latestPost = mostRecentPost(posts, today);
-  const end = spellDate(latestPost?.end_date);
-  if (latestPost && (end === null || end >= today)) {
-    return postLine(latestPost, true);
-  }
+  if (latestPost && held(latestPost)) return postLine(latestPost, true);
 
   // The rest by year; on one year a seat won, then a post, then a run.
-  const candidates: { year: string; rank: number; line: SearchLine }[] = [];
+  const candidates: { year: string; rank: number; line: () => SearchLine }[] =
+    [];
   if (won[0]) {
+    const run = won[0];
     candidates.push({
-      year: yearOf(won[0].start_date)!,
+      year: yearOf(run.start_date)!,
       rank: 0,
-      line: runLine(won[0]),
+      line: () => runLine(run),
     });
   }
   if (latestPost) {
@@ -205,19 +319,20 @@ export function personSearchLine(
       candidates.push({
         year: ended,
         rank: 1,
-        line: postLine(latestPost, false),
+        line: () => postLine(latestPost, false),
       });
     }
   }
   if (runs[0]) {
+    const run = runs[0];
     candidates.push({
-      year: yearOf(runs[0].start_date)!,
+      year: yearOf(run.start_date)!,
       rank: 2,
-      line: runLine(runs[0]),
+      line: () => runLine(run),
     });
   }
   candidates.sort((a, b) => b.year.localeCompare(a.year) || a.rank - b.rank);
-  return candidates[0]?.line;
+  return candidates[0]?.line();
 }
 
 /** The lines stored on a person, one per kind of reader.
@@ -238,12 +353,12 @@ export type StoredSearchLines = {
  *
  * A logged out reader is told of an unpublished person what its teaser page
  * would tell them and no more: the latest post, never a party or a run
- * (`shared/personTeaser.ts`). Nobody is told an unpublished person's parties
- * here: they are PKW matches nobody has checked, and on the 11-18 export the
+ * (`shared/personTeaser.ts`), as decided 2026-11-18 on board round
+ * search-same-name-r1. Nobody is told an unpublished person's parties here:
+ * they are PKW matches nobody has checked, and on the 11-18 export the
  * fifteen Krzysztof Nowaks a signed in reader is offered carried up to six
- * each, the same few on most of them - a line that leads with them tells
- * namesakes apart less than one that does not. The line is read off the
- * document the search already holds; it costs no read of its own.
+ * each, the same few on most of them. The line is read off the document the
+ * search already holds; it costs no read of its own.
  */
 export function hitLine(
   node: {
@@ -277,20 +392,17 @@ export function hitLine(
   return Object.keys(line).length > 0 ? line : undefined;
 }
 
-/** The line as the box prints it. `short` is where alone („PiS · powiat
- * mielecki”), and the full one says what is there too („PiS · powiat
- * mielecki, Rada miasta 2024”). */
-export function hitLineText(
-  line: HitLine | undefined,
-  form: "full" | "short" = "full",
-): string {
+/** The line as the box prints it: the town, the parties, then what and when.
+ * „Mielec · PiS · Rada miasta 2024”, „Jelenia Góra · „WODNIK” do 2025”. */
+export function hitLineText(line: HitLine | undefined): string {
   if (!line) return "";
-  const what = [line.what, line.when].filter(Boolean).join(" ");
-  const said =
-    form === "short"
-      ? (line.where ?? what)
-      : [line.where, what].filter(Boolean).join(", ");
-  return [line.parties?.join(", "), said].filter(Boolean).join(" · ");
+  return [
+    line.where,
+    line.parties?.join(", "),
+    [line.what, line.when].filter(Boolean).join(" "),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /** Which of `names` belong to namesakes: people who share a surname and a
