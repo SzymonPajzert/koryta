@@ -6,6 +6,7 @@ import pytest
 
 from analysis.payloads import CompaniesPayloads, PeoplePayloads, RegionPayloads
 from analysis.payloads.person import _extract_elections
+from analysis.payloads.region import gminy_with_a_government, map_region_payload
 from scrapers.map.jst import SKARB_PANSTWA
 from scrapers.stores import Context, Pipeline, ProcessPolicy
 
@@ -336,6 +337,40 @@ def test_upload_payloads_region_shape(mock_ctx):
     assert edge["source"] == "teryt14"
     assert edge["target"] == "teryt1465"
     assert edge["type"] == "owns"
+
+
+def test_every_gmina_with_a_government_gets_a_region_node():
+    """Szymon, 2026-11-18: a region page for every gmina, each showing who
+    governs it - so not only the gminy that own a company."""
+    assert gminy_with_a_government(
+        [
+            "10",  # a województwo: emitted anyway, not a gmina
+            "1005",  # a powiat, likewise
+            "1005011",  # Gmina Łowicz, urban
+            "1005022",  # a rural gmina
+            "1005033",  # an urban-rural gmina
+            "1005034",  # its town half, which governs nothing
+            "1005035",  # and its rural half
+            "1061011",  # Łódź's own gmina row: its government is on teryt1061
+            "1465108",  # a Warsaw district
+            "1261019",  # a Kraków delegatura, which elects nobody
+        ]
+    ) == frozenset({"1005011", "1005022", "1005033", "1465108"})
+
+
+def test_a_warsaw_district_is_named_as_the_site_names_the_seven_it_has():
+    payload = map_region_payload(
+        pd.Series({"id": "1465108", "name": "Mokotów", "parent_id": "1465"}),
+        frozenset({"1465108"}),
+    )
+    assert payload is not None
+    assert payload["name"] == "Mokotów (Warszawa)"
+    gmina = map_region_payload(
+        pd.Series({"id": "1005022", "name": "Łowicz", "parent_id": "1005"}),
+        frozenset({"1005022"}),
+    )
+    assert gmina is not None
+    assert gmina["name"] == "Gmina Łowicz"
 
 
 def test_upload_payloads_company_shape(mock_ctx, monkeypatch):
