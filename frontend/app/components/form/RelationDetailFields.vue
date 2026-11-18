@@ -75,7 +75,7 @@
         />
       </v-col>
       <!-- A win only. Unticked is "nobody said", not "lost": the server stores
-           nothing for it, and the page draws „Wybrany" for a win and nothing
+           nothing for it, and the page draws „Wybrany/a" for a win and nothing
            otherwise - see `elected` in shared/api.ts. -->
       <v-col cols="12">
         <v-checkbox

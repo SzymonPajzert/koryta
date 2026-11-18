@@ -135,7 +135,7 @@ export const revisionFieldLabels: Record<string, string> = {
   party: "partia",
   committee: "komitet",
   references: "źródła",
-  elected: "wybrany",
+  elected: "wybrany/a",
   term: "kadencja",
   by_election: "wybory uzupełniające",
 };

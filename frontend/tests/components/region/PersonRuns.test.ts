@@ -59,8 +59,7 @@ describe("RegionPersonRuns", () => {
   it("says a won seat without a gender", async () => {
     const box = await mountBox();
     const newest = box.get('[data-testid="person-run-e2024"]');
-    expect(newest.text()).toContain("Z mandatem");
-    expect(box.text()).not.toContain("Wybrany");
+    expect(newest.text()).toContain("Wybrany/a");
   });
 
   it("opens the older runs in place and hands focus to the first one it opened", async () => {

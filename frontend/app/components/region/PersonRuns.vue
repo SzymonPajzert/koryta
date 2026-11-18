@@ -55,7 +55,7 @@
                 color="success"
                 variant="flat"
               >
-                Z mandatem
+                Wybrany/a
               </v-chip>
             </template>
           </div>

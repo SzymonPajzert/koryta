@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "wybrany-a-przy-mandacie",
+    title: "Zdobyty mandat jako „Wybrany/a”",
+    description:
+      "Przy wygranym starcie w wyborach stoi „Wybrany/a” zamiast „Wybrany”, bo nie zapisujemy płci.",
+    steps: [
+      "Otwórz stronę osoby, która zdobyła mandat - przy starcie w wyborach jest „Wybrany/a”.",
+      "Na stronie regionu rozwiń listę wyborczą - przy osobach z mandatem jest „Wybrany/a”.",
+    ],
+    area: "public",
+  },
+  {
     id: "wladze-regionu-z-pkw",
     title: "Władze gminy, powiatu i województwa, z możliwością poprawki",
     description:

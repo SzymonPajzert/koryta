@@ -74,7 +74,7 @@ async function headerAndLedger(page: Page, testInfo: TestInfo) {
   await expect(history.getByTestId("history-box-people")).toContainText(
     "Jacek Testowy",
   );
-  // A candidacy prints its year, and the „Wybrany” it won.
+  // A candidacy prints its year, and the „Wybrany/a” it won.
   await expect(history.getByTestId("edge-period-vishalinarada")).toContainText(
     "2018",
   );

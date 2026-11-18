@@ -57,7 +57,7 @@ describe("CardEmploymentHistory", () => {
     expect(wrapper.find('[data-testid="edge-elected-won"]').exists()).toBe(
       true,
     );
-    expect(wrapper.text()).toContain("Wybrany");
+    expect(wrapper.text()).toContain("Wybrany/a");
   });
 
   it("says nothing about a candidacy that carries no win", async () => {

@@ -23,15 +23,15 @@
           }}
         </div>
         <div v-if="election.committee">{{ election.committee }}</div>
-        <div v-if="election.elected === true">Wybrany</div>
-        <div v-else-if="election.elected === false">Nie wybrany</div>
+        <div v-if="election.elected === true">Wybrany/a</div>
+        <div v-else-if="election.elected === false">Nie wybrany/a</div>
       </v-tooltip>
       <v-icon
         v-if="election.elected === true"
         :icon="mdiCheckCircle"
         size="14"
         class="mr-1 election-won"
-        aria-label="wybrany"
+        aria-label="wybrany/a"
       />
       <span v-if="election.year" class="font-weight-bold mr-1">
         {{ election.year }}

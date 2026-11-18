@@ -1,9 +1,9 @@
 <template>
   <!-- The people on one election list, a row each: the name, what they stood
-       for, their parties and whether they won the seat. The seat in the
-       words of the list's own count („w tym 3 z mandatem”), not
-       „Wybrany”: that would have to agree in gender with a name, and
-       nothing stores anybody's (shared/activityFeed.ts). -->
+       for, their parties and whether they won the seat - „Wybrany/a”, as
+       every page says a win: nothing stores anybody's grammatical gender
+       (shared/activityFeed.ts), and Szymon chose the slash over another
+       wording (2026-11-18). -->
   <ul
     class="list-members"
     :class="{ 'list-members--indent': indent }"
@@ -51,7 +51,7 @@
         color="success"
         variant="flat"
       >
-        Z mandatem
+        Wybrany/a
       </v-chip>
     </li>
   </ul>
@@ -69,7 +69,7 @@ defineProps<{
   highlightId?: string;
   /** A step in from the left, for a list opened under its own head. */
   indent?: boolean;
-  /** Without the offices and the „Z mandatem” chip: for a council's members,
+  /** Without the offices and the „Wybrany/a” chip: for a council's members,
    * where every row would say the same of both. */
   plain?: boolean;
 }>();

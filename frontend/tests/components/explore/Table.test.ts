@@ -1002,7 +1002,7 @@ describe("ExploreTable's matched and won runs", () => {
     expect(chips[0]!.find(".election-won").exists()).toBe(false);
     expect(chips[1]!.find(".election-won").exists()).toBe(true);
     expect(chips[1]!.find(".election-won").attributes("aria-label")).toBe(
-      "wybrany",
+      "wybrany/a",
     );
   });
 });

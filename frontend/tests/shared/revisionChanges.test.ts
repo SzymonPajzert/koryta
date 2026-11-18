@@ -59,7 +59,7 @@ describe("revisionChanges", () => {
     const { elected: _won, ...unticked } = candidacy;
 
     expect(revisionChanges(unticked, candidacy)).toEqual([
-      { field: "elected", label: "wybrany", from: "tak", to: null },
+      { field: "elected", label: "wybrany/a", from: "tak", to: null },
     ]);
     // A stored `false` reads as a blank everywhere (see `elected` in
     // shared/api.ts), so dropping one is not a change anybody has to decide on.

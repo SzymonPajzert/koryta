@@ -145,7 +145,9 @@
                   variant="flat"
                   :data-testid="`edge-elected-${edge.id}`"
                 >
-                  Wybrany
+                  <!-- „/a”: nothing stores anybody's grammatical gender
+                       (shared/activityFeed.ts). Szymon, 2026-11-18. -->
+                  Wybrany/a
                 </v-chip>
                 <!-- On a person's page only as the exception: nearly every row
                      there is a public company, which is what the page is about,
@@ -925,7 +927,7 @@ function predecessorOf(edge: EdgeNode): Predecessor[] {
 }
 
 /* A candidacy's committee last on its role line, after the party, the
-   „Wybrany” chip and a draft's „Opublikuj”: the committee's long name is
+   „Wybrany/a” chip and a draft's „Opublikuj”: the committee's long name is
    what wraps, onto a line of its own, rather than pushing the admin's
    button down to a fourth line. */
 .history-row--ledger .history-meta__committee {

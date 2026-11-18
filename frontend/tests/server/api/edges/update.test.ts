@@ -324,7 +324,7 @@ describe("api/edges/update", () => {
       expect(
         revisionChanges(proposed, withoutInternalFields(stored["edges/e1"]!)),
       ).toEqual([
-        { field: "elected", label: "wybrany", from: "tak", to: null },
+        { field: "elected", label: "wybrany/a", from: "tak", to: null },
       ]);
     });
 
