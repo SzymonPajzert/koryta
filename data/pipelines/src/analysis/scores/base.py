@@ -59,7 +59,9 @@ import typing
 
 import pandas as pd
 
+from analysis.extract import SUPERVISORY_ROLE
 from analysis.payloads.person import PeoplePayloads
+from entities.company_bodies import RADA_SPOLECZNA, supervisory_body
 from entities.composite import PersonScore
 from scrapers.koryta.created import KorytaPeopleCreated
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
@@ -87,6 +89,13 @@ SCORE_BANDS: tuple[tuple[float, int], ...] = (
 #: it is the number the ranges below are drawn around: a ceiling under it keeps
 #: a model out of the queue, a floor on it puts everybody it names in.
 QUEUE_THRESHOLD = 3
+
+#: The most any model gives a person whose only public posts are seats on a
+#: rada społeczna (`Population.holds_only_rada_spoleczna_seats`): under
+#: `QUEUE_THRESHOLD`, so the queue does not put them in front of a reviewer.
+#: Decision on 2026-11-11: such people are not published for now. They keep a
+#: score, so None turns the rule off and the next run restores them.
+RADA_SPOLECZNA_ONLY_CEILING: int | None = QUEUE_THRESHOLD - 1
 
 
 @dataclasses.dataclass(frozen=True)
@@ -159,6 +168,9 @@ class CompanyFacts:
     name: str | None
     teryt: str | None
     is_public: bool
+    #: What supervises the company, by its legal form: `RADA_SPOLECZNA` for an
+    #: SPZOZ, empty for the rest (`entities.company_bodies.supervisory_body`).
+    supervisory_body: str = ""
 
 
 def rejestr_io_id(value: typing.Any) -> str | None:
@@ -250,6 +262,35 @@ class Population:
     def has_candidacy(self, key: str) -> bool:
         return bool(self.candidacies.get(key))
 
+    def is_rada_spoleczna_seat(self, post: Employment) -> bool:
+        """Whether this post is a seat on a rada społeczna, which is unpaid.
+
+        The role says it is a seat on the supervisory organ rather than a job
+        in the management, and the legal form says that organ is a rada
+        społeczna. The role alone cannot: the register gives every
+        supervisory seat the same label. A Zarząd post at an SPZOZ is its
+        salaried director and is not one.
+        """
+        company = self.companies.get(post.krs)
+        return (
+            company is not None
+            and company.supervisory_body == RADA_SPOLECZNA
+            and post.role == SUPERVISORY_ROLE
+        )
+
+    def holds_only_rada_spoleczna_seats(self, key: str) -> bool:
+        """Whether this person holds a rada społeczna seat and no other post at
+        a company known to be public, ended posts included."""
+        holds_seat = False
+        for post in self.employments.get(key, []):
+            if self.is_rada_spoleczna_seat(post):
+                holds_seat = True
+                continue
+            company = self.companies.get(post.krs)
+            if company is not None and company.is_public:
+                return False
+        return holds_seat
+
     def display_name(self, key: str) -> str:
         """What to call this person in the output.
 
@@ -291,11 +332,28 @@ def banded_scores(
     return {str(name): span.rescale(band(value)) for name, value in percentile.items()}
 
 
+def demote_rada_spoleczna_only(
+    banded: typing.Mapping[str, int], population: Population
+) -> dict[str, int]:
+    """`banded`, with everybody whose only public posts are rada społeczna seats
+    held at `RADA_SPOLECZNA_ONLY_CEILING`; unchanged while that is None."""
+    ceiling = RADA_SPOLECZNA_ONLY_CEILING
+    if ceiling is None:
+        return dict(banded)
+    return {
+        key: min(score, ceiling)
+        if population.holds_only_rada_spoleczna_seats(key)
+        else score
+        for key, score in banded.items()
+    }
+
+
 class PeopleScoreModel(Pipeline):
     """A model that nominates people to look at next.
 
     Subclasses set `filename` and `model_tag` and implement `raw_scores`. The
-    base handles who is eligible, the 1-5 banding and the output shape.
+    base handles who is eligible, the 1-5 banding, the rada społeczna ceiling
+    and the output shape.
     """
 
     #: The `userUid` this model's votes are stored under. Anything containing
@@ -340,6 +398,14 @@ class PeopleScoreModel(Pipeline):
             {key: score for key, score in raw.items() if key in eligible},
             self.score_range,
         )
+        demoted = demote_rada_spoleczna_only(banded, population)
+        held = sum(1 for key, score in demoted.items() if score != banded[key])
+        if held:
+            print(
+                f"{type(self).__name__}: {held} people whose only public posts "
+                f"are rada społeczna seats held at {RADA_SPOLECZNA_ONLY_CEILING}"
+            )
+        banded = demoted
 
         records = [
             dataclasses.asdict(
@@ -524,15 +590,26 @@ class PeopleScoreModel(Pipeline):
     def company_facts(companies: pd.DataFrame) -> dict[str, CompanyFacts]:
         if companies.empty or "krs" not in companies:
             return {}
+        if "form" not in companies:
+            print(
+                "CompaniesKRS has no form column: no rada społeczna seat can be "
+                "told apart, so nobody is held under RADA_SPOLECZNA_ONLY_CEILING"
+            )
         facts = {}
         for _, row in companies.iterrows():
             krs = row.get("krs")
             if not krs or pd.isna(krs):
                 continue
             is_public = row.get("is_public", False)
+            # NaN where the register gave no form; `supervisory_body` wants a
+            # string or None.
+            form = row.get("form")
             facts[str(krs)] = CompanyFacts(
                 name=row.get("name"),
                 teryt=str(row["teryt_code"]) if row.get("teryt_code") else None,
                 is_public=bool(is_public) if not pd.isna(is_public) else False,
+                supervisory_body=supervisory_body(
+                    form if isinstance(form, str) else None
+                ),
             )
         return facts
