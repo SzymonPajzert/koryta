@@ -340,13 +340,6 @@ const candidates = computed(() =>
   relations.value.filter((relation) => !relation.published),
 );
 
-/** The ones that may actually go live. The rest are shown, greyed, so the
- * reviewer can see *why* a relation is not on offer rather than wondering
- * where it went. */
-const selectableIds = computed(() =>
-  candidates.value.filter((r) => r.publishable).map((r) => r.id),
-);
-
 /** A relation as the two-places rule reads it: one of this page's own
  * candidacies, which run from the person to the place. */
 function candidacyOf(relation: NodeRelation): Candidacy | undefined {
@@ -505,10 +498,20 @@ const listedSelectedCount = computed(
       .length,
 );
 
-/** What „Zaznacz wszystkie" ticks: everything that may go live but the
- * candidacies of a clash, which the reviewer has to pick one by one. */
+/** What „Zaznacz wszystkie" ticks: everything that may go live - the rest
+ * are shown, greyed, so the reviewer can see why a relation is not on offer -
+ * but the candidacies of a clash, which the reviewer has to pick one by one,
+ * and the runs in doubt beside them (`doubted`): ticked in bulk, a namesake's
+ * other runs would be vouched for unseen, and his party with them. */
 const bulkIds = computed(() =>
-  selectableIds.value.filter((id) => !clashOf.value.has(id)),
+  candidates.value
+    .filter(
+      (relation) =>
+        relation.publishable &&
+        !clashOf.value.has(relation.id) &&
+        !doubted(relation),
+    )
+    .map((relation) => relation.id),
 );
 
 const allSelected = computed(

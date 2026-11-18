@@ -919,6 +919,33 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
     ).toContain("Tylko niezaznaczone kandydatury dają partię: PiS.");
   });
 
+  it("keeps the namesake's other runs in the place left out out of „Zaznacz wszystkie”", async () => {
+    const rows = [
+      ...withParties(),
+      candidacy("kozienice-2014", "1407", "2014", { parties: ["PiS"] }),
+    ];
+    serveRelations(rows, ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+    await click(checkbox("gniezno-2002"));
+
+    await click(el("publish-select-all"));
+
+    // Ticked in bulk, his 2014 run would be vouched for and PiS go live
+    // unwarned.
+    expect(checkbox("kozienice-2014")?.checked).toBe(false);
+    expect(el("publish-clash-parties-local-2002")?.textContent).toContain(
+      "PiS",
+    );
+    await click(confirmButton());
+    expect(publishedIds()).toEqual([
+      "gniezno-2002",
+      "gniezno-2006",
+      "gniezno-2010",
+      "zol",
+    ]);
+  });
+
   it("names a party once, under the newest block whose runs give it", async () => {
     // A second election in two places, the namesake's run there for PiS too.
     const rows = [
