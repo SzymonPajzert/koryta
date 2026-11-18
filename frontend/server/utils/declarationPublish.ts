@@ -40,7 +40,12 @@
  * import may be writing pages, and a page a stale write of one took off the
  * site again is found and put back (`restoreReverted`).
  */
-import type { DocumentData, Firestore } from "firebase-admin/firestore";
+import type {
+  DocumentData,
+  DocumentReference,
+  Firestore,
+  WriteBatch,
+} from "firebase-admin/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { AuditEntry } from "~~/shared/audit";
 import { isoDay, warsawDate, warsawHour } from "~~/shared/dates";
@@ -63,6 +68,7 @@ import { registerEntry } from "~~/shared/identifiers";
 import { CONTENT_CHANGED_AT } from "~~/shared/lastmod";
 import type { Edge, Note, NoteSource, Revision } from "~~/shared/model";
 import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
+import { partyFloor, showsCandidacyAndPaidPost } from "~~/shared/partyFloor";
 import {
   latestPublishableRevision,
   normalizeUpdateTime,
@@ -90,7 +96,13 @@ import { unnamedLocal } from "./edges";
 import { peopleImportRunning } from "./jobs";
 import { resolveMergedNode } from "./merge";
 import { requeueQuietly } from "./readingQueue";
-import { applyRevision, holdsRevision, nodeRevisions } from "./revisions";
+import {
+  applyRevision,
+  createRevisionTransaction,
+  holdsRevision,
+  nodeRevisions,
+  withoutInternalFields,
+} from "./revisions";
 
 /** How long a page may stay `publishing` before the next pass takes it up
  * again. Publishing one takes seconds; longer means the pass that claimed it
@@ -934,6 +946,8 @@ async function publicPages(
  * Then the page goes up the way /api/nodes/publish puts it up: the import's
  * newest revision approved first, where the page has none approved or an
  * older one, in a commit of its own, then `published` with the audit row.
+ * That commit also files „Inne” on a page that would go up naming no party
+ * beside its candidacy and paid post (`partyFloor` in shared/partyFloor.ts).
  * `stats.isApproved` is left to the trigger in functions/src/nodes.ts, which
  * sets it on every change of visibility, as it does for that endpoint. The
  * relations follow in batches: the chosen candidacies as a reviewer's publish
@@ -1128,6 +1142,7 @@ export async function publishPage(
   });
 
   let approvedRevision: string | null = null;
+  let floored = false;
   if (!resumed) {
     // Its own commit, before the one below, as in /api/nodes/publish: the
     // worst a failure in between leaves is a page approved and still hidden,
@@ -1144,6 +1159,16 @@ export async function publishPage(
       approvedRevision = approve.id;
     }
     const batch = db.batch();
+    // What the page shows once this pass is through.
+    const shown = [
+      ...elections.filter(({ data }) => pageIsPublic(data)),
+      ...candidaciesToPublish,
+      ...jobs.filter(({ data }) => pageIsPublic(data)),
+      ...jobsToPublish,
+    ].map(({ data }) => ({ ...data, published: true }));
+    floored =
+      partyFloor(page) !== null &&
+      (await fileOtherParty(db, batch, nodeRef, shown, companyNodes));
     batch.update(nodeRef, {
       published: true,
       [CONTENT_CHANGED_AT]: now.toISOString(),
@@ -1208,7 +1233,7 @@ export async function publishPage(
   );
   console.info(
     `[declarations] published ${pageId} with ${published.length} relation(s), ` +
-      `${heldEdges.length} held`,
+      `${heldEdges.length} held${floored ? ", party Inne" : ""}`,
   );
   return { status: "published", approvedRevision, edges: edgesRecord };
 }
@@ -1645,6 +1670,33 @@ function clashingCandidacies(
       : undefined;
   });
   return new Set(clashes.flatMap((clash) => clash.rows.map((row) => row.id)));
+}
+
+/** Files „Inne” in `batch` on a page that goes up naming no party while it
+ * shows a candidacy and a paid public post (`partyFloor`). Whether it did.
+ * The page is read again, for what the approval just before wrote on it. */
+async function fileOtherParty(
+  db: Firestore,
+  batch: WriteBatch,
+  nodeRef: DocumentReference,
+  shown: readonly Edge[],
+  companies: ReadonlyMap<string, DocumentData>,
+): Promise<boolean> {
+  if (!showsCandidacyAndPaidPost(shown, (id) => companies.get(id))) {
+    return false;
+  }
+  const stored = (await nodeRef.get()).data();
+  const parties = stored ? partyFloor(stored) : null;
+  if (!stored || !parties) return false;
+  createRevisionTransaction(
+    db,
+    batch,
+    actor,
+    nodeRef,
+    { ...withoutInternalFields(stored), parties },
+    { automatic: true, approve: true, stored },
+  );
+  return true;
 }
 
 /** Puts the relations up, `EDGE_PUBLISH_CHUNK` a commit. The ids that went
