@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "wyszukiwarka-linia-pod-osoba",
+    title: "Linijka pod osobą w wyszukiwarce",
+    description:
+      "Pod każdą osobą jest linijka: miasto, partia, stanowisko. Imienników da się odróżnić.",
+    steps: [
+      "Wpisz „robert wó”. Każdy Robert Wójcik ma inną linijkę, np. „Mielec · PiS · Rada miasta 2024”.",
+      "Wyloguj się i wpisz to samo. Pod osobą bez strony jest tylko jej ostatnie stanowisko, bez partii.",
+    ],
+    area: "public",
+  },
+  {
     id: "inne-dla-kandydatow-z-posada",
     title: "Kandydaci z płatną posadą mają co najmniej „Inne”",
     description:

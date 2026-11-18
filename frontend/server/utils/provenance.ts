@@ -47,7 +47,20 @@ export async function importedOrReviewed(
     }),
   );
   for (const { id, first } of firsts) {
-    if (first?.update_automatic === true) qualified.add(id);
+    if (writtenByImportOrReviewed({ id }, first)) qualified.add(id);
   }
   return qualified;
+}
+
+/** The same rule for one document whose first revision is already in hand -
+ * the earliest by `update_time` of those whose `node_id` is the document's
+ * id, as the query above finds it. /api/stats/computeNodes reads every
+ * revision anyway, and asks this of every person and post at once for the
+ * line the search box shows under an unpublished person
+ * (shared/searchLine.ts). */
+export function writtenByImportOrReviewed(
+  doc: Written,
+  first: { update_automatic?: unknown } | undefined,
+): boolean {
+  return !!doc.revision_id || first?.update_automatic === true;
 }
