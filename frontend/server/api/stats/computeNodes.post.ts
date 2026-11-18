@@ -1,4 +1,5 @@
 import { getFirestore } from "firebase-admin/firestore";
+import type { Query, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { requireAdmin } from "~~/server/utils/auth";
 import type {
   Edge,
@@ -34,6 +35,60 @@ import {
   type LineTargets,
 } from "~~/shared/searchLine";
 
+/** What this handler and the helpers it calls read of each collection, and
+ * nothing else. A node's search chunks and old stats, and the snapshot each
+ * revision carries, are most of the bytes and nothing here reads them. A field
+ * left off reads as absent and changes the output without an error, so a
+ * helper that starts reading another field needs it added here. */
+const FIELDS = {
+  nodes: [
+    "type",
+    "name",
+    "published",
+    "deleted",
+    "revision_id",
+    // Regions: the search line and the region rows.
+    "teryt",
+    // Places: which posts count.
+    "isPublic",
+    "supervisoryBody",
+    // People: queueTier.
+    "wikipedia",
+    "rejestrIo",
+    // getNodeGroups leaves a hidden node out of a group.
+    "hide",
+  ],
+  edges: [
+    "type",
+    "source",
+    "target",
+    "published",
+    "deleted",
+    "revision_id",
+    "name",
+    "start_date",
+    "end_date",
+    "position",
+    "elected",
+    "by_election",
+  ],
+  notes: ["nodeId", "sources"],
+  votes: ["nodeId", "userUid", "updatedAt", "categoryVotes"],
+  revisions: ["node_id", "nodeId", "update_time", "update_automatic"],
+  // `fact_type` is what `queueTier` files a person by.
+  extractions: ["personNodeId", "fact_type"],
+};
+
+/** Updates sent before waiting for them to land, so that no more than this
+ * many computed updates sit in memory behind the writer's throttle. */
+const FLUSH_EVERY = 500;
+
+/** A query's documents one at a time, as the server sends them, so none of
+ * the collection is held as snapshots. */
+function streamed(query: Query): AsyncIterable<QueryDocumentSnapshot> {
+  return query.stream() as unknown as AsyncIterable<QueryDocumentSnapshot>;
+}
+
 function calculateTransitiveTargets(
   nodeEdges: Edge[],
   placeToRegions: Record<string, string[]>,
@@ -62,7 +117,7 @@ function buildNodeUpdateData(
   nodeEdges: Edge[],
   nodeNotes: Note[],
   nodeVotes: VoteDocument[],
-  nodeRevisionsRaw: { id: string; data: Revision }[],
+  nodeRevisions: RevisionMinimal[],
   placeToRegions: Record<string, string[]>,
   resolvedPlaceToParentCompanies: Record<string, string[]>,
   nodeGroupSizeMap: Record<string, number>,
@@ -111,15 +166,9 @@ function buildNodeUpdateData(
     stats.people = targetCounts[node.id]?.size || 0;
   }
 
-  const mappedRevisions: RevisionMinimal[] = nodeRevisionsRaw.map((r) => {
-    return {
-      id: r.id,
-      update_time: normalizeUpdateTime(r.data.update_time),
-    };
-  });
   const revisionsObj = computeRevisionsObj(
     node.data.revision_id,
-    mappedRevisions,
+    nodeRevisions,
   );
 
   return {
@@ -137,43 +186,24 @@ export default defineEventHandler(async (event) => {
   await requireAdmin(event);
 
   const db = getFirestore("koryta-pl");
+  // One collection at a time, each document dropped once its fields are
+  // copied out, so the peak is what is kept rather than every snapshot.
+  const read = (collection: keyof typeof FIELDS) =>
+    streamed(db.collection(collection).select(...FIELDS[collection]));
 
-  const [
-    nodesSnap,
-    edgesSnap,
-    notesSnap,
-    votesSnap,
-    revisionsSnap,
-    extractionsSnap,
-  ] = await Promise.all([
-    db.collection("nodes").get(),
-    db.collection("edges").get(),
-    db.collection("notes").get(),
-    db.collection("votes").get(),
-    db.collection("revisions").get(),
-    // Only the id of the person each fact was matched to: the justification is
-    // a paragraph of prose and there is one per fact, so reading the documents
-    // whole would be the largest read in this handler to count them.
-    // ... and its kind, which is what tells a party membership from a sentence
-    // about somebody's job: `queueTier` files a person by what their facts
-    // could settle, not by how many of them there are.
-    db.collection("extractions").select("personNodeId", "fact_type").get(),
-  ]);
-
-  const nodes = nodesSnap.docs.map((doc) => ({
-    id: doc.id,
-    data: doc.data() as Node,
-  }));
+  const nodes: { id: string; data: Node }[] = [];
+  for await (const doc of read("nodes")) {
+    nodes.push({ id: doc.id, data: doc.data() as Node });
+  }
   // With their ids, which the search line reads a post's first revision by.
-  const edges = edgesSnap.docs.map(
-    (doc) => ({ ...doc.data(), id: doc.id }) as Edge,
-  );
-  const notes = notesSnap.docs.map((doc) => doc.data() as Note);
-  const votes = votesSnap.docs.map((doc) => doc.data() as VoteDocument);
-  const revisions = revisionsSnap.docs.map((doc) => ({
-    id: doc.id,
-    data: doc.data() as Revision,
-  }));
+  const edges: Edge[] = [];
+  for await (const doc of read("edges")) {
+    edges.push({ ...doc.data(), id: doc.id } as Edge);
+  }
+  const notes: Note[] = [];
+  for await (const doc of read("notes")) notes.push(doc.data() as Note);
+  const votes: VoteDocument[] = [];
+  for await (const doc of read("votes")) votes.push(doc.data() as VoteDocument);
 
   const nodesRecord: Record<string, Node> = {};
   for (const n of nodes) {
@@ -200,7 +230,7 @@ export default defineEventHandler(async (event) => {
   // handler from wiping the field, since it writes `stats` as a whole map.
   const factsByNode: Record<string, number> = {};
   const factTypesByNode: Record<string, Set<string>> = {};
-  for (const doc of extractionsSnap.docs) {
+  for await (const doc of read("extractions")) {
     const personNodeId = doc.get("personNodeId") as string | undefined;
     if (personNodeId) {
       factsByNode[personNodeId] = (factsByNode[personNodeId] ?? 0) + 1;
@@ -212,12 +242,28 @@ export default defineEventHandler(async (event) => {
   }
   const noFactTypes: ReadonlySet<string> = new Set();
 
-  const revisionsByNode: Record<string, { id: string; data: Revision }[]> = {};
-  for (const rev of revisions) {
-    const nId = rev.data.node_id || rev.data.nodeId;
+  // Each node's revisions as `computeRevisionsObj` reads them. And the first
+  // revision of every document, which is what says whether an import wrote it
+  // - the rule the teaser route reads it by, one query per document, kept here
+  // in one pass (server/utils/provenance.ts).
+  const revisionsByNode: Record<string, RevisionMinimal[]> = {};
+  const firstRevisions: Record<
+    string,
+    { at: string; update_automatic?: unknown }
+  > = {};
+  for await (const doc of read("revisions")) {
+    const rev = doc.data() as Revision;
+    const at = normalizeUpdateTime(rev.update_time);
+    const nId = rev.node_id || rev.nodeId;
     if (nId) {
       if (!revisionsByNode[nId]) revisionsByNode[nId] = [];
-      revisionsByNode[nId].push(rev);
+      revisionsByNode[nId].push({ id: doc.id, update_time: at });
+    }
+    const id = rev.node_id;
+    if (!id || at === null) continue;
+    const first = firstRevisions[id];
+    if (!first || at < first.at) {
+      firstRevisions[id] = { at, update_automatic: rev.update_automatic };
     }
   }
 
@@ -332,19 +378,8 @@ export default defineEventHandler(async (event) => {
     },
   };
 
-  // The first revision of every document, which is what says whether an
-  // import wrote it - the rule the teaser route reads it by, one query per
-  // document, kept here in one pass (server/utils/provenance.ts).
-  const firstRevisions: Record<string, { at: string; data: Revision }> = {};
-  for (const rev of revisions) {
-    const id = rev.data.node_id;
-    const at = normalizeUpdateTime(rev.data.update_time);
-    if (!id || at === null) continue;
-    const first = firstRevisions[id];
-    if (!first || at < first.at) firstRevisions[id] = { at, data: rev.data };
-  }
   const shownOnTeaser = (doc: { id: string; revision_id?: unknown }) =>
-    writtenByImportOrReviewed(doc, firstRevisions[doc.id]?.data);
+    writtenByImportOrReviewed(doc, firstRevisions[doc.id]);
   const now = Date.now();
   const searchLines = (node: { id: string; data: Node }, nodeEdges: Edge[]) =>
     storedSearchLines(
@@ -405,9 +440,12 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const chunks = [];
-  let currentBatch = db.batch();
-  let operationCount = 0;
+  // Throttled as Firestore asks, 500 writes a second to start with: the
+  // updates go in id order, so each stretch of them lands on one key range.
+  const writer = db.bulkWriter();
+  let failed = 0;
+  let firstFailure: unknown;
+  let writes: Promise<void>[] = [];
   // The rows /api/stats/regions serves, taken from the same stats being
   // written to the region nodes rather than recomputed, so the two cannot
   // disagree. See server/utils/regionStats.ts.
@@ -444,22 +482,28 @@ export default defineEventHandler(async (event) => {
       );
     }
 
-    const nodeRef = db.collection("nodes").doc(node.id);
-    currentBatch.update(nodeRef, updateData);
-    operationCount++;
-
-    if (operationCount === 400) {
-      chunks.push(currentBatch.commit());
-      currentBatch = db.batch();
-      operationCount = 0;
+    writes.push(
+      writer.update(db.collection("nodes").doc(node.id), updateData).then(
+        () => undefined,
+        (error: unknown) => {
+          failed++;
+          firstFailure ??= error;
+        },
+      ),
+    );
+    if (writes.length === FLUSH_EVERY) {
+      await Promise.all([writer.flush(), ...writes]);
+      writes = [];
     }
   }
 
-  if (operationCount > 0) {
-    chunks.push(currentBatch.commit());
+  await Promise.all([writer.close(), ...writes]);
+  if (failed > 0) {
+    throw createError({
+      statusCode: 500,
+      message: `${failed} of ${nodes.length} nodes were not updated: ${String(firstFailure)}`,
+    });
   }
-
-  await Promise.all(chunks);
   await writeRegionStats(db, regionRows, new Date());
 
   return {
