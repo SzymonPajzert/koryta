@@ -95,6 +95,13 @@ export const GOALS = {
       "Reader re-split the home timeline. `value` is `party`, `region` or `category` - which of the three cuts anybody actually wants, and so which one should be the default.",
     props: ["value"],
   },
+  // The map's party chips (decision on 2026-11-18): which parties a reader
+  // asks the map about, once it opens on the leading one.
+  "home-map:party": {
+    description:
+      "Reader switched what the home map is coloured by. `value` is the party picked, or `all` for the leading party in each powiat. Which parties readers look up, and whether anybody leaves the default.",
+    props: ["value"],
+  },
   "home-timeline:range": {
     description:
       "Reader changed the home timeline's time range. `value` is `5`, `10` or `all`. Whether the twenty-five year default is read as too much.",
