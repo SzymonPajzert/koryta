@@ -385,9 +385,12 @@ function heldRows(): DeclarationPublicationRow[] {
 /** The rule's rows and the admin's, the newest first: an admin's no is the
  * freshest thing here, and it is what the section shows first. */
 function setAsideRows(): DeclarationPublicationRow[] {
+  // Ids of their own: the held rows' run up to 1048, and a person is on one
+  // list only.
   const declined = DECLINED_REASONS.map(
     (reason, i): DeclarationPublicationRow => ({
       ...heldRow(reason, 200 + i, 1 + i * 4.5),
+      personId: fakeId(3000 + i),
       status: "declined",
     }),
   );
@@ -395,6 +398,7 @@ function setAsideRows(): DeclarationPublicationRow[] {
     Array<PublicationHoldReason>(count).fill(reason),
   ).map((reason, i): DeclarationPublicationRow => ({
     ...heldRow(reason, 300 + i, 14 + ((i * 41) % NO_POST_TOTAL) * 1.1),
+    personId: fakeId(3100 + i),
     paidPost: false,
   }));
   return [...declined, ...noPost].sort((a, b) => b.at.localeCompare(a.at));
@@ -418,6 +422,53 @@ export function heldCrops(row: DeclarationPublicationRow): HeldCropRow[] {
       })),
     },
   ];
+}
+
+/** The same, when the crop is a namesake's: settled on the date of another
+ * page it names, so it is not this page's to decide. */
+export function heldCropsOfAnother(
+  row: DeclarationPublicationRow,
+): HeldCropRow[] {
+  const [crop] = heldCrops(row);
+  return [
+    {
+      ...crop!,
+      decidable: false,
+      people: [
+        ...crop!.people,
+        {
+          id: fakeId(4000),
+          name: "Jan Imiennikowski",
+          published: true,
+          birthDate: crop!.agreed,
+        },
+      ],
+    },
+  ];
+}
+
+/** `GET /api/revisions/byNode` of a page with nothing approved whose newest
+ * version is a person's proposal, newer than the import's. */
+export function proposalRevisions(name: string) {
+  return {
+    approvedRevisionId: null,
+    revisions: [
+      {
+        id: "fxrevimport",
+        data: { name },
+        update_time: "2026-08-20T07:10:00Z",
+        update_automatic: true,
+        update_user: "pipeline",
+      },
+      {
+        id: "fxrevproposal",
+        status: "pending",
+        data: { name },
+        update_time: "2026-08-27T16:42:00Z",
+        update_user: "fxreader",
+      },
+    ],
+  };
 }
 
 /** `GET /api/edges/byNode` of a page held for standing in two places: the two
@@ -491,30 +542,49 @@ export function heldRelations(personId: string): NodeRelations {
 }
 
 /** DERIVED: the seven pages the automation published today, by the frozen
- * noon in Warsaw, newest first; `daysBack` moves them to an earlier day. */
+ * noon in Warsaw, and one an admin published by hand while it was held, which
+ * closed its hold; newest first. `daysBack` moves them to an earlier day. */
 function recentRows(daysBack = 0): DeclarationPublicationRow[] {
   const times = ["06:15", "07:15", "07:40", "08:26", "09:02", "09:31", "09:48"];
-  return times
-    .map((time, i) => {
-      const place = unitAt(i * 3 + 1);
-      const at = new Date(
-        Date.parse(`${TODAY}T${time}:00.000Z`) - daysBack * 86_400_000,
-      ).toISOString();
-      return {
-        personId: fakeId(900 + i),
-        name: fakeName(900 + i),
-        status: "published" as const,
-        reason: null,
-        pagePublic: true,
-        at,
-        unit: place.unit,
-        documentUrl: documentUrl(place.year, 900 + i),
-        edges: { published: 1 + (i % 3), held: i % 4 === 3 ? 1 : 0 },
-        pressed: false,
-      };
-    })
-    .sort((a, b) => b.at.localeCompare(a.at));
+  const atTime = (time: string) =>
+    new Date(
+      Date.parse(`${TODAY}T${time}:00.000Z`) - daysBack * 86_400_000,
+    ).toISOString();
+  const automatic = times.map((time, i) => {
+    const place = unitAt(i * 3 + 1);
+    return {
+      // Past the held rows' ids, which run up to 1048.
+      personId: fakeId(2900 + i),
+      name: fakeName(900 + i),
+      status: "published" as const,
+      reason: null,
+      pagePublic: true,
+      at: atTime(time),
+      unit: place.unit,
+      documentUrl: documentUrl(place.year, 900 + i),
+      edges: { published: 1 + (i % 3), held: i % 4 === 3 ? 1 : 0 },
+      pressed: false,
+    };
+  });
+  const place = unitAt(23);
+  const byHand: DeclarationPublicationRow = {
+    personId: BY_HAND,
+    name: fakeName(907),
+    status: "published",
+    reason: null,
+    pagePublic: true,
+    at: atTime("09:55"),
+    unit: place.unit,
+    documentUrl: documentUrl(place.year, 907),
+    edges: { published: 1, held: 0 },
+    pressed: false,
+    byHand: true,
+  };
+  return [...automatic, byHand].sort((a, b) => b.at.localeCompare(a.at));
 }
+
+/** The page of the recent list an admin published by hand. */
+export const BY_HAND = fakeId(2907);
 
 // ---------------------------------------------------------------------------
 // The overview
