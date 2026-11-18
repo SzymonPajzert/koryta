@@ -452,6 +452,7 @@ const clashOf = computed(() => {
           regionId: edge.target,
           startDate: edge.start_date,
           position: edge.position,
+          byElection: edge.by_election,
         }
       : undefined,
   );

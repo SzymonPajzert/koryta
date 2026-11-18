@@ -32,8 +32,8 @@ const kozienice = run("1407", "Powiat kozienicki");
 
 const clash: Clash<EdgeNode> = {
   personId: "kowalski",
+  election: "local-2002",
   year: "2002",
-  position: "Samorząd",
   rows: [sejmik, gniezno, kozienice],
 };
 
@@ -84,7 +84,8 @@ describe("ChipPlaceClash", () => {
     // the only other place is powiat kozienicki.
     const wrapper = await mountChip({ edge: gniezno, clash });
     const words = await tooltip(wrapper);
-    expect(words).toContain("(2002, Samorząd): Powiat kozienicki.");
+    // The election by its name: its runs may be filed under several offices.
+    expect(words).toContain("(Samorządowe 2002): Powiat kozienicki.");
     expect(words).not.toContain("wielkopolskie");
   });
 

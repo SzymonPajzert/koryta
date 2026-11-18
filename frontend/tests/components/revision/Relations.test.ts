@@ -80,6 +80,7 @@ const relation = (over: Partial<RelationHistory> = {}): RelationHistory => ({
   startDate: "2018-01-01",
   endDate: null,
   position: null,
+  byElection: false,
   committee: null,
   elected: false,
   published: true,
@@ -341,8 +342,55 @@ describe("RevisionRelations", () => {
     const draft = row(wrapper, "draft-elsewhere");
     expect(draft.get("[data-row-toggle]").text()).toContain("dwa miejsca");
     expect(draft.text()).toContain(
-      "w dwóch miejscach w wyborach 2010 · Rada miasta: Jelenia Góra i Miasto Warszawa",
+      "w dwóch miejscach naraz (Samorządowe 2010): Jelenia Góra i Miasto Warszawa",
     );
+  });
+
+  it("warns of a draft for another office in the same election, but not of a by-election", async () => {
+    // A sejmik run in mazowieckie beside a council run in Jelenia Góra is
+    // one local election in two places; a by-election is a contest of its
+    // own.
+    mockAuthRequest.mockImplementation(async () => ({
+      ...structuredClone(PAGE),
+      relations: [
+        relation({
+          id: "live-2010",
+          startDate: "2010-01-01",
+          position: "Rada miasta",
+          state: "settled",
+          waiting: 0,
+        }),
+        ...[
+          { id: "draft-sejmik", byElection: false },
+          { id: "draft-uzupelniajace", byElection: true },
+        ].map(({ id, byElection }) =>
+          relation({
+            id,
+            other: {
+              id: "teryt14",
+              name: "mazowieckie",
+              type: "region",
+              path: null,
+              published: true,
+            },
+            startDate: "2010-01-01",
+            position: "Sejmik",
+            byElection,
+            published: false,
+            state: "draft",
+            waiting: 0,
+          }),
+        ),
+      ],
+    }));
+    const wrapper = await mountSection();
+
+    expect(row(wrapper, "draft-sejmik").text()).toContain(
+      "w dwóch miejscach naraz (Samorządowe 2010): Jelenia Góra i mazowieckie",
+    );
+    const byElection = row(wrapper, "draft-uzupelniajace").text();
+    expect(byElection).not.toContain("dwa miejsca");
+    expect(byElection).not.toContain("w dwóch miejscach");
   });
 
   it("says so when the entry has no relations", async () => {
