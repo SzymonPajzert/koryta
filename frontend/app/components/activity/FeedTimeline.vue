@@ -11,21 +11,25 @@
       <ol class="ft-rail">
         <template v-for="row in section.rows" :key="row.key">
           <!-- A rollout on the rail, by the time it went live: the same
-               shape as a line, on a filled badge, since it is the one entry
-               that is not somebody's. -->
+               shape as a line, its badge tinted like every other one
+               (decision on 2026-11-18). -->
           <li
             v-if="row.type === 'release'"
             class="ft-item"
             data-testid="feed-release"
           >
             <span
-              class="ft-badge ft-badge--release"
+              class="ft-badge bg-surface-sage"
               role="img"
               aria-label="Nowa wersja strony"
               title="Nowa wersja strony"
             >
               <!-- A rollout is a launch; sparkles read as an AI feature. -->
-              <v-icon :icon="mdiRocketLaunchOutline" size="16" />
+              <v-icon
+                :icon="mdiRocketLaunchOutline"
+                size="16"
+                class="text-ink-sage"
+              />
             </span>
             <ActivitySiteRelease
               :at="row.release.at"
@@ -253,7 +257,7 @@ import { feedKindStyle, feedToneClasses } from "~/utils/feedKindStyle";
  * together into one and neither can be mistaken for the sentence.
  *
  * A rollout of the site itself sits on the same rail, at the time it went
- * live, on the one filled badge - see `ActivitySiteRelease`.
+ * live, on a sage badge with a rocket - see `ActivitySiteRelease`.
  *
  * Renders only what arrived: the revision link, the self-approval flag and the
  * reason are on a target only when the server decided this reader is an
@@ -471,15 +475,6 @@ function reasons(batch: FeedBatch) {
   position: absolute;
   top: 0;
   width: var(--ft-badge);
-}
-
-/* Filled where every other badge is a tint: the site itself, not a person,
-   and the line a reader coming back after a few days should not scroll past.
-   White on ink-sage is 6.43:1, and `on-ink-sage` is the theme's white for
-   it, so a new palette repaints both. */
-.ft-badge--release {
-  background: rgb(var(--v-theme-ink-sage));
-  color: rgb(var(--v-theme-on-ink-sage));
 }
 
 /* ---- the line ---- */
