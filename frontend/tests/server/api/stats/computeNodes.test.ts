@@ -195,6 +195,11 @@ describe("POST /api/stats/computeNodes", () => {
         data: () => ({ type: "person", name: "Robert Nikt" }),
       },
       {
+        // Nobody has published him, nor did an import write him.
+        id: "imiennik",
+        data: () => ({ type: "person", name: "Robert Wójcik" }),
+      },
+      {
         id: "teryt1811",
         data: () => ({
           type: "region",
@@ -237,6 +242,26 @@ describe("POST /api/stats/computeNodes", () => {
         id: "seat",
         data: () => ({ type: "seat", source: "teryt1811", target: "mzbm" }),
       },
+      {
+        id: "imiennik-run",
+        data: () => ({
+          type: "election",
+          source: "imiennik",
+          target: "teryt1811",
+          position: "Rada miasta",
+          start_date: "2024-01-01",
+          elected: true,
+        }),
+      },
+      {
+        id: "imiennik-post",
+        data: () => ({
+          type: "employed",
+          source: "imiennik",
+          target: "mzbm",
+          start_date: "2020-01-01",
+        }),
+      },
     ];
     // The post was imported, which is what lets its teaser show it.
     collections.revisions = [
@@ -271,6 +296,16 @@ describe("POST /api/stats/computeNodes", () => {
         where: "Mielec",
         what: "MIEJSKI ZARZĄD BUDYNKÓW MIESZKALNYCH",
         when: "do 2019",
+        ties: ["mzbm"],
+      },
+    });
+    // Unpublished: a signed in reader is told the latest post, not the PKW
+    // run (decision on 2026-11-18), and the teaser shows nothing of a person
+    // no import wrote.
+    expect(written.imiennik).toEqual({
+      all: {
+        where: "Mielec",
+        what: "MIEJSKI ZARZĄD BUDYNKÓW MIESZKALNYCH",
         ties: ["mzbm"],
       },
     });
