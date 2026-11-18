@@ -217,28 +217,30 @@ describe("storedSearchLines", () => {
   const importedOrReviewed = (doc: { id: string; revision_id?: unknown }) =>
     !!doc.revision_id || imported.has(doc.id);
 
-  it("works out a line per kind of reader", () => {
+  /** A seat won in 2024 nobody has published, the post an import wrote, which
+   * is published, one added by hand since, and a tie of somebody else's. */
+  const ties = [
+    { ...run("draft-run", { elected: true }) },
+    {
+      ...post("imported-post", { target: "wodnik" }),
+      published: true,
+    },
+    // Somebody's say-so: never on the teaser, so never in its line.
+    post("added-by-hand", { target: "szpital", start_date: "2023-01-01" }),
+    // Somebody else's tie, handed over from the other end.
+    { ...post("not-theirs"), source: "p2" },
+  ];
+
+  it("works out a line per kind of reader of a published person", () => {
     const lines = storedSearchLines(
-      { id: "p1" },
-      [
-        { ...run("draft-run", { elected: true }) },
-        {
-          ...post("imported-post", { target: "wodnik" }),
-          published: true,
-        },
-        // Somebody's say-so: never on the teaser, so never in its line.
-        post("added-by-hand", {
-          target: "szpital",
-          start_date: "2023-01-01",
-        }),
-        // Somebody else's tie, handed over from the other end.
-        { ...post("not-theirs"), source: "p2" },
-      ],
+      { id: "p1", published: true },
+      ties,
       targets,
       importedOrReviewed,
       TODAY,
     );
     expect(lines.approved).toMatchObject({ where: "Jelenia Góra" });
+    // A signed in reader sees the seat they hold now.
     expect(lines.all).toMatchObject({
       what: "Rada miasta",
       election: "local-2024:won",
@@ -247,6 +249,41 @@ describe("storedSearchLines", () => {
       where: "Jelenia Góra",
       what: "„WODNIK”",
     });
+  });
+
+  it("leads an unpublished person's line with the latest post for a signed in reader too", () => {
+    // Decision on 2026-11-18: a draft's run is a PKW match nobody has
+    // checked, and often sits on several namesakes at once.
+    const lines = storedSearchLines(
+      { id: "p1" },
+      ties,
+      targets,
+      importedOrReviewed,
+      TODAY,
+    );
+    expect(lines.all).toMatchObject({
+      where: "Sosnowiec",
+      what: "WOJEWÓDZKI SZPITAL SPECJALISTYCZNY NR 5 W SOSNOWCU",
+      ties: ["szpital"],
+    });
+    expect(lines.all).not.toHaveProperty("election");
+    // And the teaser's post, as ever, for a logged out one.
+    expect(lines.teaser).toMatchObject({ what: "„WODNIK”" });
+  });
+
+  it("names an unpublished person's run where there is no post at all", () => {
+    const lines = storedSearchLines(
+      { id: "p1" },
+      [run("only-run", { elected: true })],
+      targets,
+      importedOrReviewed,
+      TODAY,
+    );
+    expect(lines.all).toMatchObject({
+      what: "Rada miasta",
+      election: "local-2024:won",
+    });
+    expect(lines.teaser).toBeUndefined();
   });
 
   it("gives a person added by hand no teaser line, and leaves empty scopes out", () => {

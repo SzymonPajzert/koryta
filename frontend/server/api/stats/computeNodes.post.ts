@@ -348,7 +348,12 @@ export default defineEventHandler(async (event) => {
   const now = Date.now();
   const searchLines = (node: { id: string; data: Node }, nodeEdges: Edge[]) =>
     storedSearchLines(
-      { id: node.id, revision_id: node.data.revision_id },
+      {
+        id: node.id,
+        revision_id: node.data.revision_id,
+        published: node.data.published,
+        deleted: node.data.deleted,
+      },
       nodeEdges.filter((edge): edge is Edge & { id: string } => !!edge.id),
       lineTargets,
       shownOnTeaser,

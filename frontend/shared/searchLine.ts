@@ -220,12 +220,15 @@ function lineTown(
  *    by its office, since „Prezydent” over a lost race would read as the job.
  *
  * `edges` are the ties of one scope: the published ones for the line a logged
- * out reader is sent, all of them for a signed in one.
+ * out reader is sent, all of them for a signed in one. With `lead` „post”, the
+ * latest post comes before anything else, and a run only where there is no
+ * post at all - what an unpublished person's line does (`storedSearchLines`).
  */
 export function personSearchLine(
   edges: readonly LineEdge[],
   targets: LineTargets,
   today: number,
+  lead: "office" | "post" = "office",
 ): SearchLine | undefined {
   const live = edges.filter((edge) => {
     if (edge.deleted === true) return false;
@@ -319,6 +322,11 @@ export function personSearchLine(
     );
   };
 
+  const latestPost = mostRecentPost(posts, today);
+  if (lead === "post" && latestPost) {
+    return postLine(latestPost, held(latestPost));
+  }
+
   const won = runs.filter((run) => run.elected === true);
   const seatNow = won.find((run) => {
     const key = candidacyElection(
@@ -331,7 +339,6 @@ export function personSearchLine(
   if (seatNow) return runLine(seatNow);
 
   // Held as the teaser counts it: no end, or an end still ahead.
-  const latestPost = mostRecentPost(posts, today);
   if (latestPost && held(latestPost)) return postLine(latestPost, true);
 
   // The rest by year; on one year a seat won, then a post, then a run.
@@ -373,9 +380,22 @@ export function personSearchLine(
  * unpublished page only the posts its teaser may show - those
  * `importedOrReviewed` passes, of a person it passes, as the teaser route asks
  * them (server/utils/provenance.ts). A scope with nothing to say is left out,
- * so an empty object is a person with no line at all. */
+ * so an empty object is a person with no line at all.
+ *
+ * A signed in reader's line for an unpublished person leads with the latest
+ * post too, as the logged out one does, and names a run only where there is
+ * no post (decision on 2026-11-18). Its runs are PKW matches nobody has
+ * checked, and one run often sits on several namesakes: on the 11-18 export,
+ * three Paweł Wiśniewski drafts all read „powiat brodnicki · Rada gminy 2024”,
+ * and lines led by the run told 96% of same-name pairs apart against 99% for
+ * the post. A published person's line is unchanged. */
 export function storedSearchLines(
-  person: { id: string; revision_id?: unknown },
+  person: {
+    id: string;
+    revision_id?: unknown;
+    published?: unknown;
+    deleted?: unknown;
+  },
   edges: readonly (LineEdge & { published?: unknown; revision_id?: unknown })[],
   targets: LineTargets,
   importedOrReviewed: (doc: { id: string; revision_id?: unknown }) => boolean,
@@ -392,7 +412,12 @@ export function storedSearchLines(
     targets,
     today,
   );
-  const all = personSearchLine(own, targets, today);
+  const all = personSearchLine(
+    own,
+    targets,
+    today,
+    pageIsPublic(person) ? "office" : "post",
+  );
   const shown = personSearchLine(teaser, targets, today);
   return {
     ...(approved ? { approved } : {}),
