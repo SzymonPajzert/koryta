@@ -511,11 +511,14 @@ export const JOBS: readonly JobDefinition[] = [
     title: "Odpisy pełne z wyszukiwarki KRS",
     summary:
       "Pobiera bezpłatne odpisy pełne (PDF) z ministerialnej wyszukiwarki KRS - dla firm z kolejki, z pliku albo z grafu - i z nich bierze daty, od kiedy i do kiedy kto zasiadał w zarządach.",
-    runsOn: "Ręcznie na predatorze - jeden crawler na adres IP",
+    runsOn:
+      "Krok nocy na VM koryta-nightly (koryta_nightly), po przeglądzie rejestru; ręcznie jeden crawler na adres IP",
     command: "koryta_krs_odpis --graph --changed-since <dzień>",
-    scheduleNote:
-      "Cotygodniowe odświeżenie firm z biuletynu (--graph --changed-since) - pora do ustalenia",
+    schedule: { dailyAt: "04:30", timeZone: WARSAW },
     heartbeatMinutes: 15,
+    // Rusza po bezpłatnym KRS i przeglądzie rejestru, zwykle kwadrans po
+    // starcie nocy.
+    graceMinutes: 90,
     notes: [
       "Kończy się sam, gdy wyszukiwarka zwalnia albo przestaje odpowiadać; resztę bierze następne uruchomienie (wtedy „niedokończony”). 20 prób z rzędu bez odpowiedzi to błąd.",
     ],

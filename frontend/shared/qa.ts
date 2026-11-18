@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "procesy-odpisy-krokiem-nocy",
+    title: "Procesy: odpisy pełne jako krok nocy",
+    description:
+      "Wiersz „Odpisy pełne z wyszukiwarki KRS” mówił, że chodzą ręcznie i bez pory, choć pobiera je noc. Teraz ma porę nocy i wymaga uwagi, gdy noc ich nie pobierze.",
+    steps: [
+      "Otwórz /admin/procesy: przy „Odpisy pełne z wyszukiwarki KRS” jest „następne:” z 04:30.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
     id: "procesy-kroki-nocy-w-harmonogramie",
     title: "Procesy: „Import firm” i „Oceny modeli” w „Według harmonogramu”",
     description:
