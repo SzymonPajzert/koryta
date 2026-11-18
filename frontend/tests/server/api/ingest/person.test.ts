@@ -1652,6 +1652,48 @@ describe("api/ingest/person", () => {
       );
     });
 
+    describe("a lone „Inne”", () => {
+      // What a page that went up naming no party carries (`partyFloor`):
+      // the least it names, until the pipeline finds a party.
+      async function sends(stored: string[], sent: string[]) {
+        personExists({ name: "Test Person", type: "person", parties: stored });
+        mockReadBody.mockResolvedValue({
+          name: "Test Person",
+          parties: sent,
+          companies: [],
+          elections: [],
+        });
+        return handler({} as any);
+      }
+      const written = () =>
+        (
+          vi.mocked(createRevisionTransaction).mock.calls[0]![4] as {
+            parties: string[];
+          }
+        ).parties;
+
+      it("gives way to a party the payload names", async () => {
+        await sends(["Inne"], ["PiS"]);
+        expect(written()).toEqual(["PiS"]);
+      });
+
+      it("stays where the payload names it too", async () => {
+        await sends(["Inne"], ["PiS", "Inne"]);
+        expect(written()).toEqual(["PiS", "Inne"]);
+      });
+
+      it("stays where the payload names no party", async () => {
+        const result = await sends(["Inne"], []);
+        expect(createRevisionTransaction).not.toHaveBeenCalled();
+        expect(result).toMatchObject({ person: "unchanged" });
+      });
+
+      it("is not one beside a named party, which keeps it", async () => {
+        await sends(["PO", "Inne"], ["PiS"]);
+        expect(written()).toEqual(["PO", "PiS", "Inne"]);
+      });
+    });
+
     it("writes nothing when it has nothing new to say", async () => {
       // Otherwise every nightly run leaves a revision on every person.
       personExists({ name: "Test Person", type: "person", parties: ["PiS"] });

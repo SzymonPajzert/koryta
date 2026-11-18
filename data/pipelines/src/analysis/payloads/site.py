@@ -998,6 +998,9 @@ class SiteSnapshot:
                 set(stored_parties) | set(_as_list(payload.get("parties"))),
                 key=party_sort_key,
             )
+            # The ingest also lets a lone „Inne” give way to a party the payload
+            # names (`partiesAfterImport`), which the union here does not; it
+            # does that only where the union grows, so the answer is the same.
             if len(parties) > len(stored_parties):
                 learned["parties"] = parties
         for key in ("content", "wikipedia", "rejestrIo"):

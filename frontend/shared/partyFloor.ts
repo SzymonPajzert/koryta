@@ -1,5 +1,5 @@
 import { asArray, pageIsPublic, type Edge } from "./model";
-import { OTHER_PARTY } from "./misc";
+import { OTHER_PARTY, sortParties } from "./misc";
 import { isPublicEmployment } from "./stats";
 
 /** „Inne” as the least a published page names, where it shows a candidacy and
@@ -53,4 +53,21 @@ export function partyFloor(person: {
   if (person.partiesSource === "manual") return null;
   if (asArray(person.parties).length > 0) return null;
   return [OTHER_PARTY];
+}
+
+/** The parties an import leaves on a page whose list no person set: its own
+ * and the payload's together, except that a lone „Inne” the payload does not
+ * name gives way to the parties it does. That „Inne” is this floor, or an
+ * older reading the pipeline has since dropped, and would otherwise stand
+ * beside the party the page now names. */
+export function partiesAfterImport(
+  stored: readonly string[],
+  sent: readonly string[],
+): string[] {
+  const floorAlone =
+    stored.length === 1 &&
+    stored[0] === OTHER_PARTY &&
+    sent.length > 0 &&
+    !sent.includes(OTHER_PARTY);
+  return sortParties(new Set([...(floorAlone ? [] : stored), ...sent]));
 }
