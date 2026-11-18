@@ -144,7 +144,7 @@ describe("the words for the job's codes", () => {
       if (reason === "two_pages") continue;
       const row = heldRow(reason, { pagePublic: true });
       expect(declarationHoldNote(row), reason).toBe(
-        "Strona jest już publiczna, więc nie ma czego publikować.",
+        "Strona jest już publiczna.",
       );
       expect(declarationHoldLabel(row), reason).toBe("strona już publiczna");
     }
@@ -173,9 +173,9 @@ describe("the words for the job's codes", () => {
   it("says a page held for having no post has one now", () => {
     const row = heldRow("no_public_post");
 
-    expect(declarationHoldLabel(row)).toBe("płatne stanowisko już jest");
+    expect(declarationHoldLabel(row)).toBe("jest już płatne stanowisko");
     expect(declarationHoldNote(row)).toBe(
-      "Na stronie jest już płatne stanowisko, którego wcześniej nie było. Sprawdź stronę ponownie.",
+      "Na stronie jest już płatne stanowisko. Sprawdź ponownie.",
     );
   });
 
@@ -184,10 +184,10 @@ describe("the words for the job's codes", () => {
 
     expect(declarationHoldLabel(row)).toBe("decyzja administratora");
     expect(declarationHoldNote(row)).toBe(
-      "Administrator zdecydował, że ta strona nie wyjdzie. Była wstrzymana: kandydatura w dwóch miejscach naraz.",
+      "Odłożona przez administratora. Była wstrzymana: kandydatura w dwóch miejscach naraz.",
     );
     expect(declarationHoldNote({ ...row, reason: null })).toBe(
-      "Administrator zdecydował, że ta strona nie wyjdzie.",
+      "Odłożona przez administratora.",
     );
   });
 
@@ -578,10 +578,10 @@ describe("declarationPeopleAccusative", () => {
 describe("declarationRecheckText", () => {
   it("says what came of asking a page again", () => {
     expect(declarationRecheckText({ outcome: "published" })).toBe(
-      "Opublikowano: strona przeszła sprawdzenia.",
+      "Opublikowano.",
     );
     expect(declarationRecheckText({ outcome: "confirmed" })).toBe(
-      "Strona jest już publiczna, wiersz zamknięty.",
+      "Strona była już publiczna. Wiersz zamknięty.",
     );
   });
 

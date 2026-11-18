@@ -7,6 +7,7 @@ import {
   closeHoldOnPublication,
   OVERVIEW_CACHE_BASE,
 } from "~~/server/utils/declarationDecisions";
+import { restageDeclarationPeople } from "~~/server/utils/declarationPeopleCount";
 import { cascadeUnpublishEdges } from "~~/server/utils/edgePublication";
 import {
   applyRevision,
@@ -123,6 +124,7 @@ export default defineEventHandler(async (event) => {
     try {
       if (await closeHoldOnPublication(db, body.node_id, user.uid)) {
         await useStorage("cache").clear(OVERVIEW_CACHE_BASE);
+        await restageDeclarationPeople(db, [body.node_id]);
       }
     } catch (error) {
       console.error(
