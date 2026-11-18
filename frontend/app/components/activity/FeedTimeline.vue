@@ -10,9 +10,9 @@
 
       <ol class="ft-rail">
         <template v-for="row in section.rows" :key="row.key">
-          <!-- A rollout on the rail, by the time it went live: the same
-               shape as a line, its badge tinted like every other one
-               (decision on 2026-11-18). -->
+          <!-- A day's rollouts on the rail, by the time the last of them went
+               live: the same shape as a line, its badge tinted like every
+               other one (decision on 2026-11-18). -->
           <li
             v-if="row.type === 'release'"
             class="ft-item"
@@ -33,6 +33,7 @@
             </span>
             <ActivitySiteRelease
               :at="row.release.at"
+              :first-at="row.release.firstAt"
               :changes="row.release.changes"
             />
           </li>
@@ -256,8 +257,9 @@ import { feedKindStyle, feedToneClasses } from "~/utils/feedKindStyle";
  * pills, each its own link with its type's icon, so two names can never run
  * together into one and neither can be mistaken for the sentence.
  *
- * A rollout of the site itself sits on the same rail, at the time it went
- * live, on a sage badge with a rocket - see `ActivitySiteRelease`.
+ * A day's rollouts of the site itself sit on the same rail as one block, at
+ * the time the last of them went live, on a sage badge with a rocket - see
+ * `ActivitySiteRelease`.
  *
  * Renders only what arrived: the revision link, the self-approval flag and the
  * reason are on a target only when the server decided this reader is an
@@ -268,8 +270,9 @@ const props = defineProps<{
     day: string;
     label: string;
     batches: FeedBatch[];
-    /** The rollouts of the site that went live on the day, newest first. */
-    releases?: { at: string; changes: SiteChange[] }[];
+    /** The site's rollouts of the day as one block: when the last and the
+     * first of them went live, and their changes, newest first. */
+    releases?: { at: string; firstAt: string; changes: SiteChange[] }[];
   }[];
   actorOf: (batch: FeedBatch) => FeedActor;
 }>();

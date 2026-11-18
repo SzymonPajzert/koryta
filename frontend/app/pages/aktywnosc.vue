@@ -463,20 +463,34 @@ const emptyText = computed(() => {
     : "W tym okresie nikt nic nie zrobił.";
 });
 
-type Release = { at: string; changes: SiteChange[] };
+/** A day's rollouts as one: `at` is when the last of them went live, which is
+ * where the day's block sits among the lines, and `firstAt` the first. */
+type Release = { at: string; firstAt: string; changes: SiteChange[] };
 
-/** The site's changes as the filters leave them, one entry per rollout - the
- * changes that went live at the same instant. None once a kind of line or a
- * person is picked: a rollout is not a vote, and nobody did it. */
+/** The site's changes as the filters leave them, one entry per Warsaw day:
+ * autopush rolls out on every push, so a day of merges was a stack of rows
+ * (decision on 2026-11-18). None once a kind of line or a person is picked: a
+ * rollout is not a vote, and nobody did it. */
 const filteredReleases = computed((): Release[] => {
   const group = kindGroup.value;
   if (group !== ALL_KINDS && group !== SITE_CHANGES) return [];
   if (personFilter.value) return [];
-  const releases: Release[] = [];
+  const releases: (Release & { day: string })[] = [];
+  // Newest first, so a day's first change carries its last rollout.
   for (const change of feed.value?.siteChanges ?? []) {
+    const day = warsawDate(new Date(change.at));
     const last = releases.at(-1);
-    if (last?.at === change.at) last.changes.push(change);
-    else releases.push({ at: change.at, changes: [change] });
+    if (last?.day === day) {
+      last.changes.push(change);
+      last.firstAt = change.at;
+    } else {
+      releases.push({
+        day,
+        at: change.at,
+        firstAt: change.at,
+        changes: [change],
+      });
+    }
   }
   return releases;
 });
@@ -585,9 +599,9 @@ const visible = computed(() => filtered.value.slice(0, shown.value));
 
 const hasMoreLoaded = computed(() => filtered.value.length > shown.value);
 
-/** The rollouts down to the oldest line on screen, while there are lines left
- * to show: past it, a rollout would sit under lines the list has not reached
- * yet. */
+/** The days' rollouts down to the oldest line on screen, while there are lines
+ * left to show: past it, a day's block would sit under lines the list has not
+ * reached yet. */
 const visibleReleases = computed(() => {
   const oldest = hasMoreLoaded.value ? visible.value.at(-1)?.lastAt : null;
   return oldest
@@ -677,8 +691,8 @@ type DayGroup = {
 };
 
 /** The visible lines under their Warsaw day, by when each sitting ended, and
- * the rollouts under the day they went live. Both lists are newest first, so
- * a day's entries of either kind are consecutive in their own list. */
+ * each day's rollouts under that day. Both lists are newest first, so a day's
+ * entries of either kind are consecutive in their own list. */
 const dayGroups = computed(() => {
   const today = warsawDate();
   const groups = new Map<string, DayGroup>();

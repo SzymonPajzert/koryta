@@ -47,8 +47,9 @@ const entry = (
   link?: string,
 ) => ({ id, title, description, area, ...(link ? { link } : {}) });
 
-/** Today's rollout: seven entries, so desktop lists five and asks for two
- * more, a phone three and four. */
+/** Today's two rollouts: seven entries in the one block a day gets
+ * (decision on 2026-11-18), so desktop lists five and asks for two more, a
+ * phone three and four. */
 const TODAY = [
   entry(
     "aktywnosc-zmiany-na-stronie",
@@ -135,7 +136,8 @@ const rollout = (when: string, entries: ReturnType<typeof entry>[]) =>
   entries.map((item): SiteChange => ({ ...item, at: when }));
 
 const siteChanges: SiteChange[] = [
-  ...rollout(at(0, 9, 20), TODAY),
+  ...rollout(at(0, 9, 20), TODAY.slice(0, 3)),
+  ...rollout(at(0, 7, 5), TODAY.slice(3)),
   ...rollout(at(1, 13, 34), YESTERDAY),
   ...rollout(at(3, 16, 2), THREE_DAYS_AGO),
 ];

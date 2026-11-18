@@ -89,12 +89,15 @@ import { moreTargetsLabel, type SiteChange } from "~~/shared/activityFeed";
 import type { QaArea } from "~~/shared/qa";
 import { nominativeNoun } from "~/composables/polish";
 
-/** One rollout of the site on the /aktywnosc rail: the changelog entries that
- * went live together, each a title that opens to say what changed, with the
- * way to the page it is about and to its entry on /qa, where it can be
- * checked. The badge is the timeline's, like every line's. */
+/** A day's rollouts of the site on the /aktywnosc rail, as one block: the
+ * changelog entries that went live that day, each a title that opens to say
+ * what changed, with the way to the page it is about and to its entry on /qa,
+ * where it can be checked. The badge is the timeline's, like every line's. */
 const props = defineProps<{
+  /** When the day's last rollout went live. */
   at: string;
+  /** When its first did, where that was earlier. */
+  firstAt?: string;
   changes: SiteChange[];
 }>();
 
@@ -112,7 +115,18 @@ const CLOCK = new Intl.DateTimeFormat("pl-PL", {
   timeZone: "Europe/Warsaw",
 });
 
-const time = computed(() => CLOCK.format(new Date(props.at)));
+/** As on the lines: closer together than this, the rollouts read as one
+ * moment. */
+const RANGE_FROM_MS = 5 * 60 * 1000;
+
+/** The last rollout's time, or the day's span from the first: „13:33-17:06”. */
+const time = computed(() => {
+  const last = new Date(props.at);
+  const first = props.firstAt ? new Date(props.firstAt) : last;
+  return last.getTime() - first.getTime() > RANGE_FROM_MS
+    ? `${CLOCK.format(first)}-${CLOCK.format(last)}`
+    : CLOCK.format(last);
+});
 
 const countLabel = computed(
   () =>
