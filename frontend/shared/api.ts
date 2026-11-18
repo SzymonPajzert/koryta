@@ -208,6 +208,16 @@ const electionRequestSchema = z.object({
    * too. */
   supported_by: z.string().optional(),
   backing_parties: z.array(z.string()).optional(),
+  /** An election held during a term - an early one, a court-ordered re-run, a
+   * new gmina's first - rather than a general one
+   * (`scrapers/pkw/term_elections.py`). A contest of its own: stored with
+   * `by_election`, and dated to its day (`election_date`) where a general
+   * election's candidacy is dated to its year. */
+  by_election: z.boolean().optional(),
+  election_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   election_year: z.string().optional(),
   election_type: z.enum(electionPositionValues),
   teryt: z.string().optional(),
@@ -222,6 +232,8 @@ export type ElectionRequest = {
   member_parties?: string[];
   supported_by?: string;
   backing_parties?: string[];
+  by_election?: boolean;
+  election_date?: string;
   election_year?: string;
   election_type: ElectionPosition;
   teryt?: string;

@@ -121,6 +121,7 @@ def test_a_sejmik_candidacy_is_not_a_second_place(con):
             {
                 "election_year": "2006",
                 "election_type": "samorządu",
+                "election_date": None,
                 "teryt_candidacy_powiat": powiat,
                 "teryt_wojewodztwo": [powiat[:2]],
                 "teryt_powiat": [powiat],
@@ -249,6 +250,49 @@ def test_a_statement_on_one_rounds_row_does_not_split_the_race():
     (race,) = merged.iloc[0]["elections"]
     assert race["candidacy_success"] == "TRUE"
     assert race["supported_by"] == "pop. przez: Prawo i Sprawiedliwość"
+
+
+def test_a_re_run_is_a_candidacy_of_its_own():
+    """A court-ordered re-run is a run beside the April one, not its result
+    (decision on 2026-11-18): the rows differ in their day, not only in the
+    result, and are not folded."""
+    rows = witko_rows(
+        {"candidacy_success": "FALSE", "office": "Prezydent", "election_year": "2024"},
+        {
+            "candidacy_success": "TRUE",
+            "office": "Prezydent",
+            "election_year": "2024",
+            "election_date": "2024-09-29",
+        },
+    )
+
+    assert elections(rows) == [("Prezydent", "FALSE"), ("Prezydent", "TRUE")]
+
+
+def test_an_election_held_during_a_term_is_no_second_place():
+    """Standing for a council in April and in an early mayoral election
+    elsewhere that autumn is two contests, so no clash of places."""
+    rows = witko_rows(
+        {
+            "candidacy_success": "FALSE",
+            "office": "Rada miasta",
+            "election_year": "2024",
+        },
+        {
+            "candidacy_success": "TRUE",
+            "office": "Wójt",
+            "election_year": "2024",
+            "election_date": "2024-10-27",
+            "teryt_candidacy": "246101",
+        },
+    )
+    ctx = typing.cast(Context, SimpleNamespace(con=duckdb.connect()))
+    merged = people_pkw_merged(ctx, rows)
+
+    assert len(merged) == 1
+    assert not merged.iloc[0]["elections_ambiguous"]
+    days = sorted(str(e["election_date"]) for e in merged.iloc[0]["elections"])
+    assert days == ["2024-10-27", "None"]
 
 
 def test_what_a_candidate_said_of_their_party_reaches_the_candidacy():

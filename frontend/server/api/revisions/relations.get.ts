@@ -66,8 +66,7 @@ export type RelationHistory = {
   endDate: string | null;
   /** A candidacy's office. */
   position: string | null;
-  /** Whether a candidacy was in a by-election, a contest of its own that the
-   * two-places warning leaves out. */
+  /** Whether the candidacy was in an election held during a term. */
   byElection: boolean;
   committee: string | null;
   elected: boolean;

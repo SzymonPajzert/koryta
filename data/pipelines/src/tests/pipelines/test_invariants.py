@@ -1839,9 +1839,10 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes, within_budget):
     The publish dialog warns a reviewer by the place rule before a click adds
     to this count, and the site holds back a page it would publish itself:
     `placeClashes` in frontend/shared/twoPlaces.ts, which groups by the
-    election too. A change to one belongs in the other. That port leaves out
-    a by-election, and files a run with no office in a year of two elections
-    under the one `candidacyElection` reads it as.
+    election too, and a by-election by its day. A change to one belongs in the
+    other. That port leaves out a by-election with no office or no day, and
+    files a run with no office in a year of two elections under the one
+    `candidacyElection` reads it as.
     """
     # 29 on the 2026-10-25T03:00:33.098Z export, 29 on the 10-24 one. 24 of
     # them are the clashes the office key counted, on 18 published pages on the
@@ -1875,6 +1876,9 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes, within_budget):
             edge["source"],
             str(edge.get("start_date"))[:4],
             election_stood_in(edge),
+            # An election held during a term (`by_election`) is a contest of
+            # its own beside the general one of its year, told by its day.
+            str(edge.get("start_date")) if edge.get("by_election") else None,
         )
         regions[key].add(teryt)
 

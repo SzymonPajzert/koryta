@@ -21,16 +21,23 @@
  * The election is `candidacyElection`'s, worked out here rather than by each
  * reader, so the publication's hold (`clashingCandidacies` in
  * server/utils/declarationPublish.ts), the publish dialog and the person page
- * cannot group a page's runs apart. Where the night's check differs: an
- * undated run, a by-election and a run in a year with no election of its kind
- * are left out here, and a run with no office in a year of two elections goes
- * to the one `candidacyElection` reads it as, where the check gives such runs
- * a group of their own. Two undated runs are not known to be one election,
- * and a warning has to be true of the rows it names (one such edge on
- * 2026-10-15).
+ * cannot group a page's runs apart. An election held during a term
+ * (`by_election`) is a contest of its own, told apart by its day, as the
+ * night's check tells it: a mayor elected early in one gmina may have stood
+ * for a council elsewhere that April. Where the night's check differs: an
+ * undated run, a by-election with no office or no day and a run in a year
+ * with no election of its kind are left out here, and a run with no office in
+ * a year of two elections goes to the one `candidacyElection` reads it as,
+ * where the check gives such runs a group of their own. Two undated runs are
+ * not known to be one election, and a warning has to be true of the rows it
+ * names (one such edge on 2026-10-15).
  */
 
-import { candidacyElection, type ElectionKey } from "./electionDays";
+import {
+  candidacyElection,
+  electionKind,
+  type ElectionKey,
+} from "./electionDays";
 
 /** One candidacy, as much of it as the rule reads. */
 export type Candidacy = {
@@ -40,12 +47,14 @@ export type Candidacy = {
    * pipeline names them so (payloads/region.py), and all 1,389 regions in the
    * 2026-10-15 export are. */
   regionId: string;
-  /** `start_date` as stored. Only the year is read: nearly every candidacy is
-   * dated to the first of January of its election, a few to the day itself. */
+  /** `start_date` as stored. A general election's is read for its year:
+   * nearly every candidacy is dated to the first of January of its election,
+   * a few to the day itself. A by-election's is read whole, as its day. */
   startDate?: string | null;
   /** The office, as stored, which says which election of the year it was. */
   position?: string | null;
-  /** `by_election`: a contest of its own, which clashes with nothing. Not
+  /** `by_election`: an election held during a term, a contest of its own
+   * beside the general election of its year, told apart by its day. Not
    * optional, so that no reader leaves it out and files a by-election under
    * the general election of its year. */
   byElection: boolean | null | undefined;
@@ -55,7 +64,8 @@ export type Candidacy = {
  * all be theirs. */
 export type PlaceClash<T> = {
   personId: string;
-  /** As `candidacyElection` names it: „local-2024”. */
+  /** As `candidacyElection` names it: „local-2024”. An election held during a
+   * term goes by its kind and day: „local-2025-08-10”. */
   election: ElectionKey;
   year: string;
   /** The election's rows whose place disagrees with another row's place, in
@@ -74,6 +84,19 @@ export function regionTeryt(regionId: string): string | null {
  * place, or one inside the other. */
 export function placesAgree(a: string, b: string): boolean {
   return a.startsWith(b) || b.startsWith(a);
+}
+
+/** The election a candidacy is grouped under: a general one as
+ * `candidacyElection` names it, one held during a term by its kind and day.
+ * Null where neither can be told. A by-election dated to its year alone
+ * („2024-01-01” as stored, „2024” as the page reads it) is on no known day. */
+function clashElection(candidacy: Candidacy): ElectionKey | null {
+  if (!candidacy.byElection) {
+    return candidacyElection(candidacy.startDate, candidacy.position);
+  }
+  const kind = electionKind(candidacy.position);
+  const day = /^\d{4}-(?!01-01$)\d{2}-\d{2}$/.exec(candidacy.startDate ?? "");
+  return kind && day ? `${kind}-${day[0]}` : null;
 }
 
 /** Every election in which `rows` put a person in two places.
@@ -102,11 +125,7 @@ export function placeClashes<T>(
     if (!candidacy) continue;
     const teryt = regionTeryt(candidacy.regionId);
     const year = candidacy.startDate?.slice(0, 4);
-    const election = candidacyElection(
-      candidacy.startDate,
-      candidacy.position,
-      candidacy.byElection,
-    );
+    const election = clashElection(candidacy);
     if (!teryt || !year || !election) continue;
     const key = JSON.stringify([candidacy.personId, election]);
     let group = groups.get(key);

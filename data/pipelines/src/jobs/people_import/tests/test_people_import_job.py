@@ -1903,6 +1903,22 @@ def test_a_payload_listing_the_same_things_in_another_order_is_one_hash():
     assert job.payload_hash(holding(ended)) != sent
 
 
+def test_a_key_added_since_does_not_change_the_hash_while_it_is_null():
+    """Every candidacy gains `by_election` and `election_date`, null for a
+    general election. Hashed, the nulls would make every payload new, and the
+    sent-unchanged skip would forget everybody, as the four statement keys
+    made it on 2026-11-18."""
+    general = {"election_type": "Rada miasta", "election_year": "2024"}
+    sent = job.payload_hash({**holding(POSTS), "elections": [general]})
+
+    tonight = {"elections": [{**general, "by_election": None, "election_date": None}]}
+    assert job.payload_hash({**holding(POSTS), **tonight}) == sent
+    # A run that says something with them is a change.
+    early = {"by_election": True, "election_date": "2025-08-10"}
+    changed = {"elections": [general, {**general, **early}]}
+    assert job.payload_hash({**holding(POSTS), **changed}) != sent
+
+
 def test_a_payload_sent_with_its_posts_in_another_order_is_left_out():
     sent = holding(POSTS)
     tonight = build.Candidate(holding(POSTS[::-1]), PUBLISHED, None)

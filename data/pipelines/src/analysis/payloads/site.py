@@ -1401,7 +1401,7 @@ class SiteSnapshot:
         # The won ones first, as `placingOrder` in `person.post.ts` places them.
         for election in placing_order(_rows(payload.get("elections"))):
             year = election.get("election_year")
-            held = f"{year}-01-01" if year else None
+            held = election.get("election_date") or (f"{year}-01-01" if year else None)
             region_id = self._region_of(election)
             if region_id is _SKIPPED:
                 continue
@@ -1411,31 +1411,7 @@ class SiteSnapshot:
                 # rather than acted on - see `INFORMATIONAL_REASONS`.
                 reasons.append((UNRESOLVED_REGION, held))
                 continue
-            edge: Edge = {
-                "source": person_id,
-                "target": region_id,
-                "type": "election",
-                "name": "kandydatura",
-                "position": election.get("election_type"),
-            }
-            if election.get("party"):
-                edge["party"] = election["party"]
-            if election.get("committee"):
-                edge["committee"] = election["committee"]
-            # Only a win, the way `createElection` writes only a win - so the
-            # prediction does not count a recorded defeat as something the
-            # upload would store.
-            if election.get("elected") is True:
-                edge["elected"] = True
-            # PKW's statements, as `createElection` writes them.
-            for name in ("party_member", "supported_by"):
-                if election.get(name):
-                    edge[name] = election[name]
-            for name in ("member_parties", "backing_parties"):
-                if len(_as_list(election.get(name))):
-                    edge[name] = _as_list(election.get(name))
-            if election.get("election_year"):
-                edge["start_date"] = f"{election['election_year']}-01-01"
+            edge = candidacy_edge(person_id, region_id, election)
 
             if self._misfiled_candidacy(
                 matcher, edge, election.get("teryt"), local_runs
@@ -1524,6 +1500,45 @@ class SiteSnapshot:
                     return _SKIPPED
             return None
         return self.regions.get(str(teryt))
+
+
+def candidacy_edge(
+    person_id: str, region_id: typing.Any, election: typing.Mapping[str, typing.Any]
+) -> Edge:
+    """The election edge `createElection` would write for a payload's
+    candidacy."""
+    edge: Edge = {
+        "source": person_id,
+        "target": region_id,
+        "type": "election",
+        "name": "kandydatura",
+        "position": election.get("election_type"),
+    }
+    if election.get("party"):
+        edge["party"] = election["party"]
+    if election.get("committee"):
+        edge["committee"] = election["committee"]
+    # Only a win, the way `createElection` writes only a win - so the
+    # prediction does not count a recorded defeat as something the upload
+    # would store.
+    if election.get("elected") is True:
+        edge["elected"] = True
+    # PKW's statements, as `createElection` writes them.
+    for name in ("party_member", "supported_by"):
+        if election.get(name):
+            edge[name] = election[name]
+    for name in ("member_parties", "backing_parties"):
+        if len(_as_list(election.get(name))):
+            edge[name] = _as_list(election.get(name))
+    if election.get("election_year"):
+        edge["start_date"] = f"{election['election_year']}-01-01"
+    # An election held during a term is dated to its day and marked, as
+    # `createElection` stores it.
+    if election.get("election_date"):
+        edge["start_date"] = election["election_date"]
+    if election.get("by_election"):
+        edge["by_election"] = True
+    return edge
 
 
 class _SkippedRegion:

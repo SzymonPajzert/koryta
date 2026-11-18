@@ -134,6 +134,33 @@ describe("placeClashes", () => {
     ).toEqual([["styczen", "kwiecien"]]);
   });
 
+  it("keeps an election held during a term apart from the general one of its year", () => {
+    // A council in April, an early mayoral election elsewhere that autumn.
+    expect(
+      clashes([
+        run("kwiecien", "teryt3003", "2024-01-01"),
+        run("wrzesien", "teryt1407", "2024-09-29", { byElection: true }),
+      ]),
+    ).toEqual([]);
+    // One dated to its year alone, as the person page reads it, is on no
+    // known day.
+    expect(
+      clashes([
+        run("kwiecien", "teryt3003", "2024-04-07"),
+        run("rok", "teryt1407", "2024", { byElection: true }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("finds two places in one election held during a term", () => {
+    expect(
+      clashes([
+        run("zabrze", "teryt2478", "2025-08-10", { byElection: true }),
+        run("kozienice", "teryt1407", "2025-08-10", { byElection: true }),
+      ]).map((clash) => clash.ids),
+    ).toEqual([["zabrze", "kozienice"]]);
+  });
+
   it("reads an absent and an empty office alike", () => {
     // Neither names an office, and 2002 held the local election alone.
     expect(

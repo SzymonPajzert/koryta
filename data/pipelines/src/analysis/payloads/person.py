@@ -739,6 +739,10 @@ def _extract_elections(row: pd.Series) -> list[Election]:
                 )
                 if e.get("election_year"):
                     election_payload.election_year = str(e.get("election_year"))
+                held_on = _committee(e.get("election_date"))
+                if held_on:
+                    election_payload.by_election = True
+                    election_payload.election_date = held_on
                 if teryt_val:
                     if len(teryt_val) == 4 and teryt_val.endswith("00"):
                         teryt_val = teryt_val[:2]
@@ -1180,12 +1184,18 @@ def in_two_places(elections: list[Election]) -> set[int]:
     `test_nobody_stands_in_two_places_at_once` counts on the site. A code
     another one starts with is not a second place - a sejmik candidacy and a
     council one in the same województwo - and a candidacy with no code, as on
-    the European lists, is in none.
+    the European lists, is in none. An election held during a term is one of
+    its own, by its day: a mayor elected early in one gmina in 2024 may have
+    stood for a council elsewhere that April.
     """
     by_election: dict[tuple, list[tuple[int, str]]] = collections.defaultdict(list)
     for index, election in enumerate(elections):
         if election.teryt:
-            key = (election.election_year, election.election_type)
+            key = (
+                election.election_year,
+                election.election_type,
+                election.election_date,
+            )
             by_election[key].append((index, election.teryt))
     clashing: set[int] = set()
     for placed in by_election.values():

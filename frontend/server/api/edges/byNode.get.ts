@@ -30,8 +30,8 @@ export type NodeRelation = {
    * places in one election (see shared/twoPlaces.ts) from two elections. */
   startDate: string | null;
   position: string | null;
-  /** Whether a candidacy was in a by-election, a contest of its own that the
-   * two-places rule leaves out. */
+  /** Whether the candidacy was in an election held during a term, which is
+   * an election of its own beside the general one of its year. */
   byElection: boolean;
   /** The site's parties a candidacy names - its committee's (`party`, which
    * the pipeline leaves out for a coalition's), and the ones PKW says its

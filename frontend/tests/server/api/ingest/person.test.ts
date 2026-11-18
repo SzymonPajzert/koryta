@@ -283,6 +283,66 @@ describe("api/ingest/person", () => {
     );
   });
 
+  it("dates an election held during a term to its day and marks it", async () => {
+    // Zabrze's early mayoral election of 2025-08-10. Dated to its year, as a
+    // general election's candidacy is, a re-run of the April vote would read as
+    // the April run itself.
+    mockReadBody.mockResolvedValue({
+      name: "Test Person",
+      parties: [],
+      companies: [],
+      elections: [
+        {
+          committee: "KOMITET WYBORCZY WYBORCÓW EWA WEBER",
+          election_year: "2025",
+          election_type: "Prezydent",
+          teryt: "1465",
+          by_election: true,
+          election_date: "2025-08-10",
+        },
+      ],
+    });
+
+    mockGet.mockReset();
+    mockDoc.mockReset();
+    mockDoc.mockReturnValue({
+      id: "new-doc-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({
+      id: "person-id",
+      parent: nodesParent,
+      ref: mockRef,
+    });
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ ref: { id: "teryt1465" }, id: "teryt1465", data: () => ({}) }],
+    });
+    const edgeRef = { id: "edge-id" };
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce(edgeRef);
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      2,
+      mockDb,
+      expect.anything(),
+      expect.objectContaining({ uid: "test-user-id" }),
+      edgeRef,
+      expect.objectContaining({
+        type: "election",
+        position: "Prezydent",
+        start_date: "2025-08-10",
+        by_election: true,
+      }),
+      { automatic: true, approve: false, published: false },
+    );
+  });
+
   it("records that a candidacy won", async () => {
     // `elected` is set on 2 of the 14,518 stored candidacies, so no page can
     // say anybody won anything. The pipeline has carried the result since

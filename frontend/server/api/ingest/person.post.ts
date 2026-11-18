@@ -698,6 +698,12 @@ async function createElection(
   if (election.election_year) {
     edgeData.start_date = `${election.election_year}-01-01`;
   }
+  // An election held during a term is dated to its day, which keeps it apart
+  // from the general election of its year - a re-run of the April vote is a
+  // run of its own (decision on 2026-11-18) - and marked as one, which the page
+  // reads (`candidacyDay`, `candidacyElection`).
+  if (election.election_date) edgeData.start_date = election.election_date;
+  if (election.by_election) edgeData.by_election = true;
 
   // Whether a change to a candidacy the database already holds is written out
   // or only proposed. The scrapers set this when the committee is one their
