@@ -827,7 +827,7 @@ describe("/aktywnosc", () => {
       serve({ 7: withReleases() });
       const wrapper = await mountPage();
 
-      await chip(wrapper, "Zmiany na stronie").trigger("click");
+      await chip(wrapper, "koryta.pl").trigger("click");
       await vi.waitUntil(() => itemTexts(wrapper).length === 0, {
         timeout: 2000,
       });

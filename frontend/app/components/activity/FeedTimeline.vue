@@ -24,7 +24,8 @@
               aria-label="Nowa wersja strony"
               title="Nowa wersja strony"
             >
-              <v-icon :icon="mdiCreationOutline" size="16" />
+              <!-- A rollout is a launch; sparkles read as an AI feature. -->
+              <v-icon :icon="mdiRocketLaunchOutline" size="16" />
             </span>
             <ActivitySiteRelease
               :at="row.release.at"
@@ -225,11 +226,11 @@ import {
   mdiAccountClockOutline,
   mdiAlertOutline,
   mdiChevronDown,
-  mdiCreationOutline,
   mdiFileCompare,
   mdiFileDocumentOutline,
   mdiLightbulbOutline,
   mdiLinkVariant,
+  mdiRocketLaunchOutline,
 } from "@mdi/js";
 import {
   describeFeedBatch,
