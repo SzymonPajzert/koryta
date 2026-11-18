@@ -48,9 +48,10 @@
           <v-list-item-subtitle v-if="item.raw?.subtitle" class="text-wrap">
             {{ item.raw.subtitle }}
           </v-list-item-subtitle>
-          <!-- Who this is, for two people of one name. In the meta ink at full
-               strength: Vuetify's subtitle opacity puts it at 4.29:1, and it
-               is the line a reader picks the right person by. -->
+          <!-- Who a person is - the town, the party, the post - so that two of
+               one name can be told apart (shared/searchLine.ts). In the meta
+               ink at full strength: Vuetify's subtitle opacity puts it at
+               4.29:1, and it is the line a reader picks the right person by. -->
           <v-list-item-subtitle
             v-if="item.raw?.line"
             opacity="1"
@@ -130,7 +131,7 @@ import {
   type SettledSearch,
 } from "~~/shared/searchSession";
 import { noteSearchPick } from "~/composables/teaserJourney";
-import { hitLineText, namesakes, type HitLine } from "~~/shared/searchLine";
+import { hitLineText, type HitLine } from "~~/shared/searchLine";
 import type { NodeType } from "~~/shared/model";
 import type { ProposableNodeType } from "~~/shared/api";
 import { refDebounced } from "@vueuse/core";
@@ -379,21 +380,10 @@ const searchData = ref<
   }>
 >([]);
 
-/** The people on the menu another person on it shares a name with
- * (`namesakes`), by id. */
-const namesakeIds = computed(() => {
-  const people = searchData.value.filter((hit) => hit.type === "person");
-  const shared = namesakes(people.map((hit) => hit.name));
-  return new Set(
-    people.filter((_, index) => shared[index]).map((hit) => hit.id),
-  );
-});
-
-/** The line under a person hit: only where another hit shares the name, as
- * decided 2026-11-18 on board round search-same-name-r1. Where the name alone
- * tells people apart, a line only takes room. */
-function personLine(hit: { id: string; line?: HitLine }) {
-  if (!hit.line || !namesakeIds.value.has(hit.id)) return undefined;
+/** The line under a person hit, under every one the server sent a line for:
+ * decided 2026-11-18 on board round search-same-name-r2, after r1 had picked
+ * it for namesakes only. */
+function personLine(hit: { line?: HitLine }) {
   return hitLineText(hit.line) || undefined;
 }
 

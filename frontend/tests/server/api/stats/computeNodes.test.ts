@@ -175,4 +175,107 @@ describe("POST /api/stats/computeNodes", () => {
       teryt22: [[], []],
     });
   });
+
+  /** The search box reads the line under a person off the documents its
+   * passes already hold, so it is worked out here and stored on the person:
+   * one per kind of reader (shared/searchLine.ts). */
+  it("stores the line the search box shows under each person", async () => {
+    collections.nodes = [
+      {
+        id: "radny",
+        data: () => ({
+          type: "person",
+          name: "Robert Wójcik",
+          published: true,
+          revision_id: "rev-radny",
+        }),
+      },
+      {
+        id: "nobody",
+        data: () => ({ type: "person", name: "Robert Nikt" }),
+      },
+      {
+        id: "teryt1811",
+        data: () => ({
+          type: "region",
+          name: "Powiat mielecki",
+          teryt: "1811",
+        }),
+      },
+      {
+        id: "mzbm",
+        data: () => ({
+          type: "place",
+          name: "MIEJSKI ZARZĄD BUDYNKÓW MIESZKALNYCH (Mielec)",
+        }),
+      },
+    ];
+    collections.edges = [
+      {
+        id: "run",
+        data: () => ({
+          type: "election",
+          source: "radny",
+          target: "teryt1811",
+          position: "Rada miasta",
+          start_date: "2024-01-01",
+          elected: true,
+          published: true,
+        }),
+      },
+      {
+        id: "post",
+        data: () => ({
+          type: "employed",
+          source: "radny",
+          target: "mzbm",
+          start_date: "2018-07-02",
+          end_date: "2019-06-26",
+        }),
+      },
+      {
+        id: "seat",
+        data: () => ({ type: "seat", source: "teryt1811", target: "mzbm" }),
+      },
+    ];
+    // The post was imported, which is what lets its teaser show it.
+    collections.revisions = [
+      {
+        id: "post-rev",
+        data: () => ({
+          node_id: "post",
+          update_time: "2026-05-01T10:00:00Z",
+          update_automatic: true,
+        }),
+      },
+    ];
+
+    await handler({} as never);
+
+    const written = Object.fromEntries(
+      batchUpdate.mock.calls.map(([, data], index) => [
+        collections.nodes[index]!.id,
+        data.stats.searchLine,
+      ]),
+    );
+    const seat = {
+      what: "Rada miasta",
+      when: "2024",
+      election: "local-2024:won",
+    };
+    expect(written.radny).toEqual({
+      // The published line takes no town from a post nobody has published.
+      approved: { ...seat, where: "powiat mielecki", ties: ["teryt1811"] },
+      all: { ...seat, where: "Mielec", ties: ["teryt1811", "mzbm"] },
+      teaser: {
+        where: "Mielec",
+        what: "MIEJSKI ZARZĄD BUDYNKÓW MIESZKALNYCH",
+        when: "do 2019",
+        ties: ["mzbm"],
+      },
+    });
+    // Nothing to say, and nothing stored to say it.
+    expect(written.nobody).toBeUndefined();
+    expect(written.mzbm).toBeUndefined();
+  });
 });

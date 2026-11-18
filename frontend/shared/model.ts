@@ -100,6 +100,35 @@ type NodeEdgeStats = {
   elections?: string[];
 };
 
+/** The line the search box draws under a person, as stored (see
+ * shared/searchLine.ts, which works it out). Declared here rather than there
+ * because functions/src links this file and not that one. */
+export type SearchLine = {
+  /** The town the person is active in („Mielec”), or where no town can be
+   * named, the region („powiat sztumski”, „podlaskie”). */
+  where?: string;
+  /** The office won, or the company: „Rada miasta”, „TAURON DYSTRYBUCJA”. */
+  what?: string;
+  /** The year of the election, or when a post ended: „2024”, „do 2025”. */
+  when?: string;
+  /** The far ends of the ties the line names, by id: the tie it is about,
+   * and the one its town came from. Not shown; what the search checks the
+   * person's current ties against. */
+  ties?: string[];
+  /** On a line about a run, the election as the edge stats file it:
+   * „local-2024:won” for a seat won, „local-2024” for a run. */
+  election?: string;
+};
+
+/** The lines stored on a person, one per kind of reader: over the published
+ * ties, over every tie, and over the posts an unpublished person's teaser
+ * page may show. A scope with nothing to say is absent. */
+export type StoredSearchLines = {
+  approved?: SearchLine;
+  all?: SearchLine;
+  teaser?: SearchLine;
+};
+
 export interface NodeStats {
   isApproved: boolean;
   notesCount: number;
@@ -164,6 +193,11 @@ export interface NodeStats {
    * Firestore filter does not match a document lacking the field, so such a
    * person is left out of the counts rather than counted as untierable. */
   queueTier?: number;
+  /** The line the search box draws under a person, per kind of reader - see
+   * shared/searchLine.ts. Written only by /api/stats/computeNodes, and absent
+   * on a person it has not reached since, whom the box then shows without
+   * one. */
+  searchLine?: StoredSearchLines;
 }
 
 export type VoteCategory =

@@ -1,5 +1,5 @@
-/** The short line the search box draws under a person who shares a name with
- * another hit, so that the two can be told apart before either is opened.
+/** The short line the search box draws under every person it offers, so that
+ * two people of one name can be told apart before either is opened.
  *
  * Seen 2026-11-10: a reader walking Mielec's town council typed „robert wó”
  * and opened Robert Wójcik of TAURON rather than the Mielec councillor, and
@@ -8,21 +8,29 @@
  * which: `/api/search` sent a person's id, name and type, and the box drew a
  * line under parties only.
  *
- * Under namesakes only, on one line, the town first: decided 2026-11-18 on
- * board round search-same-name-r1. The town is what a reader looking somebody
- * up already knows. Then the party of a published person, then the office or
- * the company: „Mielec · PiS · Rada miasta 2024”. Which tie the line names is
- * `personSearchLine`'s rule, and which town `lineTown`'s.
+ * One line, the town first, under every person: decided 2026-11-18 on board
+ * rounds search-same-name-r1 and -r2. The town is what a reader looking
+ * somebody up already knows. Then the party of a published person, then the
+ * office or the company: „Mielec · PiS · Rada miasta 2024”. Which tie the line
+ * names is `personSearchLine`'s rule, and which town `lineTown`'s.
  *
- * Nothing here reads anything. The search answers from documents it has
- * already read, so the line has to be stored on the person's own document
- * (`stats.searchLine`), by what already holds a person's ties, the nodes at
- * their far ends, the seat and owner edges of those, and the revisions that
- * say who wrote them: `/api/stats/computeNodes` reads every node, edge and
- * revision anyway. Nothing writes it yet.
+ * The search answers from documents it has already read, so the line is
+ * stored on the person's own document (`stats.searchLine`) by
+ * `/api/stats/computeNodes`, the one place that already holds every tie, the
+ * nodes at their far ends, the seat and owner edges of those and the
+ * revisions that say who wrote them (`storedSearchLines`). That makes a line
+ * only as fresh as the last run, so the search checks it against the
+ * person's edge stats, which the edge stats sweeper keeps current within a
+ * minute of any change, and drops a line about a tie that has gone
+ * (`hitLine`).
  */
 
-import { asArray } from "./model";
+import {
+  asArray,
+  pageIsPublic,
+  type SearchLine,
+  type StoredSearchLines,
+} from "./model";
 import { OTHER_PARTY } from "./misc";
 import { mostRecentPost } from "./personTeaser";
 import { splitQualifier } from "./search";
@@ -30,6 +38,7 @@ import { spellDate } from "./succession";
 import {
   candidacyElection,
   electionOptions,
+  electionResultKey,
   type ElectionKey,
 } from "./electionDays";
 
@@ -67,20 +76,16 @@ export type LineTarget = {
   owners?: readonly string[];
 };
 
-/** What the line says, stored on the person per kind of reader. */
-export type SearchLine = {
-  /** The town the person is active in („Mielec”), or where no town can be
-   * named, the region („powiat sztumski”, „podlaskie”). */
-  where?: string;
-  /** The office won, or the company: „Rada miasta”, „TAURON DYSTRYBUCJA”. */
-  what?: string;
-  /** The year of the election, or when a post ended: „2024”, „do 2025”. */
-  when?: string;
-};
+/** The nodes the line reads, by id. A `Map` is one. */
+export type LineTargets = { get(id: string): LineTarget | undefined };
 
-/** What `/api/search` sends with a person: the stored line, and the parties
- * the person page prints beside the name. */
-export type HitLine = SearchLine & { parties?: string[] };
+export type { SearchLine, StoredSearchLines };
+
+/** What `/api/search` sends with a person: the line, and the parties the
+ * person page prints beside the name. */
+export type HitLine = Pick<SearchLine, "where" | "what" | "when"> & {
+  parties?: string[];
+};
 
 /** The newest election of each kind the site records - a seat won in one of
  * these is a seat held now. */
@@ -134,11 +139,11 @@ function regionTown(region: LineTarget | undefined): string | undefined {
  * region it lies in, and that region as a line says it. */
 type Place = { town?: string; area?: string; region?: string };
 
-function regionPlace(region: LineTarget | undefined): Place {
+function regionPlace(region: LineTarget): Place {
   return {
     town: regionTown(region),
-    area: region?.teryt,
-    region: region?.name ? placeName(region.name) : undefined,
+    area: region.teryt,
+    region: region.name ? placeName(region.name) : undefined,
   };
 }
 
@@ -147,10 +152,7 @@ function regionPlace(region: LineTarget | undefined): Place {
  * inside its seat that owns it, or the one town of several - a company a
  * single gmina owns is that gmina's. Most seats are a powiat, which is no
  * town: „CECH RZEMIOSŁ RÓŻNYCH W SZTUMIE” has nothing but powiat sztumski. */
-function companyPlace(
-  company: LineTarget,
-  targets: ReadonlyMap<string, LineTarget>,
-): Place {
+function companyPlace(company: LineTarget, targets: LineTargets): Place {
   const [, bracket] = splitQualifier(
     (company.name ?? "").replace(/\s+/g, " "),
     "place",
@@ -178,7 +180,8 @@ function yearOf(date: string | null | undefined): string | undefined {
   return /^(\d{4})/.exec(date ?? "")?.[1];
 }
 
-/** The town a line leads with, for the tie it names.
+/** The town a line leads with, for the tie it names, and the tie it came
+ * from where that is another one.
  *
  * The tie's own, where it has one. A run is filed under the powiat it was in,
  * which is no town - every local run is, „Rada miasta” in Mielec included -
@@ -190,21 +193,23 @@ function lineTown(
   subject: LineEdge,
   byRecency: readonly LineEdge[],
   placeOf: (edge: LineEdge) => Place,
-): string | undefined {
+): { where?: string; from?: string } {
   const own = placeOf(subject);
-  if (own.town) return own.town;
+  if (own.town) return { where: own.town };
   if (own.area) {
     for (const tie of byRecency) {
       if (tie.id === subject.id) continue;
       const place = placeOf(tie);
-      if (place.town && place.area?.startsWith(own.area)) return place.town;
+      if (place.town && place.area?.startsWith(own.area)) {
+        return { where: place.town, from: tie.target };
+      }
     }
   }
-  return own.region;
+  return own.region ? { where: own.region } : {};
 }
 
-/** The line for a person, from their ties and the nodes the line reads
- * (keyed by id), or nothing where no tie says anything.
+/** The line for a person, from their ties and the nodes the line reads, or
+ * nothing where no tie says anything.
  *
  * Which tie, in this order:
  * 1. a seat won in the newest election of its kind - the office they hold now,
@@ -219,7 +224,7 @@ function lineTown(
  */
 export function personSearchLine(
   edges: readonly LineEdge[],
-  targets: ReadonlyMap<string, LineTarget>,
+  targets: LineTargets,
   today: number,
 ): SearchLine | undefined {
   const live = edges.filter((edge) => {
@@ -234,7 +239,9 @@ export function personSearchLine(
         targets.get(edge.target)?.type === "region" &&
         yearOf(edge.start_date),
     )
-    .toSorted(
+    // `sort` on the copy `filter` made, not `toSorted`: functions/ builds
+    // shared/ too, for an ES2022 that does not have it.
+    .sort(
       (a, b) =>
         yearOf(b.start_date)!.localeCompare(yearOf(a.start_date)!) ||
         Number(b.elected === true) - Number(a.elected === true) ||
@@ -257,7 +264,7 @@ export function personSearchLine(
         ? Number.MAX_SAFE_INTEGER
         : (spellDate(edge.end_date) ?? 0)
       : Date.parse(`${yearOf(edge.start_date)}-12-31`);
-  const byRecency = [...posts, ...runs].toSorted(
+  const byRecency = [...posts, ...runs].sort(
     (a, b) => lastSeen(b) - lastSeen(a) || a.id.localeCompare(b.id),
   );
   const placeOf = (edge: LineEdge): Place => {
@@ -267,24 +274,49 @@ export function personSearchLine(
       : regionPlace(target);
   };
 
+  /** The fields a line has, and none it does not: Firestore refuses a map
+   * holding an undefined value. */
+  const line = (
+    subject: LineEdge,
+    what: string,
+    when: string | undefined,
+    election?: string,
+  ): SearchLine => {
+    const { where, from } = lineTown(subject, byRecency, placeOf);
+    return {
+      ...(where ? { where } : {}),
+      what,
+      ...(when ? { when } : {}),
+      ties: from ? [subject.target, from] : [subject.target],
+      ...(election ? { election } : {}),
+    };
+  };
   const runLine = (run: LineEdge): SearchLine => {
     const office = run.position?.trim();
-    return {
-      where: lineTown(run, byRecency, placeOf),
-      what:
-        run.elected === true && office && office !== "Samorząd"
-          ? office
-          : "wybory",
-      when: yearOf(run.start_date)!,
-    };
+    const what =
+      run.elected === true && office && office !== "Samorząd"
+        ? office
+        : "wybory";
+    const key = candidacyElection(
+      run.start_date,
+      run.position,
+      run.by_election,
+    );
+    const filed =
+      key === null
+        ? undefined
+        : run.elected === true
+          ? electionResultKey(key, "won")
+          : key;
+    return line(run, what, yearOf(run.start_date), filed);
   };
   const postLine = (post: LineEdge, isHeld: boolean): SearchLine => {
     const ended = isHeld ? undefined : yearOf(post.end_date);
-    return {
-      where: lineTown(post, byRecency, placeOf),
-      what: companyName(targets.get(post.target)!.name!),
-      ...(ended ? { when: `do ${ended}` } : {}),
-    };
+    return line(
+      post,
+      companyName(targets.get(post.target)!.name!),
+      ended ? `do ${ended}` : undefined,
+    );
   };
 
   const won = runs.filter((run) => run.elected === true);
@@ -335,17 +367,54 @@ export function personSearchLine(
   return candidates[0]?.line();
 }
 
-/** The lines stored on a person, one per kind of reader.
- *
- * `approved` and `all` are `personSearchLine` over the published ties and over
- * every tie. `teaser` is the same over the posts alone, and only those an
- * import wrote or a reviewer approved: what the teaser page of an unpublished
- * person shows a logged out reader (`/api/nodes/[id]/teaser`), and absent
- * where that page is a 404. */
-export type StoredSearchLines = {
-  approved?: SearchLine;
-  all?: SearchLine;
-  teaser?: SearchLine;
+/** The lines `/api/stats/computeNodes` stores on a person, from every edge it
+ * holds of theirs: the published ones for a logged out reader of a published
+ * page, all of them for a signed in reader, and for a logged out reader of an
+ * unpublished page only the posts its teaser may show - those
+ * `importedOrReviewed` passes, of a person it passes, as the teaser route asks
+ * them (server/utils/provenance.ts). A scope with nothing to say is left out,
+ * so an empty object is a person with no line at all. */
+export function storedSearchLines(
+  person: { id: string; revision_id?: unknown },
+  edges: readonly (LineEdge & { published?: unknown; revision_id?: unknown })[],
+  targets: LineTargets,
+  importedOrReviewed: (doc: { id: string; revision_id?: unknown }) => boolean,
+  today: number,
+): StoredSearchLines {
+  const own = edges.filter(
+    (edge) => edge.source === person.id && edge.deleted !== true,
+  );
+  const teaser = importedOrReviewed(person)
+    ? own.filter((edge) => edge.type === "employed" && importedOrReviewed(edge))
+    : [];
+  const approved = personSearchLine(
+    own.filter((edge) => pageIsPublic(edge)),
+    targets,
+    today,
+  );
+  const all = personSearchLine(own, targets, today);
+  const shown = personSearchLine(teaser, targets, today);
+  return {
+    ...(approved ? { approved } : {}),
+    ...(all ? { all } : {}),
+    ...(shown ? { teaser: shown } : {}),
+  };
+}
+
+/** The part of a person's document the line is read off: what
+ * `stats.searchLine` holds, the edge stats it is checked against, the
+ * parties, and whether the page is published. */
+export type SearchLineNode = {
+  type?: string;
+  visibility?: boolean;
+  parties?: unknown;
+  stats?: {
+    searchLine?: StoredSearchLines;
+    edges?: {
+      all?: { targetNodeIds?: unknown; elections?: unknown };
+      approved?: { targetNodeIds?: unknown; elections?: unknown };
+    };
+  };
 };
 
 /** What `/api/search` sends with a person hit: the line the reader may see,
@@ -357,16 +426,16 @@ export type StoredSearchLines = {
  * search-same-name-r1. Nobody is told an unpublished person's parties here:
  * they are PKW matches nobody has checked, and on the 11-18 export the
  * fifteen Krzysztof Nowaks a signed in reader is offered carried up to six
- * each, the same few on most of them. The line is read off the document the
- * search already holds; it costs no read of its own.
+ * each, the same few on most of them.
+ *
+ * A stored line is as old as the last computeNodes run, and the edge stats
+ * beside it are current, so a line whose tie has left the person's ties, or
+ * whose election has, is not sent: a namesake's run taken off a page must not
+ * go on naming them in the box. The parties are read off the page as it is.
+ * All of it from the document the search already holds; no read of its own.
  */
 export function hitLine(
-  node: {
-    type?: string;
-    visibility?: boolean;
-    parties?: unknown;
-    stats?: { searchLine?: StoredSearchLines };
-  },
+  node: SearchLineNode,
   includeDrafts: boolean,
 ): HitLine | undefined {
   if (node.type !== "person") return undefined;
@@ -377,6 +446,19 @@ export function hitLine(
     : includeDrafts
       ? stored?.all
       : stored?.approved;
+  const scope =
+    includeDrafts || teaserOnly
+      ? node.stats?.edges?.all
+      : node.stats?.edges?.approved;
+  const current =
+    !!said &&
+    (said.ties ?? []).every((id) =>
+      asArray(scope?.targetNodeIds as string[] | undefined).includes(id),
+    ) &&
+    (!said.election ||
+      asArray(scope?.elections as string[] | undefined).includes(
+        said.election,
+      ));
   const parties =
     node.visibility === true
       ? asArray(
@@ -384,9 +466,9 @@ export function hitLine(
         ).filter((party) => typeof party === "string" && party !== OTHER_PARTY)
       : [];
   const line: HitLine = {
-    ...(said?.where ? { where: said.where } : {}),
-    ...(said?.what ? { what: said.what } : {}),
-    ...(said?.when ? { when: said.when } : {}),
+    ...(current && said.where ? { where: said.where } : {}),
+    ...(current && said.what ? { what: said.what } : {}),
+    ...(current && said.when ? { when: said.when } : {}),
     ...(parties.length > 0 ? { parties } : {}),
   };
   return Object.keys(line).length > 0 ? line : undefined;
@@ -403,24 +485,4 @@ export function hitLineText(line: HitLine | undefined): string {
   ]
     .filter(Boolean)
     .join(" · ");
-}
-
-/** Which of `names` belong to namesakes: people who share a surname and a
- * given name with another of them. „Jacek Wiśniewski” and „Jacek Andrzej
- * Wiśniewski” both answer „wiśniewski jac”, and „Tomasz Paweł Wiśniewski”
- * stands among four Paweł Wiśniewskis when „paweł wiśniewski” is typed. The
- * surname is the last word, a hyphenated one whole. */
-export function namesakes(names: readonly string[]): boolean[] {
-  const people = names.map((name) => {
-    const words = name.toLocaleLowerCase("pl").split(/\s+/).filter(Boolean);
-    return { surname: words.at(-1), given: new Set(words.slice(0, -1)) };
-  });
-  return people.map((person, index) =>
-    people.some(
-      (other, otherIndex) =>
-        otherIndex !== index &&
-        other.surname === person.surname &&
-        [...other.given].some((word) => person.given.has(word)),
-    ),
-  );
 }
