@@ -537,6 +537,35 @@ describe("PublishNodeDialog.vue", () => {
     expect(alert).not.toContain("propozycję zmiany");
   });
 
+  it("calls neither a migration's version nor the import's under a person's uid a proposal", async () => {
+    for (const newest of [
+      { update_user: "migration:merge-duplicates" },
+      { update_automatic: true, update_user: "someone" },
+    ]) {
+      revisionsResponse = {
+        approvedRevisionId: null,
+        revisions: [
+          {
+            id: "rev-new",
+            data: { name: "Jan Kowalski" },
+            update_time: "2026-08-12T10:00:00Z",
+            ...newest,
+          },
+        ],
+      };
+      serveRelations([]);
+      wrapper = mountDialog();
+      await open(wrapper);
+
+      const alert = el("publish-auto-approve")?.textContent ?? "";
+      expect(alert).toContain("12.08.2026");
+      expect(alert).not.toContain("propozycję zmiany");
+      wrapper.unmount();
+      document.body.innerHTML = "";
+    }
+    wrapper = undefined;
+  });
+
   it("says so when the version it is about to publish is a person's proposal", async () => {
     // The newest version is somebody's edit nobody has read: publishing
     // approves it all the same, as the hold's „czeka propozycja zmiany” knows.
@@ -771,21 +800,30 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
     // PO is also his 2006 and 2010 runs' party, which nothing doubts.
     const warning = el("publish-clash-parties-local-2002") as HTMLElement;
     expect(warning.textContent.replace(/\s+/g, " ")).toContain(
-      "Partia PiS pochodzi tylko z niezaznaczonej kandydatury. Jeśli to imiennik, usuń ją w edycji strony.",
+      "Tylko niezaznaczona kandydatura daje partię: PiS. Jeśli to imiennik, usuń ją na stronie osoby.",
     );
-    expect(warning.querySelector("a")?.getAttribute("href")).toBe(
-      "/edit/node/jan-kowalski",
-    );
+    // The person page, where „Zaproponuj zmianę” edits the parties, in a tab
+    // of its own: the dialog stays as it was.
+    const link = warning.querySelector("a");
+    expect(link?.getAttribute("href")).toBe("/entity/person/jan-kowalski");
+    expect(link?.getAttribute("target")).toBe("_blank");
   });
 
-  it("takes the warning back once the reviewer ticks that run", async () => {
+  it("moves the warning with the side the reviewer picks", async () => {
     serveRelations(withParties(), ["PO", "PiS"]);
     wrapper = mountDialog();
     await open(wrapper);
+    const warning = () =>
+      el("publish-clash-parties-local-2002")?.textContent.replace(/\s+/g, " ");
 
+    await click(checkbox("gniezno-2002"));
+    expect(warning()).toContain("daje partię: PiS.");
+
+    // The other side picked instead: PiS is vouched for, and his career in
+    // powiat gnieźnieński, all of it unticked, is what is left out.
+    await click(checkbox("gniezno-2002"));
     await click(checkbox("kozienice-2002"));
-
-    expect(el("publish-clash-parties-local-2002")).toBeNull();
+    expect(warning()).toContain("dają partię: PO.");
   });
 
   it("names every party of a clash nobody ticked, and leaves one no run names", async () => {
@@ -801,8 +839,103 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
     expect(
       el("publish-clash-parties-local-2002")?.textContent.replace(/\s+/g, " "),
     ).toContain(
-      "Partie PO i PiS pochodzą tylko z niezaznaczonych kandydatur. Jeśli to imiennik, usuń je w edycji strony.",
+      "Tylko niezaznaczone kandydatury dają partie: PO i PiS. Jeśli to imiennik, usuń je na stronie osoby.",
     );
+  });
+
+  it("reads the parties of the version publishing approves, not the page as stored", async () => {
+    // Nothing approved: the newest version goes live, here the admin's own
+    // proposal from the person page, without the namesake's PiS.
+    revisionsResponse = {
+      approvedRevisionId: null,
+      revisions: [
+        {
+          id: "rev-import",
+          data: { name: "Jan Kowalski", parties: ["PO", "PiS"] },
+          update_time: "2026-07-09T10:00:00Z",
+          update_automatic: true,
+          update_user: "pipeline",
+        },
+        {
+          id: "rev-admin",
+          status: "pending",
+          data: { name: "Jan Kowalski", parties: ["PO"] },
+          update_time: "2026-08-12T10:00:00Z",
+          update_user: "admin-uid",
+        },
+      ],
+    };
+    serveRelations(withParties(), ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(el("publish-clash-parties-local-2002")).toBeNull();
+  });
+
+  it("reads the version again when the window comes back, and keeps the ticks", async () => {
+    serveRelations(withParties(), ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+    await click(checkbox("gniezno-2002"));
+    expect(el("publish-clash-parties-local-2002")).not.toBeNull();
+
+    // The admin took PiS off in another tab: a proposal, now the newest.
+    revisionsResponse = {
+      approvedRevisionId: null,
+      revisions: [
+        {
+          id: "rev-admin",
+          status: "pending",
+          data: { name: "Jan Kowalski", parties: ["PO"] },
+          update_time: "2026-08-12T10:00:00Z",
+          update_user: "admin-uid",
+        },
+      ],
+    };
+    window.dispatchEvent(new Event("focus"));
+    await flushPromises();
+
+    expect(el("publish-clash-parties-local-2002")).toBeNull();
+    expect(checkbox("gniezno-2002")?.checked).toBe(true);
+  });
+
+  it("counts the namesake's other runs in the place left out, once a side is picked", async () => {
+    // He stood in powiat kozienicki in 2014 too, for PiS: no clash that year.
+    const rows = [
+      ...withParties(),
+      candidacy("kozienice-2014", "1407", "2014", { parties: ["PiS"] }),
+    ];
+    serveRelations(rows, ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    // Before a side is picked, the 2006 run is nobody's to doubt.
+    expect(el("publish-clash-parties-local-2002")).toBeNull();
+
+    await click(checkbox("gniezno-2002"));
+
+    expect(
+      el("publish-clash-parties-local-2002")?.textContent.replace(/\s+/g, " "),
+    ).toContain("Tylko niezaznaczone kandydatury dają partię: PiS.");
+  });
+
+  it("names a party once, under the newest block whose runs give it", async () => {
+    // A second election in two places, the namesake's run there for PiS too.
+    const rows = [
+      ...withParties(),
+      candidacy("gniezno-2018", "3003", "2018", { parties: ["PO"] }),
+      candidacy("kozienice-2018", "1407", "2018", { parties: ["PiS"] }),
+    ];
+    serveRelations(rows, ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+    await click(checkbox("gniezno-2002"));
+    await click(checkbox("gniezno-2018"));
+
+    expect(el("publish-clash-parties-local-2018")?.textContent).toContain(
+      "PiS",
+    );
+    expect(el("publish-clash-parties-local-2002")).toBeNull();
   });
 
   it("says nothing about parties when no run in two places gives one", async () => {

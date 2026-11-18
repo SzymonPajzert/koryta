@@ -512,7 +512,7 @@ describe("api/edges/byNode", () => {
       start_date: "2024-01-01",
       party: "PiS",
       member_parties: ["PSL", 7],
-      backing_parties: ["PiS"],
+      backing_parties: ["PiS", "Razem"],
     };
     stored["edges/bare"] = {
       source: "node-1",
@@ -526,7 +526,7 @@ describe("api/edges/byNode", () => {
 
     const relations = byId(await callHandler());
 
-    expect(relations["run"]!.parties).toEqual(["PiS", "PSL"]);
+    expect(relations["run"]!.parties).toEqual(["PiS", "PSL", "Razem"]);
     expect(relations["bare"]!.parties).toEqual([]);
     expect(relations["job"]!.parties).toEqual([]);
   });
