@@ -8,9 +8,16 @@ należy do partii politycznej”) and who backed the candidacy (`supported_by`:
 SLD”). The second is recorded on any list, a local voters' committee's
 included, and that is where it says most: the committee's name names no party.
 
-Szymon, 2026-11-11: a backing counts as an affiliation, as a membership does.
-The site's parties mean affiliation in the broad sense, and the page is to show
-how each one is known rather than list them all alike.
+Decision on 2026-11-11: a backing counts as an affiliation, as a membership
+does. The site's parties mean affiliation in the broad sense, and the page is
+to show how each one is known rather than list them all alike.
+
+Some files write the backing into the membership column, alone („popierany
+przez Prawo i Sprawiedliwość”) or after the membership („nie należy do partii
+politycznej, pop. Nowoczesna Ryszarda Petru”): 629 candidacies, 477 of them on
+the 2001 Sejm lists, the rest in the 2011 and 2015 Sejm and Senate files and
+the 2014 European one. `membership_and_backing` splits such a cell, so the
+party it names is read as the backing it is rather than as a membership.
 
 Both columns name the party in whatever form the year's file used: in full, as
 an abbreviation, in the genitive after „członek” („członek Prawa i
@@ -42,6 +49,11 @@ party_names: dict[str, list[str]] = {
     "prawo i sprawiedliwość": ["PiS"],
     "prawa i sprawiedliwości": ["PiS"],
     "pis": ["PiS"],
+    # Misspelt in the 2001 Sejm file's membership column, one or two rows each.
+    "prawo i sprawiedliowść": ["PiS"],
+    "prawo i sprawiedliwpść": ["PiS"],
+    "prawo i sprawiedlowość": ["PiS"],
+    "prawo i sprawioedliwość": ["PiS"],
     # PO, and Koalicja Obywatelska, which `committee_to_party` files as PO too.
     "platforma obywatelska": ["PO"],
     "platforma obywatelska rp": ["PO"],
@@ -52,6 +64,8 @@ party_names: dict[str, list[str]] = {
     "platformę obywatelską": ["PO"],
     "platformę obywatelską rp": ["PO"],
     "platformę obywatelską rzeczypospolitej polskiej": ["PO"],
+    # One 2024 backing, written without spaces.
+    "platformaobywatelskarzeczypospolitejpolskiej": ["PO"],
     "po": ["PO"],
     "po rp": ["PO"],
     # The 2006 council file's abbreviation, 1,082 candidates.
@@ -63,6 +77,7 @@ party_names: dict[str, list[str]] = {
     # PSL
     "polskie stronnictwo ludowe": ["PSL"],
     "polskiego stronnictwa ludowego": ["PSL"],
+    "polskie stronictwo ludowe": ["PSL"],
     "psl": ["PSL"],
     # SLD, and Nowa Lewica after the 2021 rename, kept apart as on the site.
     "sojusz lewicy demokratycznej": ["SLD"],
@@ -250,6 +265,7 @@ party_names: dict[str, list[str]] = {
 NO_PARTY = {
     "nie należy do partii politycznej",
     "nie należy do partii",
+    "nie należy do partii polit",
     "nie należy",
     "nie zgłoszono przynależności do partii",
     "brak oznaczenia",
@@ -272,6 +288,31 @@ _KIND = re.compile(
     re.IGNORECASE,
 )
 _QUOTES = re.compile(r"[\"'„”“«»]")
+#: Where a backing starts in a membership cell, wherever the cell's spacing
+#: put it: „…politycznej, popierany przez PSL”, „…polit.popierany przez …”.
+_BACKING = re.compile(
+    r"(?<!\w)(?:popierany|popierana|popierane|popierani|pop\.)(?=\s|$)",
+    re.IGNORECASE,
+)
+
+
+def membership_and_backing(cell: str | None) -> tuple[str | None, str | None]:
+    """A membership cell as the membership it states and the backing PKW wrote
+    into it as well, either of them None where the cell has none.
+
+    „nie należy do partii politycznej, pop. SLD” is („nie należy do partii
+    politycznej”, „pop. SLD”); „popierany przez PSL” is no membership at all.
+    """
+    if not cell:
+        return None, None
+    if len(cell) > 1 and _QUOTES.fullmatch(cell[0]) and _QUOTES.fullmatch(cell[-1]):
+        cell = cell[1:-1]
+    found = _BACKING.search(cell)
+    if found is None:
+        return cell, None
+    membership = _QUOTES.sub("", cell[: found.start()]).strip(" ,;") or None
+    backing = cell[found.start() :].strip() or None
+    return membership, backing
 
 
 def statement_name(text: str) -> str:
