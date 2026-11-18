@@ -851,6 +851,21 @@ def test_a_recount_reports_nothing(runs):
     assert len(session.sent) == 1
 
 
+def test_a_recount_reads_nothing_from_stdin(monkeypatch, runs):
+    # As the night runs it: nothing on stdin, and the robot's usual token.
+    session = Session()
+    session.by_path[f"{ENDPOINT}/api/stats/computeNodes"] = [Response(200, {})]
+    monkeypatch.setattr(uploader, "token_source", lambda endpoint: Tokens())
+    monkeypatch.setattr(uploader.requests, "Session", lambda: session)
+
+    run_main(
+        monkeypatch, ["--type", "computeNodes", "--endpoint", ENDPOINT, "--submit"], []
+    )
+
+    assert session.sent == [(f"{ENDPOINT}/api/stats/computeNodes", None, "Bearer t1")]
+    assert runs == []
+
+
 def run_main(monkeypatch, argv: list[str], rows: list[dict]) -> None:
     monkeypatch.setattr(sys, "argv", ["koryta_uploader", *argv])
     lines = "".join(json.dumps(row) + "\n" for row in rows)

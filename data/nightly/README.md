@@ -10,6 +10,7 @@ when nobody is still editing, and compares tonight's people with that copy:
 | 04:15       | the instance schedule boots `koryta-nightly` (up to 15 minutes late, the docs say)                     |
 | 04:30       | `koryta-nightly.timer` starts `koryta-nightly.service`: `night.sh`, then `koryta_nightly`              |
 | ~06:30      | `declarations`: the site counts the declarations in people from predator's newest facts                |
+| ~06:30      | `compute_nodes`: autopush recounts every page's stats, the search lines among them                     |
 | ~06:30      | the night is over; `poweroff.sh` switches the VM off                                                   |
 | 08:30       | `--stop-by`: no step but `compress` and `tidy` starts after this                                       |
 | 09:00       | the instance schedule stops the VM, if a night hung                                                    |
@@ -37,6 +38,7 @@ order, each with a time limit and its output in the night's log:
 | `company_updates` | `koryta_company_import --max-uploads 200 --max-renames 0`: what tonight's data changes on the companies the export has (below)                     |
 | `scores`          | `koryta_score_import`: the scoring models rebuilt, tonight's new pages included, and their votes reconciled                                        |
 | `declarations`    | `koryta_bip_declarations send-facts`: predator's newest facts, with tonight's list, to the site, which counts the declarations in people (below)   |
+| `compute_nodes`   | `koryta_uploader --type computeNodes --endpoint https://autopush.koryta.pl --submit`: the site recounts every page's stats (below)                 |
 | `tidy`            | export shards and day-named outputs older than a week off the disk                                                                                 |
 
 The VM keeps its disk, so `versioned/`, the download cache, the listing ranges
@@ -364,6 +366,20 @@ A failed step does not end the night; the steps that depend on it are held:
   sends again; a refusal, or the site's own error (500) again after a wait,
   fails the step. The site counts on every try, so there are two at most,
   which end inside the step's 15 minutes.
+- `compute_nodes` waits for nothing and holds nothing: a held night still
+  brings the counts and the search lines up to the day's edits. It is one
+  request, which the site cuts off at 300 s; a refusal or no answer fails the
+  step, and the counts stay as the last recount left them.
+
+Recount: the stats every page carries - what the lists filter and sort by, the
+queue tiers, the line the search box draws under a person - are worked out by
+`/api/stats/computeNodes` over the whole database, last in the night so that
+they cover everything it sent. It asks autopush, never koryta.pl (decision on
+2026-11-18): the two share the database, and autopush runs main's code on
+4000 MiB, while koryta.pl runs older code on 1 GiB, whose recount writes
+`stats` without the search line and so takes it off every person. The robot
+signs in as it does for its uploads: the site lets the datascience group
+recount, as well as an admin.
 
 ## Runs asked for on the site
 

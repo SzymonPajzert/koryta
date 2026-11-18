@@ -397,7 +397,9 @@ class NumpyEncoder(json.JSONEncoder):
 class Args:
     endpoint: str
     submit: bool
-    type: typing.Literal["person", "company", "region", "score", "extraction"]
+    type: typing.Literal[
+        "person", "company", "region", "score", "extraction", "computeNodes"
+    ]
     database: str
     limit: int | None
     offset: int | None
@@ -1277,7 +1279,11 @@ def read_payloads_filtered(args) -> list[dict]:
 def main():
     args = parse_args()
 
-    entities = read_payloads_filtered(args)
+    # The recount sends nothing: it asks the site to recount what it holds.
+    if args.type == "computeNodes":
+        entities = [{}]
+    else:
+        entities = read_payloads_filtered(args)
     print(f"Query returned {len(entities)} rows.", file=sys.stderr)
 
     if len(entities) == 0:

@@ -40,6 +40,7 @@ GOOD = {
     "koryta_company_import": 0,
     "koryta_score_import": 0,
     "koryta_bip_declarations": 0,
+    "koryta_uploader": 0,
     "compressor": 0,
     # The held pipelines' rebuilds, as `koryta <Name>`.
     **{f"koryta {name}": 0 for name in night.REBUILT_ON_CHANGE},
@@ -289,6 +290,7 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "koryta_company_import",
         "koryta_score_import",
         "koryta_bip_declarations",
+        "koryta_uploader",
     ]
     assert set(world.steps().values()) == {("succeeded", "")} | {
         ("succeeded", FRESH),
@@ -1301,11 +1303,12 @@ def test_the_scores_do_not_wait_on_how_the_people_went(world):
     assert world.steps()["people"] == ("failed", "kod wyjścia 1")
     assert world.steps()["company_updates"] == ("succeeded", "")
     assert world.steps()["scores"] == ("succeeded", "")
-    assert world.ran()[-4:] == [
+    assert world.ran()[-5:] == [
         "koryta_people_import",
         "koryta_company_import",
         "koryta_score_import",
         "koryta_bip_declarations",
+        "koryta_uploader",
     ]
 
 
@@ -1344,6 +1347,41 @@ def test_no_declarations_facts_yet_is_partial_and_a_refusal_fails_the_night(worl
     assert night.main([]) == night.EXIT_FAILED
 
     assert world.steps()["declarations"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["tidy"][0] == "succeeded"
+
+
+def test_the_site_recounts_on_autopush_after_everything_the_night_sent(world):
+    assert night.main([]) == 0
+
+    assert world.ran()[-2:] == ["koryta_bip_declarations", "koryta_uploader"]
+    argv, _ = world.command("koryta_uploader")
+    assert argv[1:] == [
+        "--type",
+        "computeNodes",
+        "--endpoint",
+        "https://autopush.koryta.pl",
+        "--submit",
+    ]
+    assert world.steps()["compute_nodes"] == ("succeeded", "")
+
+
+def test_a_held_night_still_recounts(world):
+    world.export = STALE
+
+    assert night.main([]) == night.EXIT_TRY_LATER
+
+    assert world.steps()["people"][0] == "held"
+    assert world.steps()["compute_nodes"] == ("succeeded", "")
+
+
+def test_a_recount_that_fails_fails_the_night_and_holds_nothing(world):
+    # The site's 504 after 300 s, or a refusal: the uploader exits 1.
+    world.codes["koryta_uploader"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["compute_nodes"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["people"] == ("succeeded", "")
     assert world.steps()["tidy"][0] == "succeeded"
 
 
@@ -1457,6 +1495,10 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
     assert (
         "declarations at most 15 min: koryta_bip_declarations send-facts: "
         "predator's newest facts part, with tonight's list, to the site" in out
+    )
+    assert (
+        "compute_nodes at most 10 min: koryta_uploader --type computeNodes "
+        "--endpoint https://autopush.koryta.pl --submit" in out
     )
     assert "koryta_scrape_krs_paid --scope fallback --max-calls 50" in out
     assert (
