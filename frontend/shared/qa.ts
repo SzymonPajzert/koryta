@@ -59,6 +59,15 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "start-kampania-w-plausible",
+    title: "Wejścia przez koryta.pl/start widać w Plausible",
+    description:
+      "Wejścia przez koryta.pl/start mają w Plausible kampanię „start”. Źródło (Instagram, Facebook, wykop) zostaje.",
+    steps: ["Wejdź na koryta.pl/start: adres ma ?utm_campaign=start."],
+    link: "/start",
+    area: "admin",
+  },
+  {
     id: "mniej-miejsca-pod-danymi-osoby",
     title: "Mniej pustego miejsca pod danymi osoby",
     description:
