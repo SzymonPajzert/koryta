@@ -150,48 +150,74 @@ describe("RegionAuthorities", () => {
     );
   });
 
-  it("opens a long council in place and hands focus to the first member it opened", async () => {
-    // Ten seats on one committee and five on another: the fold after twelve
-    // cuts the second one short, after its first two.
-    const members = [
-      ...Array.from({ length: 10 }, (_, index) =>
-        member(`Anna ${String.fromCharCode(65 + index)}`, {
-          committee: "KKW KOALICJA OBYWATELSKA",
-          committeeParties: ["PO"],
-          page: { id: `a${index}`, published: true, parties: ["PO"] },
-        }),
-      ),
-      ...Array.from({ length: 5 }, (_, index) =>
-        member(`Bogdan ${String.fromCharCode(65 + index)}`, {
-          committee: "KW PRAWO I SPRAWIEDLIWOŚĆ",
-          committeeParties: ["PiS"],
-          page: { id: `b${index}`, published: true, parties: ["PiS"] },
-        }),
-      ),
-    ];
-    const view = await mountView(
-      { councils: [{ office: "Rada powiatu", seats: 15, members }] },
-      "powiat",
+  /** Gmina Łowicz's council in two committees, Jakub Wolski on the second. */
+  const council: GovernmentView = {
+    councils: [
+      {
+        office: "Rada miasta",
+        seats: 3,
+        members: [
+          member("Anna Duża", { committee: "KWW ŁOWICKIE.PL" }),
+          member("Ewa Duża", { committee: "KWW ŁOWICKIE.PL" }),
+          member("Jakub Wolski", {
+            committee: "KW PRAWO I SPRAWIEDLIWOŚĆ",
+            committeeParties: ["PiS"],
+            page: { id: "wolski", published: true, parties: ["PiS"] },
+          }),
+        ],
+      },
+    ],
+  };
+
+  it("opens a council on every committee side by side, a tab each to see one alone", async () => {
+    const view = await mountView(council, "gmina", { highlightId: "wolski" });
+    const tabs = view.findAll(
+      '[data-testid="region-authorities-tabs-Rada miasta"] .v-tab',
     );
-    const names = () =>
-      view.findAll(".list-member").map((row) => row.get("a").text());
-    const before = names();
-    expect(before).toHaveLength(12);
+    expect(tabs.map((tab) => tab.text().replace(/\s+/g, " "))).toEqual([
+      "Wszyscy 3",
+      "KWW ŁOWICKIE.PL 2",
+      "PiS 1",
+    ]);
+    const all = () =>
+      view.get('[data-testid="region-authorities-all-Rada miasta"]');
+    const visible = (element: { element: Element }) =>
+      (element.element as HTMLElement).style.display !== "none";
+    // „Wszyscy”: a box each, every name.
+    expect(visible(all())).toBe(true);
+    expect(
+      all()
+        .findAll(".council-group__head")
+        .map((head) => head.text()),
+    ).toEqual(["KWW ŁOWICKIE.PL 2", "KW PRAWO I SPRAWIEDLIWOŚĆ 1"]);
 
-    const button = view.get("button.list-more");
-    expect(button.attributes("aria-expanded")).toBe("false");
-    const box = document.getElementById(button.attributes("aria-controls")!);
-    expect(box?.classList.contains("lists-box")).toBe(true);
+    // Each name once in the page, under „Wszyscy”.
+    expect(view.findAll(".list-member")).toHaveLength(3);
 
-    await button.trigger("click");
+    // One committee alone, two to a row; „Wszyscy” hidden, still there.
+    await tabs[2]!.trigger("click");
     await flushPromises();
+    expect(visible(all())).toBe(false);
+    const alone = view.get(
+      '[data-testid="region-authorities-committee-Rada miasta"]',
+    );
+    expect(alone.find(".list-members--columns").exists()).toBe(true);
+    expect(
+      alone.findAll(".list-member__name").map((name) => name.text()),
+    ).toEqual(["Jakub Wolski"]);
+  });
 
-    const after = names();
-    expect(after).toHaveLength(15);
-    expect(view.find("button.list-more").exists()).toBe(false);
-    // Where the button was, so a keyboard is not dropped back to the top.
-    const opened = after.find((name) => !before.includes(name));
-    expect(document.activeElement?.textContent.trim()).toBe(opened);
-    expect(opened).toBe("Bogdan C");
+  it("draws no tabs for a council of one committee", async () => {
+    const one: GovernmentView = {
+      councils: [
+        {
+          office: "Rada gminy",
+          members: [member("Anna Duża"), member("Ewa Duża")],
+        },
+      ],
+    };
+    const view = await mountView(one, "gmina");
+    expect(view.find(".council-tabs").exists()).toBe(false);
+    expect(view.findAll(".council-column")).toHaveLength(1);
   });
 });

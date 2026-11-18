@@ -6,7 +6,10 @@
        wording (2026-11-18). -->
   <ul
     class="list-members"
-    :class="{ 'list-members--indent': indent }"
+    :class="{
+      'list-members--indent': indent,
+      'list-members--columns': columns,
+    }"
     data-testid="list-members"
   >
     <li
@@ -69,6 +72,8 @@ defineProps<{
   highlightId?: string;
   /** A step in from the left, for a list opened under its own head. */
   indent?: boolean;
+  /** Two names to a row on a desktop: a council's committee in its tab. */
+  columns?: boolean;
   /** Without the offices and the „Wybrany/a” chip: for a council's members,
    * where every row would say the same of both. */
   plain?: boolean;
@@ -106,6 +111,28 @@ defineProps<{
 .list-member__name {
   font-size: var(--k-ui-size);
   font-weight: 600;
+}
+
+/* Two to a row on a desktop, the rules between them as between rows: every
+   row ruled above but the first two, and the right-hand one ruled off from
+   the left. */
+@media (min-width: 960px) {
+  .list-members--columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .list-members--columns .list-member {
+    border-top: 1px solid var(--k-line);
+  }
+
+  .list-members--columns .list-member:nth-child(-n + 2) {
+    border-top: 0;
+  }
+
+  .list-members--columns .list-member:nth-child(2n) {
+    border-left: 1px solid var(--k-line);
+  }
 }
 
 /* The person the reader came from: a rail on their own row, so among the

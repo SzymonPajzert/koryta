@@ -110,32 +110,71 @@
         :summary="summaryOf(council)"
       />
 
-      <!-- A row each, under the committee (Szymon, 2026-11-18: a row each,
-           with the person's own party chips). -->
-      <div :id="boxId(council.office)" class="lists-box k-bleed-xs">
-        <template v-for="group in shownGroups(council)" :key="group.key">
+      <!-- A row each, under the committee (Szymon, 2026-11-18), the
+           committees apart. A tab per committee, its members two to a row on a
+           desktop, and first a „Wszyscy” tab with every committee side by
+           side, a box each - Szymon, board round region-lists-r4: "a synthesis
+           of both. Add an option „wszyscy” that shows b option, otherwise it
+           shows a". It opens on „Wszyscy”, so everybody is listed at once; a
+           council of one committee needs no tabs. -->
+      <v-tabs
+        v-if="council.committees.length > 1"
+        :model-value="selectedOf(council)"
+        color="ink-sage"
+        density="compact"
+        show-arrows
+        class="council-tabs mb-2"
+        :data-testid="`region-authorities-tabs-${council.office}`"
+        @update:model-value="select(council.office, $event)"
+      >
+        <v-tab :value="ALL" class="text-none">
+          Wszyscy
+          <span class="council-tab__count">{{ namedOf(council) }}</span>
+        </v-tab>
+        <v-tab
+          v-for="group in council.committees"
+          :key="group.key"
+          :value="group.key"
+          class="text-none"
+        >
+          {{ tabLabel(group) }}
+          <span class="council-tab__count">{{ group.members.length }}</span>
+        </v-tab>
+      </v-tabs>
+      <div
+        v-show="selectedOf(council) === ALL"
+        class="council-columns"
+        :data-testid="`region-authorities-all-${council.office}`"
+      >
+        <div
+          v-for="group in council.committees"
+          :key="group.key"
+          class="lists-box council-column"
+        >
           <div class="council-group__head">
             {{ group.committee ?? "Komitet nieznany" }}
-            <span class="council-group__count">{{
-              groupCount(council, group)
-            }}</span>
+            <span class="council-group__count">{{ group.members.length }}</span>
           </div>
           <RegionListMembers
             :members="group.members.map(asListMember)"
             :highlight-id="highlightId"
             plain
           />
-        </template>
-        <button
-          v-if="foldedOf(council) > 0"
-          type="button"
-          class="list-more"
-          aria-expanded="false"
-          :aria-controls="boxId(council.office)"
-          @click="showAllMembers(council)"
-        >
-          Pokaż wszystkich radnych ({{ namedOf(council) }})
-        </button>
+        </div>
+      </div>
+      <!-- One committee, drawn only once its tab is picked: the page carries
+           each name once, under „Wszyscy”. -->
+      <div
+        v-if="committeeOf(council)"
+        class="lists-box k-bleed-xs"
+        :data-testid="`region-authorities-committee-${council.office}`"
+      >
+        <RegionListMembers
+          :members="committeeOf(council)!.members.map(asListMember)"
+          :highlight-id="highlightId"
+          plain
+          columns
+        />
       </div>
 
       <!-- A seat whose holder PKW does not name: a winner who became the head
@@ -162,7 +201,7 @@ import { readableInkOn } from "~~/shared/colors";
 import { monthYear, shortDate } from "~~/shared/dates";
 import { ink } from "~/utils/chartTheme";
 import { polishCounting } from "~/composables/polish";
-import { createSlug, generateEntityUrl } from "~~/shared/slugs";
+import { generateEntityUrl } from "~~/shared/slugs";
 import type { ListMember } from "~~/shared/electionLists";
 import {
   committeeLabel,
@@ -283,102 +322,39 @@ function summaryOf(council: CouncilSection): string {
     .join(", ")}`;
 }
 
-/** How many members a committee has on the council, whatever the fold
- * shows of them. */
-function groupCount(council: CouncilSection, group: CommitteeGroup): number {
-  return (
-    council.committees.find((each) => each.key === group.key)?.members.length ??
-    group.members.length
-  );
+/** The tab of every committee at once. */
+const ALL = "wszyscy";
+
+/** The tab each council shows: „Wszyscy” until the reader picks one. */
+const picked = ref<Record<string, string>>({});
+
+function selectedOf(council: CouncilSection): string {
+  return picked.value[council.office] ?? ALL;
 }
 
+/** The committee whose tab is open, or none on „Wszyscy”. */
+function committeeOf(council: CouncilSection): CommitteeGroup | undefined {
+  const key = selectedOf(council);
+  return key === ALL
+    ? undefined
+    : council.committees.find((group) => group.key === key);
+}
+
+/** Members the council names, against its seats. */
 function namedOf(council: CouncilSection): number {
   return council.seats - council.unnamed;
 }
 
-/** How many members a council shows before „Pokaż wszystkich radnych”: a
- * sejmik has up to fifty-one. Never folding a single one away, nor the
- * person the reader came from. */
-const MEMBERS_SHOWN = 12;
-const unfolded = ref(new Set<string>());
-
-function unfold(office: string) {
-  unfolded.value = new Set([...unfolded.value, office]);
-}
-
-function shownGroups(council: CouncilSection): CommitteeGroup[] {
-  if (
-    unfolded.value.has(council.office) ||
-    namedOf(council) <= MEMBERS_SHOWN + 1
-  ) {
-    return council.committees;
+function select(office: string, key: unknown) {
+  if (typeof key === "string") {
+    picked.value = { ...picked.value, [office]: key };
   }
-  const shown: CommitteeGroup[] = [];
-  let left = MEMBERS_SHOWN;
-  for (const group of council.committees) {
-    const self = group.members.findIndex(
-      (member) => !!member.page && member.page.id === props.highlightId,
-    );
-    const take = Math.max(left, self + 1);
-    if (take <= 0) continue;
-    shown.push({ ...group, members: group.members.slice(0, take) });
-    left -= Math.min(take, group.members.length);
-  }
-  return shown;
 }
 
-function foldedOf(council: CouncilSection): number {
-  return (
-    namedOf(council) -
-    shownGroups(council).reduce((sum, group) => sum + group.members.length, 0)
-  );
-}
-
-/** For the button to say what it opens, the same on the server and in the
- * browser. */
-const councilsId = useId();
-function boxId(office: string): string {
-  return `${councilsId}-${createSlug(office)}`;
-}
-
-/** Where the first member the fold held stands once the council is whole.
- * A committee shows the start of its members, so that is the first committee
- * cut short, after everybody before it - not the first past a count: the
- * person the reader came from shows past the fold. */
-function firstFolded(council: CouncilSection): number {
-  const shown = new Map(
-    shownGroups(council).map((group) => [group.key, group.members.length]),
-  );
-  let index = 0;
-  for (const group of council.committees) {
-    const count = shown.get(group.key) ?? 0;
-    if (count < group.members.length) return index + count;
-    index += group.members.length;
-  }
-  return index;
-}
-
-/** Opening the council takes the focused button away, which would drop a
- * keyboard or screen-reader user back to the top of the page. Focus goes to
- * the first member it opened instead, the next Tab carrying on down the
- * council; `preventScroll`, because the rows open downwards from where the
- * reader already is. A member with no page is text, so their row takes the
- * focus rather than a link. */
-async function showAllMembers(council: CouncilSection) {
-  const index = firstFolded(council);
-  unfold(council.office);
-  await nextTick();
-  const rows = document
-    .getElementById(boxId(council.office))
-    ?.querySelectorAll<HTMLElement>(".list-member");
-  const row = rows?.[index];
-  const link = row?.querySelector<HTMLElement>("a");
-  if (link) {
-    link.focus({ preventScroll: true });
-  } else if (row) {
-    row.tabIndex = -1;
-    row.focus({ preventScroll: true });
-  }
+/** „PiS”, „KO”, „Trzecia Droga”: a party's list by the party, a local list
+ * by its own name. */
+function tabLabel(group: CommitteeGroup): string {
+  return committeeLabel(group.committee ?? "Komitet nieznany", group.parties);
 }
 </script>
 
@@ -406,8 +382,26 @@ async function showAllMembers(council: CouncilSection) {
   border-top: 1px solid var(--k-line);
 }
 
-.council-group__count {
+.council-group__count,
+.council-tab__count {
   font-weight: 400;
   margin-left: 4px;
+}
+
+/* b: a committee to a box, two boxes to a row on a desktop. */
+.council-columns {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 960px) {
+  .council-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.council-column {
+  align-self: start;
 }
 </style>

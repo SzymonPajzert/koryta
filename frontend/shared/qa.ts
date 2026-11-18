@@ -88,6 +88,7 @@ export const QA_ITEMS: QaItem[] = [
     steps: [
       "Otwórz Gminę Łowicz - w „Władze gminy” jest burmistrz i 20 radnych z nazwiskami, pod radą „Brak danych o jednym radnym”.",
       "Otwórz Powiat łowicki - przy staroście jest „Brak danych” z (i).",
+      "Nad radą są zakładki: „Wszyscy” pokazuje komitety obok siebie, a zakładka komitetu tylko jego radnych.",
       "Zalogowany, kliknij „Zaproponuj zmianę” obok nazwy gminy, wpisz innego burmistrza i wyślij - strona pokazuje podgląd z nowym burmistrzem.",
       "W historii zmian tej propozycji jest linia „Władze: burmistrz” ze starym i nowym nazwiskiem.",
     ],
