@@ -1,6 +1,6 @@
 import { getFirestore } from "firebase-admin/firestore";
 import type { Query, QueryDocumentSnapshot } from "firebase-admin/firestore";
-import { requireAdmin } from "~~/server/utils/auth";
+import { getUser } from "~~/server/utils/auth";
 import type {
   Edge,
   Note,
@@ -180,10 +180,18 @@ function buildNodeUpdateData(
 export default defineEventHandler(async (event) => {
   // Reads every node, edge, note, vote and revision and writes back to every
   // node, so an open one is both a way to run up the bill and a way to
-  // overwrite the counters the whole site is filtered and ordered by. Admin
-  // rather than merely signed in, for the same reason approving a revision is:
-  // this decides what the public sees.
-  await requireAdmin(event);
+  // overwrite the counters the whole site is filtered and ordered by. An admin,
+  // or the datascience group: a recount writes no more than its imports
+  // already do, and the night's robot runs one after its uploads (decision on
+  // 2026-11-18).
+  const user = await getUser(event);
+  if (user.admin !== true && user.datascience !== true) {
+    throw createError({
+      statusCode: 403,
+      message:
+        "Ta operacja jest dostępna tylko dla administratorów i grupy datascience.",
+    });
+  }
 
   const db = getFirestore("koryta-pl");
   // One collection at a time, each document dropped once its fields are

@@ -46,9 +46,9 @@ vi.mock("firebase-admin/firestore", () => ({
   getFirestore: vi.fn(() => mockDb),
 }));
 
-// Faked at the token, not at the gate: `requireAdmin` and the `getUser` it
-// calls are the thing under test, so both run for real and only the header and
-// the token verification are stood in for.
+// Faked at the token, not at the gate: `getUser` and the check on its claims
+// are the thing under test, so both run for real and only the header and the
+// token verification are stood in for.
 const mockVerifyIdToken = vi.fn();
 vi.mock("firebase-admin/auth", () => ({
   getAuth: vi.fn(() => ({ verifyIdToken: mockVerifyIdToken })),
@@ -88,15 +88,28 @@ beforeEach(() => {
 });
 
 describe("POST /api/stats/computeNodes", () => {
-  it("refuses a caller who is not an admin", async () => {
+  it("refuses a signed-in caller who is neither an admin nor in datascience", async () => {
     // It rewrites `stats` on every node, which is what every listing is
-    // filtered and ordered by, so this is a decision about what the public
-    // sees - the same bar as approving a revision.
-    mockVerifyIdToken.mockResolvedValue({ uid: "reader-1", admin: false });
+    // filtered and ordered by, so it is not for anybody who can sign in.
+    mockVerifyIdToken.mockResolvedValue({ uid: "reader-1" });
 
     await expect(handler({} as never)).rejects.toMatchObject({
       statusCode: 403,
     });
+  });
+
+  it("lets the datascience group through, as the night's robot is", async () => {
+    // A recount writes no more than its imports already do, and the night
+    // runs one after its uploads (decision on 2026-11-18).
+    mockVerifyIdToken.mockResolvedValue({
+      uid: "pipeline-people-import",
+      datascience: true,
+    });
+
+    const result = await handler({} as never);
+
+    expect(result).toMatchObject({ status: "success" });
+    expect(statsDocSet).toHaveBeenCalled();
   });
 
   it("refuses a caller carrying no token", async () => {
@@ -118,7 +131,7 @@ describe("POST /api/stats/computeNodes", () => {
   it("reads nothing when it refuses", async () => {
     // A full pass reads every node, edge, note, vote and revision. Refusing
     // after paying for that would leave the bill open to anyone.
-    mockVerifyIdToken.mockResolvedValue({ uid: "reader-1", admin: false });
+    mockVerifyIdToken.mockResolvedValue({ uid: "reader-1" });
     const nodes = vi.fn();
     collections.nodes = [{ id: "n-1", data: nodes }];
 
