@@ -33,6 +33,10 @@ export type NodeRelation = {
   /** Whether a candidacy was in a by-election, a contest of its own that the
    * two-places rule leaves out. */
   byElection: boolean;
+  /** The site's parties a candidacy names - its committee's (`party`), and
+   * the ones PKW says its candidate belonged to or was backed by - which the
+   * import adds to the page's. Empty for any other relation. */
+  parties: string[];
   /** The revision publishing this relation would approve, when it points at
    * none of its own yet: the newest one it already holds. Null when the edge
    * already has an approved revision, or holds none and will be published on
@@ -59,7 +63,30 @@ export type NodeRelation = {
 export type NodeRelations = {
   relations: NodeRelation[];
   nodePublished: boolean;
+  /** The page's parties as stored, which publishing it shows: the import's
+   * union over every candidacy on it, a namesake's included. */
+  nodeParties: string[];
 };
+
+/** `candidacyParties`'s reading of one field: the strings in it. */
+function strings(value: unknown): string[] {
+  if (typeof value === "string") return value ? [value] : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && !!item)
+    : [];
+}
+
+/** The site's parties a candidacy gives the page it is on, each once. */
+function candidacyParties(edge: Record<string, unknown>): string[] {
+  if (edge.type !== "election") return [];
+  return [
+    ...new Set([
+      ...strings(edge.party),
+      ...strings(edge.member_parties),
+      ...strings(edge.backing_parties),
+    ]),
+  ];
+}
 
 const queryValidator = z.object({
   nodeId: z.string().min(1),
@@ -123,6 +150,7 @@ export default defineEventHandler(async (event): Promise<NodeRelations> => {
           : null,
       position: typeof edge.position === "string" ? edge.position : null,
       byElection: edge.by_election === true,
+      parties: candidacyParties(edge as unknown as Record<string, unknown>),
       revisionToApprove:
         publishCandidateRevision(
           candidates,
@@ -154,5 +182,6 @@ export default defineEventHandler(async (event): Promise<NodeRelations> => {
   return {
     relations,
     nodePublished: nodeDoc.exists && pageIsPublic(nodeDoc.data() ?? {}),
+    nodeParties: strings(nodeDoc.data()?.parties),
   };
 });

@@ -494,7 +494,59 @@ describe("api/edges/byNode", () => {
 
     const result = await callHandler();
 
-    expect(result).toEqual({ relations: [], nodePublished: false });
+    expect(result).toEqual({
+      relations: [],
+      nodePublished: false,
+      nodeParties: [],
+    });
+  });
+
+  it("names the parties a candidacy gives the page, and none for a job", async () => {
+    // What the dialog shows beside a run in two places: the party a
+    // namesake's run puts on the page.
+    stored["nodes/teryt3003"] = publishedNode("Powiat gnieźnieński");
+    stored["edges/run"] = {
+      source: "node-1",
+      target: "teryt3003",
+      type: "election",
+      start_date: "2024-01-01",
+      party: "PiS",
+      member_parties: ["PSL", 7],
+      backing_parties: ["PiS"],
+    };
+    stored["edges/bare"] = {
+      source: "node-1",
+      target: "teryt3003",
+      type: "election",
+      start_date: "2018-01-01",
+      party: "",
+    };
+    stored["edges/job"] = { ...employment, party: "PO" };
+    stored["nodes/node-2"] = publishedNode("Firma A");
+
+    const relations = byId(await callHandler());
+
+    expect(relations["run"]!.parties).toEqual(["PiS", "PSL"]);
+    expect(relations["bare"]!.parties).toEqual([]);
+    expect(relations["job"]!.parties).toEqual([]);
+  });
+
+  it("returns the page's parties as stored", async () => {
+    stored["nodes/node-1"] = {
+      name: "Jan Kowalski",
+      published: false,
+      parties: ["PO", "PiS"],
+    };
+
+    expect((await callHandler()).nodeParties).toEqual(["PO", "PiS"]);
+
+    stored["nodes/node-1"] = { name: "Jan Kowalski", parties: "PO" };
+
+    expect((await callHandler()).nodeParties).toEqual(["PO"]);
+
+    stored["nodes/node-1"] = { name: "Jan Kowalski" };
+
+    expect((await callHandler()).nodeParties).toEqual([]);
   });
 
   it("is refused to everyone but an admin", async () => {
