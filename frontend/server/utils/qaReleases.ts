@@ -29,8 +29,9 @@ export function releaseBackend(): string {
 }
 
 /** koryta.pl's rollouts from before the record existed, newest first, off the
- * App Hosting build logs as of 2026-09-26, and again as of 2026-10-30 for the
- * twelve from 10-07 on: each went live at `at`, when its build finished, with
+ * App Hosting build logs as of 2026-09-26, as of 2026-10-30 for the twelve
+ * from 10-07 on and as of 2026-11-18 for the four from 11-01 on (11-03's
+ * second added no entry): each went live at `at`, when its build finished, with
  * every entry from `newest` down to the next rollout's `newest`. That split is
  * the array order of `QA_ITEMS` - every rollout's new entries turned out to be
  * one unbroken run at the top of the list it shipped, and still one run, in
@@ -49,6 +50,19 @@ export const ROLLOUTS_BEFORE_RECORD: readonly {
   newest: string;
   at: string | null;
 }[] = [
+  {
+    newest: "mapa-strony-bez-daty-24-pazdziernika-1408",
+    at: "2026-11-17T14:34:28.000Z",
+  },
+  {
+    newest: "automat-publikuje-tylko-z-platna-posada",
+    at: "2026-11-04T20:40:25.000Z",
+  },
+  { newest: "dzialaj-z-nami-na-telefonie", at: "2026-11-03T05:28:57.000Z" },
+  {
+    newest: "oswiadczenia-link-do-biezacego-wycinka",
+    at: "2026-11-01T18:05:34.000Z",
+  },
   {
     newest: "formularz-spolki-branze-bez-skarbu-panstwa",
     at: "2026-10-29T14:43:02.000Z",
