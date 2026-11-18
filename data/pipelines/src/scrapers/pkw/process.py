@@ -10,6 +10,7 @@ import pandas as pd
 
 from entities.person import PKW as Person
 from scrapers.map.teryt import Teryt
+from scrapers.pkw.affiliations import membership_and_backing
 from scrapers.pkw.elections import ElectionType
 from scrapers.pkw.headers import CSV_HEADERS, ElectionContext, SetField
 from scrapers.pkw.offices import local_office, teryt_code
@@ -85,6 +86,10 @@ def extract_data(
 
     party_member = statement(party_member)
     supported_by = statement(supported_by)
+    if supported_by is None:
+        # A backing the file wrote into the membership column is a backing.
+        # No candidacy has one in both columns, so none is overwritten.
+        party_member, supported_by = membership_and_backing(party_member)
 
     return Person(
         election_year=election_year,

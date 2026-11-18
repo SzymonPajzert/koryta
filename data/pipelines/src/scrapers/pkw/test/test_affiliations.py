@@ -5,8 +5,14 @@ Every statement below is one PKW wrote, in the year noted.
 
 import pytest
 
-from scrapers.pkw.affiliations import parties_of_statement, unclassified_names
+from scrapers.pkw.affiliations import (
+    membership_and_backing,
+    parties_of_statement,
+    unclassified_names,
+)
 from scrapers.pkw.elections import OTHER_PARTY
+from scrapers.pkw.process import extract_data
+from util.polish import PkwFormat
 
 
 @pytest.mark.parametrize(
@@ -50,6 +56,15 @@ from scrapers.pkw.elections import OTHER_PARTY
         ("KW Platforma Obywatelska RP", ["PO"]),
         # Two backers
         ("Samoobrona RP, PSL", ["PSL", OTHER_PARTY]),
+        # 2024, written without spaces
+        (
+            "popierany przez partię polityczną: "
+            "PlatformaObywatelskaRzeczypospolitejPolskiej",
+            ["PO"],
+        ),
+        # 2001, misspelt
+        ("popierany przez Prawo i Sprawiedliowść", ["PiS"]),
+        ("popierana przez Polskie Stronictwo Ludowe", ["PSL"]),
     ],
 )
 def test_a_statement_names_its_party(statement, parties):
@@ -77,6 +92,100 @@ def test_a_statement_names_its_party(statement, parties):
 )
 def test_a_statement_naming_no_party_gives_none(statement):
     assert parties_of_statement(statement) == []
+
+
+@pytest.mark.parametrize(
+    ("cell", "membership", "backing"),
+    [
+        # 2015 Sejm: a membership and a backing in one cell.
+        (
+            "nie należy do partii politycznej, pop. Nowoczesna Ryszarda Petru",
+            "nie należy do partii politycznej",
+            "pop. Nowoczesna Ryszarda Petru",
+        ),
+        # 2011 Sejm, with no space after the comma.
+        (
+            "nie należy do partii politycznej,popierany przez PSL",
+            "nie należy do partii politycznej",
+            "popierany przez PSL",
+        ),
+        ("nie należy popierany przez PSL", "nie należy", "popierany przez PSL"),
+        (
+            "nie należy do partii polit.popierany przez Polską Wspólnotę Narod.",
+            "nie należy do partii polit.",
+            "popierany przez Polską Wspólnotę Narod.",
+        ),
+        # 2001 Sejm: a backing alone, also in quotes and capitalised.
+        (
+            "popierany przez Prawo i Sprawiedliwość",
+            None,
+            "popierany przez Prawo i Sprawiedliwość",
+        ),
+        (
+            '"popierany przez Prawo i Sprawiedliwość"',
+            None,
+            "popierany przez Prawo i Sprawiedliwość",
+        ),
+        ("Popierany przez PSL", None, "Popierany przez PSL"),
+        # A membership is left as it is.
+        (
+            "członek partii politycznej: Nowa Lewica",
+            "członek partii politycznej: Nowa Lewica",
+            None,
+        ),
+        (
+            "członek Polskiego Stronnictwa Ludowego",
+            "członek Polskiego Stronnictwa Ludowego",
+            None,
+        ),
+        ("nie należy do partii politycznej", "nie należy do partii politycznej", None),
+        (None, None, None),
+    ],
+)
+def test_a_membership_cell_gives_up_the_backing_written_into_it(
+    cell, membership, backing
+):
+    assert membership_and_backing(cell) == (membership, backing)
+
+
+def test_a_backing_in_the_membership_column_names_no_membership():
+    membership, backing = membership_and_backing(
+        "nie należy do partii politycznej, popierany przez SLD"
+    )
+    assert parties_of_statement(membership) == []
+    assert parties_of_statement(backing) == ["SLD"]
+    assert unclassified_names(membership) == []
+
+
+def test_a_backing_written_as_a_membership_is_stored_as_a_backing():
+    person = extract_data(
+        "2015",
+        "sejmu",
+        PkwFormat.UNKNOWN,
+        first_name="Jan",
+        last_name="Kowalski",
+        party_member="nie należy do partii politycznej, pop. Nowoczesna Ryszarda Petru",
+    )
+
+    assert (person.party_member, person.supported_by) == (
+        "nie należy do partii politycznej",
+        "pop. Nowoczesna Ryszarda Petru",
+    )
+
+
+def test_a_backing_column_is_never_overwritten_by_the_membership_one():
+    person = extract_data(
+        "2024",
+        "samorządu",
+        PkwFormat.UNKNOWN,
+        first_name="Jan",
+        last_name="Kowalski",
+        party_member="nie należy do partii politycznej, pop. SLD",
+        supported_by="popierany przez partię polityczną: Nowa Lewica",
+    )
+
+    assert person.party_member == "nie należy do partii politycznej, pop. SLD"
+    assert person.supported_by == "popierany przez partię polityczną: Nowa Lewica"
 
 
 def test_unclassified_names_are_what_the_table_may_be_missing():
