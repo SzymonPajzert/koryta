@@ -730,7 +730,12 @@ const {
   targets,
   referencedIn,
   refresh: refreshEdges,
-} = await useEdges(node);
+} = await useEdges(
+  node,
+  // A region draws none of its candidacies from the graph: its lists and
+  // „Władze” read them on their own (Szymon, 2026-11-18: "add the skip").
+  type === "region" ? { skip: "election" } : {},
+);
 await Promise.all([electionRuns, regionAncestorsData, governmentData]);
 const edges = computed(() => [...sources.value, ...targets.value]);
 

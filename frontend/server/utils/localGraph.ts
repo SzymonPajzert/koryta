@@ -8,7 +8,7 @@ import {
   pruneOuterRing,
   type GraphLayout,
 } from "~~/shared/graph/util";
-import type { Edge, Person, Company, Region } from "~~/shared/model";
+import type { Edge, EdgeType, Person, Company, Region } from "~~/shared/model";
 import {
   fetchNodesByIds,
   fetchEdgesClose,
@@ -71,6 +71,7 @@ function expandableFrontier(nodes: NodeDataUnion[]): string[] {
 async function fetchNeighbourhood(
   focusIds: string[],
   distance: number,
+  skip?: EdgeType,
 ): Promise<{ edges: Edge[]; nodes: Map<string, NodeDataUnion> }> {
   const edges = new Map<string, Edge>();
   const nodes = new Map<string, NodeDataUnion>();
@@ -78,7 +79,7 @@ async function fetchNeighbourhood(
   let frontier = focusIds;
 
   for (let hop = 0; hop < distance && frontier.length > 0; hop++) {
-    const found = await fetchEdgesClose(frontier);
+    const found = await fetchEdgesClose(frontier, skip);
     const discovered: string[] = [];
     for (const edge of found) {
       edges.set(edge.id ?? `${edge.source}|${edge.target}|${edge.type}`, edge);
@@ -119,6 +120,8 @@ export async function getLocalGraph(
   distance: number,
   expansions: string[],
   peers: string[] = [],
+  /** A type of relation left out of the walk: see `fetchEdgesClose`. */
+  skip?: EdgeType,
 ) {
   const subjectIds = [focusNodeId, ...peers.filter((id) => !!id)].filter(
     (id, at, all) => all.indexOf(id) === at,
@@ -129,7 +132,7 @@ export async function getLocalGraph(
   }
 
   const { edges: edgesFromDBRaw, nodes: alreadyFetched } =
-    await fetchNeighbourhood(Array.from(focusIds), distance);
+    await fetchNeighbourhood(Array.from(focusIds), distance, skip);
 
   const neededNodeIds = new Set<string>(focusIds);
   for (const edge of edgesFromDBRaw) {

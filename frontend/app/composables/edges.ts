@@ -171,7 +171,13 @@ export const edgeTypeLabels: Record<string, string> = {
   tagged: "Dotyczy tematu",
 };
 
-export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
+export async function useEdges(
+  nodeID: MaybeRefOrGetter<string | undefined>,
+  /** A type of relation the page does not draw, left out of the request: a
+   * region's candidacies, which its lists read on their own. In the url, so
+   * the answer is cached apart from the full graph the canvas asks for. */
+  { skip }: { skip?: EdgeType } = {},
+) {
   const { user } = useAuthState();
   const { data: localData, refresh: refreshLocal } = await authFetch(
     () => `/api/graph/local/${toValue(nodeID)}`,
@@ -180,6 +186,7 @@ export async function useEdges(nodeID: MaybeRefOrGetter<string | undefined>) {
         latest: !!user.value,
         distance: 1,
         center: toValue(nodeID),
+        ...(skip ? { skip } : {}),
       })),
       watch: [toRef(nodeID)],
     },

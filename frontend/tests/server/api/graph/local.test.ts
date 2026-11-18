@@ -5,7 +5,10 @@ import postHandler from "../../../../server/api/graph/local/[id].post";
 /** What each request asked `getLocalGraph` for. Hoisted with the nitro
  * globals, which have to exist before the routes are imported. */
 const asked = vi.hoisted(() => {
-  const asked = { showUnapproved: [] as boolean[] };
+  const asked = {
+    showUnapproved: [] as boolean[],
+    skip: [] as (string | undefined)[],
+  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   globalThis.defineEventHandler = (fn: any) => fn;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,8 +20,16 @@ const asked = vi.hoisted(() => {
 });
 
 vi.mock("../../../../server/utils/localGraph", () => ({
-  getLocalGraph: async (_focus: string, showUnapproved: boolean) => {
+  getLocalGraph: async (
+    _focus: string,
+    showUnapproved: boolean,
+    _distance: number,
+    _expansions: string[],
+    _peers: string[],
+    skip?: string,
+  ) => {
     asked.showUnapproved.push(showUnapproved);
+    asked.skip.push(skip);
     return { nodes: {}, edges: [], nodeGroups: [] };
   },
 }));
@@ -57,6 +68,15 @@ const call = (handler: any, event: ReturnType<typeof request>) =>
 describe("/api/graph/local/[id]", () => {
   beforeEach(() => {
     asked.showUnapproved.length = 0;
+    asked.skip.length = 0;
+  });
+
+  it("leaves out the one relation type a page asks it to, and nothing it does not know", async () => {
+    // A region page draws none of its candidacies from the graph.
+    await call(getHandler, request({ query: { skip: "election" } }));
+    await call(getHandler, request({ query: { skip: "nonsense" } }));
+    await call(getHandler, request());
+    expect(asked.skip).toEqual(["election", undefined, undefined]);
   });
 
   it("draws a logged out reader who types `latest` the published graph", async () => {

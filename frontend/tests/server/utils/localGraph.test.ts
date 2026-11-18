@@ -94,6 +94,15 @@ describe("getLocalGraph", () => {
     expect(layout.edges.map((e) => e.id)).not.toContain("p1-c2");
   });
 
+  it("passes a skipped relation type to every query it makes", async () => {
+    world(NODES, EDGES);
+    await getLocalGraph("p1", false, 2, [], [], "election");
+    for (const call of mockFetchEdgesClose.mock.calls) {
+      expect(call[1]).toBe("election");
+    }
+    expect(mockFetchEdgesClose).toHaveBeenCalled();
+  });
+
   it("asks once and stops, at one hop", async () => {
     world(NODES, EDGES);
 

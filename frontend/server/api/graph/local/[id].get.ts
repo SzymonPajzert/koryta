@@ -1,4 +1,5 @@
 import { getLocalGraph } from "~~/server/utils/localGraph";
+import { edgeTypes, type EdgeType } from "~~/shared/model";
 import {
   editorFreshCachedEventHandler,
   wantsLatest,
@@ -27,11 +28,19 @@ async function localGraph(event: H3Event) {
     expansions = (query.expand as string).split(",");
   }
 
+  // One type of relation to leave out, by a page that does not draw it: a
+  // region's candidacies (`fetchEdgesClose`). Anything else is ignored.
+  const skip = edgeTypes.includes(query.skip as EdgeType)
+    ? (query.skip as EdgeType)
+    : undefined;
+
   return getLocalGraph(
     focusNodeId,
     await wantsLatest(event),
     distance,
     expansions,
+    [],
+    skip,
   );
 }
 

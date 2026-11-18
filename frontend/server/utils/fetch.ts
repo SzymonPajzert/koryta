@@ -1,6 +1,7 @@
 import {
   type NodeType,
   type Edge,
+  type EdgeType,
   type Person,
   type Company,
   type Article,
@@ -265,9 +266,15 @@ function edgeFromDB(doc: FirebaseFirestore.QueryDocumentSnapshot): Edge {
   } as Edge;
 }
 
-/** Fetches edges connected to specific nodes */
+/** Fetches edges connected to specific nodes, all of them but those of
+ * `skip`'s type: a region page asks without its candidacies, which its lists
+ * read on their own (`/api/nodes/[id]/election-lists`) and its graph never
+ * drew - 2,120 of Województwo mazowieckie's 2,279 reads (2026-11-11). One
+ * type, as `!=`: Firestore refuses a `not-in` beside the `in`. The
+ * `(source, type)` and `(target, type)` indexes serve it. */
 export async function fetchEdgesClose(
   centerNodeIds: string | string[],
+  skip?: EdgeType,
 ): Promise<Edge[]> {
   const ids = Array.isArray(centerNodeIds) ? centerNodeIds : [centerNodeIds];
   if (ids.length === 0) return [];
@@ -280,17 +287,14 @@ export async function fetchEdgesClose(
   for (let i = 0; i < ids.length; i += chunkSize) {
     const chunk = ids.slice(i, i + chunkSize);
 
-    // Fetch edges where these nodes are the source
-    const sourceQuery = db
-      .collection("edges")
-      .where("source", "in", chunk)
-      .get();
+    const near = (side: "source" | "target") => {
+      const query = db.collection("edges").where(side, "in", chunk);
+      return (skip ? query.where("type", "!=", skip) : query).get();
+    };
 
-    // Fetch edges where these nodes are the target
-    const targetQuery = db
-      .collection("edges")
-      .where("target", "in", chunk)
-      .get();
+    // Fetch edges where these nodes are the source, and where the target
+    const sourceQuery = near("source");
+    const targetQuery = near("target");
 
     const [sourceSnap, targetSnap] = await Promise.all([
       sourceQuery,
