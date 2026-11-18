@@ -269,7 +269,7 @@ describe("qaReleases", () => {
   // After the newest rollout in the history, as every process that runs
   // this code is: one started before it would list that rollout's entries
   // above the ones it dated itself.
-  const STARTED = "2026-10-31T08:00:00.000Z";
+  const STARTED = "2026-11-18T08:00:00.000Z";
 
   beforeEach(() => {
     vi.resetModules();
@@ -292,6 +292,12 @@ describe("qaReleases", () => {
 
     expect(at(ROLLOUTS_BEFORE_RECORD[0]!.newest)).toBe(
       ROLLOUTS_BEFORE_RECORD[0]!.at,
+    );
+    // The rollout of 11-17 brought six entries, down to where the one of
+    // 11-04 starts; 11-01's thirteen end above the 10-29 one.
+    expect(at("postep-oswiadczen-w-osobach")).toBe("2026-11-17T14:34:28.000Z");
+    expect(at("oswiadczenia-odczytaj-date-urodzenia")).toBe(
+      "2026-11-01T18:05:34.000Z",
     );
     // The rollout of 10-29 brought three entries: its newest and the two
     // under it, down to where the rollout before it starts.
