@@ -1,5 +1,6 @@
 import type { GraphLayout } from "../../../shared/graph/util";
 import type { Node, NodeStats } from "../../../shared/graph/model";
+import type { ElectionPosition } from "../../../shared/model";
 import { NODE_COLORS } from "../../../shared/graph/nodes";
 import type { NodeRelation } from "../../../server/api/edges/byNode.get";
 
@@ -12,7 +13,19 @@ import type { NodeRelation } from "../../../server/api/edges/byNode.get";
  * 2002 run in powiat kozienicki that is somebody else's. The name is made up;
  * the places are real, because the rule reads their TERYT codes off the
  * region ids. Neither the seed nor any other capture has a candidacy, which
- * is why nothing in the suite drew either warning until these did. */
+ * is why nothing in the suite drew either warning until these did.
+ *
+ * The rule reads the election, not the office, so the page also has one of
+ * each pair an office key let through, each after a real page: a Senat run
+ * beside a namesake's Sejm run in another województwo (2023), a sejmik run
+ * beside a city council run in powiat kutnowski (2024), a city council run
+ * beside a Warsaw district's (2018), and a run with no office, which in 2010
+ * can only be a local one, beside a „Samorząd” run (2010). The pairs came
+ * from branch two-places-dialog-by-election-kind, which this dialog replaces.
+ *
+ * Each run carries the party the import gives the page from it: PO from his
+ * career, PiS from the namesake's 2002 run, so the dialog says which party
+ * only that run gives. */
 
 export const CLASH_PERSON = "visdwamiejsca";
 const NAME = "Tomasz Przykładowy";
@@ -22,6 +35,8 @@ const run = (
   teryt: string,
   place: string,
   year: string,
+  position: string | null = "Samorząd",
+  parties: string[] = ["PO"],
 ): NodeRelation => ({
   id,
   type: "election",
@@ -32,9 +47,9 @@ const run = (
   otherPublished: true,
   published: false,
   startDate: `${year}-01-01`,
-  position: "Samorząd",
+  position,
   byElection: false,
-  parties: [],
+  parties,
   revisionToApprove: null,
   hasPendingRevision: false,
   publishable: true,
@@ -43,10 +58,28 @@ const run = (
 /** /api/edges/byNode for the draft page, in the order the endpoint sorts it:
  * by the far end, then newest first. */
 export const twoPlacesRelations: NodeRelation[] = [
+  run(
+    "visrunwarszawa2018",
+    "1465",
+    "Miasto Warszawa",
+    "2018",
+    "Rada dzielnicy",
+  ),
+  run(
+    "visrungniezno2018",
+    "3003",
+    "Powiat gnieźnieński",
+    "2018",
+    "Rada miasta",
+  ),
   run("visrungniezno2010", "3003", "Powiat gnieźnieński", "2010"),
   run("visrungniezno2006", "3003", "Powiat gnieźnieński", "2006"),
   run("visrungniezno2002", "3003", "Powiat gnieźnieński", "2002"),
-  run("visrunkozienice2002", "1407", "Powiat kozienicki", "2002"),
+  run("visrunkozienice2002", "1407", "Powiat kozienicki", "2002", "Samorząd", [
+    "PiS",
+  ]),
+  run("visrunkutno2024", "1002", "Powiat kutnowski", "2024", "Rada miasta"),
+  run("visrunsokolka2010", "2011", "Powiat sokólski", "2010", null),
   {
     id: "visseat",
     type: "employed",
@@ -64,7 +97,13 @@ export const twoPlacesRelations: NodeRelation[] = [
     hasPendingRevision: false,
     publishable: true,
   },
+  run("visrunsejm2023", "02", "Województwo dolnośląskie", "2023", "Sejm"),
+  run("visrunsejmik2024", "30", "Województwo wielkopolskie", "2024", "Sejmik"),
+  run("visrunsenat2023", "30", "Województwo wielkopolskie", "2023", "Senat"),
 ];
+
+/** The page's parties as the import stores them: its runs' parties. */
+export const twoPlacesParties = ["PO", "PiS"];
 
 /** /api/revisions/byNode for the same page: one approved version, so the
  * dialog has nothing to say about which one goes live and the shot is about
@@ -104,21 +143,24 @@ function region(id: string, name: string): Node & { stats: NodeStats } {
 /** /api/graph/local/[id] for a published person page wearing the same
  * career, after publication: the 2002 run in powiat gnieźnieński is live and
  * the one in powiat kozienicki is still a draft - the row whose own
- * „Opublikuj” would complete the clash. Dated the way the live API dates a
- * candidacy (`edgeFromDB`): the election day, as both start and end. */
+ * „Opublikuj” would complete the clash. And the same of 2023: the Senat run in
+ * wielkopolskie live, the namesake's Sejm run in dolnośląskie a draft. Dated
+ * the way the live API dates a candidacy (`edgeFromDB`): the election day, as
+ * both start and end. */
 export function twoPlacesGraph(subjectId: string): GraphLayout {
   const candidacy = (
     id: string,
     target: string,
     day: string,
     visibility: boolean,
+    position: ElectionPosition = "Samorząd",
   ) => ({
     id,
     source: subjectId,
     target,
     type: "election" as const,
     name: "kandydatura",
-    position: "Samorząd" as const,
+    position,
     start_date: day,
     end_date: day,
     visibility,
@@ -137,8 +179,12 @@ export function twoPlacesGraph(subjectId: string): GraphLayout {
       },
       teryt3003: region("teryt3003", "Powiat gnieźnieński"),
       teryt1407: region("teryt1407", "Powiat kozienicki"),
+      teryt30: region("teryt30", "Województwo wielkopolskie"),
+      teryt02: region("teryt02", "Województwo dolnośląskie"),
     },
     edges: [
+      candidacy("visrunsenat2023", "teryt30", "2023-10-15", true, "Senat"),
+      candidacy("visrunsejm2023", "teryt02", "2023-10-15", false, "Sejm"),
       candidacy("visrungniezno2006", "teryt3003", "2006-11-12", true),
       candidacy("visrungniezno2002", "teryt3003", "2002-10-27", true),
       candidacy("visrunkozienice2002", "teryt1407", "2002-10-27", false),
