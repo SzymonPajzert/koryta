@@ -54,7 +54,7 @@
           <v-list-item-subtitle
             v-if="item.raw?.line"
             opacity="1"
-            class="omni-person-line text-ink-neutral text-wrap"
+            class="omni-person-line text-ink-neutral"
             data-testid="omni-search-person-line"
           >
             {{ item.raw.line }}
@@ -140,9 +140,6 @@ import { authHeaders } from "~/composables/auth";
 const router = useRouter();
 const { push, currentRoute } = router;
 const user = useCurrentUser();
-// TEMP(wariant): przed = no line, a = under every person, b = only under
-// namesakes, c = the place alone under every person.
-const wariant = computed(() => String(currentRoute.value.query.wariant ?? "a")); // TEMP(wariant)
 
 const props = defineProps<{
   width?: string;
@@ -392,14 +389,12 @@ const namesakeIds = computed(() => {
   );
 });
 
-/** The line under a person hit, as the variant draws it. */
+/** The line under a person hit: only where another hit shares the name, as
+ * decided 2026-11-18 on board round search-same-name-r1. Where the name alone
+ * tells people apart, a line only takes room. */
 function personLine(hit: { id: string; line?: HitLine }) {
-  if (!hit.line || wariant.value === "przed") return undefined; // TEMP(wariant)
-  if (wariant.value === "b" && !namesakeIds.value.has(hit.id)) {
-    return undefined; // TEMP(wariant)
-  }
-  const form = wariant.value === "c" ? "short" : "full"; // TEMP(wariant)
-  return hitLineText(hit.line, form) || undefined;
+  if (!hit.line || !namesakeIds.value.has(hit.id)) return undefined;
+  return hitLineText(hit.line) || undefined;
 }
 
 async function performSearch(searchTerm: string) {
@@ -581,21 +576,16 @@ watch(nodeGroupPicked, (value) => {
   transform: rotate(0deg) !important;
 }
 
-/* The line under a person: two lines at most, at a line height the accents
-   of „ŚWIĘTOKRZYSKI” fit under, as the box clips what overflows it. Its start,
-   the parties and the place, is what tells two people apart; the rest of a
-   180-letter register name is on their page. One line on a phone, where two
-   took the menu from six people to four. */
+/* The line under a person: one line, cut at its end (decided 2026-11-18 on
+   board round search-same-name-r1). Its start, the town and the party, is what
+   tells two people apart; the rest of a 180-letter register name is on their
+   page. At a line height the accents of „ŚWIĘTOKRZYSKI” fit under, as the box
+   clips what overflows it. */
 .omni-person-line {
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   line-height: 1.25rem;
-}
-
-@media (max-width: 599.98px) {
-  .omni-person-line {
-    -webkit-line-clamp: 1;
-    line-clamp: 1;
-  }
 }
 </style>
