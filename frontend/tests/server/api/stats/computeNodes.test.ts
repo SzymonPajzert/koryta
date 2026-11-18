@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import handler from "../../../../server/api/stats/computeNodes.post";
+import type { NodeRevisions, NodeStats } from "../../../../shared/model";
 
 /** Every collection the handler reads, empty unless a test says otherwise. */
 const collections: Record<string, unknown[]> = {
@@ -11,23 +12,34 @@ const collections: Record<string, unknown[]> = {
   extractions: [],
 };
 
+/** The field mask each collection was read through. */
+const selected = new Map<string, string[]>();
+
 const statsDocSet = vi.fn();
-const batchUpdate = vi.fn();
-const batchCommit = vi.fn();
+const writerUpdate = vi.fn();
+const writerFlush = vi.fn();
+const writerClose = vi.fn();
 
 const mockDb = {
   collection: (name: string) => {
     const query = {
-      get: async () => ({ docs: collections[name] ?? [] }),
-      // `extractions` is read through a field mask - only the id of the person
-      // each fact was matched to - so the query object has to survive a
-      // `.select()` on the way to `.get()`.
-      select: () => query,
-      doc: () => ({ set: statsDocSet }),
+      select: (...fields: string[]) => {
+        selected.set(name, fields);
+        return query;
+      },
+      stream: () =>
+        (async function* () {
+          yield* collections[name] ?? [];
+        })(),
+      doc: (id: string) => ({ id, set: statsDocSet }),
     };
     return query;
   },
-  batch: () => ({ update: batchUpdate, commit: batchCommit }),
+  bulkWriter: () => ({
+    update: writerUpdate,
+    flush: writerFlush,
+    close: writerClose,
+  }),
 };
 
 vi.mock("firebase-admin/firestore", () => ({
@@ -55,11 +67,24 @@ globalThis.getRequestHeader = ((_event: unknown, name: string) =>
     ? authHeader
     : undefined) as typeof globalThis.getRequestHeader;
 
+/** What was written to each node, by its id. */
+function writtenBy<T>(
+  pick: (data: { stats: NodeStats; revisions: NodeRevisions | null }) => T,
+) {
+  return Object.fromEntries(
+    writerUpdate.mock.calls.map(([ref, data]) => [ref.id, pick(data)]),
+  ) as Record<string, T>;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  writerUpdate.mockResolvedValue({});
+  writerFlush.mockResolvedValue(undefined);
+  writerClose.mockResolvedValue(undefined);
   authHeader = "Bearer token-1";
   mockVerifyIdToken.mockResolvedValue({ uid: "admin-1", admin: true });
   for (const key of Object.keys(collections)) collections[key] = [];
+  selected.clear();
 });
 
 describe("POST /api/stats/computeNodes", () => {
@@ -101,7 +126,7 @@ describe("POST /api/stats/computeNodes", () => {
       statusCode: 403,
     });
     expect(nodes).not.toHaveBeenCalled();
-    expect(batchCommit).not.toHaveBeenCalled();
+    expect(writerUpdate).not.toHaveBeenCalled();
   });
 
   it("lets an admin through", async () => {
@@ -109,6 +134,56 @@ describe("POST /api/stats/computeNodes", () => {
 
     expect(result).toMatchObject({ status: "success" });
     expect(statsDocSet).toHaveBeenCalled();
+  });
+
+  /** Whole documents - mostly a node's search chunks and old stats and a
+   * revision's snapshot, none of which the handler reads - are what took the
+   * recount past the 300 s a request gets, on the 2026-11-18 export. */
+  it("reads every collection through a field mask", async () => {
+    await handler({} as never);
+
+    expect([...selected.keys()].sort()).toEqual([
+      "edges",
+      "extractions",
+      "nodes",
+      "notes",
+      "revisions",
+      "votes",
+    ]);
+    expect(selected.get("nodes")).not.toContain("stats");
+    expect(selected.get("nodes")).not.toContain("nameChunksLower");
+    expect(selected.get("revisions")).not.toContain("data");
+  });
+
+  /** Waiting for the writer every so often is what keeps the computed updates
+   * from piling up in memory behind its throttle. */
+  it("writes every node, waiting for the writer every 500 updates", async () => {
+    collections.nodes = Array.from({ length: 1001 }, (_, i) => ({
+      id: `person-${i}`,
+      data: () => ({ type: "person", name: `P${i}` }),
+    }));
+
+    await handler({} as never);
+
+    expect(writerUpdate).toHaveBeenCalledTimes(1001);
+    expect(writerFlush).toHaveBeenCalledTimes(2);
+    expect(writerClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails when a node could not be written, before the region rows", async () => {
+    collections.nodes = [
+      { id: "person-1", data: () => ({ type: "person", name: "A" }) },
+      { id: "person-2", data: () => ({ type: "person", name: "B" }) },
+    ];
+    writerUpdate
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error("NOT_FOUND"));
+
+    await expect(handler({} as never)).rejects.toMatchObject({
+      statusCode: 500,
+    });
+    expect(writerClose).toHaveBeenCalled();
+    expect(statsDocSet).not.toHaveBeenCalled();
   });
 
   /** `stats` is written as one map, so a pass that did not count the facts
@@ -128,13 +203,54 @@ describe("POST /api/stats/computeNodes", () => {
 
     await handler({} as never);
 
-    const written = Object.fromEntries(
-      batchUpdate.mock.calls.map(([, data], index) => [
-        collections.nodes[index]!.id,
-        data.stats.factsCount,
-      ]),
-    );
-    expect(written).toEqual({ "person-1": 2, "person-2": 0 });
+    expect(writtenBy((data) => data.stats.factsCount)).toEqual({
+      "person-1": 2,
+      "person-2": 0,
+    });
+  });
+
+  /** The newest revision, how many there are, and whether the approved one
+   * is behind - by `node_id`, or by the `nodeId` older revisions carry. */
+  it("sums up each node's revisions", async () => {
+    collections.nodes = [
+      {
+        id: "person-1",
+        data: () => ({
+          type: "person",
+          name: "A",
+          revision_id: "revisions/rev-old",
+        }),
+      },
+      { id: "person-2", data: () => ({ type: "person", name: "B" }) },
+    ];
+    collections.revisions = [
+      {
+        id: "rev-old",
+        data: () => ({
+          node_id: "person-1",
+          update_time: "2026-01-01T10:00:00.000Z",
+        }),
+      },
+      {
+        id: "rev-new",
+        data: () => ({
+          nodeId: "person-1",
+          update_time: { toDate: () => new Date("2026-02-01T10:00:00Z") },
+        }),
+      },
+    ];
+
+    await handler({} as never);
+
+    expect(writtenBy((data) => data.revisions)).toEqual({
+      "person-1": {
+        latest_id: "rev-new",
+        latest_time: "2026-02-01T10:00:00.000Z",
+        total: 2,
+        has_unapproved: true,
+      },
+      "person-2": null,
+    });
   });
 
   /** The candidacies are edges, and the table's „Wybory” filter cannot read
@@ -164,13 +280,12 @@ describe("POST /api/stats/computeNodes", () => {
 
     await handler({} as never);
 
-    const written = Object.fromEntries(
-      batchUpdate.mock.calls.map(([, data], index) => [
-        collections.nodes[index]!.id,
-        [data.stats.edges.all.elections, data.stats.edges.approved.elections],
+    expect(
+      writtenBy((data) => [
+        data.stats.edges.all.elections,
+        data.stats.edges.approved.elections,
       ]),
-    );
-    expect(written).toEqual({
+    ).toEqual({
       "person-1": [["parliament-2023"], ["parliament-2023"]],
       teryt22: [[], []],
     });
@@ -277,12 +392,7 @@ describe("POST /api/stats/computeNodes", () => {
 
     await handler({} as never);
 
-    const written = Object.fromEntries(
-      batchUpdate.mock.calls.map(([, data], index) => [
-        collections.nodes[index]!.id,
-        data.stats.searchLine,
-      ]),
-    );
+    const written = writtenBy((data) => data.stats.searchLine);
     const seat = {
       what: "Rada miasta",
       when: "2024",
