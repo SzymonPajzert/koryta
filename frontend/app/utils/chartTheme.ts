@@ -1,5 +1,6 @@
 import plLocale from "apexcharts/dist/locales/pl.json";
 import type { ActivityKind } from "~~/shared/activity";
+import { OTHER_PARTY } from "~~/shared/misc";
 import { escapeHtml } from "~~/shared/notifications";
 import type { SearchEnding } from "~~/shared/searchLog";
 
@@ -74,16 +75,73 @@ export const diverging = {
   neutral: "#f0efec",
 } as const;
 
-/** The home page's map of Poland. A district shades from white towards `heat`
- * with its share of the busiest district's people, `empty` is a district
- * nobody on the site works in, `hover` the one under the pointer. */
+/** The home page's map of Poland (chart/PolandMap.vue): the fills that carry
+ * no party, and the lines. White lines between powiaty and grey voivodeship
+ * borders replaced black ones (decision on 2026-11-18): the fills carry the
+ * information and the lines recede, on a dark party fill as on a phone. */
 export const choropleth = {
-  heat: "#cc0000",
+  /** Nobody on the site works in the powiat yet. */
   empty: "#fff6d5",
-  hover: "#e0e0e0",
-  district: "#333333",
-  voivodeship: "#000000",
+  /** Too few people with a party for a share to say anything. */
+  thin: "#ebeae5",
+  /** Two parties tied for the lead, or „Inne” leading: no party to paint. */
+  tie: ink.axis,
+  /** On one party's map: a powiat where nobody has that party. */
+  none: "#f6f5f1",
+  district: ink.surface,
+  voivodeship: ink.secondary,
+  /** The outline drawn round the powiat under the pointer. */
+  hover: ink.primary,
 } as const;
+
+/** People in a powiat in six classes (1-4, 5-9, 10-19, 20-49, 50-99, 100+),
+ * light to dark in the map's old red. What the map shows until the night's
+ * recount has written party counts to the region rows. */
+export const choroplethPeople = [
+  "#fee0db",
+  "#f9bdb3",
+  "#ec988b",
+  "#d96e60",
+  "#c34235",
+  "#a30101",
+] as const;
+
+/** The party most of a powiat's people have, in three steps of its share
+ * among the people with a party: under 45%, 45-59%, 60% and up (decision on
+ * 2026-11-18). Each step is the party's own hue, with `partyColors`' fill as
+ * one of them, so the strongest map still reads as that party. Built in OKLCH
+ * and checked with the data-viz validator as ordinal ramps: monotone
+ * lightness, at least 0.06 between steps, one hue. */
+export const choroplethLead: Record<string, readonly [string, string, string]> =
+  {
+    PO: ["#fdd6b2", "#fca241", "#c67712"],
+    PiS: ["#a5c0e5", "#517cb5", "#073b76"],
+    PSL: ["#b8f1d4", "#2ed396", "#23966a"],
+    "Polska 2050": ["#fceec7", "#FFCB03", "#c29a07"],
+    "Nowa Lewica": ["#ffa097", "#f75b54", "#D40E20"],
+    Konfederacja: ["#b1bfd2", "#596d8a", "#102440"],
+    Nowoczesna: ["#b7e9ee", "#00A9B7", "#017782"],
+    "Bezpartyjni Samorządowcy": ["#c8b2e8", "#9a74c9", "#6A3D9A"],
+  };
+
+/** One party's map: its share of a powiat's people with a party, in four
+ * steps (1-19%, 20-39%, 40-59%, 60% and up), built and checked as
+ * `choroplethLead` is. „Inne” gets a ramp here though it never leads: its
+ * own map is still a party's map. */
+export const choroplethShare: Record<
+  string,
+  readonly [string, string, string, string]
+> = {
+  PO: ["#ffdec1", "#fdc18a", "#fca241", "#bd700c"],
+  PiS: ["#d0e0f5", "#97b3d9", "#4f76a9", "#073b76"],
+  PSL: ["#c5f1da", "#8ce2b8", "#2ed396", "#069869"],
+  "Polska 2050": ["#f9eac4", "#FFCB03", "#d1a604", "#a58308"],
+  "Nowa Lewica": ["#ffd2cc", "#f49288", "#e85c55", "#D40E20"],
+  Konfederacja: ["#d7dfea", "#a4b2c6", "#556781", "#102440"],
+  Nowoczesna: ["#c7edf1", "#81cad3", "#00A9B7", "#02717b"],
+  "Bezpartyjni Samorządowcy": ["#e4d7f7", "#bca5dc", "#9270bd", "#6A3D9A"],
+  [OTHER_PARTY]: ["#ecebe8", "#c3c2b7", "#9d9c92", "#797870"],
+};
 
 /** The greys two older party charts - the people bars on a region's page and
  * the company bars on /eksploruj - give the people no party colour accounts

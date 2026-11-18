@@ -1,17 +1,83 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
+import { clearNuxtData } from "#app";
 import PolandMap from "../../../../app/components/chart/PolandMap.vue";
-import { mountSuspended } from "@nuxt/test-utils/runtime";
+import {
+  choropleth,
+  choroplethLead,
+  choroplethPeople,
+  choroplethShare,
+} from "~/utils/chartTheme";
+
+type Row = {
+  id: string;
+  teryt: string;
+  name: string;
+  people: number;
+  parties?: Record<string, number>;
+};
+
+/** What /api/stats/regions answers; each test sets it before mounting. */
+let rows: Row[] = [];
+registerEndpoint("/api/stats/regions", () => rows);
+
+/** Three powiaty as the night's recount writes them. PiS has the most people
+ * over all three (13), then PO (11), then Nowa Lewica (3). */
+const counted: Row[] = [
+  {
+    id: "teryt1201",
+    teryt: "1201",
+    name: "Powiat bocheński",
+    people: 10,
+    parties: { PiS: 7, PO: 2 },
+  },
+  {
+    id: "teryt3064",
+    teryt: "3064",
+    name: "Poznań",
+    people: 20,
+    parties: { PO: 9, PiS: 6, "Nowa Lewica": 3 },
+  },
+  {
+    id: "teryt1261",
+    teryt: "1261",
+    name: "Kraków",
+    people: 2,
+    parties: { PO: 0, PiS: 0 },
+  },
+];
+
+/** The map fetches lazily: the counts land after it mounts. */
+const mountMap = async () => {
+  const wrapper = await mountSuspended(PolandMap);
+  if (rows.length)
+    await vi.waitFor(() =>
+      expect(wrapper.findAll("title").map((t) => t.text())).toContainEqual(
+        expect.stringContaining(rows[0]!.name),
+      ),
+    );
+  return wrapper;
+};
+
+/** The path whose tooltip starts with this name. */
+const pathOf = (wrapper: Awaited<ReturnType<typeof mountMap>>, name: string) =>
+  wrapper
+    .findAll("path")
+    .find(
+      (p) =>
+        p.find("title").exists() && p.find("title").text().startsWith(name),
+    )!;
+
+beforeEach(() => {
+  rows = [];
+  // The map's data is keyed, so a mount would otherwise get the last one's.
+  clearNuxtData("polandmap-region-stats");
+});
 
 describe("PolandMap", () => {
-  const mountMap = async () => {
-    return await mountSuspended(PolandMap);
-  };
-
   it("renders correctly with padded teryt names from the API", async () => {
     const wrapper = await mountMap();
-    const titles = wrapper.findAll("title");
-    const titlesText = titles.map((t) => t.text());
-    console.log(titlesText.slice(0, 10)); // just look at first 10
+    const titlesText = wrapper.findAll("title").map((t) => t.text());
 
     // Validate padding fixed the 3-digit bug. Without padding, it was 'Powiat 146'
     expect(titlesText.some((t) => t.match(/Powiat 0\d{3} \(0 osób\)/))).toBe(
@@ -19,35 +85,109 @@ describe("PolandMap", () => {
     );
   });
 
-  it("assigns hoveredDistrict on mouseenter and clears on mouseleave of svg", async () => {
+  it("outlines the powiat under the pointer and keeps its fill", async () => {
+    const wrapper = await mountMap();
+    const path = pathOf(wrapper, "Powiat 0204");
+    const fill = path.attributes("fill");
+
+    await path.trigger("mouseenter");
+
+    const outline = wrapper.findAll('[data-testid="map-hover"] path');
+    expect(outline.map((p) => p.attributes("d"))).toEqual([
+      path.attributes("d"),
+      path.attributes("d"),
+    ]);
+    expect(outline[1]!.attributes("fill")).toBe("none");
+    expect(path.attributes("fill")).toBe(fill);
+
+    await wrapper.find("svg").trigger("mouseleave");
+    expect(wrapper.find('[data-testid="map-hover"]').exists()).toBe(false);
+  });
+
+  it("keeps the picked powiat outlined until another is picked", async () => {
+    const wrapper = await mountMap();
+    const first = pathOf(wrapper, "Powiat 0204");
+    const second = pathOf(wrapper, "Powiat 0205");
+    const picked = () =>
+      wrapper.find('[data-testid="map-picked"] path').attributes("d");
+
+    await first.trigger("click");
+    expect(picked()).toBe(first.attributes("d"));
+    expect(wrapper.emitted("click")).toHaveLength(1);
+
+    // Pointing elsewhere outlines that one too, and leaving keeps the pick.
+    await second.trigger("mouseenter");
+    expect(wrapper.find('[data-testid="map-hover"]').exists()).toBe(true);
+    await wrapper.find("svg").trigger("mouseleave");
+    expect(picked()).toBe(first.attributes("d"));
+
+    await second.trigger("click");
+    expect(picked()).toBe(second.attributes("d"));
+  });
+
+  it("opens on the leading party, shaded by its share", async () => {
+    rows = counted;
     const wrapper = await mountMap();
 
-    const svg = wrapper.find("svg");
-    const paths = wrapper.findAll("path");
-
-    // Find the path corresponding to teryt 0204
-    const mockedPath = paths.find((p) =>
-      p.find("title").text().includes("Powiat 0204"),
+    // PiS has 7 of the 9 with a party: 78%, the strongest step.
+    expect(pathOf(wrapper, "Powiat bocheński").attributes("fill")).toBe(
+      choroplethLead.PiS![2],
     );
-
-    expect(mockedPath).toBeDefined();
-
-    // Trigger mouseenter on path
-    await mockedPath!.trigger("mouseenter");
-
-    // Hovered path must have fill="#e0e0e0"
-    expect(mockedPath!.attributes("fill")).toBe("#e0e0e0");
-
-    // Other paths shouldn't be #e0e0e0
-    const otherPath = paths.find(
-      (p) => !p.find("title").text().includes("Powiat 0204"),
+    // PO has 9 of 18: 50%, the middle step.
+    expect(pathOf(wrapper, "Poznań").attributes("fill")).toBe(
+      choroplethLead.PO![1],
     );
-    expect(otherPath!.attributes("fill")).not.toBe("#e0e0e0");
+    expect(pathOf(wrapper, "Kraków").attributes("fill")).toBe(choropleth.thin);
+    expect(wrapper.find('[data-testid="map-legend"]').text()).toContain(
+      "Najliczniejsza partia",
+    );
+  });
 
-    // Trigger mouseleave on SVG
-    await svg.trigger("mouseleave");
+  it("offers a chip per party, most people first", async () => {
+    rows = counted;
+    const wrapper = await mountMap();
 
-    // The fill color should no longer be #e0e0e0
-    expect(mockedPath!.attributes("fill")).not.toBe("#e0e0e0");
+    const chips = wrapper
+      .findAll(".map-switch__chip")
+      .map((chip) => chip.text());
+    expect(chips).toEqual(["Wszystkie", "PiS", "PO", "Nowa Lewica / SLD"]);
+  });
+
+  it("shows one party's share once its chip is picked", async () => {
+    rows = counted;
+    const wrapper = await mountMap();
+
+    const po = wrapper
+      .findAll(".map-switch__chip")
+      .find((chip) => chip.text() === "PO")!;
+    await po.trigger("click");
+
+    // 2 of 9 is 22%: the second step. 9 of 18 is 50%: the third.
+    expect(pathOf(wrapper, "Powiat bocheński").attributes("fill")).toBe(
+      choroplethShare.PO![1],
+    );
+    expect(pathOf(wrapper, "Poznań").attributes("fill")).toBe(
+      choroplethShare.PO![2],
+    );
+    expect(pathOf(wrapper, "Poznań").find("title").text()).toContain(
+      "PO: 9 z 18 osób z partią",
+    );
+    expect(wrapper.find('[data-testid="map-legend"]').text()).toContain(
+      "Udział PO wśród osób z partią",
+    );
+  });
+
+  it("colours people and offers no chips before the recount writes parties", async () => {
+    rows = counted.map(({ parties: _parties, ...row }) => row);
+    const wrapper = await mountMap();
+
+    expect(wrapper.find('[data-testid="map-switch"]').exists()).toBe(false);
+    // 20 people: the 20-49 class.
+    expect(pathOf(wrapper, "Poznań").attributes("fill")).toBe(
+      choroplethPeople[3],
+    );
+    expect(wrapper.find('[data-testid="map-legend"]').text()).toContain(
+      "Osoby w powiecie",
+    );
   });
 });

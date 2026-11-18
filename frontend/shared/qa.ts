@@ -59,6 +59,20 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "mapa-w-kolorach-partii",
+    title: "Mapa na stronie głównej w kolorach partii",
+    description:
+      "Powiat ma kolor partii, którą ma najwięcej jego osób, tym ciemniejszy, im większy jej udział. Nad mapą każda partia ma swoją mapę udziału. Kolory partii pojawiają się po nocnym przeliczeniu, wcześniej mapa pokazuje liczbę osób w sześciu odcieniach czerwieni.",
+    steps: [
+      "Otwórz stronę główną: powiaty są pomarańczowe (PO), granatowe (PiS) i zielone (PSL), a nie jednakowo różowe.",
+      "Kliknij „PiS” nad mapą: mapa i legenda pod nią pokazują udział PiS w każdym powiecie.",
+      "Najedź na powiat: dostaje obrys, a podpowiedź wymienia osoby z każdej partii.",
+      "Na telefonie przesuń rząd partii w bok.",
+    ],
+    link: "/?widok=mapa",
+    area: "public",
+  },
+  {
     id: "wyszukiwarka-linia-pod-osoba",
     title: "Linijka pod osobą w wyszukiwarce",
     description:
