@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  compareFieldValue,
   proposableFieldNames,
   renderFieldValue,
   revisionChanges,
@@ -363,5 +364,74 @@ describe("a region's „Władze”", () => {
       "Burmistrz: Mariusz Siewiera (KWW ŁOWICKIE.PL)\n" +
         "Rada miasta (2): Jakub Wolski, ze stroną, Hubert Krajewski",
     );
+  });
+});
+
+/** The side-by-side table's cells: a list an item a line, marked against the
+ * approved version (Szymon, region-lists-r3: "special cases to compare list
+ * fields"). */
+describe("compareFieldValue", () => {
+  it("marks a list's items against the approved version", () => {
+    expect(compareFieldValue(["PO", "KO"], ["PiS", "PO"])).toEqual({
+      kind: "list",
+      items: [
+        { text: "PO" },
+        { text: "KO", change: "added" },
+        { text: "PiS", change: "removed" },
+      ],
+    });
+    // The approved column itself, and a sanitized list, unmarked.
+    expect(compareFieldValue({ 0: "PO", 1: "KO" })).toEqual({
+      kind: "list",
+      items: [{ text: "PO" }, { text: "KO" }],
+    });
+  });
+
+  it("reads one line as it was for anything that is not a list", () => {
+    expect(compareFieldValue("Jan Kowalski", "Jan Kowalsky")).toBeNull();
+    expect(compareFieldValue(true)).toBeNull();
+  });
+
+  it("reads a region's „Władze” by part, only what changed spelled out", () => {
+    const approved = {
+      election: "local-2024",
+      head: { office: "Burmistrz", name: "Mariusz Siewiera" },
+      councils: [
+        {
+          office: "Rada miasta",
+          members: [{ name: "Jakub Wolski" }, { name: "Hubert Krajewski" }],
+        },
+      ],
+    };
+    const proposed = {
+      ...approved,
+      head: { office: "Burmistrz", name: "Anna Nowa" },
+      councils: [
+        {
+          office: "Rada miasta",
+          members: [{ name: "Jakub Wolski" }, { name: "Ewa Nowa" }],
+        },
+      ],
+    };
+    expect(compareFieldValue(proposed, approved)).toEqual({
+      kind: "government",
+      head: { office: "Burmistrz", text: "Anna Nowa", was: "Mariusz Siewiera" },
+      councils: [
+        {
+          office: "Rada miasta",
+          count: 2,
+          added: ["Ewa Nowa"],
+          removed: ["Hubert Krajewski"],
+          kept: ["Jakub Wolski"],
+        },
+      ],
+    });
+    // The approved column: nothing marked, the council folded under a count.
+    expect(compareFieldValue(approved)).toMatchObject({
+      head: { text: "Mariusz Siewiera" },
+      councils: [
+        { added: [], removed: [], kept: ["Jakub Wolski", "Hubert Krajewski"] },
+      ],
+    });
   });
 });

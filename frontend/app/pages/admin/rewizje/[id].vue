@@ -256,18 +256,17 @@
                     >
                       {{ fieldName(key) }}
                     </div>
-                    <!-- A list reads as one, „PO, PiS”, the way the diff
-                         prints it, rather than as JSON brackets; and every
-                         way of having nothing - no key, null, "", [] - says
-                         „brak” alike, where a blank cell used to stand
-                         beside „- brak -” for the same absence. -->
+                    <!-- A list an item a line, marked against the approved
+                         version, rather than as JSON brackets or one long
+                         line; a region's „Władze” by part, only what changed
+                         spelled out. Every way of having nothing - no key,
+                         null, "", [] - says „brak” alike. -->
                     <div class="field-value text-body-2">
-                      <pre v-if="fieldText(rev, key)" class="mb-0">{{
-                        fieldText(rev, key)
-                      }}</pre>
-                      <span v-else class="text-medium-emphasis font-italic"
-                        >- brak -</span
-                      >
+                      <RevisionComparedValue
+                        :value="getRevisionData(rev.data)[key]"
+                        :approved="approvedValueOf(rev, key)"
+                        :text="fieldText(rev, key)"
+                      />
                     </div>
                   </td>
                 </tr>
@@ -747,6 +746,15 @@ function getRevisionData(data: unknown): Record<string, unknown> {
 const approvedRevision = computed(() =>
   allRevisions.value.find((rev) => rev.id === approvedRevisionId.value),
 );
+
+/** The approved revision's value of `key`, for a column to mark its list
+ * against; undefined in the approved column itself and where nothing is
+ * approved yet. */
+function approvedValueOf(rev: Record<string, unknown>, key: string): unknown {
+  const approved = approvedRevision.value;
+  if (!approved || rev.id === approved.id) return undefined;
+  return getRevisionData(approved.data)[key];
+}
 
 /** Whether `key` says something different here than in the approved revision.
  *

@@ -410,3 +410,119 @@ export function governmentChanges(
   }
   return changes;
 }
+
+/* ---------- a list field, item by item, for the side-by-side table ---------- */
+
+/** One item of a list field in a revision's column: what it says, and whether
+ * the approved version lacks it (`added`) or has it where this one does not
+ * (`removed`). */
+export interface ComparedItem {
+  text: string;
+  change?: "added" | "removed";
+}
+
+/** A council of a region's „Władze” in a revision's column: who it would add
+ * and drop against the approved version, and how many stay as they are. */
+export interface ComparedCouncil {
+  office: string;
+  /** Members this revision names. */
+  count: number;
+  added: string[];
+  removed: string[];
+  kept: string[];
+}
+
+/** A value the table draws other than as one line of text. Szymon, board
+ * round region-lists-r3, on „Władze” printed whole in a cell: "This is hard to
+ * read - we should have special cases to compare list fields". */
+export type ComparedValue =
+  | { kind: "list"; items: ComparedItem[] }
+  | {
+      kind: "government";
+      head?: { office: string; text: string | null; was?: string | null };
+      councils: ComparedCouncil[];
+    };
+
+/** The items of a list of plain values: a party list, a set of categories. */
+function plainItems(value: unknown): string[] | null {
+  const items = listOf(value);
+  if (!Array.isArray(value) && items.length === 0) return null;
+  if (items.some((item) => item !== null && typeof item === "object")) {
+    return null;
+  }
+  return items.flatMap((item) => {
+    const text = renderFieldValue(item);
+    return text ? [text] : [];
+  });
+}
+
+/** How a revision's `value` reads in its column against the approved
+ * version's: a list item by item, marked; a region's „Władze” by part, only
+ * what changed spelled out. `approved` undefined is the approved column
+ * itself, or an entry nothing is approved for: nothing is marked. Null for a
+ * value that reads well as one line. */
+export function compareFieldValue(
+  value: unknown,
+  approved?: unknown,
+): ComparedValue | null {
+  if (value && typeof value === "object" && isGovernment(value)) {
+    const now = asGovernment(value);
+    const before = approved === undefined ? now : asGovernment(approved);
+    const headText = renderGovernmentHead(now.head);
+    const headWas = renderGovernmentHead(before.head);
+    const offices = [
+      ...new Set(
+        [...now.councils, ...before.councils].map((council) => council.office),
+      ),
+    ];
+    return {
+      kind: "government",
+      ...(now.head?.office || before.head?.office
+        ? {
+            head: {
+              office: capitaliseLabel(
+                officeLabel(now.head?.office ?? before.head?.office),
+              ),
+              text: headText,
+              ...(headWas !== headText ? { was: headWas } : {}),
+            },
+          }
+        : {}),
+      councils: offices.map((office) => {
+        const members = (
+          now.councils.find((council) => council.office === office)?.members ??
+          []
+        ).map(renderGovernmentPerson);
+        const was = (
+          before.councils.find((council) => council.office === office)
+            ?.members ?? []
+        ).map(renderGovernmentPerson);
+        return {
+          office,
+          count: members.length,
+          added: members.filter((member) => !was.includes(member)),
+          removed: was.filter((member) => !members.includes(member)),
+          kept: members.filter((member) => was.includes(member)),
+        };
+      }),
+    };
+  }
+
+  const items = plainItems(value);
+  if (!items) return null;
+  if (approved === undefined) {
+    return { kind: "list", items: items.map((text) => ({ text })) };
+  }
+  const was = plainItems(approved) ?? [];
+  return {
+    kind: "list",
+    items: [
+      ...items.map((text) =>
+        was.includes(text) ? { text } : { text, change: "added" as const },
+      ),
+      ...was
+        .filter((text) => !items.includes(text))
+        .map((text) => ({ text, change: "removed" as const })),
+    ],
+  };
+}

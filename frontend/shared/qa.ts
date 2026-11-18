@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "porownanie-list-w-rewizji",
+    title: "Listy w porównaniu wersji element po elemencie",
+    description:
+      "W porównaniu wersji obok siebie lista (partie, kategorie, władze regionu) ma jeden element w linii, a to, co dochodzi albo odchodzi względem zatwierdzonej wersji, jest zaznaczone.",
+    steps: [
+      "Otwórz historię zmian wpisu z propozycją zmiany partii - w „Porównaniu obok siebie” nowa partia ma „+”, usunięta jest przekreślona.",
+      "Otwórz historię zmian regionu z propozycją zmiany władz - stary burmistrz jest przekreślony nad nowym, a przy radzie widać tylko, kto dochodzi i kto odchodzi.",
+    ],
+    area: "admin",
+  },
+  {
     id: "wybrany-a-przy-mandacie",
     title: "Zdobyty mandat jako „Wybrany/a”",
     description:
