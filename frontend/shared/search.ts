@@ -67,7 +67,7 @@ const QUALIFIED_TYPES = new Set(["place", "region"]);
 
 /** A name as what it is called and the town its `QUALIFIER` names, the second
  * empty where it has none. */
-function splitQualifier(name: string, type?: string): [string, string] {
+export function splitQualifier(name: string, type?: string): [string, string] {
   const match =
     type !== undefined && QUALIFIED_TYPES.has(type)
       ? QUALIFIER.exec(name)
