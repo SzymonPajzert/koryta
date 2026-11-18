@@ -995,6 +995,54 @@ describe("/admin/oswiadczenia", () => {
     const open = (page: Wrapper, list: string, personId: string) =>
       page.get(`[data-testid="${list}"] [data-person-id="${personId}"]`);
 
+    it("reads the lists again when a decision is refused as made already", async () => {
+      const page = await mountPage();
+      const line = await openHeld(page, "hp2");
+      const [hp1, hp2, hp3] = holds().lists.held;
+      // Declined in another tab meanwhile.
+      current = () =>
+        after(
+          [hp1!, hp3!],
+          [{ ...hp2!, status: "declined" }, ...holds().lists.setAside],
+        );
+      const before = mockAuthRequest.getMockImplementation()!;
+      mockAuthRequest.mockImplementation(async (url: string, options) => {
+        if (url.endsWith("/hp2/decline")) {
+          throw {
+            statusCode: 409,
+            data: { message: "Ta osoba jest już odłożona." },
+          };
+        }
+        return before(url, options);
+      });
+
+      await line.get("[data-hold-decline]").trigger("click");
+      await flushPromises();
+
+      expect(snackbar(page)).toEqual({
+        text: "Ta osoba jest już odłożona.",
+        color: "error",
+      });
+      expect(overviewLoads()).toBe(2);
+      expect(listed(page, "declarations-held")).toEqual(["hp1", "hp3"]);
+    });
+
+    it("keeps the list as it was when a decision fails otherwise", async () => {
+      const page = await mountPage();
+      const line = await openHeld(page, "hp2");
+      const before = mockAuthRequest.getMockImplementation()!;
+      mockAuthRequest.mockImplementation(async (url: string, options) => {
+        if (url.endsWith("/hp2/decline")) throw new Error("fetch failed");
+        return before(url, options);
+      });
+
+      await line.get("[data-hold-decline]").trigger("click");
+      await flushPromises();
+
+      expect(overviewLoads()).toBe(1);
+      expect(listed(page, "declarations-held")).toContain("hp2");
+    });
+
     it("sends „Nie publikuj” for the row's person, and shows the list read after it", async () => {
       answer("/api/declarations/publications/hp2/decline", { id: "hp2" });
       const page = await mountPage();

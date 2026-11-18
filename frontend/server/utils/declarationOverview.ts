@@ -105,11 +105,15 @@ export function withLists(
   lists: DeclarationOverview["lists"],
   at: Date,
 ): DeclarationOverview {
+  // Somebody published since the counts were taken has left the held lists
+  // already: counted as published too, so the chain adds up meanwhile.
+  const since = lists.recent.filter((row) => row.at > totals.at).length;
   return {
     ...totals,
     at: at.toISOString(),
     publications: {
       ...totals.publications,
+      published: totals.publications.published + since,
       held: lists.held.length,
       setAside: lists.setAside.length,
       heldBy: countByReason(lists.held),

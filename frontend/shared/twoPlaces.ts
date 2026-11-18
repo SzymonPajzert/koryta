@@ -162,13 +162,15 @@ export function yearsInPlace<T>(
 /** The page's parties that only doubtful candidacies give it, in the page's
  * order: those every candidacy naming the party is doubtful about.
  *
- * The import adds every candidacy's party to the page's, a namesake's run in
- * the other place of a clash included, and publishing the page shows them all
- * whatever relations go with it. A party no candidacy names came from
- * elsewhere (a press list, a reviewer) and is left alone, as is one a run not
- * in doubt names too. `partiesOf` answers undefined for a row that is not a
+ * The import adds the parties of a page's candidacies to the page's, and a
+ * namesake's get in where the pipeline does not see the clash - two offices
+ * of one election, his runs of other years - or were stored before it
+ * looked. Publishing the page shows them all, whatever relations go with it.
+ * A party no candidacy names came from elsewhere (a press list, a reviewer,
+ * a coalition's committee) and is left alone, as is one a run not in doubt
+ * names too. `partiesOf` answers undefined for a row that is not a
  * candidacy; `doubtful` is the caller's: the publish dialog's are the runs of
- * a clash left unticked. */
+ * a clash left unticked, and his other runs in a place left out of one. */
 export function partiesOnlyFrom<T>(
   pageParties: readonly string[],
   rows: readonly T[],

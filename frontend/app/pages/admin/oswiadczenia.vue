@@ -418,6 +418,11 @@ const headInfo = computed(() => {
 const errorText = (err: unknown, fallback: string) =>
   (err as { data?: { message?: string } }).data?.message || fallback;
 
+/** The HTTP status a failed request answered with, if it got one. */
+const statusOf = (err: unknown) =>
+  (err as { statusCode?: number; status?: number }).statusCode ??
+  (err as { status?: number }).status;
+
 /** Loads are numbered: an answer that lands after a newer load's is dropped,
  * so a slow one never puts back a list from before a decision. */
 let loads = 0;
@@ -650,6 +655,9 @@ async function decideHold(
     await load();
   } catch (err) {
     notify(errorText(err, "Nie udało się zapisać decyzji."), true);
+    // Refused because the record moved on, in another tab or by the night:
+    // the lists as they are now, so the row does not offer it again.
+    if (statusOf(err) === 409) await load();
   } finally {
     holdBusy.delete(row.personId);
   }

@@ -101,6 +101,21 @@ describe("api/declarations/overview", () => {
     expect(Date.parse(second.at)).toBeGreaterThan(Date.parse(totals.at));
   });
 
+  it("counts as published who went up since the counts were taken", async () => {
+    // Off the held list already, so the chain would lose them meanwhile.
+    mocks.reviewLists.mockResolvedValue({
+      ...lists([row("b")]),
+      recent: [
+        row("a", { status: "published", at: "2026-11-18T10:01:00.000Z" }),
+        row("old", { status: "published", at: "2026-11-18T09:30:00.000Z" }),
+      ],
+    });
+
+    const answer = await handler({} as never);
+
+    expect(answer.publications.published).toBe(11);
+  });
+
   it("reads nothing for somebody who is not an admin", async () => {
     mocks.requireAdmin.mockRejectedValue(
       Object.assign(new Error("Tylko dla administratorów."), {

@@ -33,9 +33,10 @@ export type NodeRelation = {
   /** Whether a candidacy was in a by-election, a contest of its own that the
    * two-places rule leaves out. */
   byElection: boolean;
-  /** The site's parties a candidacy names - its committee's (`party`), and
-   * the ones PKW says its candidate belonged to or was backed by - which the
-   * import adds to the page's. Empty for any other relation. */
+  /** The site's parties a candidacy names - its committee's (`party`, which
+   * the pipeline leaves out for a coalition's), and the ones PKW says its
+   * candidate belonged to or was backed by - which the import adds to the
+   * page's. Empty for any other relation. */
   parties: string[];
   /** The revision publishing this relation would approve, when it points at
    * none of its own yet: the newest one it already holds. Null when the edge
@@ -63,8 +64,10 @@ export type NodeRelation = {
 export type NodeRelations = {
   relations: NodeRelation[];
   nodePublished: boolean;
-  /** The page's parties as stored, which publishing it shows: the import's
-   * union over every candidacy on it, a namesake's included. */
+  /** The page's parties as stored: the import's union over its candidacies,
+   * which can hold a namesake's (`partiesOnlyFrom` in shared/twoPlaces.ts).
+   * Publishing shows them on a page with an approved version; one without
+   * goes up with the version publishing approves. */
   nodeParties: string[];
 };
 
