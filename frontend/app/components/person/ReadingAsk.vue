@@ -168,7 +168,8 @@ onBeforeUnmount(() => observer?.disconnect());
   border-radius: 8px;
   display: flex;
   gap: 16px 24px;
-  padding: 16px 20px;
+  /* Tight: an aside between the header and the history (decided 2026-11-18). */
+  padding: 12px 20px;
 }
 
 .ask-box__words {
@@ -229,7 +230,8 @@ onBeforeUnmount(() => observer?.disconnect());
   .ask-box {
     align-items: stretch;
     flex-direction: column;
-    padding: 16px;
+    gap: 12px;
+    padding: 12px;
   }
 
   .ask-figure {

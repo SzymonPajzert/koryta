@@ -122,7 +122,9 @@
         :node-id="entity.id"
         :needs-split="personEntity?.needs_split"
       />
-      <CardPersonInfo :person="personEntity" class="mb-2" />
+      <!-- mb-0 over the row's own -12px: the facts keep their columns' 12px
+           under them, and no more (decided 2026-11-18). -->
+      <CardPersonInfo :person="personEntity" class="mb-0" />
       <!-- Under the facts, as it vouches for one of them: the birth date. -->
       <PersonDeclarationNote v-if="entity?.id" :node-id="entity.id" />
       {{ entity?.content }}
