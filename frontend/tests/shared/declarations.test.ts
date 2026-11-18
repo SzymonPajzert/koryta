@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   agreedName,
+  cropPriority,
   machineSettles,
   declarationIngestSchema,
   extractId,
@@ -8,6 +9,8 @@ import {
   nameFitsPage,
   parseTypedDate,
   pngSize,
+  READ_PRIORITY,
+  readingReached,
   settleReading,
   type ReaderAnswer,
 } from "../../shared/declarations";
@@ -290,6 +293,84 @@ describe("machineSettles", () => {
       ),
     ).toBeNull();
     expect(machineSettles({ ...ocr, birthDate: "1979" }, ["1979"])).toBeNull();
+  });
+});
+
+describe("cropPriority", () => {
+  const page = (fields = {}) => ({
+    tier: 0 as const,
+    read: false,
+    birthDate: "1979-07-15",
+    ...fields,
+  });
+
+  it("takes the lowest of the crop's pages", () => {
+    expect(cropPriority([page({ tier: 2 }), page({ tier: 0 })], null)).toBe(0);
+    expect(cropPriority([], null)).toBe(3);
+  });
+
+  it("puts a page a reading has reached last", () => {
+    expect(cropPriority([page({ read: true })], null)).toBe(READ_PRIORITY);
+    // Another of the crop's people still waits for one.
+    expect(cropPriority([page({ read: true }), page({ tier: 2 })], null)).toBe(
+      2,
+    );
+  });
+
+  it("puts a crop half a tier back where the job read a full date the page contradicts", () => {
+    expect(cropPriority([page()], "1981-02-03")).toBe(0.5);
+    expect(cropPriority([page()], "1979-07-15")).toBe(0);
+    expect(
+      cropPriority([page({ birthDate: " 1979-07-15 " })], "1979-07-15"),
+    ).toBe(0);
+    // No date on the page, a year alone, nothing read.
+    expect(
+      cropPriority([page({ tier: 1, birthDate: undefined })], "1981-02-03"),
+    ).toBe(1);
+    expect(cropPriority([page()], "1981")).toBe(0);
+    expect(cropPriority([page()], undefined)).toBe(0);
+    // Read is read, whatever the job saw.
+    expect(cropPriority([page({ read: true })], "1981-02-03")).toBe(
+      READ_PRIORITY,
+    );
+  });
+});
+
+describe("readingReached", () => {
+  const settled = (fields = {}) => ({
+    status: "agreed",
+    agreed: { value: "1979-07-15", kind: "date" },
+    pageOutcomes: { kowalska: "queued" },
+    ...fields,
+  });
+
+  it("is a full date settled and compared with the page, whatever it found", () => {
+    expect(readingReached([settled()], "kowalska")).toBe(true);
+    for (const outcome of ["different", "no_date", "held", "confirmed"]) {
+      expect(
+        readingReached(
+          [settled({ pageOutcomes: { kowalska: outcome } })],
+          "kowalska",
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("is never a year alone, a crop still read or taken back, nor another page's", () => {
+    expect(
+      readingReached(
+        [settled({ agreed: { value: "1979", kind: "year" } })],
+        "kowalska",
+      ),
+    ).toBe(false);
+    for (const status of ["open", "disputed", "unreadable", "withdrawn"]) {
+      expect(readingReached([settled({ status })], "kowalska")).toBe(false);
+    }
+    expect(readingReached([settled({ pageOutcomes: null })], "kowalska")).toBe(
+      false,
+    );
+    expect(readingReached([settled()], "nowak")).toBe(false);
+    expect(readingReached([], "kowalska")).toBe(false);
   });
 });
 

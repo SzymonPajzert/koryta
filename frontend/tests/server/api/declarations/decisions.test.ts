@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => {
     readBody: vi.fn(),
     restage: vi.fn(),
     restageCrops: vi.fn(),
+    requeue: vi.fn(),
   };
 });
 
@@ -67,6 +68,11 @@ vi.mock("../../../../server/utils/declarationPublish", () => ({
 vi.mock("../../../../server/utils/declarationPeopleCount", () => ({
   restageDeclarationPeople: mocks.restage,
   restageCropPeople: mocks.restageCrops,
+}));
+// Which crop's people get their place in the readers' queue back, which
+// tests/server/utils/declarationPublish.test.ts runs.
+vi.mock("../../../../server/utils/readingQueue", () => ({
+  requeueCropPeople: mocks.requeue,
 }));
 
 const ID = `${"a".repeat(64)}-p0`;
@@ -185,6 +191,8 @@ describe("api/declarations/[id]/settle", () => {
     expect(mocks.clear).not.toHaveBeenCalledWith("nitro:handlers");
     expect(mocks.linkedOnAPage).toHaveBeenCalledWith(expect.anything(), ID);
     expect(headers()["Cache-Control"]).toBe("private, no-store");
+    // Its people's other crops take their place in the readers' queue.
+    expect(mocks.requeue).toHaveBeenCalledWith(expect.anything(), ID);
   });
 
   it("drops the cached pages when a public page linked the crop", async () => {
@@ -340,8 +348,10 @@ describe("api/declarations/[id]/withdraw", () => {
     expect(mocks.clear).toHaveBeenCalledWith(OVERVIEW);
     expect(mocks.clear).not.toHaveBeenCalledWith("nitro:handlers");
     expect(headers()["Cache-Control"]).toBe("private, no-store");
-    // Its people move in the people count.
+    // Its people move in the people count, and their other crops take their
+    // place in the readers' queue again: this may have been the only reading.
     expect(mocks.restageCrops).toHaveBeenCalledWith(expect.anything(), [ID]);
+    expect(mocks.requeue).toHaveBeenCalledWith(expect.anything(), ID);
   });
 
   it("drops the cached pages when a public page linked the crop", async () => {
