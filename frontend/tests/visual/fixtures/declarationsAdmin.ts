@@ -7,6 +7,7 @@ import {
   type DeclarationOverview,
   type DeclarationPublicationRow,
   type DeclarationReviewRow,
+  type HeldCropRow,
   type LocalOffice,
   type PersonDeclarations,
   type PublicationHoldReason,
@@ -313,27 +314,27 @@ function differentRows(n: number): DeclarationReviewRow[] {
   });
 }
 
-/** REAL, on 2026-11-06: why the 111 pages that wait for an admin are held. */
+/** REAL, on 2026-11-18: why the 249 pages that wait for an admin are held. */
 const HELD_BY: { reason: PublicationHoldReason; count: number }[] = [
-  { reason: "two_places", count: 50 },
-  { reason: "pending_proposal", count: 20 },
-  { reason: "ambiguous_candidacy", count: 17 },
-  { reason: "conflicting_reading", count: 15 },
-  { reason: "no_candidacy_on_page", count: 7 },
+  { reason: "two_places", count: 154 },
+  { reason: "pending_proposal", count: 30 },
+  { reason: "ambiguous_candidacy", count: 28 },
+  { reason: "conflicting_reading", count: 26 },
+  { reason: "no_candidacy_on_page", count: 9 },
   { reason: "admin_decision", count: 1 },
   { reason: "kept_hidden", count: 1 },
 ];
 const HELD_TOTAL = HELD_BY.reduce((sum, { count }) => sum + count, 0);
 
-/** REAL, on 2026-11-06: what the 156 pages with no paid public post are held
+/** REAL, on 2026-11-18: what the 315 pages with no paid public post are held
  * for, which is not always that. */
 const NO_POST_BY: { reason: PublicationHoldReason; count: number }[] = [
-  { reason: RULED_OUT, count: 125 },
+  { reason: RULED_OUT, count: 280 },
   { reason: "two_places", count: 15 },
+  { reason: "conflicting_reading", count: 7 },
   { reason: "ambiguous_candidacy", count: 6 },
-  { reason: "conflicting_reading", count: 5 },
   { reason: "kept_hidden", count: 3 },
-  { reason: "pending_proposal", count: 1 },
+  { reason: "pending_proposal", count: 3 },
   { reason: "admin_decision", count: 1 },
 ];
 /** DERIVED: three an admin has declined, which production has none of yet. */
@@ -342,9 +343,8 @@ const DECLINED_REASONS: PublicationHoldReason[] = [
   "conflicting_reading",
   "ambiguous_candidacy",
 ];
-const SET_ASIDE_TOTAL =
-  NO_POST_BY.reduce((sum, { count }) => sum + count, 0) +
-  DECLINED_REASONS.length;
+const NO_POST_TOTAL = NO_POST_BY.reduce((sum, { count }) => sum + count, 0);
+const SET_ASIDE_TOTAL = NO_POST_TOTAL + DECLINED_REASONS.length;
 
 function heldRow(
   reason: PublicationHoldReason,
@@ -373,9 +373,7 @@ function heldRows(): DeclarationPublicationRow[] {
   const rows = HELD_BY.flatMap(({ reason, count }) =>
     Array<PublicationHoldReason>(count).fill(reason),
   )
-    .map((reason, i) =>
-      heldRow(reason, i, 2.5 + ((i * 41) % HELD_TOTAL) * 1.3),
-    )
+    .map((reason, i) => heldRow(reason, i, 2.5 + ((i * 41) % HELD_TOTAL) * 1.3))
     .sort((a, b) => b.at.localeCompare(a.at));
   // REAL: four rows of 2026-11-06 were published by hand while they waited.
   // One of them here, to close.
@@ -395,24 +393,21 @@ function setAsideRows(): DeclarationPublicationRow[] {
   );
   const noPost = NO_POST_BY.flatMap(({ reason, count }) =>
     Array<PublicationHoldReason>(count).fill(reason),
-  ).map(
-    (reason, i): DeclarationPublicationRow => ({
-      ...heldRow(reason, 300 + i, 14 + ((i * 41) % 156) * 1.1),
-      paidPost: false,
-    }),
-  );
+  ).map((reason, i): DeclarationPublicationRow => ({
+    ...heldRow(reason, 300 + i, 14 + ((i * 41) % NO_POST_TOTAL) * 1.1),
+    paidPost: false,
+  }));
   return [...declined, ...noPost].sort((a, b) => b.at.localeCompare(a.at));
 }
 
 /** `GET /api/declarations/publications/<id>/crops`: the crop that gives a page
  * held for a conflicting reading another day, for any row. */
-export function heldCrops(
-  row: DeclarationPublicationRow,
-): DeclarationReviewRow[] {
+export function heldCrops(row: DeclarationPublicationRow): HeldCropRow[] {
   const [crop] = differentRows(1);
   return [
     {
       ...crop!,
+      decidable: true,
       unit: row.unit,
       documentUrl: row.documentUrl,
       people: crop!.people.map((person) => ({
@@ -450,13 +445,28 @@ export function heldRelations(personId: string): NodeRelations {
     otherId,
     otherName,
     startDate,
-    position: "Rada gminy",
+    position: "Rada powiatu",
   });
   return {
     relations: [
-      candidacy(`${personId}-run1`, "teryt1465", "Powiat grójecki", "2024-04-07"),
-      candidacy(`${personId}-run2`, "teryt0217", "Powiat strzeliński", "2024-04-07"),
-      candidacy(`${personId}-run3`, "teryt1465", "Powiat grójecki", "2018-10-21"),
+      candidacy(
+        `${personId}-run1`,
+        "teryt1465",
+        "Powiat grójecki",
+        "2024-04-07",
+      ),
+      candidacy(
+        `${personId}-run2`,
+        "teryt0217",
+        "Powiat strzeliński",
+        "2024-04-07",
+      ),
+      candidacy(
+        `${personId}-run3`,
+        "teryt1465",
+        "Powiat grójecki",
+        "2018-10-21",
+      ),
       {
         ...relation,
         id: `${personId}-job`,
@@ -520,8 +530,8 @@ function recentRows(daysBack = 0): DeclarationPublicationRow[] {
  *     different
  *   publications: 74 published over 11 days at no more than 10 a day, 7 of
  *     them today; 9 queued
- * REAL, on 2026-11-06, for the lists an admin works through
- *   111 held with a paid post, by reason; 156 with none, with 3 declined
+ * REAL, on 2026-11-18, for the lists an admin works through
+ *   249 held with a paid post, by reason; 315 with none, with 3 declined
  *   beside them
  */
 export const declarationOverview: DeclarationOverview = {

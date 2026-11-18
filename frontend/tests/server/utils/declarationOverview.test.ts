@@ -55,7 +55,8 @@ function run(q: Query) {
         const actual = value(doc.get(field)) as number | undefined;
         if (op === ">=")
           return actual !== undefined && actual >= (value(expected) as number);
-        if (op === "in") return (expected as unknown[]).includes(doc.get(field));
+        if (op === "in")
+          return (expected as unknown[]).includes(doc.get(field));
         return doc.get(field) === expected;
       }),
     );
@@ -314,8 +315,9 @@ describe("countEverything", () => {
       // reason says nothing about the ones after it.
       hold("no-post", "two_places", 3);
       hold("ruled-out", "no_public_post", 4);
+      // Declined: still held on the record, with the admin's no on it.
       hold("declined", "two_places", 2, {
-        status: "declined",
+        declinedBy: "admin",
         declinedAt: at("2026-10-27T10:00:00Z"),
       });
 
@@ -399,7 +401,11 @@ describe("countEverything", () => {
 
     it("lists every hold, the newest first, not the newest twenty", async () => {
       for (let day = 1; day <= 25; day++) {
-        hold(`held-${day}`, day % 2 ? "two_places" : "ambiguous_candidacy", day);
+        hold(
+          `held-${day}`,
+          day % 2 ? "two_places" : "ambiguous_candidacy",
+          day,
+        );
         post(`held-${day}`);
       }
 
@@ -417,20 +423,78 @@ describe("countEverything", () => {
       ]);
     });
 
-    it("does not let the rule's holds push the others off the list", async () => {
-      // Newer than everything that waits, and more of them than a list holds.
+    it("lists every hold, so none is counted where it is not shown", async () => {
+      // Newer than everything that waits, and more than any cap would keep.
       for (let i = 0; i < 400; i++) {
         hold(`nopost-${i}`, "no_public_post", 28);
       }
       hold("old", "two_places", 1);
       post("old");
+      // Past where a cap of 300 by id would have stopped, gaining a post.
+      hold("zz-gained", "no_public_post", 27);
+      post("zz-gained");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { publications, lists } = await countEverything(db as any, 0, NOW);
 
-      expect(lists.held.map((row) => row.personId)).toContain("old");
+      expect(lists.held.map((row) => row.personId)).toEqual(
+        expect.arrayContaining(["old", "zz-gained"]),
+      );
       expect(publications.setAside).toBe(400);
-      expect(lists.setAside).toHaveLength(300);
+      expect(lists.setAside).toHaveLength(400);
+      expect(publications.held).toBe(lists.held.length);
+    });
+
+    it("keeps a page held again where it first waited", async () => {
+      hold("first", "two_places", 5);
+      post("first");
+      // Waited before "first", held again by a recheck since.
+      hold("rechecked", "conflicting_reading", 2, {
+        heldAt: at("2026-10-28T10:00:00Z"),
+      });
+      post("rechecked");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { lists } = await countEverything(db as any, 0, NOW);
+
+      const order = lists.held.map((row) => row.personId);
+      expect(order.indexOf("first")).toBeLessThan(order.indexOf("rechecked"));
+      // Shown by when it was held.
+      expect(lists.held.find((row) => row.personId === "rechecked")!.at).toBe(
+        "2026-10-28T10:00:00.000Z",
+      );
+    });
+
+    it("leaves out the record of a page merged into another or removed", async () => {
+      stored.set("nodes/merged", { name: "M", merged_into: "kowalska" });
+      hold("merged", "two_pages", 3);
+      stored.set("nodes/removed", { name: "R", deleted: true });
+      hold("removed", "two_places", 4);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { lists } = await countEverything(db as any, 0, NOW);
+
+      const listed = [...lists.held, ...lists.setAside].map((r) => r.personId);
+      expect(listed).not.toContain("merged");
+      expect(listed).not.toContain("removed");
+    });
+
+    it("says which publications an admin made by hand", async () => {
+      stored.set("declarationPublications/by-hand", {
+        status: "published",
+        reason: null,
+        autoPublished: false,
+        publishedAt: at("2026-10-29T09:00:00Z"),
+        handPublished: { uid: "admin", held: "two_places" },
+        declarations: [],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { lists } = await countEverything(db as any, 0, NOW);
+
+      expect(
+        lists.recent.find((row) => row.personId === "by-hand"),
+      ).toMatchObject({ status: "published", byHand: true });
     });
   });
 

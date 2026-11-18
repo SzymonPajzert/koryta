@@ -72,7 +72,13 @@ const IN_PARALLEL = 8;
 const ANY_CHUNK = 30;
 
 const NODE_FIELDS = ["type", "published", "birthDate", "merged_into"];
-const PUBLICATION_FIELDS = ["personId", "status", "reason", "publishedAt"];
+const PUBLICATION_FIELDS = [
+  "personId",
+  "status",
+  "reason",
+  "publishedAt",
+  "declinedAt",
+];
 const CROP_FIELDS = [
   "status",
   "personIds",
@@ -228,6 +234,7 @@ function publicationOf(
     reason:
       typeof data?.reason === "string" && data.reason ? data.reason : null,
     publishedOn: warsawDayOf(data?.publishedAt),
+    ...(data?.declinedAt ? { declined: true } : {}),
   };
 }
 

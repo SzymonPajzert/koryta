@@ -7,6 +7,7 @@ import {
   declarationDifferenceTone,
   declarationDrainText,
   declarationHoldActions,
+  declarationRecheckLabel,
   declarationHoldLabel,
   declarationHoldLabels,
   declarationHoldNote,
@@ -130,12 +131,11 @@ describe("the words for the job's codes", () => {
     expect(declarationHoldLabels.admin_decision).toBe(
       "datę ustalił administrator",
     );
-    expect(declarationHoldNotes.admin_decision).toBe(
-      "Opublikuj ręcznie, jeśli się zgadza.",
-    );
-    expect(declarationHoldNote(heldRow("admin_decision"))).toBe(
-      "Opublikuj ręcznie, jeśli się zgadza.",
-    );
+    // Published by hand, the page shows no declaration: it says so first.
+    const note =
+      "Opublikuj ręcznie, jeśli się zgadza. Datę ustalił administrator, więc oświadczenia na stronie nie będzie.";
+    expect(declarationHoldNotes.admin_decision).toBe(note);
+    expect(declarationHoldNote(heldRow("admin_decision"))).toBe(note);
   });
 
   it("asks nobody to publish a page that is public by now", () => {
@@ -174,8 +174,42 @@ describe("the words for the job's codes", () => {
     const row = heldRow("no_public_post");
 
     expect(declarationHoldLabel(row)).toBe("jest już płatne stanowisko");
+    // A recheck would publish the page without a post added by hand.
     expect(declarationHoldNote(row)).toBe(
-      "Na stronie jest już płatne stanowisko. Sprawdź ponownie.",
+      "Na stronie jest już płatne stanowisko. Opublikuj ręcznie i zaznacz je.",
+    );
+    expect(declarationHoldActions(row)).toEqual({
+      publish: true,
+      recheck: false,
+      decline: true,
+      restore: false,
+    });
+  });
+
+  it("tells the admin what clears each hold that waits", () => {
+    expect(declarationHoldNote(heldRow("two_pages"))).toBe(
+      "Ta osoba ma dwie strony. Połącz je albo opublikuj właściwą ręcznie.",
+    );
+    expect(declarationHoldNote(heldRow("ambiguous_candidacy"))).toBe(
+      "W powiecie z oświadczenia pasują dwie kandydatury tej osoby. Przy publikacji ręcznej zaznacz tylko właściwą.",
+    );
+    expect(declarationHoldNote(heldRow("two_places"))).toBe(
+      "Kandydatury wypadają w dwóch miejscach naraz. Przy publikacji ręcznej zaznacz tylko właściwą.",
+    );
+    expect(declarationHoldNote(heldRow("conflicting_reading"))).toBe(
+      "Inny wycinek tej osoby podaje inną datę. Popraw jego odczyt albo wycofaj go, jeśli nie jest jej, i sprawdź ponownie.",
+    );
+    expect(declarationHoldNote(heldRow("needs_split"))).toBe(
+      "Strona jest do rozdzielenia. Rozdziel ją, potem sprawdź ponownie.",
+    );
+    expect(declarationHoldNote(heldRow("kept_hidden"))).toBe(
+      "Administrator zostawił tę stronę ukrytą. Wyjdzie tylko opublikowana ręcznie.",
+    );
+  });
+
+  it("sends the admin to publish before the proposal, which can erase the date", () => {
+    expect(declarationHoldNote(heldRow("pending_proposal"))).toBe(
+      "Na stronie czeka propozycja zmiany. Opublikuj ręcznie wersję z importu, propozycję rozpatrz potem.",
     );
   });
 
@@ -251,17 +285,45 @@ describe("the words for the job's codes", () => {
       });
     });
 
-    it("offers nothing on a page with no paid post: the post brings it back", () => {
+    it("offers only a publication by hand on a page with no paid post", () => {
+      // Its post may be one the pipelines have not recorded, a mayor's office.
       for (const reason of ["no_public_post", "two_places"] as const) {
         expect(
           declarationHoldActions(heldRow(reason, { paidPost: false })),
           reason,
         ).toEqual({
-          publish: false,
+          publish: true,
           recheck: false,
           decline: false,
           restore: false,
         });
+      }
+    });
+
+    it("does not offer a check that no admin's action lets pass", () => {
+      for (const reason of [
+        "kept_hidden",
+        "pending_proposal",
+        "revision_rejected",
+        "name_differs",
+      ] as const) {
+        expect(declarationHoldActions(heldRow(reason)), reason).toEqual({
+          publish: true,
+          recheck: false,
+          decline: true,
+          restore: false,
+        });
+      }
+      for (const reason of [
+        "candidacy_reviewed",
+        "no_revision",
+        "no_longer_matches",
+        "conflicting_reading",
+        "no_candidacy_on_page",
+      ] as const) {
+        expect(declarationHoldActions(heldRow(reason)).recheck, reason).toBe(
+          true,
+        );
       }
     });
 
@@ -276,7 +338,23 @@ describe("the words for the job's codes", () => {
           decline: false,
           restore: false,
         });
+        expect(
+          declarationRecheckLabel(heldRow(reason, { pagePublic: true })),
+        ).toBe("Zamknij wstrzymanie");
       }
+      // Two pages with one date are asked again, not closed, and can be set
+      // aside: the other page may keep its date for good.
+      expect(
+        declarationRecheckLabel(heldRow("two_pages", { pagePublic: true })),
+      ).toBe("Sprawdź ponownie");
+      expect(
+        declarationHoldActions(heldRow("two_pages", { pagePublic: true })),
+      ).toEqual({
+        publish: false,
+        recheck: true,
+        decline: true,
+        restore: false,
+      });
     });
 
     it("offers to take an admin's no back, and nothing else", () => {
@@ -323,7 +401,9 @@ describe("the words for the job's codes", () => {
 
     it("asks nothing of a row whose post nobody looked for", () => {
       expect(
-        publicationSetAside(heldRow(null, { status: "published", paidPost: undefined })),
+        publicationSetAside(
+          heldRow(null, { status: "published", paidPost: undefined }),
+        ),
       ).toBe(false);
     });
   });
@@ -581,7 +661,7 @@ describe("declarationRecheckText", () => {
       "Opublikowano.",
     );
     expect(declarationRecheckText({ outcome: "confirmed" })).toBe(
-      "Strona była już publiczna. Wiersz zamknięty.",
+      "Strona była już publiczna. Wstrzymanie zamknięte.",
     );
   });
 
@@ -599,7 +679,9 @@ describe("declarationRecheckText", () => {
     );
     expect(
       declarationRecheckText({ outcome: "skipped", skipped: "import" }),
-    ).toBe("Nie sprawdzono: trwa import osób albo nie da się sprawdzić, czy trwa.");
+    ).toBe(
+      "Nie sprawdzono: trwa import osób albo nie da się sprawdzić, czy trwa.",
+    );
   });
 });
 

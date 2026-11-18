@@ -2,6 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import type { DocumentReference, Firestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
+import { afterHandPublication } from "~~/server/utils/declarationDecisions";
 import { applyRevision, revisionTargetRef } from "~~/server/utils/revisions";
 import { notifyRevisionReviewed } from "~~/server/utils/revisionNotifications";
 import { resolveEdgeEndpoints } from "~~/server/utils/edgePublication";
@@ -100,6 +101,15 @@ export default defineEventHandler(async (event) => {
   // against what is stored now.
   await assertEdgeRevisionPublishable(db, revisionRef, revision, body.publish);
 
+  // A person's page this approval takes from draft to public is a publication
+  // by hand, as on /api/nodes/publish: it closes the page's declaration hold.
+  const before =
+    body.publish === true
+      ? (
+          await revisionTargetRef(db, { ...revision, id: revisionRef.id }).get()
+        ).data()
+      : undefined;
+
   const { targetRef, published } = await applyRevision(
     db,
     revisionRef,
@@ -112,6 +122,15 @@ export default defineEventHandler(async (event) => {
   // now would otherwise keep serving its previous answer.
   await useStorage("cache").clear("nitro:handlers");
   forgetQueued(body.revision_id, "approved");
+
+  if (
+    published &&
+    before?.type === "person" &&
+    before.published !== true &&
+    targetRef.parent.id === "nodes"
+  ) {
+    await afterHandPublication(db, targetRef.id, user.uid, true);
+  }
 
   await notifyRevisionReviewed(db, {
     decision: "approved",

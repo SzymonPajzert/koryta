@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { requireAdmin } from "../../../../server/utils/auth";
+import { afterHandPublication } from "../../../../server/utils/declarationDecisions";
 import { notifyRevisionReviewed } from "../../../../server/utils/revisionNotifications";
 import handler from "../../../../server/api/revisions/approve.post";
 
@@ -62,6 +63,10 @@ vi.mock("../../../../server/utils/auth", () => ({
 
 vi.mock("../../../../server/utils/revisionNotifications", () => ({
   notifyRevisionReviewed: vi.fn(async () => "sent"),
+}));
+
+vi.mock("../../../../server/utils/declarationDecisions", () => ({
+  afterHandPublication: vi.fn(async () => {}),
 }));
 
 const { mockReadValidatedBody } = vi.hoisted(() => {
@@ -520,6 +525,73 @@ describe("api/revisions/approve", () => {
 
       expect(result.published).toBe(true);
       expect(mockGetAll).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("a person's page held on /admin/oswiadczenia", () => {
+    beforeEach(() => {
+      // The batch writes the target, so a read of it made after the approval
+      // would see the page public already.
+      mockBatchSet.mockImplementation(
+        (ref: { path: string }, data: Record<string, unknown>) => {
+          stored[ref.path] = data;
+        },
+      );
+    });
+
+    afterEach(() => {
+      mockBatchSet.mockReset();
+    });
+
+    const approvePerson = (
+      node: Record<string, unknown>,
+      extra: Record<string, unknown> = { publish: true },
+    ) => {
+      stored["revisions/rev-1"] = {
+        node_id: "person-1",
+        collection: "nodes",
+        data: { type: "person", name: "Jan" },
+      };
+      stored["nodes/person-1"] = node;
+      requestApproval(extra);
+      return handler({} as never);
+    };
+
+    it("closes the hold when approving publishes a person's draft", async () => {
+      await approvePerson({ type: "person", name: "Jan", published: false });
+
+      expect(afterHandPublication).toHaveBeenCalledWith(
+        mockDb,
+        "person-1",
+        "admin-uid",
+        true,
+      );
+    });
+
+    it("leaves the hold alone when nothing went from draft to public", async () => {
+      // Public already: publishing again closes no two-pages hold.
+      await approvePerson({ type: "person", name: "Jan", published: true });
+      // Approved without publishing.
+      await approvePerson(
+        { type: "person", name: "Jan", published: false },
+        {},
+      );
+
+      expect(afterHandPublication).not.toHaveBeenCalled();
+    });
+
+    it("does not look for a hold on a company", async () => {
+      stored["revisions/rev-1"] = {
+        node_id: "place-1",
+        collection: "nodes",
+        data: { type: "place", name: "Firma" },
+      };
+      stored["nodes/place-1"] = { type: "place", published: false };
+      requestApproval({ publish: true });
+
+      await handler({} as never);
+
+      expect(afterHandPublication).not.toHaveBeenCalled();
     });
   });
 });

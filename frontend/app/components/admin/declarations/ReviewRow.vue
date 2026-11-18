@@ -60,6 +60,9 @@
       </AdminRowFact>
     </template>
 
+    <p v-if="!decidable" class="drev__settled" data-crop-settled>
+      {{ settledNote }}
+    </p>
     <div class="drev__grid">
       <!-- The crop comes first: everything below is checked against it. -->
       <section class="drev__crop" aria-label="Wycinek">
@@ -240,7 +243,7 @@
       </section>
     </div>
 
-    <template #footer>
+    <template v-if="decidable" #footer>
       <form class="drev__settle" @submit.prevent="settleTyped">
         <v-text-field
           v-model="typed"
@@ -355,13 +358,21 @@ import { shortWarsawTime } from "~~/shared/jobs";
  * back when it is not this person's. The row only asks for them; the page
  * sends them and reloads, as `FeedbackReportRow` leaves its writes to
  * /admin/opinie. */
-const props = defineProps<{
-  row: DeclarationReviewRow;
-  kind: "disputed" | "different";
-  /** The decision on this row being sent, if one is. */
-  busy?: "settle" | "unreadable" | "withdraw" | null;
-  now: Date;
-}>();
+const props = withDefaults(
+  defineProps<{
+    row: DeclarationReviewRow;
+    kind: "disputed" | "different";
+    /** The decision on this row being sent, if one is. */
+    busy?: "settle" | "unreadable" | "withdraw" | null;
+    now: Date;
+    /** The page the reading is compared with, where the row is listed under
+     * one person (a held publication's crops); else the crop's first page. */
+    pageId?: string;
+    /** False for a crop settled already, which nobody decides here. */
+    decidable?: boolean;
+  }>(),
+  { busy: null, pageId: undefined, decidable: true },
+);
 
 const emit = defineEmits<{
   settle: [value: string];
@@ -371,7 +382,24 @@ const emit = defineEmits<{
 
 const expanded = defineModel<boolean>("expanded", { default: false });
 
-const firstPerson = computed(() => props.row.people[0] ?? null);
+const firstPerson = computed(
+  () =>
+    props.row.people.find((person) => person.id === props.pageId) ??
+    props.row.people[0] ??
+    null,
+);
+
+/** Of a settled crop: the page whose date it is, which is why it holds this
+ * one, and why it is not this list's to decide. */
+const settledNote = computed(() => {
+  const owner = props.row.people.find(
+    (person) =>
+      person.id !== props.pageId && person.birthDate === props.row.agreed,
+  );
+  return owner
+    ? `To wycinek strony ${owner.name}: zgadza się z jej datą.`
+    : "Ten wycinek jest już rozstrzygnięty.";
+});
 
 const difference = computed(() =>
   props.row.agreed
@@ -677,6 +705,12 @@ const withdrawQuestion = computed(() =>
 .drev__reveal {
   margin-top: 4px;
   margin-inline-start: -8px;
+}
+
+.drev__settled {
+  margin: 0 0 12px;
+  font-size: 0.875rem;
+  text-wrap: pretty;
 }
 
 .drev__note {

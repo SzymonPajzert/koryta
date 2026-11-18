@@ -1122,21 +1122,22 @@ export const PEOPLE_IMPORT_WINDOW = { from: 3, to: 9 } as const;
 export const PRESS_BATCH = 25;
 
 /** Where a page's publication stands, as `declarationPublications` stores
- * it. `confirmed` is a page that was public already when its date matched, or
- * was published by hand while it was held: nothing to publish, but the
- * declaration is linked on it. `publishing` is a page a pass has taken up - the
- * automation under a slot of the day, an admin's press without one - and whose
- * writes are under way, or were cut short; one left there for long is tried
- * again. `declined` is a held page an admin said will not be published: it
- * keeps the reason it was held for, no later reading takes it up again, and
- * only an admin puts it back, or publishes it by hand. */
+ * it. `confirmed` is a page that was public already when its date matched:
+ * nothing to publish, but the declaration is linked on it. `publishing` is a
+ * page a pass has taken up - the automation under a slot of the day, an
+ * admin's press without one - and whose writes are under way, or were cut
+ * short; one left there for long is tried again.
+ *
+ * A held page an admin said will not be published stays `held`, with
+ * `declinedAt` on the record (`declinePublication`): a release that knows
+ * nothing of it then keeps it held too, where a status of its own would be
+ * queued again by the first reading it meets. */
 export const publicationStatuses = [
   "queued",
   "publishing",
   "published",
   "held",
   "confirmed",
-  "declined",
 ] as const;
 export type PublicationStatus = (typeof publicationStatuses)[number];
 
@@ -1268,8 +1269,14 @@ export type DeclarationReviewRow = {
   updatedAt: string;
 };
 
+/** A crop that gives a held page another date, as its row lists it: whether
+ * an admin can still decide it here, or it was settled already, as another
+ * page's declaration with that page's date. */
+export type HeldCropRow = DeclarationReviewRow & { decidable: boolean };
+
 /** A person published from the queue, waiting in it, held or declined: by the
- * automation, or at an admin's press of „Opublikuj z kolejki”. */
+ * automation, at an admin's press of „Opublikuj z kolejki”, or by hand while
+ * held. `declined` is a held record with `declinedAt`. */
 export type DeclarationPublicationRow = {
   personId: string;
   name: string;
@@ -1292,6 +1299,9 @@ export type DeclarationPublicationRow = {
   /** Whether an admin's press took the page up last, rather than the
    * automation on its own. */
   pressed: boolean;
+  /** Whether an admin published the page by hand while it was held
+   * (`closeHoldOnPublication`). */
+  byHand?: boolean;
 };
 
 /**

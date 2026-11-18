@@ -32,7 +32,12 @@
         {{ shortWarsawTime(row.at, now) }}
       </AdminRowFact>
       <AdminRowFact label="Jednostka">{{ row.unit }}</AdminRowFact>
-      <AdminRowFact label="Powiązania">{{ edgesText }}</AdminRowFact>
+      <AdminRowFact
+        v-if="row.status === 'published' && !row.byHand"
+        label="Powiązania"
+      >
+        {{ edgesText }}
+      </AdminRowFact>
     </template>
 
     <p v-if="holdNote" class="dpub__reason" data-hold-note>
@@ -48,49 +53,44 @@
     <p v-if="cropsGone" class="dpub__reason" data-hold-crops-empty>
       Żaden wycinek nie podaje już innej daty. Sprawdź ponownie.
     </p>
-    <section
-      v-else-if="showCrops"
-      class="dpub__crops"
-      aria-label="Wycinki z inną datą"
-      data-hold-crops
-    >
-      <h3 class="dpub__subhead">Wycinki z inną datą</h3>
-      <v-skeleton-loader v-if="cropsLoading" type="list-item-two-line" />
-      <p v-else-if="cropsError" class="dpub__reason" data-hold-crops-error>
-        {{ cropsError }}
-        <v-btn size="small" variant="text" @click="loadCrops">
-          Spróbuj ponownie
-        </v-btn>
+    <template v-else-if="showCrops">
+      <p v-if="cropsOthers" class="dpub__reason" data-hold-crops-others>
+        Inną datę podają wycinki innych stron. Opublikuj ręcznie albo nie
+        publikuj.
       </p>
-      <AdminRowList v-else-if="crops?.length">
-        <AdminDeclarationsReviewRow
-          v-for="crop in crops"
-          :key="crop.id"
-          v-model:expanded="openCrops[crop.id]"
-          kind="different"
-          :row="crop"
-          :now="now"
-          :busy="cropBusy?.(crop.id) ?? null"
-          @settle="(value: string) => emit('crop', crop, 'settle', value)"
-          @unreadable="emit('crop', crop, 'unreadable')"
-          @withdraw="emit('crop', crop, 'withdraw')"
-        />
-      </AdminRowList>
-    </section>
+      <section
+        class="dpub__crops"
+        aria-label="Wycinki z inną datą"
+        data-hold-crops
+      >
+        <h3 class="dpub__subhead">Wycinki z inną datą</h3>
+        <v-skeleton-loader v-if="cropsLoading" type="list-item-two-line" />
+        <p v-else-if="cropsError" class="dpub__reason" data-hold-crops-error>
+          {{ cropsError }}
+          <v-btn size="small" variant="text" @click="loadCrops">
+            Spróbuj ponownie
+          </v-btn>
+        </p>
+        <AdminRowList v-else-if="crops?.length">
+          <AdminDeclarationsReviewRow
+            v-for="crop in crops"
+            :key="crop.id"
+            v-model:expanded="openCrops[crop.id]"
+            kind="different"
+            :row="crop"
+            :page-id="row.personId"
+            :decidable="crop.decidable"
+            :now="now"
+            :busy="cropBusy?.(crop.id) ?? null"
+            @settle="(value: string) => emit('crop', crop, 'settle', value)"
+            @unreadable="emit('crop', crop, 'unreadable')"
+            @withdraw="emit('crop', crop, 'withdraw')"
+          />
+        </AdminRowList>
+      </section>
+    </template>
 
     <div class="dpub__links">
-      <!-- The one link that is the row's next step, ahead of the two that
-           only lead somewhere. -->
-      <v-btn
-        v-if="actions.publish && row.reason === 'pending_proposal'"
-        size="small"
-        variant="tonal"
-        :to="`/admin/rewizje/${row.personId}`"
-        :prepend-icon="mdiFileCompare"
-        data-hold-revisions
-      >
-        Propozycja zmiany
-      </v-btn>
       <v-btn
         size="small"
         variant="text"
@@ -98,6 +98,18 @@
         :prepend-icon="mdiAccountOutline"
       >
         Strona osoby
+      </v-btn>
+      <!-- After the publication, not before it: approving an old proposal
+           first can write an empty birth date over the import's. -->
+      <v-btn
+        v-if="actions.publish && row.reason === 'pending_proposal'"
+        size="small"
+        variant="text"
+        :to="`/admin/rewizje/${row.personId}`"
+        :prepend-icon="mdiFileCompare"
+        data-hold-revisions
+      >
+        Propozycja zmiany
       </v-btn>
       <v-btn
         size="small"
@@ -125,16 +137,16 @@
         Opublikuj ręcznie
       </v-btn>
       <v-btn
-        v-if="actions.recheck"
+        v-if="actions.recheck && !cropsOthers"
         class="dpub__decision"
         variant="outlined"
-        :prepend-icon="row.pagePublic ? mdiClose : mdiRefresh"
+        :prepend-icon="declarationHoldIsOver(row) ? mdiCheckAll : mdiRefresh"
         :disabled="!!busy"
         :loading="busy === 'recheck'"
         data-hold-recheck
         @click="emit('recheck')"
       >
-        {{ row.pagePublic ? "Zamknij wiersz" : "Sprawdź ponownie" }}
+        {{ declarationRecheckLabel(row) }}
       </v-btn>
       <v-btn
         v-if="actions.restore"
@@ -171,7 +183,7 @@ import {
   mdiAccountOutline,
   mdiCancel,
   mdiCheck,
-  mdiClose,
+  mdiCheckAll,
   mdiFileCompare,
   mdiOpenInNew,
   mdiRefresh,
@@ -183,14 +195,17 @@ import { polishCounting } from "~/composables/polish";
 import { toneClasses } from "~/utils/jobStyle";
 import {
   declarationHoldActions,
+  declarationHoldIsOver,
   declarationHoldLabel,
   declarationHoldNote,
   declarationHoldTone,
+  declarationRecheckLabel,
 } from "~/utils/declarationsAdmin";
 import {
   publicationSetAside,
   type DeclarationPublicationRow,
   type DeclarationReviewRow,
+  type HeldCropRow,
 } from "~~/shared/declarations";
 import { shortWarsawTime } from "~~/shared/jobs";
 
@@ -200,9 +215,10 @@ import { shortWarsawTime } from "~~/shared/jobs";
  * A held one says why in the words of the hold and what would clear it, and
  * its foot holds the decisions: publish it by hand, in the dialog the person's
  * own page opens, which is where two candidacies are told apart; check it again
- * once what held it is gone; or say it will not be published, which is taken
- * back as easily. Held for a crop that reads another day, it shows that crop.
- * Whether the page is public now is on the row too. */
+ * where a check can still pass; or say it will not be published, which is
+ * taken back as easily. Held for a crop that reads another day, it shows that
+ * crop, decidable where it still waits for an admin. Whether the page is
+ * public now is on the row too. */
 const props = defineProps<{
   row: DeclarationPublicationRow;
   now: Date;
@@ -239,7 +255,7 @@ const showCrops = computed(
     !props.row.pagePublic &&
     props.row.reason === "conflicting_reading",
 );
-const crops = ref<DeclarationReviewRow[] | null>(null);
+const crops = ref<HeldCropRow[] | null>(null);
 const cropsLoading = ref(false);
 const cropsError = ref<string | null>(null);
 /** The crops open, each by itself; the only one starts open. */
@@ -251,9 +267,19 @@ const cropsGone = computed(
   () => showCrops.value && crops.value?.length === 0 && !cropsError.value,
 );
 
+/** Every crop that gives another date is another page's, settled already:
+ * nothing here can be decided, and a recheck will hold the page again. */
+const cropsOthers = computed(
+  () =>
+    showCrops.value &&
+    !!crops.value?.length &&
+    crops.value.every((crop) => !crop.decidable),
+);
+
 const holdNote = computed(() =>
   (props.row.status === "held" || props.row.status === "declined") &&
-  !cropsGone.value
+  !cropsGone.value &&
+  !cropsOthers.value
     ? declarationHoldNote(props.row)
     : null,
 );
@@ -262,7 +288,7 @@ async function loadCrops() {
   cropsLoading.value = crops.value === null;
   cropsError.value = null;
   try {
-    crops.value = await authRequest<DeclarationReviewRow[]>(
+    crops.value = await authRequest<HeldCropRow[]>(
       `/api/declarations/publications/${encodeURIComponent(props.row.personId)}/crops`,
       { method: "GET" },
     );
@@ -297,10 +323,12 @@ const tag = computed(() => {
   return declarationHoldLabel(props.row);
 });
 
-/** The state in full, for the open row. A page an admin pressed for is the
- * admin's publication, not the automation's. */
+/** The state in full, for the open row. A page an admin pressed for, or
+ * published by hand while it was held, is the admin's publication, not the
+ * automation's. */
 const statusLabel = computed(() => {
   if (props.row.status === "published") {
+    if (props.row.byHand) return "opublikowana ręcznie";
     return props.row.pressed
       ? "opublikowana przez administratora"
       : "opublikowana automatycznie";

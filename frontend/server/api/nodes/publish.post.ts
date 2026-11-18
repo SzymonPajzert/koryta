@@ -3,11 +3,7 @@ import type { DocumentReference } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
 import { recordAudit } from "~~/server/utils/audit";
-import {
-  closeHoldOnPublication,
-  OVERVIEW_CACHE_BASE,
-} from "~~/server/utils/declarationDecisions";
-import { restageDeclarationPeople } from "~~/server/utils/declarationPeopleCount";
+import { afterHandPublication } from "~~/server/utils/declarationDecisions";
 import { cascadeUnpublishEdges } from "~~/server/utils/edgePublication";
 import {
   applyRevision,
@@ -116,22 +112,17 @@ export default defineEventHandler(async (event) => {
   // needs fresh are `editorFresh` as well.
   await useStorage("cache").clear("nitro:handlers");
 
-  // A page held on /admin/oswiadczenia that is public now has nothing left to
-  // wait for. Whichever screen the page went up from, and after the commit,
-  // like the message below: a hold left open costs a row on an admin's list,
-  // and a publication refused for it would be worse.
-  if (body.published && nodeDoc.data()?.type === "person") {
-    try {
-      if (await closeHoldOnPublication(db, body.node_id, user.uid)) {
-        await useStorage("cache").clear(OVERVIEW_CACHE_BASE);
-        await restageDeclarationPeople(db, [body.node_id]);
-      }
-    } catch (error) {
-      console.error(
-        `[declarations] cannot close the hold of ${body.node_id}`,
-        error,
-      );
-    }
+  // A person's page held on /admin/oswiadczenia that went public has nothing
+  // left to wait for, and one taken down again after that waits again.
+  // Whichever screen it was pressed on, after the commit, like the message
+  // below, and only on a change: pressing publish on a page already public
+  // closes no hold.
+  const stored = nodeDoc.data();
+  if (
+    stored?.type === "person" &&
+    (stored.published === true) !== body.published
+  ) {
+    await afterHandPublication(db, body.node_id, user.uid, body.published);
   }
 
   // After the commit, and never allowed to fail it: the same order and the

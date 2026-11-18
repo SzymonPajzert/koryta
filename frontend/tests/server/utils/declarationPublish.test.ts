@@ -16,6 +16,7 @@ import {
   closeHoldOnPublication,
   decideExtract,
   declinePublication,
+  reopenHoldOnUnpublication,
   linkedOnAPage,
   restorePublication,
   waitsForAdmin,
@@ -2993,9 +2994,30 @@ describe("what an admin does about a held page", () => {
         reason: "two_pages",
       });
 
-      // Merged, which is what the row asks for.
+      // Merged into her page, nothing carried over.
       edit("nodes/kowalska-2", { merged_into: "kowalska" });
       await expect(recheck()).resolves.toEqual({ outcome: "published" });
+    });
+
+    it("does not close a public page's two-pages hold while the other page has its date", async () => {
+      kowalska();
+      edit("nodes/kowalska", { published: true });
+      person("kowalska-2");
+      edit("declarationExtracts/kowalska-crop", {
+        personIds: ["kowalska", "kowalska-2"],
+      });
+      await matchPages(firestore, "kowalska-crop", NOON);
+      expect(record()).toMatchObject({ status: "held", reason: "two_pages" });
+
+      // Confirming it would link a declaration that may be the other page's.
+      await expect(recheck()).resolves.toEqual({
+        outcome: "held",
+        reason: "two_pages",
+      });
+      expect(record()).toMatchObject({ status: "held", reason: "two_pages" });
+
+      edit("nodes/kowalska-2", { merged_into: "kowalska" });
+      await expect(recheck()).resolves.toEqual({ outcome: "confirmed" });
     });
 
     it("refuses a draft only an admin's date holds: that is published by hand", async () => {
@@ -3059,7 +3081,32 @@ describe("what an admin does about a held page", () => {
       expect(state()).toBe(before);
     });
 
-    it("leaves a page it could not finish for the next pass to take up", async () => {
+    it("leaves the claim for the next pass when it fails after the page went up", async () => {
+      await heldForNoPost();
+      edit("nodes/wodociagi", { isPublic: true });
+      // The page's own commit goes through; the relations' fail.
+      const real = firestore.batch.bind(firestore);
+      const broken = vi.spyOn(firestore, "batch").mockImplementation(() => {
+        if (read("nodes/kowalska")?.published === true) {
+          throw new Error("unavailable");
+        }
+        return real();
+      });
+
+      await expect(recheck()).rejects.toThrow("unavailable");
+      broken.mockRestore();
+
+      expect(read("nodes/kowalska")!.published).toBe(true);
+      // Not a hold on a public page: the next pass finishes it, as a press.
+      expect(record()).toMatchObject({
+        status: "publishing",
+        pressedBy: ADMIN,
+      });
+      const later = new Date(NOON.getTime() + STUCK_PUBLISHING_MS + 60_000);
+      expect((await press(0, later)).published).toEqual(["kowalska"]);
+    });
+
+    it("puts the hold back as it was when the pass fails half way", async () => {
       await heldForNoPost();
       edit("nodes/wodociagi", { isPublic: true });
       const broken = vi
@@ -3069,13 +3116,12 @@ describe("what an admin does about a held page", () => {
       await expect(recheck()).rejects.toThrow("unavailable");
       broken.mockRestore();
 
+      // Not left `publishing` with no reason, out of every admin list.
       expect(record()).toMatchObject({
-        status: "publishing",
-        pressedBy: ADMIN,
+        status: "held",
+        reason: "no_public_post",
       });
-      // The press it was claimed under is finished by the next press.
-      const later = new Date(NOON.getTime() + STUCK_PUBLISHING_MS + 60_000);
-      expect((await press(0, later)).published).toEqual(["kowalska"]);
+      await expect(recheck()).resolves.toEqual({ outcome: "published" });
     });
   });
 
@@ -3086,8 +3132,9 @@ describe("what an admin does about a held page", () => {
 
       await declinePublication(firestore, "kowalska", ADMIN, NOON);
 
+      // Still held: a release that knows nothing of declining keeps it so.
       expect(record()).toMatchObject({
-        status: "declined",
+        status: "held",
         reason: "conflicting_reading",
         declinedBy: ADMIN,
         declinedAt: FakeTimestamp.fromDate(NOON),
@@ -3106,8 +3153,9 @@ describe("what an admin does about a held page", () => {
       await press(0, LATER);
 
       expect(record()).toMatchObject({
-        status: "declined",
+        status: "held",
         reason: "no_public_post",
+        declinedBy: ADMIN,
         extractIds: ["kowalska-crop", "kowalska-crop-2"],
       });
       expect(read("nodes/kowalska")!.published).toBe(false);
@@ -3130,9 +3178,52 @@ describe("what an admin does about a held page", () => {
       await matchPages(firestore, "kowalska-crop-3", LATER);
 
       expect(record()).toMatchObject({
-        status: "declined",
+        status: "held",
         reason: "no_public_post",
+        declinedBy: ADMIN,
       });
+    });
+
+    it("puts back on hold a declined page an older release queued", async () => {
+      // What main's nextPublication makes of a declined admin's-date hold
+      // when a readers' crop with the page's date settles: queued, with the
+      // admin's no still on it.
+      await heldOnAnAdminsDate();
+      await declinePublication(firestore, "kowalska", ADMIN, NOON);
+      edit("declarationPublications/kowalska", {
+        status: "queued",
+        reason: null,
+      });
+
+      const result = await press(0, LATER);
+
+      expect(result.published).toEqual([]);
+      expect(record()).toMatchObject({
+        status: "held",
+        reason: "admin_decision",
+        declinedBy: ADMIN,
+      });
+      expect(read("nodes/kowalska")!.published).toBe(false);
+    });
+
+    it("keeps a declined admin's-date hold from a reading that would take it over", async () => {
+      await heldOnAnAdminsDate();
+      await declinePublication(firestore, "kowalska", ADMIN, NOON);
+      extract("kowalska-crop-2", { declarationYear: 2022 });
+
+      await matchPages(firestore, "kowalska-crop-2", LATER);
+
+      expect(record()).toMatchObject({
+        status: "held",
+        reason: "admin_decision",
+        declinedBy: ADMIN,
+      });
+
+      // Put back, the readers' crop takes it over as before.
+      await restorePublication(firestore, "kowalska", LATER);
+      extract("kowalska-crop-3", { declarationYear: 2021 });
+      await matchPages(firestore, "kowalska-crop-3", LATER);
+      expect(record()).toMatchObject({ status: "queued", reason: null });
     });
 
     it("gives way to a page that went public all the same", async () => {
@@ -3144,6 +3235,8 @@ describe("what an admin does about a held page", () => {
       await matchPages(firestore, "kowalska-crop-2", LATER);
 
       expect(record()).toMatchObject({ status: "confirmed", reason: null });
+      expect(record().declinedAt).toBeUndefined();
+      expect(record().declinedBy).toBeUndefined();
     });
 
     it("puts the page back on hold for what it was held for", async () => {
@@ -3191,9 +3284,12 @@ describe("what an admin does about a held page", () => {
         closeHoldOnPublication(firestore, "kowalska", ADMIN, LATER),
       ).resolves.toBe(true);
 
+      // Published, by hand: counted as published wherever a press is.
       expect(record()).toMatchObject({
-        status: "confirmed",
+        status: "published",
         reason: null,
+        autoPublished: false,
+        publishedAt: FakeTimestamp.fromDate(LATER),
         handPublished: {
           uid: ADMIN,
           at: FakeTimestamp.fromDate(LATER),
@@ -3210,7 +3306,27 @@ describe("what an admin does about a held page", () => {
         closeHoldOnPublication(firestore, "kowalska", ADMIN, LATER),
       ).resolves.toBe(true);
 
-      expect(record()).toMatchObject({ status: "confirmed", reason: null });
+      expect(record()).toMatchObject({ status: "published", reason: null });
+      expect(record().declinedAt).toBeUndefined();
+    });
+
+    it("is not put back by a sweep after a stale write: it is no publication of the automation's", async () => {
+      await heldForNoPost();
+      await closeHoldOnPublication(firestore, "kowalska", ADMIN, NOON);
+      // The publication by hand is the admin's on the audit, as
+      // /api/nodes/publish writes it, and the page is a draft again.
+      put(`audit/hand-kowalska`, {
+        action: "publish",
+        collection: "nodes",
+        target_id: "kowalska",
+        user: ADMIN,
+        at: NOON.toISOString(),
+      });
+      edit("nodes/kowalska", { published: false });
+
+      await sweepDeclarations(firestore, LATER, 0);
+
+      expect(read("nodes/kowalska")!.published).toBe(false);
     });
 
     it("leaves every other record alone, and a page with none", async () => {
@@ -3241,6 +3357,37 @@ describe("what an admin does about a held page", () => {
       expect(shown.map((declaration) => declaration.url)).toEqual([
         "https://bip.strzelin.pl/download/kowalska-crop",
       ]);
+    });
+  });
+
+  describe("reopenHoldOnUnpublication", () => {
+    it("puts the hold back on a page taken down after a publication by hand", async () => {
+      await heldForNoPost();
+      await closeHoldOnPublication(firestore, "kowalska", ADMIN, NOON);
+
+      await expect(
+        reopenHoldOnUnpublication(firestore, "kowalska", LATER),
+      ).resolves.toBe(true);
+
+      expect(record()).toMatchObject({
+        status: "held",
+        reason: "no_public_post",
+        heldAt: FakeTimestamp.fromDate(LATER),
+      });
+      expect(record().handPublished).toBeUndefined();
+    });
+
+    it("leaves a publication of the automation's to its own sweep", async () => {
+      await queued();
+      await drain();
+      expect(record()).toMatchObject({ status: "published" });
+      const before = state();
+
+      await expect(
+        reopenHoldOnUnpublication(firestore, "kowalska", LATER),
+      ).resolves.toBe(false);
+
+      expect(state()).toBe(before);
     });
   });
 

@@ -197,7 +197,7 @@
           <AdminSectionHead
             title="Nie do publikacji"
             :count="formatCount(overview.publications.setAside)"
-            info="Osoby bez płatnego stanowiska w instytucji publicznej, bez którego automat nikogo nie publikuje, i te odłożone przez administratora. Gdy na stronie pojawi się stanowisko, osoba sama wraca do wstrzymanych."
+            info="Osoby bez płatnego stanowiska w instytucji publicznej, bez którego automat nikogo nie publikuje, i osoby odłożone przez administratora. Gdy na stronie pojawi się stanowisko, osoba sama wraca do wstrzymanych; można ją też opublikować ręcznie."
           >
             <AdminDeclarationsShowAll
               v-model="showAllAside"
@@ -217,6 +217,7 @@
                 @update:expanded="
                   (open: boolean) => setOpen(`aside:${row.personId}`, open)
                 "
+                @publish="openPublish(row)"
                 @restore="decideHold(row, 'restore')"
               />
             </AdminRowList>
@@ -228,7 +229,7 @@
           <AdminSectionHead
             title="Opublikowane ostatnio"
             :count="overview.lists.recent.length"
-            info="Strony, które opublikował automat albo administrator przyciskiem „Opublikuj z kolejki”, razem z zatrudnieniami w KRS i wyborami w regionie z oświadczenia; kto, widać w otwartym wierszu. Każda ma na sobie notkę z linkiem do oświadczenia, dopóki jego odczyt potwierdza datę urodzenia na stronie."
+            info="Strony, które opublikował automat albo administrator, przyciskiem „Opublikuj z kolejki” albo ręcznie z listy wstrzymanych, razem z zatrudnieniami w KRS i wyborami w regionie z oświadczenia; kto, widać w otwartym wierszu. Każda ma na sobie notkę z linkiem do oświadczenia, dopóki jego odczyt potwierdza datę urodzenia na stronie."
           >
             <AdminDeclarationsShowAll
               v-model="showAllRecent"
@@ -314,7 +315,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { mdiRefresh } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { polishCounting, polishCountingGenitive } from "~/composables/polish";
@@ -417,19 +418,27 @@ const headInfo = computed(() => {
 const errorText = (err: unknown, fallback: string) =>
   (err as { data?: { message?: string } }).data?.message || fallback;
 
+/** Loads are numbered: an answer that lands after a newer load's is dropped,
+ * so a slow one never puts back a list from before a decision. */
+let loads = 0;
+
 async function load() {
+  const mine = ++loads;
   loading.value = true;
   error.value = null;
   try {
-    overview.value = await authRequest<DeclarationOverview>(
+    const answer = await authRequest<DeclarationOverview>(
       "/api/declarations/overview",
       { method: "GET" },
     );
+    if (mine !== loads) return;
+    overview.value = answer;
     now.value = new Date();
   } catch (err) {
+    if (mine !== loads) return;
     error.value = errorText(err, "Nie udało się wczytać przeglądu oświadczeń.");
   } finally {
-    loading.value = false;
+    if (mine === loads) loading.value = false;
   }
 }
 
@@ -464,7 +473,20 @@ const showAllHeld = ref(false);
 const pickedReason = ref<PublicationHoldReason | null>(null);
 /** What the held rows are narrowed to, null for all of them. A reason whose
  * last row has just been decided is no longer among the select's items, and
- * the list goes back to everything rather than to nothing. */
+ * the list goes back to everything rather than to nothing - for good, so the
+ * filter does not come back by itself with the next row of that reason. */
+watch(
+  () => overview.value?.publications.heldBy,
+  (heldBy) => {
+    if (
+      pickedReason.value &&
+      heldBy &&
+      !heldBy.some(({ reason }) => reason === pickedReason.value)
+    ) {
+      pickedReason.value = null;
+    }
+  },
+);
 const heldReason = computed({
   get: () =>
     overview.value?.publications.heldBy.some(
@@ -474,14 +496,26 @@ const heldReason = computed({
       : null,
   set: (reason) => {
     pickedReason.value = reason;
+    focused.value = null;
   },
 });
+
+/** The row a decision has just left open on the held list - held again for
+ * another reason, or put back - shown first, past the filter and the fold,
+ * until the admin picks a filter or decides again. */
+const focused = ref<string | null>(null);
 
 const heldRows = computed(() => {
   const lists = overview.value?.lists;
   if (!lists) return [];
   const reason = heldReason.value;
-  return reason ? lists.held.filter((row) => row.reason === reason) : lists.held;
+  const pinned = focused.value
+    ? lists.held.find((row) => row.personId === focused.value)
+    : undefined;
+  const rest = lists.held.filter(
+    (row) => row !== pinned && (!reason || row.reason === reason),
+  );
+  return pinned ? [pinned, ...rest] : rest;
 });
 const heldShown = computed(() =>
   showAllHeld.value ? heldRows.value : heldRows.value.slice(0, HELD_LIMIT),
@@ -501,7 +535,7 @@ const reasonOptions = computed(() => {
 });
 
 const heldInfo =
-  "Osoby z tą samą datą i płatnym stanowiskiem, których automat nie opublikował, bo ktoś już o nich zdecydował (niebieskie) albo coś budzi wątpliwość (bursztynowe). „Sprawdź ponownie” powtarza sprawdzenia automatu i publikuje stronę z powiązaniami. „Opublikuj ręcznie” je pomija: powiązania wybierasz sam. „Nie publikuj” przenosi osobę do sekcji „Nie do publikacji”. Strona opublikowana ręcznie znika z listy, skądkolwiek ją opublikowano.";
+  "Osoby z tą samą datą i płatnym stanowiskiem, których automat nie opublikował, bo ktoś już o nich zdecydował (niebieskie) albo coś budzi wątpliwość (bursztynowe). „Sprawdź ponownie” powtarza sprawdzenia automatu i publikuje stronę z powiązaniami, jeśli przejdą. „Opublikuj ręcznie” je pomija: powiązania wybierasz sam. „Nie publikuj” przenosi osobę do sekcji „Nie do publikacji”. Strona opublikowana ręcznie znika z listy, skądkolwiek ją opublikowano.";
 
 /** Who will not be published is the record, not the work: a few rows, the
  * newest first, so that a „Nie publikuj” shows up here to be taken back. */
@@ -579,7 +613,7 @@ const holdBusy = reactive(new Map<string, HoldDecision>());
 
 const holdDone: Record<Exclude<HoldDecision, "recheck">, string> = {
   decline: "Przeniesiono do „Nie do publikacji”.",
-  restore: "Przywrócono do wstrzymanych.",
+  restore: "Przywrócono.",
 };
 
 async function decideHold(
@@ -588,17 +622,30 @@ async function decideHold(
 ) {
   if (holdBusy.has(row.personId)) return;
   holdBusy.set(row.personId, decision);
+  focused.value = null;
   const url = `/api/declarations/publications/${encodeURIComponent(row.personId)}/${decision}`;
   try {
-    const result = await authRequest<RecheckResult>(url, { method: "POST" });
-    notify(
-      decision === "recheck" ? declarationRecheckText(result) : holdDone[decision],
-    );
-    // The row leaves its list with most of these; if it stays, it is the
-    // admin's to read what changed.
-    if (decision !== "recheck" || result.outcome !== "held") {
+    if (decision === "recheck") {
+      const result = await authRequest<RecheckResult>(url, { method: "POST" });
+      notify(declarationRecheckText(result));
+      // Held again, the row stays open, first on the list, for the admin to
+      // read what holds it now; a skipped one stays as it was.
+      if (result.outcome === "held") focused.value = row.personId;
+      else if (result.outcome !== "skipped") {
+        openRows.delete(`held:${row.personId}`);
+      }
+    } else {
+      await authRequest(url, { method: "POST" });
+      notify(holdDone[decision]);
       openRows.delete(`held:${row.personId}`);
       openRows.delete(`aside:${row.personId}`);
+      // Back first on the held list, open, with its decisions - or open in
+      // „Nie do publikacji”, where a page with no paid post goes back to.
+      if (decision === "restore") {
+        focused.value = row.personId;
+        openRows.add(`held:${row.personId}`);
+        openRows.add(`aside:${row.personId}`);
+      }
     }
     await load();
   } catch (err) {
@@ -620,13 +667,16 @@ async function openPublish(row: DeclarationPublicationRow) {
   publishOpen.value = true;
 }
 
-/** The server closes the hold with the publication, wherever it is pressed. */
+/** The person a publication by hand took off the lists: the server closes the
+ * hold with it, wherever it is pressed. */
+function published(row: DeclarationPublicationRow | null) {
+  if (!row) return;
+  openRows.delete(`held:${row.personId}`);
+  openRows.delete(`aside:${row.personId}`);
+}
+
 async function onPublished({ relations }: { relations: number }) {
-  const row = publishing.value;
-  if (row) {
-    openRows.delete(`held:${row.personId}`);
-    openRows.delete(`aside:${row.personId}`);
-  }
+  published(publishing.value);
   notify(
     relations > 0
       ? `Opublikowano stronę z ${polishCountingGenitive(relations, "powiązaniem", "powiązaniami")}.`
@@ -650,7 +700,10 @@ async function onPublishFailed({
       : errorText(err, "Nie udało się opublikować strony."),
     true,
   );
-  if (nodePublished) await load();
+  if (nodePublished) {
+    published(publishing.value);
+    await load();
+  }
 }
 
 /** The cap's button: an admin's press, past the daily limit. What the
@@ -753,11 +806,11 @@ async function publishQueued(): Promise<boolean> {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
-/* Wide enough for the longest reason, which is a whole sentence's worth. */
+/* Wide enough for the longest reason with its count. */
 .dheld__reason {
-  width: 300px;
+  width: 380px;
   max-width: 100%;
-  flex: 0 1 300px;
+  flex: 0 1 380px;
 }
 
 @media (max-width: 599.98px) {
@@ -781,6 +834,18 @@ async function publishQueued(): Promise<boolean> {
 
   .dsection {
     margin-top: 32px;
+  }
+
+  /* The reason takes the column's width, and the head's actions may shrink
+   * to it: 380px would push the page past a phone's width. */
+  .dsection :deep(.asec__actions) {
+    min-width: 0;
+  }
+
+  .dheld__reason {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
   }
 }
 </style>
