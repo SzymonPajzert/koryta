@@ -1203,11 +1203,26 @@ describe("publishing a queued page", () => {
     expect(page.published).toBe(true);
     expect(typeof page.content_changed_at).toBe("string");
     // The import's revision, approved by the automation on the way up.
-    expect((page.revision_id as { path: string }).path).toBe(
-      "revisions/rev-kowalska",
-    );
     expect(read("revisions/rev-kowalska")).toMatchObject({
       status: "approved",
+      review_user: DECLARATION_ACTOR,
+    });
+    // Then „Inne”, as her KWW run named no party: in a revision of its own,
+    // which the page now shows.
+    expect(page.parties).toEqual(["Inne"]);
+    const shownBy = (page.revision_id as { path: string }).path;
+    expect(shownBy).not.toBe("revisions/rev-kowalska");
+    expect(read(shownBy)).toMatchObject({
+      node_id: "kowalska",
+      data: {
+        type: "person",
+        name: "Anna Kowalska",
+        birthDate: BORN,
+        parties: ["Inne"],
+      },
+      status: "approved",
+      update_user: DECLARATION_ACTOR,
+      update_automatic: true,
       review_user: DECLARATION_ACTOR,
     });
     const audit = [...stored.entries()]
@@ -1273,6 +1288,83 @@ describe("publishing a queued page", () => {
     expect(read("edges/kowalska-hand-job")!.published).toBe(false);
     expect(read("declarationPublications/kowalska")).toMatchObject({
       edges: { held: [{ id: "kowalska-hand-job", reason: "by_hand" }] },
+    });
+  });
+
+  describe("the party she goes up with", () => {
+    /** Her page, run, job and crop, with `content` on the page, queued. */
+    async function queuedWith(content: Data) {
+      person("kowalska", {}, content);
+      candidacy("kowalska-run", "kowalska");
+      job("kowalska-job", "kowalska", "wodociagi");
+      extract("kowalska-crop", { personIds: ["kowalska"] });
+      await matchPages(firestore, "kowalska-crop", NOON);
+    }
+
+    const revisionsOfHers = () =>
+      [...stored.entries()].filter(
+        ([path, row]) =>
+          path.startsWith("revisions/") && row.node_id === "kowalska",
+      );
+
+    it("keeps a party the page names", async () => {
+      await queuedWith({ parties: ["PSL"] });
+
+      expect((await drain()).published).toEqual(["kowalska"]);
+
+      const page = read("nodes/kowalska")!;
+      expect(page.parties).toEqual(["PSL"]);
+      expect((page.revision_id as { path: string }).path).toBe(
+        "revisions/rev-kowalska",
+      );
+      expect(revisionsOfHers()).toHaveLength(1);
+    });
+
+    it("leaves a list a person set, an empty one too", async () => {
+      await queuedWith({ parties: [], partiesSource: "manual" });
+
+      expect((await drain()).published).toEqual(["kowalska"]);
+
+      expect(read("nodes/kowalska")!.parties).toEqual([]);
+      expect(revisionsOfHers()).toHaveLength(1);
+    });
+
+    it("names no party where no paid post goes up with her", async () => {
+      await queuedWith({});
+      // Her one job is a person's to settle, so the page goes up without it.
+      put("revisions/rev-kowalska-job", {
+        ...read("revisions/rev-kowalska-job")!,
+        update_automatic: false,
+        update_user: "reader-uid",
+      });
+
+      expect((await drain()).published).toEqual(["kowalska"]);
+
+      expect(read("edges/kowalska-job")!.published).toBe(false);
+      expect(read("nodes/kowalska")!.parties).toBeUndefined();
+      expect(revisionsOfHers()).toHaveLength(1);
+    });
+
+    it("counts a paid post that is up already", async () => {
+      await queuedWith({});
+      put("edges/kowalska-job", {
+        ...read("edges/kowalska-job")!,
+        published: true,
+      });
+
+      await drain();
+
+      expect(read("nodes/kowalska")!.parties).toEqual(["Inne"]);
+    });
+
+    it("files it once, however often a pass comes", async () => {
+      await queuedWith({});
+      await drain();
+      const before = state();
+
+      await drain(3, LATER);
+
+      expect(state()).toBe(before);
     });
   });
 
@@ -2630,7 +2722,14 @@ describe("a publication a stale write undid", () => {
    * then. */
   async function reverted(pressed = false) {
     await queued();
-    await (pressed ? press() : drain());
+    // The pass dates the revisions it writes by the clock, which reads NOON
+    // as its `now` does: before the import's below, as in production.
+    vi.useFakeTimers({ now: NOON, toFake: ["Date"] });
+    try {
+      await (pressed ? press() : drain());
+    } finally {
+      vi.useRealTimers();
+    }
     expect(read("nodes/kowalska")!.published).toBe(true);
     const data = {
       type: "person",
@@ -2654,9 +2753,17 @@ describe("a publication a stale write undid", () => {
     expect(result.touched).toEqual(["kowalska"]);
     const page = read("nodes/kowalska")!;
     expect(page.published).toBe(true);
-    expect((page.revision_id as { path: string }).path).toBe(
-      "revisions/rev-kowalska-2",
-    );
+    // The import's revision, approved on the way back up, then „Inne” over
+    // it again: the stale write took that off with the rest.
+    expect(read("revisions/rev-kowalska-2")!.status).toBe("approved");
+    expect(page.parties).toEqual(["Inne"]);
+    expect(read((page.revision_id as { path: string }).path)).toMatchObject({
+      data: {
+        wikipedia: "https://pl.wikipedia.org/wiki/Anna_Kowalska",
+        parties: ["Inne"],
+      },
+      status: "approved",
+    });
     expect(read("edges/kowalska-run")!.published).toBe(true);
     expect(read("declarationPublications/kowalska")).toMatchObject({
       status: "published",
