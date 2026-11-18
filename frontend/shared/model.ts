@@ -592,6 +592,72 @@ export interface Article extends Omit<Node, "type"> {
 export interface Region extends Omit<Node, "type"> {
   type: "region";
   teryt: string;
+  /** Who governs the place: see `RegionGovernment`. Absent on a place with no
+   * government of its own (a town's part of a mixed gmina, a delegatura). */
+  authorities?: RegionGovernment;
+  /** „manual” once a person's proposal has changed `authorities`: the seed
+   * from PKW (scripts/migrate/seed-region-authorities.ts) leaves it alone. */
+  authoritiesSource?: "manual";
+}
+
+/** Who governs a region: its head and its councils. Filled once from PKW's
+ * results of the newest local election, then corrected by contributors
+ * through the region's own proposals, reviewed like any other field. Szymon,
+ * 2026-11-18: "it's filled by PKW but if the burmistrz changes for some
+ * reason, volunteers can change this information themselves".
+ *
+ * On the region's node rather than as edges to people, by his choice the same
+ * day: most of the 49,000 names have no page and are to get none. The cost is
+ * the one `Topic` explains: a proposal is the whole record, so approving one
+ * of two proposals filed at once reverts the other.
+ *
+ * Never served raw to a logged out reader: a `personId` may name a page they
+ * may not open. `/api/nodes/[id]/authorities` serves it with the links each
+ * reader may follow.
+ */
+export interface RegionGovernment {
+  /** The election the record was filled from, `local-2024`. */
+  election?: string;
+  /** The head of the executive. Absent where nobody is known, which for a
+   * starosta or a marszałek, chosen by the council, is the norm. */
+  head?: GovernmentHead;
+  /** Each council, in the order the page lists them. */
+  councils?: GovernmentCouncil[];
+}
+
+/** A person on the record: their name as PKW gives it, put the way a page
+ * writes one („Mariusz Siewiera”), and their page where one is known. */
+export interface GovernmentPerson {
+  name: string;
+  /** The node of their page. Absent for the many with none. */
+  personId?: string;
+  /** The list they won the seat on, as PKW spells it. */
+  committee?: string;
+  /** The parties the pipelines map that committee to, for the colour of its
+   * seats: `["PO"]` for KKW KOALICJA OBYWATELSKA, none for a local list. */
+  committeeParties?: string[];
+}
+
+export interface GovernmentHead extends GovernmentPerson {
+  /** „Wójt”, „Burmistrz” and „Prezydent” as PKW and a candidacy's
+   * `position` name them (the page writes „Prezydent miasta”); „Starosta”
+   * and „Marszałek województwa”, whom the council chooses. */
+  office: string;
+  /** The party they told PKW they belong to; absent where they declared
+   * none, or nobody knows. */
+  member?: string;
+  /** Since when they hold the office, `YYYY-MM-DD`, where somebody said. */
+  since?: string;
+}
+
+export interface GovernmentCouncil {
+  /** „Rada gminy”, „Rada miasta”, „Rada powiatu”, „Sejmik”, „Rada dzielnicy”. */
+  office: string;
+  /** How many seats it has, PKW's count. More than `members` where a seat's
+   * holder is not known: a winner who became the head passed theirs on to
+   * somebody PKW's results do not name. */
+  seats?: number;
+  members: GovernmentPerson[];
 }
 
 /** A story several articles belong to — "powodzianie KRR", say.

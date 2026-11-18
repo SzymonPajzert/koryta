@@ -59,6 +59,33 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "wladze-regionu-z-pkw",
+    title: "Władze gminy, powiatu i województwa, z możliwością poprawki",
+    description:
+      "Strona regionu pokazuje wójta, burmistrza albo prezydenta i wszystkich radnych z wyborów 2024 według PKW, także osoby bez strony na koryta.pl. Zalogowani mogą zaproponować zmianę, np. nowego burmistrza.",
+    steps: [
+      "Otwórz Gminę Łowicz - w „Władze gminy” jest burmistrz i 20 radnych z nazwiskami, pod radą „Brak danych o jednym radnym”.",
+      "Otwórz Powiat łowicki - przy staroście jest „Brak danych” z (i).",
+      "Zalogowany, kliknij „Zaproponuj zmianę” obok nazwy gminy, wpisz innego burmistrza i wyślij - strona pokazuje podgląd z nowym burmistrzem.",
+      "W historii zmian tej propozycji jest linia „Władze: burmistrz” ze starym i nowym nazwiskiem.",
+    ],
+    link: "/region/gmina-lowicz-teryt1005011",
+    area: "public",
+  },
+  {
+    id: "strona-regionu-starty-osoby",
+    title: "Strona regionu ze startami osoby i listami wyborczymi",
+    description:
+      "Kliknięcie startu w wyborach na stronie osoby otwiera stronę regionu z jej startami tam. Każdy start rozwija listę, z której kandydowała, z innymi osobami z tego komitetu.",
+    steps: [
+      "Na stronie osoby kliknij region przy starcie w wyborach - na górze strony regionu jest ramka z jej startami.",
+      "Kliknij „Kto jeszcze był na tej liście” - lista rozwija się w ramce.",
+      "Pod nazwą regionu są okruszki do województwa i powiatu, a niżej „Spółki w regionie” i na końcu „Listy wyborcze”.",
+    ],
+    link: "/region/powiat-lowicki-teryt1005",
+    area: "public",
+  },
+  {
     id: "sklad-raz-zmiany-jednakowo",
     title: "Obecny skład raz, zmiany na stanowiskach tak samo na obu stronach",
     description:

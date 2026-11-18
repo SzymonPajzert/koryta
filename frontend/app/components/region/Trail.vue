@@ -4,7 +4,7 @@
        region-lists-r1: "as breadcrumbs in below the name, e.g. Województwo
        X > Powiat X which would lead to the pages of the regions". -->
   <nav
-    v-if="ancestors.length || kindLabel"
+    v-if="ancestors.length"
     class="region-trail"
     aria-label="Położenie regionu"
     data-testid="region-crumbs"
@@ -22,21 +22,15 @@
           ancestor.name
         }}</NuxtLink>
       </li>
-      <!-- TEMP(wariant) rodzaj: the kind of unit, last and not a link - it
-           tells the town Gmina Łowicz from the rural gmina of the name. -->
-      <li v-if="kindLabel" class="region-trail__item region-trail__kind">
-        {{ kindLabel }}
-      </li>
     </ol>
   </nav>
 </template>
 
 <script setup lang="ts">
 defineProps<{
-  /** Widest first, from `useRegionAncestors`. */
+  /** Widest first, from `useRegionAncestors`. Places only (Szymon,
+   * 2026-11-18): not the kind of unit after them. */
   ancestors: { name: string; url: string }[];
-  /** „gmina miejska”: the kind of unit, when asked for. */
-  kindLabel?: string;
 }>();
 </script>
 

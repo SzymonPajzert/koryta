@@ -46,10 +46,6 @@ export interface RegionRuns {
    * nobody has published yet, or an unpublished person's that neither an
    * import wrote nor a reviewer approved. */
   hidden: number;
-  /** Of those, the newest local election's wins, by office, that an import
-   * wrote or a reviewer approved: { Prezydent: 1 } on Miasto Warszawa for a
-   * logged out reader on 2026-11-11. Absent for an editor, who sees them. */
-  hiddenElected?: Record<string, number>;
 }
 
 /** One person on a list, once, however many offices they stood for on it: a

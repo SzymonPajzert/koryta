@@ -6,7 +6,11 @@ import {
   wantsLatest,
 } from "~~/server/utils/handlers";
 import { resolveMergedNode } from "~~/server/utils/merge";
-import { dropDraftStats, dropSearchIndex } from "~~/server/utils/fetch";
+import {
+  dropDraftStats,
+  dropGovernment,
+  dropSearchIndex,
+} from "~~/server/utils/fetch";
 import { z } from "zod";
 import type { Node } from "~~/shared/model";
 
@@ -63,7 +67,12 @@ export default editorFreshCachedEventHandler(async (event) => {
   // TODO how to check the response has a correct shape
   responseValidator.parse(node);
 
-  return { node: latest ? node : dropDraftStats(node) };
+  // A region's „Władze” goes to a logged out reader through its own
+  // endpoint, which vets the pages it links (`dropGovernment`). A signed in
+  // reader keeps it here, for the form that proposes a change to it.
+  return {
+    node: latest ? node : dropDraftStats(dropGovernment({ ...node }) as Node),
+  };
 });
 
 async function getLatestRevision(db: FirebaseFirestore.Firestore, id: string) {

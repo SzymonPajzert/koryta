@@ -5,6 +5,8 @@ import type {
   ElectionPosition,
   Person,
   Topic,
+  Region,
+  RegionGovernment,
 } from "./model";
 import type { SupervisoryOrgan } from "./companyOrgans";
 import { supervisoryOrgans } from "./companyOrgans";
@@ -515,6 +517,74 @@ export const topicEditSchema = z.object({
 
 export type TopicEditRequest = z.infer<typeof topicEditSchema>;
 
+/** A day, a month or a year, as typed: when a head took office. The empty
+ * string clears a date that turned out to be wrong. */
+const governmentDate = z
+  .string()
+  .trim()
+  .refine((value) => !value || /^\d{4}(-\d{2}(-\d{2})?)?$/.test(value), {
+    message: "Format daty to RRRR, RRRR-MM albo RRRR-MM-DD",
+  })
+  .optional();
+
+/** A text field of the record, trimmed, and absent rather than empty: the
+ * form sends every field it shows, and an empty committee is no claim. */
+const governmentText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((value) => value || undefined);
+
+/** Who a seat is held by: a name, and the rest as far as anybody knows it. */
+const governmentPerson = {
+  name: z
+    .string()
+    .trim()
+    .min(1, "Imię i nazwisko jest wymagane")
+    .max(200, "Za długie imię i nazwisko"),
+  personId: governmentText(100),
+  committee: governmentText(300),
+  committeeParties: z
+    .array(z.string().trim().min(1).max(100))
+    .max(5)
+    .optional(),
+};
+
+/** A region's „Władze” (`RegionGovernment`). Bounded, so that a proposal
+ * cannot balloon the node: the largest council is Warszawa's, 60 seats. */
+export const governmentSchema = z.object({
+  election: governmentText(50),
+  head: z
+    .object({
+      ...governmentPerson,
+      office: z.string().trim().min(1).max(100),
+      member: governmentText(200),
+      since: governmentDate.transform((value) => value || undefined),
+    })
+    .optional(),
+  councils: z
+    .array(
+      z.object({
+        office: z.string().trim().min(1).max(100),
+        seats: z.number().int().min(0).max(100).optional(),
+        members: z.array(z.object(governmentPerson)).max(100),
+      }),
+    )
+    .max(5)
+    .optional(),
+}) satisfies z.ZodType<RegionGovernment>;
+
+/** What a region's proposal may change: its „Władze” and nothing else. Its
+ * name and code come from the TERYT register, which the rest of the data
+ * joins on. */
+export const regionEditSchema = z.object({
+  authorities: governmentSchema,
+}) satisfies z.ZodType<Pick<Region, "authorities">>;
+
+export type RegionEditRequest = z.infer<typeof regionEditSchema>;
+
 /** The node types a person may propose from the site.
  *
  * Regions are left out: they come from the TERYT register, are complete, and
@@ -534,7 +604,13 @@ export const editSchemas = {
   place: companyEditSchema,
   article: articleEditSchema,
   topic: topicEditSchema,
+  region: regionEditSchema,
 } as const;
+
+/** The node types an existing node may be edited as: the proposable ones, and
+ * a region, whose „Władze” anybody may correct though nobody may propose a
+ * new region. */
+export type EditableNodeType = keyof typeof editSchemas;
 
 /** A proposal to take an entry down, which is a revision like any other and is
  * reviewed the same way. The reason is required because it is the only thing a

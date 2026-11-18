@@ -1,29 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   authorityKind,
+  committeeLabel,
+  governmentSections,
+  headTitle,
   newestLocalElection,
-  regionAuthorities,
+  termOf,
+  type GovernmentPersonView,
+  type GovernmentView,
 } from "../../shared/regionAuthorities";
-import type { RegionRun } from "../../shared/electionLists";
-
-let edges = 0;
-/** A 2024 win, with what a test does not care about filled in. */
-function won(over: Partial<RegionRun> & { personId: string }): RegionRun {
-  edges += 1;
-  return {
-    edgeId: `e${edges}`,
-    personName: over.personId,
-    parties: [],
-    published: true,
-    start: "2024-01-01",
-    position: "Rada miasta",
-    committee: null,
-    party: null,
-    elected: true,
-    byElection: false,
-    ...over,
-  };
-}
 
 describe("authorityKind", () => {
   it("reads the kind of place off the TERYT code", () => {
@@ -43,190 +28,133 @@ describe("authorityKind", () => {
   });
 });
 
-describe("regionAuthorities", () => {
-  it("reads the newest local election and its term", () => {
+describe("the term", () => {
+  it("is the newest local election's, five years", () => {
     expect(newestLocalElection()).toBe("local-2024");
-    expect(regionAuthorities([], "1061")?.term).toBe("2024-2029");
+    expect(termOf()).toBe("2024-2029");
+    expect(termOf("local-2018")).toBe("2018-2023");
+    expect(termOf("nonsense")).toBe("");
   });
+});
 
-  const city: RegionRun[] = [
-    won({
-      personId: "Hanna Prezes",
-      position: "Prezydent",
-      committee: "KKW KOALICJA OBYWATELSKA",
-      party: "PO",
-    }),
-    // The head also won a council seat, which passed down the list.
-    won({
-      personId: "Hanna Prezes",
-      committee: "KKW KOALICJA OBYWATELSKA",
-      party: "PO",
-    }),
-    won({
-      personId: "Adam Zieliński",
-      committee: "KKW KOALICJA OBYWATELSKA",
-      party: "PO",
-    }),
-    won({ personId: "Ewa Abacka", committee: "KKW Koalicja Obywatelska" }),
-    won({ personId: "Olga Nowa", committee: "KW PRAWO I SPRAWIEDLIWOŚĆ" }),
-    won({ personId: "Jan Bez", committee: null }),
-    // A loss, a win of the term before, a by-election and a run with no
-    // office: none of them is the council now.
-    won({
-      personId: "Piotr Przegrany",
-      committee: "KW PRAWO I SPRAWIEDLIWOŚĆ",
-      elected: false,
-    }),
-    won({ personId: "Piotr Dawny", start: "2018-01-01" }),
-    won({ personId: "Piotr Uzupełniony", byElection: true }),
-    won({ personId: "Piotr Samorządowy", position: "Samorząd" }),
-  ];
+function person(
+  name: string,
+  over: Partial<GovernmentPersonView> = {},
+): GovernmentPersonView {
+  return { name, committee: "KWW ŁOWICKIE.PL", ...over };
+}
 
-  it("names a city's prezydent and groups its council by committee", () => {
-    const view = regionAuthorities(city, "1061")!;
-    expect(view.kind).toBe("miasto");
-    expect(view.title).toBe("Władze miasta");
-    expect(view.executive).toMatchObject({
-      state: "held",
-      title: "Prezydent miasta",
-      committee: "KKW KOALICJA OBYWATELSKA",
+/** Gmina Łowicz as PKW left it: the burmistrz, and a council one of whose 21
+ * seats passed to somebody PKW does not name. */
+const lowicz: GovernmentView = {
+  election: "local-2024",
+  head: {
+    ...person("Mariusz Siewiera"),
+    office: "Burmistrz",
+  },
+  councils: [
+    {
+      office: "Rada miasta",
+      seats: 4,
+      members: [
+        person("Jakub Wolski", {
+          committee: "KW PRAWO I SPRAWIEDLIWOŚĆ",
+          committeeParties: ["PiS"],
+          page: { id: "p1", published: true, parties: ["PiS"] },
+        }),
+        person("Hubert Krajewski"),
+        person("Adam Babski", {
+          committee: "KW Prawo i Sprawiedliwość",
+          committeeParties: ["PiS"],
+        }),
+      ],
+    },
+  ],
+};
+
+describe("governmentSections", () => {
+  it("draws the head and each council, by committee, the largest first", () => {
+    const sections = governmentSections(lowicz, "gmina")!;
+    expect(sections.title).toBe("Władze gminy");
+    expect(sections.term).toBe("2024-2029");
+    expect(sections.head).toMatchObject({
+      office: "Burmistrz",
+      title: "Burmistrz",
+      appointed: false,
+      holder: { name: "Mariusz Siewiera" },
     });
-    const [council] = view.councils;
-    expect(council!.title).toBe("Rada miasta");
+    const [council] = sections.councils;
+    expect(council).toMatchObject({
+      title: "Rada miasta",
+      seats: 4,
+      unnamed: 1,
+    });
+    // One committee however PKW cased it, and its members by name.
     expect(
       council!.committees.map((group) => [
         group.committee,
-        group.party,
-        group.members.map((member) => member.personId),
+        group.parties,
+        group.members.map((member) => member.name),
       ]),
     ).toEqual([
-      // One committee in two spellings is one group, by surname.
-      ["KKW KOALICJA OBYWATELSKA", "PO", ["Ewa Abacka", "Adam Zieliński"]],
-      ["KW PRAWO I SPRAWIEDLIWOŚĆ", null, ["Olga Nowa"]],
-      [null, null, ["Jan Bez"]],
+      ["KW PRAWO I SPRAWIEDLIWOŚĆ", ["PiS"], ["Adam Babski", "Jakub Wolski"]],
+      ["KWW ŁOWICKIE.PL", [], ["Hubert Krajewski"]],
     ]);
-    expect(view.shown).toBe(5);
-    expect(view.pointer).toBeUndefined();
   });
 
-  it("counts a bare year as the term", () => {
-    const view = regionAuthorities(
-      [won({ personId: "Rok Bez Dnia", start: "2024" })],
-      "1061",
+  it("keeps the slot of a head the council chooses, nobody in it", () => {
+    const powiat = governmentSections(
+      {
+        election: "local-2024",
+        councils: [{ office: "Rada powiatu", members: [person("Anna Nowak")] }],
+      },
+      "powiat",
     )!;
-    expect(view.councils[0]!.shown).toBe(1);
-  });
-
-  it("keeps two pages of one name as two rows", () => {
-    const view = regionAuthorities(
-      [
-        won({ personId: "a", personName: "Jan Kowalski", committee: "KWW X" }),
-        won({ personId: "b", personName: "Jan Kowalski", committee: "KWW X" }),
-      ],
-      "1061",
-    )!;
-    expect(view.councils[0]!.committees[0]!.members).toHaveLength(2);
-  });
-
-  it("shows no head where two wins are stored for one seat", () => {
-    const view = regionAuthorities(
-      [
-        ...city,
-        won({
-          personId: "Runner Up",
-          position: "Prezydent",
-          committee: "KW PRAWO I SPRAWIEDLIWOŚĆ",
-        }),
-      ],
-      "1061",
-    )!;
-    expect(view.executive).toMatchObject({ state: "contested" });
+    expect(powiat.head).toEqual({
+      office: "Starosta",
+      title: "Starosta",
+      appointed: true,
+    });
     expect(
-      view.executive?.state === "contested" &&
-        view.executive.holders.map((holder) => holder.personId),
-    ).toEqual(["Hanna Prezes", "Runner Up"]);
-    // Nobody is taken for the head, so the head's council seat counts.
-    expect(view.councils[0]!.shown).toBe(5);
-  });
-
-  it("calls a win this reader may not see awaiting, and one beside it contested", () => {
-    const council = city.filter((run) => run.position !== "Prezydent");
-    expect(
-      regionAuthorities(council, "1061", { Prezydent: 1 })!.executive,
-    ).toMatchObject({ state: "awaiting", title: "Prezydent miasta" });
-    expect(
-      regionAuthorities(city, "1061", { Prezydent: 1 })!.executive,
-    ).toMatchObject({ state: "contested" });
-    expect(regionAuthorities(council, "1061")!.executive).toMatchObject({
-      state: "unknown",
-    });
-  });
-
-  it("gives a powiat and a województwo the head their council chooses", () => {
-    const powiat = regionAuthorities(
-      [
-        won({
-          personId: "Rafał Powiatowy",
-          position: "Rada powiatu",
-          committee: "KW PRAWO I SPRAWIEDLIWOŚĆ",
-        }),
-        // A gmina's wójt and council filed on the powiat are not its own.
-        won({ personId: "Wójt Gminny", position: "Wójt" }),
-        won({ personId: "Radny Gminny", position: "Rada gminy" }),
-      ],
-      "1005",
+      governmentSections({ councils: [] }, "wojewodztwo")!.head?.title,
+    ).toBe("Marszałek województwa");
+    // Filled in by somebody: the slot holds them.
+    const filled = governmentSections(
+      { councils: [], head: { office: "Starosta", name: "Jan Kowalski" } },
+      "powiat",
     )!;
-    expect(powiat.executive).toEqual({ state: "appointed", title: "Starosta" });
-    expect(powiat.councils.map((council) => council.title)).toEqual([
-      "Rada powiatu",
-    ]);
-    expect(powiat.shown).toBe(1);
-    const wojewodztwo = regionAuthorities(
-      [won({ personId: "Radna Sejmiku", position: "Sejmik" })],
-      "10",
-    )!;
-    expect(wojewodztwo.title).toBe("Władze województwa");
-    expect(wojewodztwo.executive).toEqual({
-      state: "appointed",
-      title: "Marszałek województwa",
+    expect(filled.head).toMatchObject({
+      appointed: true,
+      holder: { name: "Jan Kowalski" },
     });
-    expect(wojewodztwo.councils[0]!.title).toBe("Sejmik województwa");
   });
 
-  it("draws a gmina's head where a run names one, and its council by its kind", () => {
-    const view = regionAuthorities(
-      [won({ personId: "Andrzej Wójt", position: "Wójt", committee: "KWW Y" })],
-      "2414052",
-    )!;
-    expect(view.executive).toMatchObject({ state: "held", title: "Wójt" });
+  it("names PKW's prezydent the way a reader does", () => {
+    expect(headTitle("Prezydent")).toBe("Prezydent miasta");
     expect(
-      view.councils.map((council) => [council.title, council.shown]),
-    ).toEqual([["Rada gminy", 0]]);
-    expect(view.pointer).toBeUndefined();
-    // A town's council is its Rada miasta.
-    expect(regionAuthorities([], "1005011")!.councils[0]!.title).toBe(
-      "Rada miasta",
-    );
+      governmentSections(
+        {
+          councils: [],
+          head: { office: "Prezydent", name: "Hanna Zdanowska" },
+        },
+        "miasto",
+      )!.head?.title,
+    ).toBe("Prezydent miasta");
   });
 
-  it("points a place that shows nobody where its people are", () => {
-    // A gmina: its runs are on its powiat for now.
-    expect(regionAuthorities([], "1005011")).toMatchObject({
-      shown: 0,
-      pointer: "powiat",
-    });
-    // A city's gmina twin and a Warsaw district: on the city's page.
-    expect(regionAuthorities([], "1061011")).toMatchObject({
-      shown: 0,
-      pointer: "miasto",
-    });
-    expect(regionAuthorities([], "1465108")).toMatchObject({
-      kind: "dzielnica",
-      pointer: "miasto",
-    });
-    // A powiat points nowhere: its line just says nobody is known.
-    expect(regionAuthorities([], "1005")!.pointer).toBeUndefined();
-    // A part of a gmina has no government of its own.
-    expect(regionAuthorities([], "1406114")).toBeNull();
+  it("draws nothing for a place with no record and no slot to hold", () => {
+    expect(governmentSections(null, "gmina")).toBeNull();
+    expect(governmentSections(undefined, "miasto")).toBeNull();
+  });
+});
+
+describe("committeeLabel", () => {
+  it("names a party's list by the party, a local list by itself", () => {
+    expect(committeeLabel("KKW KOALICJA OBYWATELSKA", ["PO"])).toBe("KO");
+    expect(
+      committeeLabel("KKW TRZECIA DROGA PSL-PL2050", ["PSL", "Polska 2050"]),
+    ).toBe("Trzecia Droga");
+    expect(committeeLabel("KW PRAWO I SPRAWIEDLIWOŚĆ", ["PiS"])).toBe("PiS");
+    expect(committeeLabel("KWW ŁOWICKIE.PL", [])).toBe("KWW ŁOWICKIE.PL");
   });
 });

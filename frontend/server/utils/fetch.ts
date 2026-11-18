@@ -107,6 +107,19 @@ export function dropSearchIndex(
   return data;
 }
 
+/** A node without a region's „Władze” (`Region.authorities`). Every list of
+ * nodes is served without it - about 49,000 names over all regions, where a
+ * list wants names and codes - and so is a logged out reader of a single
+ * region, since its `personId`s may name pages they may not open.
+ * `/api/nodes/[id]/authorities` serves it, with the links each reader may
+ * follow. Strips in place, like `dropSearchIndex`. */
+export function dropGovernment(
+  data: FirebaseFirestore.DocumentData,
+): FirebaseFirestore.DocumentData {
+  delete data.authorities;
+  return data;
+}
+
 /** How many ids a stored list holds, read tolerantly: `sanitizeFirestoreData`
  * stores a list written from inside another as a map with numbered keys. */
 function idCount(value: unknown): number {
@@ -148,7 +161,7 @@ export function dropDraftStats<T extends FirebaseFirestore.DocumentData>(
 export function parseNodeDoc<T extends { id?: string; visibility?: boolean }>(
   doc: FirebaseFirestore.QueryDocumentSnapshot,
 ): T {
-  const data = dropSearchIndex(doc.data());
+  const data = dropGovernment(dropSearchIndex(doc.data()));
   if (data.revision_id && typeof data.revision_id.path === "string") {
     data.revision_id = data.revision_id.path;
   }
@@ -187,7 +200,7 @@ const _cachedFetchNodes = defineCachedFunction(
       if (!docSnap.exists) return {};
       if (docSnap.data()?.type !== path) return {};
 
-      const data = dropSearchIndex(docSnap.data() || {});
+      const data = dropGovernment(dropSearchIndex(docSnap.data() || {}));
       if (data.revision_id && typeof data.revision_id.path === "string") {
         data.revision_id = data.revision_id.path;
       }

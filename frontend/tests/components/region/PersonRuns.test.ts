@@ -50,7 +50,6 @@ function mountBox() {
       person,
       runs: personRunsIn("p1", runs, groupElectionLists(runs)),
       kind: "powiat",
-      wariant: "b",
     },
     attachTo: document.body,
   });

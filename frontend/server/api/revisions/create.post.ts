@@ -14,6 +14,7 @@ import {
   editSchemas,
   proposableNodeTypes,
   removalSchema,
+  type EditableNodeType,
   type ProposableNodeType,
 } from "~~/shared/api";
 
@@ -45,7 +46,9 @@ export default defineEventHandler(async (event) => {
   // an article the URL it lives at. Parsing against the schema also strips
   // anything not explicitly allowed, so a caller can't smuggle in e.g.
   // `revision_id` and have it written straight to the node below.
-  const schema = editSchemas[proposableType(baseFields)];
+  const schema = isNewNode
+    ? editSchemas[proposableType(baseFields)]
+    : editSchemas[editableType(baseFields)];
 
   // A removal is a revision that changes no field but says the entry should
   // go. It is reviewed like any other, so its reason travels with it rather
@@ -103,6 +106,13 @@ export default defineEventHandler(async (event) => {
     // firmly as a list does.
     if (dataFields.parties !== undefined) {
       dataFields.partiesSource = "manual";
+    }
+
+    // A region's „Władze” on the same terms: once a person has corrected it,
+    // re-running the seed from PKW (seed-region-authorities.ts) must not put
+    // the April 2024 result back over a burmistrz who has changed since.
+    if (dataFields.authorities !== undefined) {
+      dataFields.authoritiesSource = "manual";
     }
 
     // A company's name, on the same terms, so that `ingest/company` does not
@@ -206,14 +216,21 @@ export default defineEventHandler(async (event) => {
   return { id: revisionRef.id, node_id: nodeRef.id, duplicate: false };
 });
 
+/** The kind of node an edit is for: a region's own, for its „Władze”, and
+ * otherwise as `proposableType` reads it. A region is never a kind anybody
+ * proposes anew, so only an edit to a stored one takes it. */
+function editableType(source: { type?: unknown }): EditableNodeType {
+  return source.type === "region" ? "region" : proposableType(source);
+}
+
 /** The kind of node a proposal is for, out of the kinds anyone may propose.
  *
  * Until this was read, every new entry was written as a person whatever the
  * form said - so a proposed company lost its KRS number to `personEditSchema`
  * and turned up in the database as a politician. An unknown or missing type
  * still means a person, which is what the great majority of entries are. That
- * also covers an edit to a stored node of a kind nobody proposes: a region has
- * no form of its own, so its editable fields are a person's.
+ * also covers an edit to a stored node of a kind nobody proposes, except a
+ * region: see `editableType`.
  */
 function proposableType(source: { type?: unknown }): ProposableNodeType {
   const type = source.type;

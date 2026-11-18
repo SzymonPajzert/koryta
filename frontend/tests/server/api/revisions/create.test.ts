@@ -363,6 +363,80 @@ describe("api/revisions/create, place edits", () => {
     expect(writtenRevision().data).not.toHaveProperty("categoriesSource");
   });
 
+  it("takes a region's „Władze”, and nothing else of a region", async () => {
+    // Its name and code come from TERYT: a region's proposal is its record of
+    // who governs it (Szymon, 2026-11-18).
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "region",
+      name: "Gmina Łowicz",
+      teryt: "1005011",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "teryt1005011",
+      name: "Gmina Wymyślona",
+      teryt: "9999999",
+      authorities: {
+        election: "local-2024",
+        head: {
+          office: "Burmistrz",
+          name: " Anna Nowa ",
+          committee: "",
+          since: "2025-06-01",
+        },
+        councils: [
+          {
+            office: "Rada miasta",
+            seats: 21,
+            members: [{ name: "Jakub Wolski", personId: "p1", smuggled: 1 }],
+          },
+        ],
+      },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({} as any);
+
+    const data = writtenRevision().data;
+    expect(data).toMatchObject({
+      type: "region",
+      name: "Gmina Łowicz",
+      teryt: "1005011",
+      authoritiesSource: "manual",
+    });
+    // Trimmed, an empty committee left out, an unknown key stripped.
+    expect(data.authorities).toEqual({
+      election: "local-2024",
+      head: { office: "Burmistrz", name: "Anna Nowa", since: "2025-06-01" },
+      councils: [
+        {
+          office: "Rada miasta",
+          seats: 21,
+          members: [{ name: "Jakub Wolski", personId: "p1" }],
+        },
+      ],
+    });
+  });
+
+  it("refuses a council member with no name", async () => {
+    vi.mocked(baseNodeFields).mockResolvedValueOnce({
+      type: "region",
+      name: "Gmina Łowicz",
+      teryt: "1005011",
+    });
+    mockReadBody.mockResolvedValue({
+      node_id: "teryt1005011",
+      authorities: {
+        councils: [{ office: "Rada miasta", members: [{ name: "  " }] }],
+      },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(handler({} as any)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Imię i nazwisko jest wymagane",
+    });
+  });
+
   it("does not let a person edit smuggle in an ownership flag", async () => {
     vi.mocked(baseNodeFields).mockResolvedValueOnce({
       type: "person",

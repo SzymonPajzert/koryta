@@ -140,8 +140,6 @@ const props = defineProps<{
   groups: ElectionLists[];
   /** The person the reader came from, whose rows the lists mark. */
   highlightId?: string;
-  /** Lists open from the start: the ones that person was on. */
-  openKeys?: string[];
 }>();
 
 const route = useRoute();
@@ -176,7 +174,7 @@ function rowsOf(group: ElectionLists): Row[] {
   ];
 }
 
-const opened = ref(new Set(props.openKeys ?? []));
+const opened = ref(new Set<string>());
 const unfolded = ref(new Set<string>());
 const showAllElections = ref(false);
 

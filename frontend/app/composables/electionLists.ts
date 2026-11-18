@@ -1,7 +1,7 @@
 import { useCurrentUser } from "vuefire";
 import { authFetch } from "~/composables/auth";
 import type { RegionRuns } from "~~/shared/electionLists";
-import type { RegionComposition } from "~~/shared/regionComposition";
+import type { GovernmentView } from "~~/shared/regionAuthorities";
 
 /** Who stood for election in a region: the runs its page groups into lists
  * and the box at its top.
@@ -28,24 +28,33 @@ export function useRegionElectionRuns(regionId: string) {
   });
 }
 
-/** PKW's whole 2024 result for a region page (shared/regionComposition.ts).
- * TEMP(wariant): asked only for the board round's preview, `?wladze=c`. */
-export function useRegionComposition(
-  regionId: string,
-  wanted: MaybeRefOrGetter<boolean>,
-) {
+/** A region's „Władze” (`/api/nodes/[id]/authorities`): its head and its
+ * councils, each person linked where this reader may open their page.
+ *
+ * `latest` for a signed in reader, for the reason `useRegionElectionRuns`
+ * gives; with it the `?revisionId=` of a proposal being previewed, so the
+ * section shows the change the way the rest of the page does. The revision is
+ * read through a computed of its own: a string, which a navigation that keeps
+ * it leaves alone, where reading `route.query` in the query itself would
+ * fetch again on every hash link and Back. */
+export function useRegionGovernment(regionId: string) {
   const route = useRoute();
-  return useAsyncData(
-    `region-composition-${regionId}`,
-    () =>
-      toValue(wanted)
-        ? $fetch<RegionComposition | null>(
-            `/api/nodes/${regionId}/composition`,
-            {
-              query: route.query.nazwiska ? { nazwiska: "1" } : {},
-            },
-          ).catch(() => null)
-        : Promise.resolve(null),
-    { watch: [() => toValue(wanted)] },
+  const user = useCurrentUser();
+  const revisionId = computed(() =>
+    typeof route.query.revisionId === "string"
+      ? route.query.revisionId
+      : undefined,
+  );
+  const query = computed(() =>
+    user.value
+      ? {
+          latest: true,
+          ...(revisionId.value ? { revisionId: revisionId.value } : {}),
+        }
+      : {},
+  );
+  return authFetch<GovernmentView | null>(
+    `/api/nodes/${regionId}/authorities`,
+    { query, key: `region-authorities-${regionId}` },
   );
 }

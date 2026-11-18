@@ -8,11 +8,17 @@
                logged out reader, and so for a crawler, it is the
                teaser, which answers 404. -->
           <NuxtLink
+            v-if="url"
             :to="url"
             :rel="published ? undefined : 'nofollow'"
             class="link-plain text-subtitle-1 font-weight-bold"
             >{{ name }}</NuxtLink
           >
+          <!-- No page, or none this reader may open: a region's head as PKW
+               names them, as text. -->
+          <span v-else class="text-subtitle-1 font-weight-bold">{{
+            name
+          }}</span>
           <PartyChip v-for="party in parties" :key="party" :party />
           <!-- The party of an unpublished holder, which a logged
                out reader is told is there and not what it is. -->
@@ -52,8 +58,8 @@ import { Comment, Fragment, isVNode } from "vue";
 defineProps<{
   /** The holder's name: the link, and the letters on the disc. */
   name: string;
-  /** Their page. */
-  url: string;
+  /** Their page. Without one the name is text. */
+  url?: string;
   /** Whether their page is live. A link to one that is not is `nofollow`. */
   published: boolean;
   /** Their parties, a chip each, after the name. */

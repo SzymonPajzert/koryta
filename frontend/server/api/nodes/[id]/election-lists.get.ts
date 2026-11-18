@@ -9,8 +9,6 @@ import { importedOrReviewed } from "~~/server/utils/provenance";
 import { asArray, pageIsPublic } from "~~/shared/model";
 import type { Edge, Person } from "~~/shared/model";
 import type { RegionRun, RegionRuns } from "~~/shared/electionLists";
-import { candidacyElection } from "~~/shared/electionDays";
-import { newestLocalElection } from "~~/shared/regionAuthorities";
 
 /** A backstop rather than a budget: the most candidacies any region held on
  * the 2026-11-11 export was 1,404, in Województwo mazowieckie. */
@@ -133,12 +131,6 @@ async function electionLists(event: H3Event): Promise<RegionRuns> {
 
   const runs: RegionRun[] = [];
   const drafts: { edge: Stored<Edge>; person: StoredNode }[] = [];
-  /** A published person's win of the newest local election that this reader
-   * is not shown yet: the region page says the seat's result awaits a
-   * check, rather than that nobody is known (Warszawa's prezydent on
-   * 2026-11-11: his page is published, his 2024 run is not). */
-  const hiddenWins: Stored<Edge>[] = [];
-  const newest = newestLocalElection();
   let hidden = 0;
   for (const edge of edges) {
     const person = people.get(edge.source);
@@ -164,61 +156,17 @@ async function electionLists(event: H3Event): Promise<RegionRuns> {
         );
       } else {
         hidden += 1;
-        if (
-          edge.elected === true &&
-          edge.position &&
-          candidacyElection(
-            edge.start_date,
-            edge.position,
-            edge.by_election,
-          ) === newest
-        ) {
-          hiddenWins.push(edge);
-        }
       }
     } else {
       drafts.push({ edge, person });
     }
   }
 
-  const hiddenElected: Record<string, number> = {};
-  if (drafts.length || hiddenWins.length) {
+  if (drafts.length) {
     const shown = await importedOrReviewed(db, [
       ...drafts.map(({ person }) => person),
       ...drafts.map(({ edge }) => edge),
-      ...hiddenWins,
     ]);
-    // Only a win an import wrote or a reviewer approved: a hand-made one can
-    // neither show a mayor nor hold the seat as awaiting. Counted by person,
-    // and not at all for somebody this reader is shown winning that office:
-    // a hidden copy of a shown win is a second document, not a second
-    // claimant - a merge keeps the duplicate page's copy beside the
-    // survivor's (`merge.ts`), and the ingest writes its own beside a
-    // hand-dated one (Andrzej Kleszcz's 2024 council run, 2026-11-11).
-    // A count still, never whose: that would name the hidden run.
-    const shownWinners = new Set(
-      runs
-        .filter(
-          (run) =>
-            run.elected &&
-            candidacyElection(run.start, run.position, run.byElection) ===
-              newest,
-        )
-        .map((run) => `${run.position}\u0000${run.personId}`),
-    );
-    const counted = new Set<string>();
-    for (const edge of hiddenWins) {
-      const claim = `${edge.position}\u0000${edge.source}`;
-      if (
-        !shown.has(edge.id) ||
-        shownWinners.has(claim) ||
-        counted.has(claim)
-      ) {
-        continue;
-      }
-      counted.add(claim);
-      hiddenElected[edge.position!] = (hiddenElected[edge.position!] ?? 0) + 1;
-    }
     for (const { edge, person } of drafts) {
       if (!shown.has(person.id) || !shown.has(edge.id)) {
         hidden += 1;
@@ -234,11 +182,7 @@ async function electionLists(event: H3Event): Promise<RegionRuns> {
     }
   }
 
-  return {
-    runs,
-    hidden,
-    ...(Object.keys(hiddenElected).length ? { hiddenElected } : {}),
-  };
+  return { runs, hidden };
 }
 
 /** Six hours, the site default: a list from 2018 does not change, and an

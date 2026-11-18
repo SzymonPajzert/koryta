@@ -83,7 +83,6 @@
           :person="personHere"
           :runs="personRuns"
           :kind="kindOfRegion"
-          :wariant="wariant"
         />
         <RegionPeopleStatistics teryt="1261" />
         <RegionPeopleStatistics teryt="12" />
@@ -91,7 +90,6 @@
           :region-id="node"
           :groups="electionGroups"
           :highlight-id="osoba"
-          :open-keys="openListKeys"
         />
       </div>
     </template>
@@ -114,14 +112,20 @@
            page top, where it sits on it in the trail of the places above, and
            „Eksploruj region” beside it. Szymon, board round region-lists-r1,
            on the card head: "A bit too much of the negative space here." -->
-      <AdminPageHead
-        v-if="entity?.type === 'region' && glowa !== 'karta'"
-        :title="regionTitle"
-      >
-        <template v-if="regionAncestors.length || trailKind" #meta>
-          <RegionTrail :ancestors="regionAncestors" :kind-label="trailKind" />
+      <AdminPageHead v-if="entity?.type === 'region'" :title="regionTitle">
+        <template v-if="regionAncestors.length" #meta>
+          <RegionTrail :ancestors="regionAncestors" />
         </template>
         <template #actions>
+          <!-- What a region's page has to propose: its „Władze”, the one
+               part of a region anybody may change (Szymon, 2026-11-18). -->
+          <DialogProposeRegionGovernment
+            v-if="governmentSectionsShown"
+            :region-id="node"
+            :view="government"
+            :sections="governmentSectionsShown"
+            @submitted="regionProposals?.refresh()"
+          />
           <v-btn
             variant="tonal"
             :prepend-icon="mdiFormatListBulleted"
@@ -131,29 +135,15 @@
           </v-btn>
         </template>
       </AdminPageHead>
-      <!-- The header, as one block: a region's „Eksploruj region” belongs to
-           the name under it and stays 16px above it, where on its own it would
-           stand a section's gap away. A wrapper rather than a class on the
-           card, which renders one root per type and so takes none.
-           TEMP(wariant) glowa=karta: a region's old card head, for the board
-           round's comparison. -->
+      <!-- A wrapper rather than a class on the card, which renders one root
+           per type and so takes none. -->
       <div v-else>
-        <div v-if="entity?.type === 'region'" class="d-flex mb-4">
-          <v-btn
-            variant="tonal"
-            :prepend-icon="mdiFormatListBulleted"
-            :to="`/eksploruj/tabela?teryt=${regionTeryt}`"
-          >
-            Eksploruj region
-          </v-btn>
-        </div>
         <EntityDetailsCard
           v-if="entity"
           :key="sourcePath"
           :entity="entity"
           :type="type"
           :extra-locations="searchLocations"
-          :ancestors="regionAncestors"
           @published="refreshNode()"
           @voted="emit('voted')"
         />
@@ -166,6 +156,14 @@
            `v-else` below, which binds to the person branch rather than to
            the chain of them. -->
       <template v-if="entity?.type === 'region'">
+        <!-- The reader's own proposals for this region, as a company's page
+             lists them under its head. Nothing until they have proposed
+             something. -->
+        <RevisionNodeProposals
+          v-if="governmentSectionsShown"
+          ref="regionProposals"
+          :node-id="node"
+        />
         <!-- Who the reader came from, when they came from a run on
              somebody's page: that person's runs here, each with the way to
              the list it was on. First, because it is what the click was
@@ -175,26 +173,14 @@
           :person="personHere"
           :runs="personRuns"
           :kind="kindOfRegion"
-          :wariant="wariant"
         />
         <!-- Who governs the place: where Szymon pinned it on the board,
              above the lists (region-lists-r1). -->
         <RegionAuthorities
-          v-if="authorities"
-          :authorities="authorities"
+          v-if="governmentSectionsShown || governmentKind === 'twin'"
+          :sections="governmentSectionsShown"
           :pointer-target="pointerTarget"
           :highlight-id="osoba"
-          :wariant="wladze"
-          :composition="composition"
-        />
-        <!-- Before the institutions: the people of a region are what its
-             page has to say about it, as a person's history lists the
-             people first. -->
-        <RegionElectionLists
-          :region-id="node"
-          :groups="electionGroups"
-          :highlight-id="osoba"
-          :open-keys="openListKeys"
         />
         <!-- The region above is the line under the name now (Szymon,
              region-lists-r1). The list stays for an admin, whose removal
@@ -216,13 +202,22 @@
           @remove="openRemove"
           @published="refreshEdges()"
         />
+        <!-- „w regionie”, not „zależne”: companies the place seats or holds
+             shares in, which are not its subsidiaries (Szymon, 2026-11-18). -->
         <CardConnectionList
           :edges="subsidiaries"
-          title="Spółki zależne"
+          title="Spółki w regionie"
           :can-remove="canRemoveRelations"
           :subject-published="subjectPublished"
           @remove="openRemove"
           @published="refreshEdges()"
+        />
+        <!-- Under the companies (Szymon, 2026-11-18). A reader who came from
+             a run has its list in the box at the top already. -->
+        <RegionElectionLists
+          :region-id="node"
+          :groups="electionGroups"
+          :highlight-id="osoba"
         />
       </template>
       <template v-if="entity?.type === 'person'">
@@ -560,10 +555,10 @@ import {
   type ListMember,
 } from "~~/shared/electionLists";
 import {
-  useRegionComposition,
   useRegionElectionRuns,
+  useRegionGovernment,
 } from "~/composables/electionLists";
-import { regionAuthorities } from "~~/shared/regionAuthorities";
+import { authorityKind, governmentSections } from "~~/shared/regionAuthorities";
 import { nodeLinkUrl } from "~~/shared/slugs";
 import { wojewodztwoLabel } from "~~/shared/teryt";
 import { useRegionAncestors } from "~/composables/regionAncestors";
@@ -719,13 +714,15 @@ const regionAncestorsData =
     ? useRegionAncestors(regionTeryt)
     : undefined;
 const regionAncestors = computed(() => regionAncestorsData?.data.value ?? []);
-/** PKW's whole 2024 result, for the preview of „Władze” (TEMP(wariant)
- * wladze=c). */
-const compositionData =
-  type === "region"
-    ? useRegionComposition(node, () => route.query.wladze === "c")
+/** Who governs the place (`Region.authorities`), as this reader may see
+ * it. Kraków's hand-drawn page has none to draw. */
+const governmentData =
+  type === "region" && node !== "teryt1261"
+    ? useRegionGovernment(node)
     : undefined;
-const composition = computed(() => compositionData?.data.value ?? null);
+const government = computed(() => governmentData?.data.value ?? null);
+/** The reader's proposals for the region, listed again once they file one. */
+const regionProposals = ref<{ refresh: () => void } | null>(null);
 
 // Calculate edges and relationships
 const {
@@ -734,7 +731,7 @@ const {
   referencedIn,
   refresh: refreshEdges,
 } = await useEdges(node);
-await Promise.all([electionRuns, regionAncestorsData, compositionData]);
+await Promise.all([electionRuns, regionAncestorsData, governmentData]);
 const edges = computed(() => [...sources.value, ...targets.value]);
 
 /** The relations a page that is not a person's lists as cards. */
@@ -850,88 +847,41 @@ const personHere = computed<ListMember | undefined>(() => {
     : undefined;
 });
 
-/** TEMP(wariant): the two looks on the board round - a: the person's lists
- * open in the box, b: the box leads down to them, open in „Listy wyborcze”. */
-const wariant = computed<"a" | "b">(() =>
-  route.query.wariant === "b" ? "b" : "a",
-);
-/** In b, the newest of the person's lists, open where the reader lands; the
- * box's links open the others. All of them open at once was Adam Struzik's
- * nine lists in Województwo mazowieckie, 14,600 px of page. */
-const openListKeys = computed(() => {
-  if (wariant.value !== "b") return [];
-  const newest = personRuns.value.find((run) => run.list)?.list;
-  return newest ? [newest.key] : [];
-});
-
 const kindOfRegion = computed(() => regionKind(regionTeryt.value));
 
-/** Who governs the place, off the runs above (shared/regionAuthorities.ts). */
-const authorities = computed(() =>
+/** What kind of place this is, for its „Władze”: one with a government of
+ * its own, a city's „Gmina X” twin, or neither. */
+const governmentKind = computed(() =>
   type === "region" && node !== "teryt1261"
-    ? regionAuthorities(
-        electionRuns?.data.value?.runs ?? [],
-        regionTeryt.value,
-        electionRuns?.data.value?.hiddenElected,
-      )
+    ? authorityKind(regionTeryt.value)
     : null,
 );
 
-/** Where a place that shows nobody sends the reader: its powiat's lists (a
- * gmina, whose runs the night files there - task
- * check-gmina-runs-sent-at-powiat-depth), its city's government (a city's
- * gmina twin) or its city's lists (a Warsaw district). Built from the TERYT
- * code, so a failed read of the name still leaves the way there. */
-const pointerTarget = computed(() => {
-  const pointer = authorities.value?.pointer;
-  const code = regionTeryt.value;
-  if (!pointer || !code) return undefined;
-  const id = `teryt${code.slice(0, 4)}`;
-  // Kraków's page is drawn by hand: its rada heads it, it has no „Władze”.
-  const handDrawn = id === "teryt1261";
-  const anchor =
-    pointer === "miasto" && authorities.value?.kind !== "dzielnica"
-      ? handDrawn
-        ? ""
-        : "#wladze"
-      : "#listy-wyborcze";
-  const councilOnly = handDrawn && pointer === "miasto";
-  const above = regionAncestors.value.find((each) => each.id === id);
-  return above
-    ? { name: above.name, url: `${above.url}${anchor}`, councilOnly }
-    : {
-        url: `${nodeLinkUrl({ id, type: "region", name: "" })}${anchor}`,
-        councilOnly,
-      };
+/** The sections of „Władze” (shared/regionAuthorities.ts), off the record the
+ * endpoint served. Null on a twin, a gmina's part and Kraków. */
+const governmentSectionsShown = computed(() => {
+  const kind = governmentKind.value;
+  if (!kind || kind === "twin" || kind === "part") return null;
+  return governmentSections(government.value, kind);
 });
 
-/** TEMP(wariant) wladze: the board round's looks of „Władze” - a, a row each
- * with the person's parties; b, names under their committee; c, a with
- * PKW's whole result (preview). */
-const wladze = computed<"a" | "b" | "c">(() =>
-  route.query.wladze === "b" || route.query.wladze === "c"
-    ? route.query.wladze
-    : "a",
-);
-/** TEMP(wariant) glowa=karta: the old card head, for the comparison crop. */
-const glowa = computed(() => route.query.glowa);
-/** TEMP(wariant) rodzaj=1: the trail ends on the kind of unit. */
-const trailKind = computed(() => {
-  if (!route.query.rodzaj || !regionTeryt.value) return undefined;
+/** Where a city's „Gmina X” twin sends the reader: the city's own
+ * „Władze”, or the top of Kraków's hand-drawn page, which has its rada and
+ * no „Władze”. Built from the TERYT code, so a failed read of the name still
+ * leaves the way there. */
+const pointerTarget = computed(() => {
   const code = regionTeryt.value;
-  if (code.length === 4) {
-    return Number(code.slice(2)) >= 61
-      ? "miasto na prawach powiatu"
-      : undefined;
-  }
-  return (
-    {
-      "1": "gmina miejska",
-      "2": "gmina wiejska",
-      "3": "gmina miejsko-wiejska",
-      "8": "dzielnica Warszawy",
-    } as Record<string, string>
-  )[code[6] ?? ""];
+  if (governmentKind.value !== "twin" || !code) return undefined;
+  const id = `teryt${code.slice(0, 4)}`;
+  const handDrawn = id === "teryt1261";
+  const anchor = handDrawn ? "" : "#wladze";
+  const above = regionAncestors.value.find((each) => each.id === id);
+  return above
+    ? { name: above.name, url: `${above.url}${anchor}`, councilOnly: handDrawn }
+    : {
+        url: `${nodeLinkUrl({ id, type: "region", name: "" })}${anchor}`,
+        councilOnly: handDrawn,
+      };
 });
 
 /** The region's name as its head and tab say it: a województwo stored by

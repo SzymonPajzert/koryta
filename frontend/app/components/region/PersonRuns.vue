@@ -67,10 +67,10 @@
         <!-- At the row's end, where the history's rows keep what can be done
              with them; under the run on a phone. -->
         <div v-if="run.list" class="person-run__action">
+          <!-- The list opens here, under its run, and the reader stays at
+               the top of the page (Szymon, 2026-11-18). -->
           <template v-if="othersOn(run) > 0">
-            <!-- TEMP(wariant) a: the list opens here, under its run. -->
             <v-btn
-              v-if="wariant === 'a'"
               variant="tonal"
               size="small"
               :append-icon="isOpen(run.edgeId) ? mdiChevronUp : mdiChevronDown"
@@ -81,18 +81,6 @@
             >
               Kto jeszcze był na tej liście: {{ othersOn(run) }}
             </v-btn>
-            <!-- TEMP(wariant) b: the list is open in „Listy wyborcze”
-                 below, and this leads down to it. -->
-            <v-btn
-              v-else
-              variant="tonal"
-              size="small"
-              :append-icon="mdiArrowDown"
-              :to="{ hash: `#lista-${run.list.key}`, query: route.query }"
-              :data-testid="`person-run-list-${run.edgeId}`"
-            >
-              Kto jeszcze był na tej liście: {{ othersOn(run) }}
-            </v-btn>
           </template>
           <span v-else class="person-run__alone">
             Z tej listy nie znamy nikogo więcej.
@@ -100,7 +88,7 @@
         </div>
 
         <RegionListMembers
-          v-if="wariant === 'a' && run.list && isOpen(run.edgeId)"
+          v-if="run.list && isOpen(run.edgeId)"
           :id="`person-run-${run.edgeId}-lista`"
           class="person-run__members"
           :members="run.list.members"
@@ -125,7 +113,7 @@
 </template>
 
 <script setup lang="ts">
-import { mdiArrowDown, mdiChevronDown, mdiChevronUp } from "@mdi/js";
+import { mdiChevronDown, mdiChevronUp } from "@mdi/js";
 import { generateEntityUrl } from "~~/shared/slugs";
 import type {
   ListMember,
@@ -137,11 +125,7 @@ const props = defineProps<{
   person: ListMember;
   runs: PersonRun[];
   kind?: RegionKind;
-  /** TEMP(wariant): which of the two looks on the board round. */
-  wariant: "a" | "b";
 }>();
-
-const route = useRoute();
 
 const personUrl = computed(() =>
   generateEntityUrl("person", props.person.personId, props.person.personName),

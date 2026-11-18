@@ -215,4 +215,31 @@ describe("GET /api/nodes/[id]", () => {
     nodes["person-1"]!.nameChunksLower = ["a", "an", "anna"];
     expect((await call()).node).not.toHaveProperty("nameChunksLower");
   });
+
+  // A region's „Władze” can link pages a logged out reader may not open:
+  // /api/nodes/[id]/authorities serves it to them, vetted. A signed in
+  // reader keeps it, for the form that proposes a change to it.
+  it("leaves a region's „Władze” out for a logged out reader only", async () => {
+    const authorities = {
+      councils: [
+        {
+          office: "Rada miasta",
+          members: [{ name: "Mariusz Szkic", personId: "hand-made-draft" }],
+        },
+      ],
+    };
+    nodes["person-1"] = {
+      type: "region",
+      name: "Gmina Łowicz",
+      teryt: "1005011",
+      published: true,
+      authorities,
+    };
+    revisions["person-1"] = [{ data: { ...nodes["person-1"] } }];
+    expect((await call()).node).not.toHaveProperty("authorities");
+    // Nor is the stored document changed under the cache.
+    expect(nodes["person-1"]).toHaveProperty("authorities");
+    asSignedInEditor();
+    expect((await call()).node).toHaveProperty("authorities", authorities);
+  });
 });

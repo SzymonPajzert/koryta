@@ -260,3 +260,108 @@ describe("revisionFieldLabels", () => {
     ]);
   });
 });
+
+/** A region's „Władze” (`Region.authorities`): sixty names in one field,
+ * read as a line for each part a proposal changes. */
+describe("a region's „Władze”", () => {
+  const region = {
+    type: "region",
+    name: "Gmina Łowicz",
+    teryt: "1005011",
+    authorities: {
+      election: "local-2024",
+      head: {
+        office: "Burmistrz",
+        name: "Mariusz Siewiera",
+        committee: "KWW ŁOWICKIE.PL",
+      },
+      councils: [
+        {
+          office: "Rada miasta",
+          seats: 3,
+          members: [
+            { name: "Jakub Wolski", personId: "p1" },
+            { name: "Hubert Krajewski" },
+          ],
+        },
+      ],
+    },
+  };
+
+  it("reads a new head and a council's changes, a line each", () => {
+    const proposed = {
+      ...region,
+      authorities: {
+        ...region.authorities,
+        head: {
+          office: "Burmistrz",
+          name: "Anna Nowa",
+          since: "2025-06-01",
+        },
+        councils: [
+          {
+            office: "Rada miasta",
+            seats: 3,
+            members: [
+              { name: "Jakub Wolski", personId: "p1" },
+              { name: "Ewa Nastepczyni" },
+            ],
+          },
+        ],
+      },
+    };
+    expect(revisionChanges(proposed, region)).toEqual([
+      {
+        field: "authorities.head",
+        label: "władze: burmistrz",
+        from: "Mariusz Siewiera (KWW ŁOWICKIE.PL)",
+        to: "Anna Nowa, od 2025-06-01",
+      },
+      {
+        field: "authorities.Rada miasta",
+        label: "władze: rada miasta",
+        from: "Hubert Krajewski",
+        to: "Ewa Nastepczyni",
+      },
+    ]);
+  });
+
+  it("reads a councillor added to an empty seat, and one taken off", () => {
+    const added = structuredClone(region);
+    added.authorities.councils[0]!.members.push({ name: "Ewa Nowa" });
+    expect(revisionChanges(added, region)).toEqual([
+      {
+        field: "authorities.Rada miasta",
+        label: "władze: rada miasta",
+        from: null,
+        to: "Ewa Nowa",
+      },
+    ]);
+    const removed = structuredClone(region);
+    removed.authorities.councils[0]!.members.pop();
+    expect(revisionChanges(removed, region)).toEqual([
+      {
+        field: "authorities.Rada miasta",
+        label: "władze: rada miasta",
+        from: "Hubert Krajewski",
+        to: "",
+      },
+    ]);
+  });
+
+  it("finds no change in a record written back as it was", () => {
+    // Firestore may hand a nested list back as a map keyed by index.
+    const roundTripped = structuredClone(region) as Record<string, unknown>;
+    (roundTripped.authorities as { councils: unknown }).councils = {
+      0: region.authorities.councils[0],
+    };
+    expect(revisionChanges(roundTripped, region)).toEqual([]);
+  });
+
+  it("renders the whole record as lines for the comparison table", () => {
+    expect(renderFieldValue(region.authorities)).toBe(
+      "Burmistrz: Mariusz Siewiera (KWW ŁOWICKIE.PL)\n" +
+        "Rada miasta (2): Jakub Wolski, ze stroną, Hubert Krajewski",
+    );
+  });
+});

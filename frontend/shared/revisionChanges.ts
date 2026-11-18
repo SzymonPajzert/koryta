@@ -60,6 +60,7 @@ export const skippedChangeFields = new Set([
   "isPublicSource",
   "categoriesSource",
   "partiesSource",
+  "authoritiesSource",
   "deleted",
   "delete_reason",
   "stats",
@@ -119,6 +120,10 @@ export const revisionFieldLabels: Record<string, string> = {
   publishedDate: "data publikacji",
   // topic
   description: "opis tematu",
+  // region: its „Władze”, read line by line by `governmentChanges`, and its
+  // code, which no form offers but a region's first revision states
+  authorities: "władze",
+  teryt: "kod TERYT",
   // edges, which a reader can propose through the relation dialogs
   start_date: "data od",
   end_date: "data do",
@@ -171,6 +176,9 @@ export function renderFieldValue(value: unknown): string | null {
   if (Array.isArray(value)) {
     const items = value.map(renderFieldValue).filter((v) => v !== null);
     return items.length > 0 ? items.join(", ") : "";
+  }
+  if (typeof value === "object" && isGovernment(value)) {
+    return renderGovernment(value);
   }
   if (typeof value === "object") {
     // A map keyed by index is the sanitized form of an array; anything else is
@@ -228,6 +236,13 @@ export function revisionChanges(
     const winTakenBack = field === "elected" && baseline.elected === true;
     if (!(field in proposed) && !winTakenBack) continue;
 
+    // A region's „Władze” is sixty names in one field: a line for each part
+    // that changed, rather than one cell of everything.
+    if (field === "authorities") {
+      changes.push(...governmentChanges(baseline[field], proposed[field]));
+      continue;
+    }
+
     // Compared after rendering rather than by identity: `["PiS"]` and
     // `{ 0: "PiS" }` are the same claim written two ways, and a revision that
     // merely round-tripped through `sanitizeFirestoreData` would otherwise show
@@ -252,4 +267,146 @@ export function revisionChanges(
   // every time - Firestore does not promise a key order and `Object.keys` on a
   // decoded document has followed insertion order more than once.
   return changes.sort((a, b) => a.label.localeCompare(b.label, "pl"));
+}
+
+/* ---------- a region's „Władze” ---------- */
+
+interface GovernmentShape {
+  head?: GovernmentPersonShape & { office?: string; since?: string };
+  councils: { office: string; members: GovernmentPersonShape[] }[];
+}
+
+interface GovernmentPersonShape {
+  name?: string;
+  personId?: string;
+  committee?: string;
+}
+
+/** A list as Firestore may hand one back: an array, or the map keyed by index
+ * `sanitizeFirestoreData` makes of an array inside an array. */
+function listOf(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => /^\d+$/.test(key))
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([, item]) => item);
+  }
+  return [];
+}
+
+/** Whether a stored value is a region's „Władze” record. */
+function isGovernment(value: object): boolean {
+  return "councils" in value || ("head" in value && "election" in value);
+}
+
+function asGovernment(value: unknown): GovernmentShape {
+  if (!value || typeof value !== "object") return { councils: [] };
+  const record = value as { head?: unknown; councils?: unknown };
+  return {
+    head:
+      record.head && typeof record.head === "object"
+        ? (record.head as GovernmentShape["head"])
+        : undefined,
+    councils: listOf(record.councils).map((council) => {
+      const { office, members } = council as {
+        office?: string;
+        members?: unknown;
+      };
+      return {
+        office: office ?? "",
+        members: listOf(members) as GovernmentPersonShape[],
+      };
+    }),
+  };
+}
+
+/** „Prezydent” is „prezydent miasta” to a reader; the rest read as stored. */
+function officeLabel(office: string | undefined): string {
+  return (
+    office === "Prezydent" ? "Prezydent miasta" : (office ?? "")
+  ).toLocaleLowerCase("pl-PL");
+}
+
+/** „Mariusz Siewiera (KWW ŁOWICKIE.PL)”, and whether a page is linked. */
+function renderGovernmentPerson(person: GovernmentPersonShape): string {
+  const name = person.name ?? "";
+  const committee = person.committee ? ` (${person.committee})` : "";
+  const page = person.personId ? ", ze stroną" : "";
+  return `${name}${committee}${page}`;
+}
+
+function renderGovernmentHead(head: GovernmentShape["head"]): string | null {
+  if (!head?.name) return null;
+  const since = head.since ? `, od ${head.since}` : "";
+  return `${renderGovernmentPerson(head)}${since}`;
+}
+
+/** The whole record as lines, for the comparison table: the head, then each
+ * council with its seats. */
+function renderGovernment(value: object): string {
+  const record = asGovernment(value);
+  const lines: string[] = [];
+  const head = renderGovernmentHead(record.head);
+  if (record.head?.office) {
+    lines.push(
+      `${capitaliseLabel(officeLabel(record.head.office))}: ${head ?? "brak danych"}`,
+    );
+  }
+  for (const council of record.councils) {
+    lines.push(
+      `${council.office} (${council.members.length}): ${council.members
+        .map(renderGovernmentPerson)
+        .join(", ")}`,
+    );
+  }
+  return lines.join("\n");
+}
+
+/** What a proposal changes in a region's „Władze”, a line for each part: the
+ * head as who held it and who would, a council as who would leave it and who
+ * would join it. `field` is unique per line, which the diff keys its rows by. */
+export function governmentChanges(
+  baseline: unknown,
+  proposed: unknown,
+): RevisionChange[] {
+  const before = asGovernment(baseline);
+  const after = asGovernment(proposed);
+  const changes: RevisionChange[] = [];
+
+  const headFrom = renderGovernmentHead(before.head);
+  const headTo = renderGovernmentHead(after.head);
+  if (headFrom !== headTo) {
+    changes.push({
+      field: "authorities.head",
+      label: `władze: ${officeLabel(after.head?.office ?? before.head?.office)}`,
+      from: headFrom,
+      to: headTo ?? "",
+    });
+  }
+
+  const offices = [
+    ...new Set(
+      [...before.councils, ...after.councils].map((council) => council.office),
+    ),
+  ];
+  for (const office of offices) {
+    const was = (
+      before.councils.find((council) => council.office === office)?.members ??
+      []
+    ).map(renderGovernmentPerson);
+    const now = (
+      after.councils.find((council) => council.office === office)?.members ?? []
+    ).map(renderGovernmentPerson);
+    const leaving = was.filter((member) => !now.includes(member));
+    const joining = now.filter((member) => !was.includes(member));
+    if (!leaving.length && !joining.length) continue;
+    changes.push({
+      field: `authorities.${office}`,
+      label: `władze: ${office.toLocaleLowerCase("pl-PL")}`,
+      from: leaving.length ? leaving.join(", ") : null,
+      to: joining.length ? joining.join(", ") : "",
+    });
+  }
+  return changes;
 }

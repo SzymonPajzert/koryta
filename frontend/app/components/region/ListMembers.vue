@@ -10,22 +10,31 @@
     data-testid="list-members"
   >
     <li
-      v-for="member in members"
-      :key="member.personId"
+      v-for="(member, index) in members"
+      :key="member.personId || `bez-strony-${index}`"
       class="list-member"
-      :class="{ 'list-member--self': member.personId === highlightId }"
-      :aria-current="member.personId === highlightId ? 'true' : undefined"
-      :data-testid="`list-member-${member.personId}`"
+      :class="{
+        'list-member--self': member.personId && member.personId === highlightId,
+      }"
+      :aria-current="
+        member.personId && member.personId === highlightId ? 'true' : undefined
+      "
+      :data-testid="`list-member-${member.personId || `bez-strony-${index}`}`"
     >
       <!-- `nofollow` to a page nobody has published: for a logged out
            reader, and so for a crawler, it is the teaser, which answers
            404. As on a company's board. -->
       <NuxtLink
+        v-if="member.personId"
         :to="generateEntityUrl('person', member.personId, member.personName)"
         :rel="member.published ? undefined : 'nofollow'"
         class="link-plain list-member__name"
         >{{ member.personName }}</NuxtLink
       >
+      <!-- A councillor with no page, or none this reader may open: the name
+           PKW gives, as text (Szymon, 2026-11-18: "they should just be
+           listed for the information"). -->
+      <span v-else class="list-member__name">{{ member.personName }}</span>
       <span
         v-if="!plain && member.offices.length"
         class="text-caption font-weight-bold list-member__office"
@@ -53,6 +62,8 @@ import { generateEntityUrl } from "~~/shared/slugs";
 import type { ListMember } from "~~/shared/electionLists";
 
 defineProps<{
+  /** A member with an empty `personId` has no page this reader may open:
+   * the name is text. */
   members: ListMember[];
   /** The person the reader came from, whose row the list marks. */
   highlightId?: string;

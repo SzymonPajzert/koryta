@@ -174,26 +174,6 @@ describe("GET /api/nodes/[id]/election-lists", () => {
     expect(answer.hidden).toBe(3);
   });
 
-  it("counts the newest election's hidden wins of an imported run, by office", async () => {
-    expect((await call()).hiddenElected).toEqual({ Prezydent: 1 });
-    // A win somebody wrote by hand holds no seat as awaiting.
-    firstRevision("e5", false);
-    expect((await call()).hiddenElected).toBeUndefined();
-  });
-
-  it("takes a hidden copy of a win the reader is shown for no second claim", async () => {
-    // The mayor's win stored twice, one copy published: as a merge leaves it.
-    edges.e8 = run("mayor", { position: "Prezydent" });
-    const answer = await call();
-    expect(answer.runs.map((each) => each.edgeId)).toContain("e8");
-    expect(answer.hiddenElected).toBeUndefined();
-    // Two hidden copies of one person's win are one claim.
-    delete edges.e8;
-    edges.e9 = run("mayor", { position: "Prezydent", published: false });
-    firstRevision("e9", true);
-    expect((await call()).hiddenElected).toEqual({ Prezydent: 1 });
-  });
-
   it("shows an editor everything, with the parties", async () => {
     reader.signedIn = true;
     const answer = await call();
@@ -207,7 +187,6 @@ describe("GET /api/nodes/[id]/election-lists", () => {
     expect(answer.runs.find((each) => each.edgeId === "e3")!.parties).toEqual([
       "PiS",
     ]);
-    expect(answer.hiddenElected).toBeUndefined();
   });
 
   it("answers nothing for a region nobody may open, or a node that is not one", async () => {

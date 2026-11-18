@@ -203,31 +203,10 @@
       {{ entity?.content }}
     </v-card-text>
   </v-card>
-
-  <v-card v-if="type == 'region'" width="100%" variant="flat">
-    <v-card-title class="headline px-0 text-wrap">
-      <v-icon start :icon="mdiMapMarkerRadiusOutline" />
-      <h1 class="d-inline">
-        {{ region?.name }}
-      </h1>
-    </v-card-title>
-    <!-- Only when there is something to say: the empty text block was 32px
-         of blank under the name of nearly every region (Szymon,
-         region-lists-r1: "a bit too much of the negative space here"). -->
-    <RegionTrail v-if="ancestors?.length" :ancestors="ancestors" />
-    <v-card-text v-if="region?.content" class="px-0">
-      {{ region.content }}
-    </v-card-text>
-  </v-card>
 </template>
 
 <script setup lang="ts">
-import {
-  mdiChevronDown,
-  mdiFileDocumentOutline,
-  mdiHistory,
-  mdiMapMarkerRadiusOutline,
-} from "@mdi/js";
+import { mdiChevronDown, mdiFileDocumentOutline, mdiHistory } from "@mdi/js";
 import type {
   Person,
   Company,
@@ -246,11 +225,8 @@ const props = withDefaults(
      * table builds those, from what it fetches - so the page derives both
      * from its edges and hands them down. */
     extraLocations?: string[];
-    /** TEMP(wariant) glowa=karta: a region's parents, widest first, for the
-     * line under its name in the old card head the board compares with. */
-    ancestors?: { name: string; url: string }[];
   }>(),
-  { extraLocations: undefined, ancestors: undefined },
+  { extraLocations: undefined },
 );
 
 /** The page went live from the badge above. The card holds no data of its own
@@ -263,10 +239,6 @@ const { user, isAdmin } = useAuthState();
 const article = computed(() =>
   props.type === "article" ? (props.entity as Article) : undefined,
 );
-const region = computed(() =>
-  props.type === "region" ? (props.entity as Region) : undefined,
-);
-
 const personEntity = computed(() =>
   props.type === "person" ? (props.entity as Person) : undefined,
 );
