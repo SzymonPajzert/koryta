@@ -877,7 +877,7 @@ describe("/admin/oswiadczenia", () => {
     expect(draft.classes()).toContain("arow--tone-warning");
     expect(draft.get("[data-page-public]").text()).toBe("szkic");
     expect(draft.get("[data-hold-note]").text()).toBe(
-      "Opublikuj ręcznie, jeśli się zgadza. Datę ustalił administrator, więc oświadczenia na stronie nie będzie.",
+      "Datę ustalił administrator, więc automat nie publikuje. Opublikuj ręcznie, jeśli się zgadza.",
     );
 
     const up = await held("fx0007");

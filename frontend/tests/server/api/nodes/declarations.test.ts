@@ -188,11 +188,20 @@ describe("api/nodes/[id]/declarations", () => {
     extracts["abc-p0"] = crop({ status: "withdrawn", agreed: null });
     expect(await call("kowalska")).toMatchObject({ declarations: [LATER] });
 
-    // An admin settled the 2024 one on her date: that confirms nothing.
+    // An admin settled the 2024 one on her date: shown all the same
+    // (decision on 2026-11-18).
     extracts["def-p0"] = crop({
       url: LATER.url,
       declarationYear: LATER.year,
       agreed: { value: BORN, kind: "date", by: "admin" },
+    });
+    expect(await call("kowalska")).toMatchObject({ declarations: [LATER] });
+
+    // And on another day it is not.
+    extracts["def-p0"] = crop({
+      url: LATER.url,
+      declarationYear: LATER.year,
+      agreed: { value: "1980-01-02", kind: "date", by: "admin" },
     });
     await expect(call("kowalska")).rejects.toMatchObject({ statusCode: 404 });
   });

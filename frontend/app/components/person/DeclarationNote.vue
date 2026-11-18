@@ -120,9 +120,9 @@ const readers = `co najmniej ${READERS_TO_AGREE} ${plural(READERS_TO_AGREE, "oso
  * typed date the job is sure of settles without readers;
  * handwriting, scans and a typed date it is unsure of go to them, so the
  * readers are said to read everything else, not the handwritten ones alone.
- * A date an admin settled never reaches this line, nor a reading the page's
- * date no longer matches: the endpoint lists only crops readers or the job
- * settled on that very day (`confirmedDeclarations`). The page's date is not
+ * A reading the page's date no longer matches never reaches this line: the
+ * endpoint lists only crops settled on that very day
+ * (`confirmedDeclarations`), by readers, the job or an admin. The page's date is not
  * said to be KRS's: it can come from Wikipedia or an editor as well. The
  * limit is not given as a number - it lives in the runtime config, not on
  * this page. */

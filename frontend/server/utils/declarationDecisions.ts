@@ -24,8 +24,8 @@ import { restageDeclarationPeople } from "./declarationPeopleCount";
  * laid over theirs.
  *
  * A date settles the crop as the admin's (`agreed.by` "admin") and is
- * compared with its pages afresh, but it publishes and confirms nobody: a
- * draft born that day is held for somebody to publish by hand
+ * compared with its pages afresh, but the automation publishes nobody on it:
+ * a draft born that day is held for somebody to publish by hand
  * (`admin_decision` in declarationPublish.ts), and a public page born that
  * day is left as it is, since the admin chose the date with the pages' dates
  * a click away. A page born on another day is flagged as for any reading. The
@@ -35,11 +35,11 @@ import { restageDeclarationPeople } from "./declarationPeopleCount";
  * comparison filed on a page stays: it is that page's to resolve. Who decided
  * what, and what it replaced, stays on the crop.
  *
- * None of the three leaves a crop confirming a page. A public page whose
- * record lists the crop stops showing its declaration
- * (`confirmedDeclarations` reads the crop, and takes neither an admin's date
- * nor a crop that is not agreed), which `linkedOnAPage` tells the endpoints,
- * so they drop the pages' cached answers.
+ * A public page whose record lists the crop shows its declaration only while
+ * the crop is agreed on the page's date (`confirmedDeclarations`, an admin's
+ * date included since the decision on 2026-11-18), so any of the three can
+ * change what the page shows, which `linkedOnAPage` tells the endpoints, so
+ * they drop the pages' cached answers.
  *
  * The decisions on a held page are here too: saying it will not be published,
  * taking that back, and what a publication by hand does to a hold. Asking a
@@ -87,10 +87,10 @@ const LINKED_RECORDS = 50;
 
 /**
  * Whether a public page may be showing the crop's declaration: a published
- * or confirmed record lists it. A decision on such a crop takes the
- * declaration off the page (`confirmedDeclarations`), whose answer is cached
- * for hours, so the endpoints drop the cached answers after it - and only
- * then, since most crops an admin decides were never linked anywhere.
+ * or confirmed record lists it. A decision on such a crop can change what the
+ * page shows (`confirmedDeclarations`), whose answer is cached for hours, so
+ * the endpoints drop the cached answers after it - and only then, since most
+ * crops an admin decides were never linked anywhere.
  *
  * A question that cannot be answered counts as yes: dropping the cache costs
  * reads, keeping it would leave the page vouching for a crop just taken back.
@@ -292,7 +292,7 @@ export async function restorePublication(
  * count, the chain, the recent list.
  *
  * Whether a declaration then shows on the page is still read off the crops
- * (`confirmedDeclarations`): one an admin's date settled shows nothing.
+ * (`confirmedDeclarations`), an admin's date included.
  *
  * Returns whether a hold was closed.
  */

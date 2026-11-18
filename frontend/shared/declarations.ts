@@ -1038,8 +1038,9 @@ export function readingReached(
  *
  * `admin_decision` holds a draft whose date matches only a date an admin
  * settled on /admin/oswiadczenia (`agreed.by` "admin"). The admin chose it
- * with the pages' dates a click away, so it confirms nothing, and the draft
- * waits for somebody to publish it by hand. A public page born that day is
+ * with the pages' dates a click away, so the automation does not publish on
+ * it, and the draft waits for somebody to publish it by hand; once public,
+ * the page shows the declaration (decision on 2026-11-18). A public page born that day is
  * given no record: it has nothing to wait for, and the admin's date links
  * nothing on it.
  *
