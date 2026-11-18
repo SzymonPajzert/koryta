@@ -16,6 +16,7 @@ import {
   searchTokens,
   townChunk,
 } from "~~/shared/search";
+import { hitLine, type StoredSearchLines } from "~~/shared/searchLine";
 
 const queryValidator = z.object({
   q: z.string().optional().default(""),
@@ -31,6 +32,9 @@ type node = {
   revision_id?: unknown;
   /** The KRS number the query was, on a hit found by it rather than by name. */
   matchedKrs?: string;
+  /** A person's, for the line under their name (`hitLine`). */
+  parties?: unknown;
+  stats?: { searchLine?: StoredSearchLines };
 };
 
 /** How far down the anchor's hit list a multi-word query reads.
@@ -230,6 +234,9 @@ export default editorFreshCachedEventHandler(async (event) => {
     // listed its people.
     const query: Record<string, string> = {};
     if (node.teryt) query.teryt = node.teryt;
+    // So the box can tell two people of one name apart, from the document the
+    // passes above have already read (`shared/searchLine.ts`).
+    const line = hitLine(node, includeDrafts);
 
     return {
       id: node.id,
@@ -242,6 +249,7 @@ export default editorFreshCachedEventHandler(async (event) => {
       // So the search box keeps the hit: its own filter matches what was
       // typed against the name, and no name holds the number.
       ...(node.matchedKrs ? { krsNumber: node.matchedKrs } : {}),
+      ...(line ? { line } : {}),
     };
   });
 });
