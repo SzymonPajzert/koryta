@@ -304,6 +304,67 @@ describe("POST /api/stats/computeNodes", () => {
     });
   });
 
+  /** The home map colours a powiat by its people's parties, so its row carries
+   * them: each person once, in the party the graph draws them in. */
+  it("counts a powiat's people by party on its row, and only a powiat's", async () => {
+    const person = (id: string, parties: string[], published = true) => ({
+      id,
+      data: () => ({ type: "person", name: id, parties, published }),
+    });
+    collections.nodes = [
+      person("pis", ["PiS"]),
+      // SLD is counted with Nowa Lewica, as on every party chart.
+      person("sld", ["SLD"]),
+      // A named party is drawn over „Inne”.
+      person("po", ["Inne", "PO"]),
+      person("bez", []),
+      person("szkic", ["PiS"], false),
+      {
+        id: "teryt1811",
+        data: () => ({
+          type: "region",
+          name: "Powiat mielecki",
+          teryt: "1811",
+        }),
+      },
+      {
+        id: "teryt18",
+        data: () => ({ type: "region", name: "podkarpackie", teryt: "18" }),
+      },
+      { id: "mzbm", data: () => ({ type: "place", name: "MZBM" }) },
+    ];
+    collections.edges = [
+      ...["pis", "sld", "po", "bez", "szkic"].map((source) => ({
+        data: () => ({
+          type: "employed",
+          source,
+          target: "mzbm",
+          published: true,
+        }),
+      })),
+      { data: () => ({ type: "seat", source: "teryt1811", target: "mzbm" }) },
+      { data: () => ({ type: "owns", source: "teryt18", target: "mzbm" }) },
+    ];
+
+    await handler({} as never);
+
+    expect(selected.get("nodes")).toContain("parties");
+    const rows = statsDocSet.mock.calls[0]![0].regions;
+    expect(rows).toContainEqual({
+      id: "teryt1811",
+      teryt: "1811",
+      name: "Powiat mielecki",
+      people: 4,
+      parties: { PiS: 1, "Nowa Lewica": 1, PO: 1 },
+    });
+    expect(rows).toContainEqual({
+      id: "teryt18",
+      teryt: "18",
+      name: "podkarpackie",
+      people: 4,
+    });
+  });
+
   /** The search box reads the line under a person off the documents its
    * passes already hold, so it is worked out here and stored on the person:
    * one per kind of reader (shared/searchLine.ts). */

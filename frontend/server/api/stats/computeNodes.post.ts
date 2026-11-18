@@ -24,6 +24,8 @@ import { bodyIsPaidPost } from "~~/shared/companyBodies";
 import { getEdges, getNodesNoStats, getNodeGroups } from "~~/shared/graph/util";
 import { partyColors } from "~~/shared/misc";
 import {
+  isPowiat,
+  partyCounts,
   regionStat,
   writeRegionStats,
   type RegionStat,
@@ -55,6 +57,8 @@ const FIELDS = {
     // People: queueTier.
     "wikipedia",
     "rejestrIo",
+    // People: the party counts on the home map's powiat rows.
+    "parties",
     // getNodeGroups leaves a hidden node out of a group.
     "hide",
   ],
@@ -482,11 +486,15 @@ export default defineEventHandler(async (event) => {
     );
 
     if (node.data.type === "region") {
+      const region = node.data as Region;
       regionRows.push(
-        regionStat(node.id, {
-          ...(node.data as Region),
-          stats: updateData.stats,
-        }),
+        regionStat(
+          node.id,
+          { ...region, stats: updateData.stats },
+          isPowiat(region)
+            ? partyCounts(targetCounts[node.id] ?? [], peopleMap)
+            : undefined,
+        ),
       );
     }
 
