@@ -36,6 +36,7 @@ import zoneinfo
 
 import pytest
 
+from analysis.bip_people_of_interest import UNPAID_BODIES, names_a_supervisory_seat
 from analysis.payloads.site import (
     DISTRICT_OFFICES,
     ELECTION_YEARS,
@@ -3060,6 +3061,67 @@ def test_a_party_list_a_person_pinned_is_changed_only_by_a_person(
         f"party list a person had pinned, up from the {KNOWN_CHANGED} known. As "
         f"(page, revision, applied on, author, pinned list, list it states): "
         f"{sample(changed, 5)}"
+    )
+
+
+def paid_public_post(edge: dict, company: dict | None) -> bool:
+    """`isPublicEmployment` in frontend/shared/stats.ts: an `employed` edge at a
+    company the register shows the public sector owns, and not a seat on an
+    organ nobody is paid to sit on."""
+    if edge.get("type") != "employed" or not company:
+        return False
+    if company.get("isPublic") is not True:
+        return False
+    unpaid = company.get("supervisoryBody") in UNPAID_BODIES
+    return not (unpaid and names_a_supervisory_seat(edge.get("name")))
+
+
+def test_a_published_candidate_with_a_paid_post_names_a_party(
+    nodes, edges, within_budget
+):
+    """A published page that shows a candidacy and a paid public post names a
+    party: „Inne” where it stood for none of the site's (decision on
+    2026-11-18).
+
+    `partyFloor` in frontend/shared/partyFloor.ts. The declarations automation
+    files „Inne” as it puts such a page up, and
+    scripts/migrate/inne-for-published-candidates.ts gave it to the pages up
+    before. Anything else that puts one up without a party - an admin's
+    publish, a candidacy or a job published later - shows here, and the
+    migration can be run again for it.
+
+    A page whose list a person set is counted too, though nothing automatic
+    may change it (`test_a_party_list_a_person_pinned_is_changed_only_by_a_person`):
+    it waits for a person.
+    """
+    # 260 on the 2026-11-18T03:00:42 export, before the migration: the 244 it
+    # gives „Inne”, and 16 lists a person set, each of them empty all along.
+    KNOWN_WITHOUT = 260
+
+    nodes_by_id = {node["id"]: node for node in nodes}
+    shown: dict[str, set[str]] = collections.defaultdict(set)
+    for edge in edges:
+        if not page_is_public(edge):
+            continue
+        if edge.get("type") == "election":
+            shown[edge["source"]].add("candidacy")
+        elif paid_public_post(edge, nodes_by_id.get(edge.get("target"))):
+            shown[edge["source"]].add("paid post")
+
+    without = sorted(
+        (node["id"], node.get("name"))
+        for node in nodes
+        if node.get("type") == "person"
+        and page_is_public(node)
+        and is_live(node)
+        and shown[node["id"]] == {"candidacy", "paid post"}
+        and not party_list(node.get("parties"))
+    )
+
+    assert within_budget(len(without), KNOWN_WITHOUT), (
+        f"{len(without)} published pages show a candidacy and a paid public post "
+        f"and name no party, up from the {KNOWN_WITHOUT} known: "
+        f"{sample(without, 10)}"
     )
 
 
