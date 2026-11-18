@@ -211,7 +211,7 @@ describe("the words for the job's codes", () => {
     // Not „the import's version”: where a person's proposal is the newest,
     // publishing approves that one, and the dialog says so.
     expect(declarationHoldNote(heldRow("pending_proposal"))).toBe(
-      "Na stronie czeka propozycja zmiany. Opublikuj ręcznie, a propozycję rozpatrz potem.",
+      "Na stronie czeka propozycja zmiany. Opublikuj ręcznie, a propozycję rozpatrz potem: odrzuć ją, jeśli usuwa datę urodzenia.",
     );
   });
 
