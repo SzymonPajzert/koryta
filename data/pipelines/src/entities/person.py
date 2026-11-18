@@ -105,6 +105,10 @@ class PKW:
     #: miasta", "Wójt"...), or None - see `scrapers.pkw.offices`. Worked out
     #: once the whole file is read, as it needs the TERYT register.
     office: str | None = None
+    #: The day of the vote, for an election held during a term rather than in
+    #: a general one (`scrapers.pkw.term_elections`): „2025-08-10”. None for
+    #: every general election's candidacy, which its year identifies.
+    election_date: str | None = None
 
 
 @dataclass

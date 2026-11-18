@@ -30,6 +30,9 @@ export type NodeRelation = {
    * places in one election (see shared/twoPlaces.ts) from two elections. */
   startDate: string | null;
   position: string | null;
+  /** Whether the candidacy was in an election held during a term, which is
+   * an election of its own beside the general one of its year. */
+  byElection: boolean;
   /** The revision publishing this relation would approve, when it points at
    * none of its own yet: the newest one it already holds. Null when the edge
    * already has an approved revision, or holds none and will be published on
@@ -119,6 +122,7 @@ export default defineEventHandler(async (event): Promise<NodeRelations> => {
           ? edge.start_date
           : null,
       position: typeof edge.position === "string" ? edge.position : null,
+      byElection: edge.by_election === true,
       revisionToApprove:
         publishCandidateRevision(
           candidates,

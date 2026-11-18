@@ -54,6 +54,7 @@ def extract_data(
     last_name: str | None = None,
     party_member: str | None = None,
     supported_by: str | None = None,
+    election_date: str | None = None,
 ):
     if pkw_name is not None:
         first_name, middle_name, last_name = parse_name(pkw_name, name_format)
@@ -108,6 +109,7 @@ def extract_data(
         last_name=last_name,
         party_member=party_member,
         supported_by=supported_by,
+        election_date=election_date or None,
     )
 
 
@@ -187,9 +189,12 @@ def process_csv(
             if val or p.name not in mapped:
                 mapped[p.name] = val
 
+        # A source of elections held during a term spans years, and each row
+        # says which it was held in (`term_elections`).
+        election_year = mapped.pop("election_year", None) or str(config.year)
         try:
             yield extract_data(
-                election_year=str(config.year),
+                election_year=str(election_year),
                 election_type=str(config.election_type),
                 name_format=config.name_format,
                 **mapped,  # type: ignore

@@ -145,6 +145,66 @@ def test_a_candidacy_dates_from_its_year_and_a_field_from_nothing():
     ]
 
 
+def candidacies_of(changes: list) -> list:
+    return [change for change in changes if change[0] == NEW_CANDIDACY]
+
+
+def stood(year: str = "2024", **fields) -> Election:
+    return Election(
+        election_type="Prezydent",
+        election_year=year,
+        teryt="1465",
+        committee="KWW LEPSZA WARSZAWA",
+        **fields,
+    )
+
+
+def stored_run(start: str, **fields) -> dict:
+    return {
+        "id": f"edge-p1-{start}",
+        "type": "election",
+        "source": "p1",
+        "target": "teryt1465",
+        "name": "kandydatura",
+        "position": "Prezydent",
+        "committee": "KWW LEPSZA WARSZAWA",
+        "start_date": start,
+        **fields,
+    }
+
+
+def test_a_re_run_beside_the_stored_april_run_is_new_and_dated_to_its_day():
+    site = snapshot(
+        stored_person("p1", "Jan Kowalski", "https://rejestr.io/osoby/1"),
+        edges=(stored_run("2024-01-01"),),
+    )
+    rerun = stood(by_election=True, election_date="2024-09-29")
+    payload = asdict(
+        person("Jan Kowalski", "https://rejestr.io/osoby/1", elections=[stood(), rerun])
+    )
+
+    assert candidacies_of(site.dated_changes(payload)) == [
+        (NEW_CANDIDACY, "2024-09-29")
+    ]
+
+
+def test_an_election_held_during_a_term_the_site_has_is_no_change():
+    early = {"by_election": True, "election_date": "2025-08-10"}
+    site = snapshot(
+        stored_person("p1", "Jan Kowalski", "https://rejestr.io/osoby/1"),
+        edges=(stored_run("2025-08-10", by_election=True),),
+    )
+    payload = asdict(
+        person(
+            "Jan Kowalski",
+            "https://rejestr.io/osoby/1",
+            elections=[stood("2025", **early)],
+        )
+    )
+
+    assert candidacies_of(site.dated_changes(payload)) == []
+
+
 def test_a_person_the_site_lacks_has_no_date():
     site = snapshot()
     payload = asdict(person("Anna Nowak", "https://rejestr.io/osoby/2"))

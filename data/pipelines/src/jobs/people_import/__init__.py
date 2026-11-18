@@ -635,15 +635,46 @@ def payload_hash(payload: Mapping[str, typing.Any]) -> str:
     (`analysis.payloads.person._extract_companies`); this keeps the next list
     a rebuild reorders from doing the same.
     """
-    return hash_as_listed(in_any_order(payload))
+    return hash_as_listed(in_any_order(without_null(payload, HASHED_UNLESS_NULL)))
 
 
 def hash_as_listed(payload: typing.Any) -> str:
     """The hash of the payload with its lists in the order they come: what
     `payload_hash` was until October 2026, and what a `SENT_PREFIX` line
     written then holds (`HASHED`)."""
-    text = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+    text = json.dumps(
+        without_null(payload, HASHED_UNLESS_NULL),
+        sort_keys=True,
+        ensure_ascii=False,
+        default=str,
+    )
     return hashlib.sha1(text.encode("utf-8")).hexdigest()
+
+
+#: Keys the payload gained after the hashes in the sent parts were written,
+#: left out of the hash wherever they are null. A key in the hash changes every
+#: payload's hash, null or not, so the sent-unchanged skip forgets everybody:
+#: the four PKW statement keys did on 2026-11-18, and 814 people came back with
+#: nothing new. Left out while null, a new key changes only the payloads that
+#: say something with it.
+HASHED_UNLESS_NULL = frozenset({"by_election", "election_date"})
+
+
+def without_null(value: typing.Any, keys: frozenset[str]) -> typing.Any:
+    """`value` without any of `keys` where it is null, at any depth."""
+    if isinstance(value, Mapping):
+        return {
+            key: without_null(item, keys)
+            for key, item in value.items()
+            if not (key in keys and _is_null(item))
+        }
+    if isinstance(value, (list, tuple)):
+        return [without_null(item, keys) for item in value]
+    return value
+
+
+def _is_null(value: typing.Any) -> bool:
+    return value is None or (isinstance(value, float) and value != value)
 
 
 def in_any_order(value: typing.Any) -> typing.Any:

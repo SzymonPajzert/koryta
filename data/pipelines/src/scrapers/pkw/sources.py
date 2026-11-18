@@ -3,6 +3,7 @@ import typing
 from dataclasses import dataclass, field
 from datetime import date
 
+from scrapers.pkw import term_elections
 from scrapers.pkw.elections import ElectionType
 from scrapers.pkw.headers import SetField
 from scrapers.stores import Context, File
@@ -50,6 +51,37 @@ class XlsExtractor(Extractor):
 
     def read(self, ctx: Context, source: FileSource | File):
         return self.read_source(ctx, source).read_xls(self.header_rows, self.skip_rows)
+
+
+@dataclass
+class TermElectionsExtractor(Extractor):
+    """The mayoral elections a term held between general ones, read off the
+    term's app on wybory.gov.pl (`scrapers.pkw.term_elections`).
+
+    The source is the term's `list.blob`. Each election it names as mayoral
+    and final is one more file, `details/{id}.blob`, read once and kept: PKW
+    does not change a final result. The rows are a CSV's, header first.
+    """
+
+    #: The app's data directory, „https://wybory.gov.pl/wojtburmistrz_2024_2029/data”.
+    data_url: str
+    #: The app's name, which keeps one term's files apart from another's.
+    app: str
+
+    def read(self, ctx: Context, source: FileSource | File):
+        listing = self.read_source(ctx, source).read_bytes()
+        rows: list[list[str | None]] = [list(term_elections.COLUMNS)]
+        for election in term_elections.listed(listing):
+            if not term_elections.mayoral_and_final(election):
+                continue
+            details = ctx.io.read_data(
+                FileSource(
+                    f"{self.data_url}/details/{election.id}.blob",
+                    f"pkw_{self.app}_{election.id}.blob",
+                )
+            )
+            rows.extend(term_elections.candidate_rows(details.read_bytes()))
+        return rows
 
 
 @dataclass
@@ -598,3 +630,22 @@ for old_woj in range(1, 50):
             ElectionType.SAMORZADOWE,
         )
     )
+
+# The mayoral elections held during the 2024-2029 term: 36 final ones on
+# 2026-11-18, Zabrze 2025 and Kraków 2026 among them. Each row carries its own
+# year, so the source's is only the term's first. The list is named for the
+# day it is read: it grows as the term goes on, and a cached copy under a
+# fixed name would never be read again.
+_MAYORS_2024_2029 = "https://wybory.gov.pl/wojtburmistrz_2024_2029/data"
+sources.append(
+    InputSource(
+        FileSource(
+            f"{_MAYORS_2024_2029}/list.blob",
+            f"pkw_wojtburmistrz_2024_2029_list_{date.today().isoformat()}.blob",
+        ),
+        TermElectionsExtractor(_MAYORS_2024_2029, "wojtburmistrz_2024_2029"),
+        2024,
+        PkwFormat.LAST_First,
+        ElectionType.SAMORZADOWE,
+    )
+)

@@ -494,6 +494,7 @@ const clashes = computed(() => {
           regionId: relation.other.id,
           startDate: relation.startDate,
           position: relation.position,
+          byElection: relation.byElection,
         }
       : undefined;
   const live = relations.value.filter(

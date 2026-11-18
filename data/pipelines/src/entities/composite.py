@@ -57,6 +57,12 @@ class Election:
     # names. Recorded on any list, a voters' committee's included.
     supported_by: str | None = None
     backing_parties: list[str] | None = None
+    # An election held during a term - an early one, a re-run, a new gmina's
+    # first - rather than a general one: its own contest, dated to its day
+    # („2025-08-10”), which the site stores as the candidacy's `start_date`.
+    # None for a general election, which the site dates by its year.
+    by_election: bool | None = None
+    election_date: str | None = None
 
 
 @dataclass

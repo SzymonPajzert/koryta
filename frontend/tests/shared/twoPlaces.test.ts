@@ -116,6 +116,25 @@ describe("placeClashes", () => {
     ).toEqual([["styczen", "kwiecien"]]);
   });
 
+  it("keeps an election held during a term apart from the general one of its year", () => {
+    // A council in April, an early mayoral election elsewhere that autumn.
+    expect(
+      clashes([
+        run("kwiecien", "teryt3003", "2024-01-01"),
+        run("wrzesien", "teryt1407", "2024-09-29", { byElection: true }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("finds two places in one election held during a term", () => {
+    expect(
+      clashes([
+        run("zabrze", "teryt2478", "2025-08-10", { byElection: true }),
+        run("kozienice", "teryt1407", "2025-08-10", { byElection: true }),
+      ]).map((clash) => clash.ids),
+    ).toEqual([["zabrze", "kozienice"]]);
+  });
+
   it("keeps absent and empty offices apart, as the night's check does", () => {
     // `edge.get("position")` there: None and "" are two keys.
     expect(

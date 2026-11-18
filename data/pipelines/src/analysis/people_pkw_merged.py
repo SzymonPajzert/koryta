@@ -22,6 +22,10 @@ def people_pkw_merged(ctx: Context, pkw_data):  # noqa: F841
             # One built before PKW's backing column was read: nobody backed,
             # and nobody said what party they belong to.
             pkw_data = pkw_data.assign(**{statement: None})
+    if "election_date" not in pkw_data.columns:
+        # One built before the elections held during a term were read: every
+        # candidacy is a general election's.
+        pkw_data = pkw_data.assign(election_date=None)
 
     con.execute(
         """
@@ -62,6 +66,9 @@ def people_pkw_merged(ctx: Context, pkw_data):  # noqa: F841
         -- `scrapers.pkw.affiliations` reads parties off both.
         CAST(party_member AS VARCHAR) AS party_member,
         CAST(supported_by AS VARCHAR) AS supported_by,
+        -- The day of an election held during a term, which is a contest of its
+        -- own beside the general election of its year; NULL for the latter.
+        CAST(election_date AS VARCHAR) AS election_date,
     FROM pkw_data
     WHERE first_name IS NOT NULL AND last_name IS NOT NULL
     """
@@ -90,6 +97,7 @@ def people_pkw_merged(ctx: Context, pkw_data):  # noqa: F841
             "office": "office",
             "party_member": "party_member",
             "supported_by": "supported_by",
+            "election_date": "election_date",
         },
     )
 
@@ -216,6 +224,7 @@ def split_records_by_place(con):
         e,
         e.election_year AS election_year,
         e.election_type AS election_type,
+        e.election_date AS election_date,
         CASE
             WHEN teryt LIKE '__00' THEN teryt[:2]
             ELSE nullif(teryt, '')
@@ -232,6 +241,9 @@ def split_records_by_place(con):
         ON a.person_row = b.person_row
         AND a.election_year = b.election_year
         AND a.election_type = b.election_type
+        -- An election held during a term is its own contest: a mayor elected
+        -- early in one gmina may have stood for a council elsewhere that April.
+        AND a.election_date IS NOT DISTINCT FROM b.election_date
     WHERE a.teryt IS NOT NULL
         AND b.teryt IS NOT NULL
         AND NOT starts_with(a.teryt, b.teryt)

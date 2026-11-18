@@ -1854,6 +1854,9 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes, within_budget):
             edge["source"],
             str(edge.get("start_date"))[:4],
             election_stood_in(edge),
+            # An election held during a term (`by_election`) is a contest of
+            # its own beside the general one of its year, told by its day.
+            str(edge.get("start_date")) if edge.get("by_election") else None,
         )
         regions[key].add(teryt)
 

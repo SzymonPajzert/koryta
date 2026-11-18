@@ -37,6 +37,11 @@ export type Candidacy = {
   /** The office, as stored. Absent and empty are two different groups, as
    * they are in the check: absent is a candidacy from before the field. */
   position?: string | null;
+  /** Whether it was an election held during a term (`by_election`): a
+   * contest of its own beside the general election of its year, told apart
+   * by its day. A mayor elected early in one gmina may have stood for a
+   * council elsewhere that April. */
+  byElection?: boolean | null;
 };
 
 /** One election in which a person's candidacies stand in places that cannot
@@ -91,7 +96,8 @@ export function placeClashes<T>(
     const year = candidacy.startDate?.slice(0, 4);
     if (!teryt || !year) continue;
     const position = candidacy.position ?? null;
-    const key = JSON.stringify([candidacy.personId, year, position]);
+    const held = candidacy.byElection ? candidacy.startDate : null;
+    const key = JSON.stringify([candidacy.personId, year, position, held]);
     let election = elections.get(key);
     if (!election) {
       election = { personId: candidacy.personId, year, position, members: [] };

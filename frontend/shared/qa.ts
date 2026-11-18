@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "kandydatury-z-wyborow-w-trakcie-kadencji",
+    title: "Kandydatury z wyborów w trakcie kadencji",
+    description:
+      "Wybory przedterminowe, ponowne i pierwsze w nowej gminie na wójta, burmistrza i prezydenta od kwietnia 2024 trafiają na strony osób, z dniem głosowania.",
+    steps: [
+      "Zaloguj się i otwórz stronę Ewy Weber. W historii ma być kandydatura na prezydenta Zabrza z 10 sierpnia 2025, bez mandatu.",
+    ],
+    link: "/osoba/9wnKCLj0EmZ1k8DxjqMc",
+    area: "contributor",
+  },
+  {
     id: "aktywnosc-zmiany-na-stronie",
     title: "Aktywność mówi też, co zmieniło się na stronie",
     description:

@@ -319,6 +319,7 @@ function candidacyOf(relation: NodeRelation): Candidacy | undefined {
     regionId: relation.otherId,
     startDate: relation.startDate,
     position: relation.position,
+    byElection: relation.byElection,
   };
 }
 

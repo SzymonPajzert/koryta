@@ -443,6 +443,10 @@ CSV_HEADERS: dict[str, SetField | None] = {
     # every column that row leaves blank - hence the name.
     "Urząd Mandat": SetField("position"),
     "Urząd": SetField("position"),
+    # The two columns `term_elections.candidate_rows` adds for an election held
+    # during a term: its day, and its year, which is not the source's.
+    "Data głosowania": SetField("election_date"),
+    "Rok głosowania": SetField("election_year"),
     "Wazne w okr.": None,
     "Ważne": None,
     "Wiek Mandat": SetField("age"),

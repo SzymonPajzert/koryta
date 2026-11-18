@@ -485,3 +485,57 @@ def test_the_payload_reads_the_statements_off_the_candidacy():
     # The committee stays what it was: no party of its own.
     assert election.party is None
     assert election.party_from_committee is False
+
+
+def test_an_election_held_during_a_term_is_no_second_place():
+    """A council in April and an early mayoral election elsewhere that autumn
+    are two contests, so both name their party."""
+    early = placed(PIS, "2024", "2461", kind="Wójt")
+    early.by_election, early.election_date = True, "2024-10-27"
+
+    assert in_two_places([placed(PSL, "2024", "1016"), early]) == set()
+    assert parties_from_candidacies([placed(PSL, "2024", "1016"), early]) == [
+        "PSL",
+        "PiS",
+    ]
+
+
+def test_two_places_in_one_election_held_during_a_term_still_clash():
+    one = placed(PIS, "2025", "2478", kind="Prezydent")
+    other = placed(PSL, "2025", "1016", kind="Prezydent")
+    for each in (one, other):
+        each.by_election, each.election_date = True, "2025-08-10"
+
+    assert in_two_places([one, other]) == {0, 1}
+
+
+def test_the_payload_dates_an_election_held_during_a_term_to_its_day():
+    row = pd.Series(
+        {
+            "elections": [
+                {
+                    "party": "KOMITET WYBORCZY WYBORCÓW EWA WEBER",
+                    "election_year": "2025",
+                    "election_type": "samorządu",
+                    "teryt_candidacy_powiat": "2478",
+                    "candidacy_success": "FALSE",
+                    "office": "Prezydent",
+                    "election_date": "2025-08-10",
+                },
+                {
+                    "party": KWW,
+                    "election_year": "2024",
+                    "election_type": "samorządu",
+                    "teryt_candidacy_powiat": "2478",
+                    "candidacy_success": "FALSE",
+                    "office": "Rada miasta",
+                    "election_date": None,
+                },
+            ]
+        }
+    )
+
+    early, general = _extract_elections(row)
+    assert (early.by_election, early.election_date) == (True, "2025-08-10")
+    assert early.election_year == "2025"
+    assert (general.by_election, general.election_date) == (None, None)

@@ -66,6 +66,8 @@ export type RelationHistory = {
   endDate: string | null;
   /** A candidacy's office. */
   position: string | null;
+  /** Whether the candidacy was in an election held during a term. */
+  byElection: boolean;
   committee: string | null;
   elected: boolean;
   published: boolean;
@@ -201,6 +203,7 @@ export default defineEventHandler(
         startDate: text(edge.start_date),
         endDate: text(edge.end_date),
         position: text(edge.position),
+        byElection: edge.by_election === true,
         committee: text(edge.committee),
         elected: edge.elected === true,
         published,
