@@ -28,7 +28,8 @@ import {
 } from "~~/server/utils/edges";
 import { approveWaitingEdge } from "~~/server/utils/edgePublication";
 import { resolveMergedNode } from "~~/server/utils/merge";
-import { electionPositions, sortParties } from "~~/shared/misc";
+import { electionPositions } from "~~/shared/misc";
+import { partiesAfterImport } from "~~/shared/partyFloor";
 import type {
   Edge,
   Article,
@@ -330,11 +331,13 @@ function updatedPerson(
     const storedParties = Array.isArray(stored.parties)
       ? (stored.parties as string[])
       : [];
-    // By name with „Inne” last, the order the pipeline sends them in.
-    const parties = sortParties(
-      new Set([...storedParties, ...(body.parties ?? [])]),
-    );
-    if (parties.length > storedParties.length) learned.parties = parties;
+    // By name with „Inne” last, the order the pipeline sends them in. A lone
+    // „Inne” gives way to a party the payload names (`partiesAfterImport`).
+    const parties = partiesAfterImport(storedParties, body.parties ?? []);
+    const same =
+      parties.length === storedParties.length &&
+      parties.every((party) => storedParties.includes(party));
+    if (!same) learned.parties = parties;
   }
 
   if (body.content) learned.content = body.content;
