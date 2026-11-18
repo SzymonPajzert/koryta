@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Firestore } from "firebase-admin/firestore";
-import { importedOrReviewed } from "../../../server/utils/provenance";
+import {
+  importedOrReviewed,
+  writtenByImportOrReviewed,
+} from "../../../server/utils/provenance";
 
 /** Revisions by the document they are about, oldest first. */
 let revisions: Record<string, Record<string, unknown>[]> = {};
@@ -89,5 +92,22 @@ describe("importedOrReviewed", () => {
     revisions = { a: [{ update_automatic: true }] };
     await importedOrReviewed(db, [{ id: "a" }, { id: "a" }, {}]);
     expect(asked).toEqual(["a"]);
+  });
+});
+
+describe("writtenByImportOrReviewed", () => {
+  it("asks of a first revision in hand what the query asks of the stored one", () => {
+    // computeNodes holds every revision, and must reach the teaser's answer.
+    expect(writtenByImportOrReviewed({ revision_id: "r1" }, undefined)).toBe(
+      true,
+    );
+    expect(writtenByImportOrReviewed({}, { update_automatic: true })).toBe(
+      true,
+    );
+    expect(writtenByImportOrReviewed({}, { update_automatic: false })).toBe(
+      false,
+    );
+    // No history at all is older than the question can be answered for.
+    expect(writtenByImportOrReviewed({}, undefined)).toBe(false);
   });
 });

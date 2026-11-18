@@ -37,6 +37,7 @@ let searched: {
   type: string;
   published?: boolean;
   query?: Record<string, string>;
+  line?: Record<string, unknown>;
 }[] = [];
 /** What the box asked the server, in order. */
 let asked: string[] = [];
@@ -384,6 +385,58 @@ describe("OmniSearch", () => {
       row("Anna Nowak")?.querySelector(".v-list-item-subtitle"),
     ).toBeNull();
     expect(row("Anna Nowakowska")).toBeDefined();
+
+    wrapper.unmount();
+  });
+
+  it("draws who each person is under their name: the town, the party, the post", async () => {
+    // Two Robert Wójciks used to read the same, and a reader walking Mielec's
+    // council opened the wrong one. Under every person the server sends a
+    // line for, namesake or not (board round search-same-name-r2).
+    searched = [
+      {
+        id: "radny",
+        name: "Robert Wójcik",
+        type: "person",
+        published: true,
+        line: {
+          where: "Mielec",
+          parties: ["PiS"],
+          what: "Rada miasta",
+          when: "2024",
+        },
+      },
+      {
+        id: "tauron",
+        name: "Robert Wójcik",
+        type: "person",
+        published: false,
+        line: { where: "Jelenia Góra", what: "„WODNIK”", when: "do 2025" },
+      },
+      { id: "nikt", name: "Robert Wójtowicz", type: "person" },
+    ];
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "robert wó");
+
+    const lines = rows()
+      .filter((el) =>
+        el
+          .querySelector(".v-list-item-title")
+          ?.textContent.trim()
+          .startsWith("Robert"),
+      )
+      .map(
+        (el) =>
+          el
+            .querySelector('[data-testid="omni-search-person-line"]')
+            ?.textContent.trim() ?? null,
+      );
+    expect(lines).toEqual([
+      "Mielec · PiS · Rada miasta 2024",
+      "Jelenia Góra · „WODNIK” do 2025",
+      null,
+    ]);
 
     wrapper.unmount();
   });

@@ -9,6 +9,7 @@ import type {
   Region,
   Node,
   Revision,
+  StoredSearchLines,
 } from "~~/shared/model";
 import {
   computeRevisionsObj,
@@ -26,6 +27,12 @@ import {
   writeRegionStats,
   type RegionStat,
 } from "~~/server/utils/regionStats";
+import { writtenByImportOrReviewed } from "~~/server/utils/provenance";
+import {
+  storedSearchLines,
+  type LineTarget,
+  type LineTargets,
+} from "~~/shared/searchLine";
 
 function calculateTransitiveTargets(
   nodeEdges: Edge[],
@@ -64,6 +71,10 @@ function buildNodeUpdateData(
   unpaidSeatPlaceIds: ReadonlySet<string>,
   nodeFactsCount: number,
   nodeFactTypes: ReadonlySet<string>,
+  searchLines: (
+    node: { id: string; data: Node },
+    edges: Edge[],
+  ) => StoredSearchLines,
 ) {
   const transitiveTargets = calculateTransitiveTargets(
     nodeEdges,
@@ -91,6 +102,10 @@ function buildNodeUpdateData(
       publicPlaceIds,
       nodeFactTypes,
     );
+    // Left off a person with no line in any scope: `stats` is written whole,
+    // so an earlier line goes with it.
+    const lines = searchLines(node, nodeEdges);
+    if (Object.keys(lines).length > 0) stats.searchLine = lines;
   }
   if (node.data.type === "region") {
     stats.people = targetCounts[node.id]?.size || 0;
@@ -149,7 +164,10 @@ export default defineEventHandler(async (event) => {
     id: doc.id,
     data: doc.data() as Node,
   }));
-  const edges = edgesSnap.docs.map((doc) => doc.data() as Edge);
+  // With their ids, which the search line reads a post's first revision by.
+  const edges = edgesSnap.docs.map(
+    (doc) => ({ ...doc.data(), id: doc.id }) as Edge,
+  );
   const notes = notesSnap.docs.map((doc) => doc.data() as Note);
   const votes = votesSnap.docs.map((doc) => doc.data() as VoteDocument);
   const revisions = revisionsSnap.docs.map((doc) => ({
@@ -288,6 +306,55 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // What the search line reads of a company besides its name: the region its
+  // `seat` edge comes from and the regions that own it, for a town where the
+  // name carries none (shared/searchLine.ts). The same live edges as above,
+  // kept apart by kind.
+  const seatOf: Record<string, string> = {};
+  const ownersOf: Record<string, string[]> = {};
+  for (const edge of edges) {
+    if (edge.deleted === true || !edge.source || !edge.target) continue;
+    if (nodesRecord[edge.source]?.type !== "region") continue;
+    if (edge.type === "seat") seatOf[edge.target] ??= edge.source;
+    else if (edge.type === "owns")
+      (ownersOf[edge.target] ??= []).push(edge.source);
+  }
+  const lineTargets: LineTargets = {
+    get: (id) => {
+      const node = nodesRecord[id];
+      if (!node) return undefined;
+      if (node.type !== "place") return node as LineTarget;
+      return {
+        ...(node as LineTarget),
+        seat: seatOf[id],
+        owners: ownersOf[id] ?? [],
+      };
+    },
+  };
+
+  // The first revision of every document, which is what says whether an
+  // import wrote it - the rule the teaser route reads it by, one query per
+  // document, kept here in one pass (server/utils/provenance.ts).
+  const firstRevisions: Record<string, { at: string; data: Revision }> = {};
+  for (const rev of revisions) {
+    const id = rev.data.node_id;
+    const at = normalizeUpdateTime(rev.data.update_time);
+    if (!id || at === null) continue;
+    const first = firstRevisions[id];
+    if (!first || at < first.at) firstRevisions[id] = { at, data: rev.data };
+  }
+  const shownOnTeaser = (doc: { id: string; revision_id?: unknown }) =>
+    writtenByImportOrReviewed(doc, firstRevisions[doc.id]?.data);
+  const now = Date.now();
+  const searchLines = (node: { id: string; data: Node }, nodeEdges: Edge[]) =>
+    storedSearchLines(
+      { id: node.id, revision_id: node.data.revision_id },
+      nodeEdges.filter((edge): edge is Edge & { id: string } => !!edge.id),
+      lineTargets,
+      shownOnTeaser,
+      now,
+    );
+
   const resolveParents = (
     target: string,
     visited = new Set<string>(),
@@ -360,6 +427,7 @@ export default defineEventHandler(async (event) => {
       unpaidSeatPlaceIds,
       factsByNode[node.id] ?? 0,
       factTypesByNode[node.id] ?? noFactTypes,
+      searchLines,
     );
 
     if (node.data.type === "region") {
