@@ -188,6 +188,45 @@ describe("CardEmploymentHistory", () => {
     expect(clashOf("e1")).toBeUndefined();
   });
 
+  it("hands one election's runs their clash whatever their offices, and no by-election", async () => {
+    // As the publication's hold groups them: a gmina council run and a
+    // sejmik run of 2024 are one local election, a by-election is not.
+    const run = (
+      id: string,
+      teryt: string,
+      position: EdgeNode["position"],
+      byElection = false,
+    ) =>
+      edge({
+        id,
+        type: "election",
+        label: "kandydatura",
+        source: "osoba",
+        target: `teryt${teryt}`,
+        start_date: "2024-04-07",
+        position,
+        by_election: byElection,
+        richNode: { id: `teryt${teryt}`, type: "region", name: teryt },
+      });
+    const wrapper = await render([
+      run("gmina", "1414", "Rada gminy"),
+      run("sejmik", "24", "Sejmik"),
+      run("uzupelniajace", "0201", "Rada gminy", true),
+    ]);
+
+    const clashOf = (id: string) =>
+      wrapper
+        .findAllComponents({ name: "ChipPlaceClash" })
+        .find((chip) => (chip.props("edge") as EdgeNode).id === id)
+        ?.props("clash") as { election: string; rows: EdgeNode[] } | undefined;
+    expect(clashOf("gmina")?.election).toBe("local-2024");
+    expect(clashOf("sejmik")?.rows.map((row) => row.id)).toEqual([
+      "gmina",
+      "sejmik",
+    ]);
+    expect(clashOf("uzupelniajace")).toBeUndefined();
+  });
+
   it("asks the page to remove the row an admin clicked", async () => {
     const wrapper = await mountSuspended(EmploymentHistory, {
       props: { edges: [edge({})], canRemove: true },

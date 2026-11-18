@@ -63,7 +63,6 @@ import {
   type PublicationStatus,
   type SweepResult,
 } from "~~/shared/declarations";
-import { candidacyElection } from "~~/shared/electionDays";
 import { registerEntry } from "~~/shared/identifiers";
 import { CONTENT_CHANGED_AT } from "~~/shared/lastmod";
 import type { Edge, Note, NoteSource, Revision } from "~~/shared/model";
@@ -1649,26 +1648,19 @@ function writtenByPerson(revision: Revision): boolean {
 
 /** The ids of the candidacies among `rows` that put the person in two places
  * in one election - grouped by the election, the way the night counts them,
- * so a European run beside a local one in 2024 is two contests. */
-function clashingCandidacies(
+ * so a European run beside a local one in 2024 is two contests. Grouped by
+ * `placeClashes`, as the publish dialog and the person page group them. */
+export function clashingCandidacies(
   pageId: string,
   rows: readonly StoredEdge[],
 ): Set<string> {
-  const clashes = placeClashes(rows, ({ data }) => {
-    const election = candidacyElection(
-      data.start_date,
-      data.position,
-      data.by_election,
-    );
-    return election
-      ? {
-          personId: pageId,
-          regionId: data.target,
-          startDate: data.start_date,
-          position: election,
-        }
-      : undefined;
-  });
+  const clashes = placeClashes(rows, ({ data }) => ({
+    personId: pageId,
+    regionId: data.target,
+    startDate: data.start_date,
+    position: data.position,
+    byElection: data.by_election,
+  }));
   return new Set(clashes.flatMap((clash) => clash.rows.map((row) => row.id)));
 }
 

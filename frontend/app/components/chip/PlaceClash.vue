@@ -31,6 +31,7 @@
 import { computed } from "vue";
 import { useAuthState } from "~/composables/auth";
 import type { EdgeNode } from "~/composables/edges";
+import { electionName } from "~~/shared/electionDays";
 import { placesAgree, regionTeryt, type PlaceClash } from "~~/shared/twoPlaces";
 
 const props = defineProps<{
@@ -44,10 +45,9 @@ const { user } = useAuthState();
 
 const visible = computed(() => !!user.value && !!props.clash);
 
+/** „Samorządowe 2024”, whatever office each of its runs was for. */
 const election = computed(() =>
-  props.clash?.position
-    ? `${props.clash.year}, ${props.clash.position}`
-    : (props.clash?.year ?? ""),
+  props.clash ? (electionName(props.clash.election) ?? props.clash.year) : "",
 );
 
 /** The other places, each once - not the rows that agree with this one, which

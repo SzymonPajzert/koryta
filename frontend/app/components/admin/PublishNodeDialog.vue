@@ -60,7 +60,7 @@
           >
             <div class="place-clash__head">
               <v-icon :icon="mdiAlertOutline" size="small" />
-              <span>Wybory {{ electionLabel(clash) }} - dwa miejsca naraz</span>
+              <span>{{ electionLabel(clash) }} - dwa miejsca naraz</span>
               <v-icon
                 :icon="mdiInformationOutline"
                 size="x-small"
@@ -186,8 +186,9 @@
             :key="clashKey(clash)"
             class="d-block"
           >
-            Po publikacji strona pokaże tę osobę w dwóch miejscach w wyborach
-            {{ electionLabel(clash) }}: {{ placeNames(clash) }}.
+            Po publikacji strona pokaże tę osobę w dwóch miejscach naraz ({{
+              electionLabel(clash)
+            }}): {{ placeNames(clash) }}.
           </span>
           Odznacz kandydaturę, która do niej nie należy.
         </v-alert>
@@ -242,6 +243,7 @@ import {
 } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
+import { electionName } from "~~/shared/electionDays";
 import {
   latestPublishableRevision,
   normalizeUpdateTime,
@@ -319,6 +321,7 @@ function candidacyOf(relation: NodeRelation): Candidacy | undefined {
     regionId: relation.otherId,
     startDate: relation.startDate,
     position: relation.position,
+    byElection: relation.byElection,
   };
 }
 
@@ -411,11 +414,13 @@ function relationLabel(relation: NodeRelation): string {
 }
 
 function clashKey(clash: PlaceClash<NodeRelation>): string {
-  return `${clash.year}-${clash.position ?? ""}`;
+  return clash.election;
 }
 
+/** „Samorządowe 2024”: the election, whatever office each of its runs was
+ * for. */
 function electionLabel(clash: PlaceClash<NodeRelation>): string {
-  return clash.position ? `${clash.year} · ${clash.position}` : clash.year;
+  return electionName(clash.election) ?? clash.year;
 }
 
 /** The years, besides the clash's own, in which the person stood in this

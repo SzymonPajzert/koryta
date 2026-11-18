@@ -73,6 +73,7 @@ const relation = (
   startDate: null,
   endDate: null,
   position: null,
+  byElection: false,
   committee: null,
   elected: false,
   published: true,

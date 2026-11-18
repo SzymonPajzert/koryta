@@ -66,6 +66,9 @@ export type RelationHistory = {
   endDate: string | null;
   /** A candidacy's office. */
   position: string | null;
+  /** Whether a candidacy was in a by-election, a contest of its own that the
+   * two-places warning leaves out. */
+  byElection: boolean;
   committee: string | null;
   elected: boolean;
   published: boolean;
@@ -201,6 +204,7 @@ export default defineEventHandler(
         startDate: text(edge.start_date),
         endDate: text(edge.end_date),
         position: text(edge.position),
+        byElection: edge.by_election === true,
         committee: text(edge.committee),
         elected: edge.elected === true,
         published,
