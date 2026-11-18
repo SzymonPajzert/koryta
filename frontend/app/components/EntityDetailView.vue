@@ -128,6 +128,19 @@
           @published="refreshNode()"
           @voted="emit('voted')"
         />
+        <!-- Above the history the reader came for, the one ask on the page,
+             to a reader who is not signed in: under it, few readers ever
+             reached it (decided 2026-11-17). Straight under the header, not
+             inside the relations below, so it takes only the header's own
+             space above it (decided 2026-11-18). A signed-in contributor knows
+             the way to /oswiadczenia and has the app bar's „Działaj z nami”.
+             Mounted once Firebase has said nobody is signed in, not before:
+             mounting is what joins the half-and-half split
+             (PERSON_ASK_EXPERIMENT), and an account restored a moment later
+             must not be counted in it. -->
+        <PersonReadingAsk
+          v-if="entity?.type === 'person' && authReady && !user"
+        />
 
         <div class="mt-4">
           <!-- A place is served by `place/DetailView.vue` and never reaches
@@ -163,15 +176,6 @@
             />
           </template>
           <template v-if="entity?.type === 'person'">
-            <!-- Above the history the reader came for, the one ask on the
-                 page, to a reader who is not signed in: under it, few readers
-                 ever reached it (decided 2026-11-17). A signed-in contributor
-                 knows the way to /oswiadczenia and has the app bar's „Działaj
-                 z nami”. Mounted once Firebase has said nobody is signed in,
-                 not before: mounting is what joins the half-and-half split
-                 (PERSON_ASK_EXPERIMENT), and an account restored a moment
-                 later must not be counted in it. -->
-            <PersonReadingAsk v-if="authReady && !user" class="mb-6" />
             <CardEmploymentHistory
               :edges="edges"
               :can-add="canAddRelations"
