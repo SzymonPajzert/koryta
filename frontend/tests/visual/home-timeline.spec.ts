@@ -34,16 +34,20 @@ test("home-timeline-tooltip", { tag: pageTag("index") }, async ({ page }) => {
 
   // The newest month is the plot's right edge. Half a pixel in: on a phone a
   // month is under 2px wide, and a whole pixel in reached the month before.
-  const plot = await card
+  // Moved there again until the tooltip names the month: the chart can miss a
+  // move, and only another move tries again. Each try starts 4px to the left,
+  // so it is a move and not the same point twice.
+  const plotArea = card
     .locator(".apexcharts-gridlines-horizontal, .apexcharts-grid")
-    .first()
-    .boundingBox();
-  await page.mouse.move(
-    plot!.x + plot!.width - 0.5,
-    plot!.y + plot!.height / 2,
-  );
-  await expect(card.locator(".apexcharts-tooltip-title")).toHaveText(
-    "Listopad 2026",
-  );
+    .first();
+  const title = card.locator(".apexcharts-tooltip-title");
+  await expect(async () => {
+    const plot = (await plotArea.boundingBox())!;
+    const edge = plot.x + plot.width - 0.5;
+    const middle = plot.y + plot.height / 2;
+    await page.mouse.move(edge - 4, middle);
+    await page.mouse.move(edge, middle);
+    await expect(title).toHaveText("Listopad 2026", { timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
   await expect(card).toHaveScreenshot("home-timeline-tooltip.png");
 });
