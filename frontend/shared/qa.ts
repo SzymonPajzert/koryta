@@ -62,11 +62,10 @@ export const QA_ITEMS: QaItem[] = [
     id: "aktywnosc-zmiany-na-stronie",
     title: "Aktywność mówi też, co zmieniło się na stronie",
     description:
-      "Wpisy z tej listy pojawiają się na /aktywnosc pod dniem, w którym zmiana weszła na koryta.pl, obok tego, co zrobili inni. " +
-      "Z każdej można przejść do strony, której dotyczy, i do jej wpisu tutaj.",
+      "Każda nowa wersja koryta.pl jest na /aktywnosc pod dniem, w którym weszła, z tytułami jej wpisów z /qa.",
     steps: [
-      "Otwórz /aktywnosc - pod dniem ostatniej wersji strony ma być zielona linijka „Nowa wersja strony” z tytułami wpisów z /qa. Kliknij tytuł - ma pokazać opis i dwa linki.",
-      "Kliknij „Zmiany na stronie” wśród filtrów nad listą - mają zostać same zmiany, po dniach.",
+      "Otwórz /aktywnosc. Pod dniem ostatniej wersji ma być linijka „Nowa wersja strony” z tytułami wpisów z /qa. Kliknij tytuł: ma pokazać opis i dwa linki.",
+      "Kliknij filtr „koryta.pl” nad listą. Mają zostać same nowe wersje strony, po dniach.",
     ],
     link: "/aktywnosc",
     area: "contributor",

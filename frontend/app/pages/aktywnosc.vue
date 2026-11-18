@@ -4,8 +4,7 @@
       <h1 class="text-h4 mb-1">Aktywność</h1>
       <p class="text-body-2 text-medium-emphasis mb-0">
         Co ostatnio zrobili inni: oceny, notatki, propozycje zmian i decyzje
-        administratorów - i co zmieniło się na samej stronie. Nowe wpisy
-        pojawiają się po kilku minutach.
+        administratorów. Nowe wpisy pojawiają się po kilku minutach.
       </p>
     </div>
 
@@ -33,13 +32,15 @@
         >
           {{ feedKindGroupLabels[group] }}
         </v-chip>
+        <!-- Named after who did it, like „Automat”: short enough that the
+             kinds stay one row on a computer. -->
         <v-chip
           :value="SITE_CHANGES"
           variant="outlined"
           class="activity__kind"
           data-testid="activity-site-changes-filter"
         >
-          Zmiany na stronie
+          koryta.pl
         </v-chip>
       </v-chip-group>
 
