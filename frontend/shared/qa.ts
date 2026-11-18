@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "partia-imiennika-w-oknie-publikacji",
+    title: "Okno publikacji pokazuje partię kandydatury w dwóch miejscach",
+    description:
+      "Przy kandydaturach w dwóch miejscach naraz okno publikacji podaje partię każdej z nich i ostrzega, gdy partię na stronie daje tylko niezaznaczona kandydatura. Publikacja pokazałaby ją na stronie.",
+    steps: [
+      "Na /admin/oswiadczenia rozwiń osobę wstrzymaną za „kandydatura w dwóch miejscach naraz” i kliknij „Opublikuj ręcznie”.",
+      "W bloku „dwa miejsca naraz” każda kandydatura ma partię. Pod blokiem może być „Partia ... pochodzi tylko z niezaznaczonej kandydatury” z linkiem do edycji strony.",
+      "Zaznacz tę kandydaturę: ostrzeżenie znika. Zamknij okno bez publikacji.",
+    ],
+    link: "/admin/oswiadczenia",
+    area: "admin",
+  },
+  {
     id: "wstrzymane-publikacje-decyzje",
     title:
       "Wstrzymane publikacje: opublikuj ręcznie, sprawdź ponownie albo odłóż",
@@ -66,7 +79,7 @@ export const QA_ITEMS: QaItem[] = [
       "Sekcja „Wstrzymane publikacje” na /admin/oswiadczenia pokazuje wszystkie wstrzymane osoby, nie 20 najnowszych, z filtrem powodu, a wiersze mają przyciski decyzji. Osoby bez płatnego stanowiska i odłożone są w nowej sekcji „Nie do publikacji”. Strona opublikowana ręcznie znika z listy i pokazuje oświadczenie.",
     steps: [
       "Wejdź na /admin/oswiadczenia. Przy „Wstrzymane publikacje” jest liczba wszystkich wstrzymanych i pole „Powód”. Wybierz powód: lista się zawęża.",
-      "Rozwiń wiersz z powodem „kandydatura w dwóch miejscach naraz” i kliknij „Opublikuj ręcznie”: otwiera się okno publikacji tej osoby. Zaznacz jedną kandydaturę i opublikuj. Wiersz od razu znika, a strona osoby jest publiczna i ma notkę z oświadczeniem.",
+      "Rozwiń wiersz z powodem „kandydatura w dwóch miejscach naraz” i kliknij „Opublikuj ręcznie”: otwiera się okno publikacji tej osoby. Zaznacz kandydaturę z miejsca oświadczenia. Jeśli okno ostrzega o partii, usuń ją najpierw w edycji strony. Opublikuj: wiersz od razu znika, a strona osoby jest publiczna i ma notkę z oświadczeniem.",
       "Kliknij „Sprawdź ponownie” w innym wierszu: komunikat mówi, czy strona wyszła, czy nadal jest wstrzymana i dlaczego.",
       "Kliknij „Nie publikuj”: osoba od razu przechodzi na górę sekcji „Nie do publikacji”. Kliknij tam „Przywróć”: wraca na górę wstrzymanych.",
       "Rozwiń wiersz w „Nie do publikacji” z powodem „brak płatnego stanowiska”: ma tylko „Opublikuj ręcznie”.",

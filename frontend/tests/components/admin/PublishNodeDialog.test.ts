@@ -58,6 +58,7 @@ const relation = (overrides: Partial<NodeRelation> = {}): NodeRelation => ({
   startDate: null,
   position: null,
   byElection: false,
+  parties: [],
   revisionToApprove: null,
   hasPendingRevision: false,
   publishable: true,
@@ -106,12 +107,12 @@ let revisionsResponse: {
 
 /** The two GETs the dialog makes on open answer with the list and the
  * revisions; every POST it makes afterwards succeeds. */
-function serveRelations(relations: NodeRelation[]) {
+function serveRelations(relations: NodeRelation[], nodeParties: string[] = []) {
   mockAuthRequest.mockImplementation(
     async (url: string, opts: { method?: string } = {}) => {
       if (url === "/api/revisions/byNode") return revisionsResponse;
       return opts.method === "GET"
-        ? { relations, nodePublished: false }
+        ? { relations, nodePublished: false, nodeParties }
         : { ok: true, url };
     },
   );
@@ -710,6 +711,71 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
       block.querySelector('[data-testid="publish-relation-zol"]'),
     ).toBeNull();
     expect(el("publish-relation-gniezno-2006")).not.toBeNull();
+  });
+
+  /** His page with the parties the import gave it: PO from his own runs in
+   * powiat gnieźnieński, PiS from the namesake's in powiat kozienicki. */
+  const withParties = () =>
+    kowalski().map((row) =>
+      row.type !== "election"
+        ? row
+        : { ...row, parties: row.id === "kozienice-2002" ? ["PiS"] : ["PO"] },
+    );
+
+  it("names each run's party, and the one only the unticked run gives the page", async () => {
+    serveRelations(withParties(), ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    const block = el("publish-place-clash-local-2002") as HTMLElement;
+    expect(
+      block
+        .querySelector('[data-testid="publish-relation-kozienice-2002"]')
+        ?.textContent.replace(/\s+/g, " "),
+    ).toContain("Samorząd · PiS · tu tylko w 2002");
+    // PO is also his 2006 and 2010 runs' party, which nothing doubts.
+    const warning = el("publish-clash-parties-local-2002") as HTMLElement;
+    expect(warning.textContent.replace(/\s+/g, " ")).toContain(
+      "Partia PiS pochodzi tylko z niezaznaczonej kandydatury. Jeśli to imiennik, usuń ją w edycji strony.",
+    );
+    expect(warning.querySelector("a")?.getAttribute("href")).toBe(
+      "/edit/node/jan-kowalski",
+    );
+  });
+
+  it("takes the warning back once the reviewer ticks that run", async () => {
+    serveRelations(withParties(), ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    await click(checkbox("kozienice-2002"));
+
+    expect(el("publish-clash-parties-local-2002")).toBeNull();
+  });
+
+  it("names every party of a clash nobody ticked, and leaves one no run names", async () => {
+    // Only the two 2002 runs: each party is a doubtful run's alone. Razem came
+    // from somewhere else, a press list say, and is not the dialog's to doubt.
+    serveRelations(
+      withParties().filter((row) => row.id.endsWith("2002")),
+      ["PO", "PiS", "Razem"],
+    );
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(
+      el("publish-clash-parties-local-2002")?.textContent.replace(/\s+/g, " "),
+    ).toContain(
+      "Partie PO i PiS pochodzą tylko z niezaznaczonych kandydatur. Jeśli to imiennik, usuń je w edycji strony.",
+    );
+  });
+
+  it("says nothing about parties when no run in two places gives one", async () => {
+    serveRelations(kowalski(), ["PO"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(el("publish-clash-parties-local-2002")).toBeNull();
   });
 
   it("leaves both sides out of „Zaznacz wszystkie”, so publishing everything publishes neither", async () => {

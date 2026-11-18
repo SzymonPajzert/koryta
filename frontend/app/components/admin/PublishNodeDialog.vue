@@ -103,11 +103,27 @@
                   <template v-if="relation.position">
                     {{ relation.position }} ·
                   </template>
+                  <!-- Its party, which the import has put on the page: the
+                       one thing a namesake's run makes the page say. -->
+                  <template v-if="relation.parties.length">
+                    {{ relation.parties.join(", ") }} ·
+                  </template>
                   {{ placeHint(clash, relation.otherId) }}
                   <span v-if="relation.published"> · już opublikowana</span>
                 </v-list-item-subtitle>
               </v-list-item>
             </v-list>
+            <p
+              v-if="clashParties(clash).length > 0"
+              class="place-clash__parties text-body-2"
+              :data-testid="`publish-clash-parties-${clashKey(clash)}`"
+            >
+              {{ partiesWarning(clashParties(clash)) }} Jeśli to imiennik, usuń
+              {{ clashParties(clash).length === 1 ? "ją" : "je" }} w
+              <NuxtLink :to="`/edit/node/${nodeId}`" target="_blank"
+                >edycji strony</NuxtLink
+              >.
+            </p>
           </section>
 
           <div class="d-flex align-center mb-2">
@@ -254,6 +270,7 @@ import {
   normalizeUpdateTime,
 } from "~~/shared/revisions";
 import {
+  partiesOnlyFrom,
   placeClashes,
   yearsInPlace,
   type Candidacy,
@@ -288,6 +305,8 @@ const open = computed({
 });
 
 const relations = ref<NodeRelation[]>([]);
+/** The page's parties as stored, which publishing it shows. */
+const nodeParties = ref<string[]>([]);
 /** When the page has nothing approved: the date of the version publishing will
  * approve on the reviewer's behalf. Worked out here rather than passed in, so
  * that every screen offering this dialog says it - the badge on a person's own
@@ -363,6 +382,42 @@ const clashesAfterPublish = computed(() =>
     candidacyOf,
   ),
 );
+
+/** The page's parties that only clashing runs left unticked give it: what a
+ * namesake's run would make the published page say. Ticking the run takes
+ * its party off the list, as the reviewer has then vouched for it. */
+const doubtfulParties = computed(() =>
+  partiesOnlyFrom(
+    nodeParties.value,
+    relations.value,
+    (relation) => (candidacyOf(relation) ? relation.parties : undefined),
+    (relation) =>
+      clashOf.value.has(relation.id) &&
+      !relation.published &&
+      !selected.value.includes(relation.id),
+  ),
+);
+
+/** The doubtful parties a clash's own runs name. */
+function clashParties(clash: PlaceClash<NodeRelation>): string[] {
+  return doubtfulParties.value.filter((party) =>
+    clash.rows.some((relation) => relation.parties.includes(party)),
+  );
+}
+
+/** „Partia PiS pochodzi tylko z niezaznaczonej kandydatury.” */
+function partiesWarning(parties: string[]): string {
+  const runs = relations.value.filter(
+    (relation) =>
+      candidacyOf(relation) &&
+      relation.parties.some((party) => parties.includes(party)),
+  ).length;
+  const from =
+    runs === 1 ? "niezaznaczonej kandydatury" : "niezaznaczonych kandydatur";
+  return parties.length === 1
+    ? `Partia ${parties[0]} pochodzi tylko z ${from}.`
+    : `Partie ${polishList(parties)} pochodzą tylko z ${from}.`;
+}
 
 /** The rows of the main list: everything but the clashing candidacies, which
  * have blocks of their own above it. */
@@ -489,11 +544,13 @@ async function load() {
       query: { nodeId: props.nodeId },
     });
     relations.value = data.relations;
+    nodeParties.value = data.nodeParties;
   } catch (error) {
     // Not fatal: publishing the page on its own is still the thing the admin
     // came here to do, so the dialog degrades to that rather than closing.
     console.error("Failed to load relations", error);
     relations.value = [];
+    nodeParties.value = [];
     loadError.value = true;
   } finally {
     pending.value = false;
@@ -609,5 +666,19 @@ function errorMessage(error: unknown): string {
 
 .place-clash :deep(.v-list) {
   padding-left: 4px !important;
+}
+
+/* Office, party and the place hint: on a phone the hint, which tells the
+   person's run from the namesake's, would go under the ellipsis. */
+.place-clash :deep(.v-list-item-subtitle) {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.place-clash__parties {
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  color: rgb(var(--v-theme-ink-warning));
+  margin: 0;
+  padding: 8px 12px 8px 20px;
 }
 </style>

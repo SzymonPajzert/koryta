@@ -47,7 +47,11 @@ async function openDialog(page: Page) {
   );
   await page.route("**/api/edges/byNode**", (route) =>
     route.fulfill({
-      json: { relations: twoPlacesRelations, nodePublished: false },
+      json: {
+        relations: twoPlacesRelations,
+        nodePublished: false,
+        nodeParties: [],
+      },
     }),
   );
   await logIn(page, USERS.admin, `/admin/rewizje/${CLASH_PERSON}`);

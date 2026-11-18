@@ -967,7 +967,11 @@ describe("/admin/oswiadczenia", () => {
     beforeEach(() => {
       current = holds;
       // What the publish dialog reads when it opens: nothing to tick.
-      answer("/api/edges/byNode", { relations: [], nodePublished: false });
+      answer("/api/edges/byNode", {
+        relations: [],
+        nodePublished: false,
+        nodeParties: [],
+      });
       answer("/api/revisions/byNode", {
         revisions: [],
         approvedRevisionId: null,

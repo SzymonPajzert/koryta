@@ -158,3 +158,25 @@ export function yearsInPlace<T>(
   }
   return Array.from(years).sort();
 }
+
+/** The page's parties that only doubtful candidacies give it, in the page's
+ * order: those every candidacy naming the party is doubtful about.
+ *
+ * The import adds every candidacy's party to the page's, a namesake's run in
+ * the other place of a clash included, and publishing the page shows them all
+ * whatever relations go with it. A party no candidacy names came from
+ * elsewhere (a press list, a reviewer) and is left alone, as is one a run not
+ * in doubt names too. `partiesOf` answers undefined for a row that is not a
+ * candidacy; `doubtful` is the caller's: the publish dialog's are the runs of
+ * a clash left unticked. */
+export function partiesOnlyFrom<T>(
+  pageParties: readonly string[],
+  rows: readonly T[],
+  partiesOf: (row: T) => readonly string[] | undefined,
+  doubtful: (row: T) => boolean,
+): string[] {
+  return [...new Set(pageParties)].filter((party) => {
+    const givers = rows.filter((row) => partiesOf(row)?.includes(party));
+    return givers.length > 0 && givers.every(doubtful);
+  });
+}

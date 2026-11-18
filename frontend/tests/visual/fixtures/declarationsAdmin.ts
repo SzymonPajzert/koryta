@@ -437,6 +437,7 @@ export function heldRelations(personId: string): NodeRelations {
     otherId: string,
     otherName: string,
     startDate: string,
+    party: string,
   ) => ({
     ...relation,
     id,
@@ -446,26 +447,33 @@ export function heldRelations(personId: string): NodeRelations {
     otherName,
     startDate,
     position: "Rada powiatu",
+    parties: [party],
   });
   return {
+    // The import's union: PO from the person's own runs, PiS from the
+    // namesake's in the other place.
+    nodeParties: ["PO", "PiS"],
     relations: [
       candidacy(
         `${personId}-run1`,
         "teryt1465",
         "Powiat grójecki",
         "2024-04-07",
+        "PO",
       ),
       candidacy(
         `${personId}-run2`,
         "teryt0217",
         "Powiat strzeliński",
         "2024-04-07",
+        "PiS",
       ),
       candidacy(
         `${personId}-run3`,
         "teryt1465",
         "Powiat grójecki",
         "2018-10-21",
+        "PO",
       ),
       {
         ...relation,
@@ -476,6 +484,7 @@ export function heldRelations(personId: string): NodeRelations {
         otherName: "Przedsiębiorstwo Wodociągów Przykładowych sp. z o.o.",
         startDate: "2021-03-01",
         position: null,
+        parties: [],
       },
     ],
   } as NodeRelations;

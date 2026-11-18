@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  partiesOnlyFrom,
   placeClashes,
   placesAgree,
   regionTeryt,
@@ -332,5 +333,47 @@ describe("the hold and the publish dialog", () => {
 
     expect(held).toEqual(["gmina-2024", "sejmik-2024"]);
     expect(marked).toEqual(held);
+  });
+});
+
+describe("partiesOnlyFrom", () => {
+  type Row = { id: string; parties?: string[]; doubtful: boolean };
+  const rows: Row[] = [
+    // The run in the declaration's place, ticked.
+    { id: "own", parties: ["PO"], doubtful: false },
+    // A namesake's run in the other place of the clash, left unticked.
+    { id: "namesake", parties: ["PiS", "PSL"], doubtful: true },
+    // Another election, in the person's own place: nothing doubts it.
+    { id: "earlier", parties: ["PSL"], doubtful: false },
+    // Not a candidacy.
+    { id: "job", doubtful: true },
+  ];
+  const partiesOf = (row: Row) => row.parties;
+  const doubtful = (row: Row) => row.doubtful;
+
+  it("names a party only doubtful runs give the page", () => {
+    expect(
+      partiesOnlyFrom(["PO", "PiS", "PSL"], rows, partiesOf, doubtful),
+    ).toEqual(["PiS"]);
+  });
+
+  it("leaves a party no candidacy names, which came from elsewhere", () => {
+    expect(partiesOnlyFrom(["Razem"], rows, partiesOf, doubtful)).toEqual([]);
+  });
+
+  it("drops a party once one of its runs is no longer in doubt", () => {
+    const ticked = rows.map((row) =>
+      row.id === "namesake" ? { ...row, doubtful: false } : row,
+    );
+    expect(
+      partiesOnlyFrom(["PO", "PiS", "PSL"], ticked, partiesOf, doubtful),
+    ).toEqual([]);
+  });
+
+  it("names each party once, in the page's order", () => {
+    const both: Row[] = [{ id: "a", parties: ["PSL", "PiS"], doubtful: true }];
+    expect(
+      partiesOnlyFrom(["PiS", "PSL", "PiS"], both, partiesOf, doubtful),
+    ).toEqual(["PiS", "PSL"]);
   });
 });
