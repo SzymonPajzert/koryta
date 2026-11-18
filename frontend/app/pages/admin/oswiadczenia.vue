@@ -147,35 +147,11 @@
         <section id="wstrzymane" class="dsection">
           <AdminSectionHead
             title="Wstrzymane publikacje"
-            :count="
-              formatCount(
-                heldView === 'aside'
-                  ? overview.publications.setAside
-                  : overview.publications.held,
-              )
-            "
+            :count="formatCount(overview.publications.held)"
             :info="heldInfo"
           >
-            <!-- TEMP(wariant): B holds both lists in one section. -->
-            <v-btn-toggle
-              v-if="wariant === 'b'"
-              v-model="heldView"
-              mandatory
-              density="compact"
-              variant="outlined"
-              divided
-              class="dheld__view"
-              data-held-view
-            >
-              <v-btn value="waiting" size="small">
-                Do decyzji ({{ overview.publications.held }})
-              </v-btn>
-              <v-btn value="aside" size="small">
-                Nie do publikacji ({{ overview.publications.setAside }})
-              </v-btn>
-            </v-btn-toggle>
             <v-select
-              v-if="reasonOptions.length > 2 && heldView === 'waiting'"
+              v-if="reasonOptions.length > 2"
               v-model="heldReason"
               :items="reasonOptions"
               label="Powód"
@@ -215,12 +191,13 @@
           </div>
         </section>
 
-        <!-- TEMP(wariant): A gives them a section of their own. -->
-        <section v-if="wariant === 'a'" id="nie-do-publikacji" class="dsection">
+        <!-- Who will not be published, apart from the held list, so that list
+             holds only what waits for a decision. -->
+        <section id="nie-do-publikacji" class="dsection">
           <AdminSectionHead
             title="Nie do publikacji"
             :count="formatCount(overview.publications.setAside)"
-            info="Te osoby nie wyjdą i nic tu nie czeka na decyzję. Na ich stronach nie ma płatnego stanowiska w instytucji publicznej, a bez niego automat nikogo nie publikuje, albo administrator zdecydował, że ich nie publikujemy. To, czy stanowisko jest, czytamy ze strony przy każdym otwarciu: gdy się pojawi, osoba sama wraca na listę wstrzymanych."
+            info="Osoby bez płatnego stanowiska w instytucji publicznej, bez którego automat nikogo nie publikuje, i te odłożone przez administratora. Gdy na stronie pojawi się stanowisko, osoba sama wraca do wstrzymanych."
           >
             <AdminDeclarationsShowAll
               v-model="showAllAside"
@@ -243,9 +220,7 @@
                 @restore="decideHold(row, 'restore')"
               />
             </AdminRowList>
-            <p v-else class="dsection__empty">
-              Każda wstrzymana osoba ma jeszcze szansę na publikację.
-            </p>
+            <p v-else class="dsection__empty">Nikogo nie odłożono.</p>
           </div>
         </section>
 
@@ -502,17 +477,9 @@ const heldReason = computed({
   },
 });
 
-// TEMP(wariant): which of the two structures the round shows.
-const route = useRoute();
-const wariant = computed(() =>
-  route.query.wariant === "b" ? ("b" as const) : ("a" as const),
-);
-const heldView = ref<"waiting" | "aside">("waiting");
-
 const heldRows = computed(() => {
   const lists = overview.value?.lists;
   if (!lists) return [];
-  if (heldView.value === "aside") return lists.setAside;
   const reason = heldReason.value;
   return reason ? lists.held.filter((row) => row.reason === reason) : lists.held;
 });
@@ -534,7 +501,7 @@ const reasonOptions = computed(() => {
 });
 
 const heldInfo =
-  "Osoby z tą samą datą i z płatnym stanowiskiem na stronie, których stron nie opublikowano ani automatycznie, ani przyciskiem „Opublikuj z kolejki”, bo ktoś już o nich zdecydował albo coś budzi wątpliwość. Niebieskie to cudza decyzja, bursztynowe czekają na wyjaśnienie. W otwartym wierszu są trzy wyjścia. „Sprawdź ponownie” przepuszcza stronę przez wszystkie sprawdzenia publikacji automatycznej, gdy to, co ją wstrzymało, już zniknęło, i publikuje ją razem z powiązaniami. „Opublikuj ręcznie” pomija sprawdzenia: sam wybierasz powiązania, które wyjdą ze stroną. „Nie publikuj” przenosi osobę do sekcji „Nie do publikacji”, skąd można ją przywrócić. Strona opublikowana ręcznie znika z listy, skądkolwiek ją opublikowano.";
+  "Osoby z tą samą datą i płatnym stanowiskiem, których automat nie opublikował, bo ktoś już o nich zdecydował (niebieskie) albo coś budzi wątpliwość (bursztynowe). „Sprawdź ponownie” powtarza sprawdzenia automatu i publikuje stronę z powiązaniami. „Opublikuj ręcznie” je pomija: powiązania wybierasz sam. „Nie publikuj” przenosi osobę do sekcji „Nie do publikacji”. Strona opublikowana ręcznie znika z listy, skądkolwiek ją opublikowano.";
 
 /** Who will not be published is the record, not the work: a few rows, the
  * newest first, so that a „Nie publikuj” shows up here to be taken back. */
@@ -611,7 +578,7 @@ type HoldDecision = "recheck" | "decline" | "restore";
 const holdBusy = reactive(new Map<string, HoldDecision>());
 
 const holdDone: Record<Exclude<HoldDecision, "recheck">, string> = {
-  decline: "Przeniesiono do sekcji „Nie do publikacji”.",
+  decline: "Przeniesiono do „Nie do publikacji”.",
   restore: "Przywrócono do wstrzymanych.",
 };
 
@@ -679,7 +646,7 @@ async function onPublishFailed({
 }) {
   notify(
     nodePublished
-      ? "Strona wyszła, ale jej powiązania nie."
+      ? "Strona wyszła, jej powiązania nie."
       : errorText(err, "Nie udało się opublikować strony."),
     true,
   );

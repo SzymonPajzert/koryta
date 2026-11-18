@@ -164,6 +164,7 @@ const overview = (over: Partial<DeclarationOverview> = {}) =>
       queued: 9,
       published: 74,
       held: 11,
+      setAside: 4,
       today: 7,
       heldBy: [{ reason: "pending_proposal", count: 11 }],
     },
@@ -176,8 +177,10 @@ const overview = (over: Partial<DeclarationOverview> = {}) =>
           name: "Ewa Pozorna",
           status: "held",
           reason: "pending_proposal",
+          paidPost: true,
         }),
       ],
+      setAside: [],
       recent: [published({})],
     },
     runs: [
@@ -216,8 +219,15 @@ const empty = (): DeclarationOverview => ({
   },
   readers: { answers: 0, readers: 0, days: [] },
   pages: { same: 0, different: 0, noDate: 0, confirmed: 0 },
-  publications: { queued: 0, published: 0, held: 0, today: 0, heldBy: [] },
-  lists: { disputed: [], different: [], held: [], recent: [] },
+  publications: {
+    queued: 0,
+    published: 0,
+    held: 0,
+    setAside: 0,
+    today: 0,
+    heldBy: [],
+  },
+  lists: { disputed: [], different: [], held: [], setAside: [], recent: [] },
   runs: [],
 });
 
@@ -641,7 +651,7 @@ describe("/admin/oswiadczenia", () => {
     expect(snackbar(page)).toEqual({
       text:
         "Opublikowano z kolejki jedną osobę. " +
-        "Wstrzymano 2 osoby; powody są na liście „Wstrzymane publikacje”. " +
+        "Wstrzymano 2 osoby; powody są na listach „Wstrzymane publikacje” i „Nie do publikacji”. " +
         "W kolejce czeka jeszcze jedna osoba.",
       color: null,
     });
@@ -772,12 +782,18 @@ describe("/admin/oswiadczenia", () => {
         "Jedna cyfra różnicy to zwykle źle odczytany wycinek albo literówka na stronie; inny rok to częściej oświadczenie innej osoby, i wtedy wycinek się wycofuje. " +
         "Przyjęta tu data, która dalej różni się od strony, wraca na tę listę, a szkic z tą samą datą trafia do sekcji „Wstrzymane publikacje”.",
     );
-    // The press holds what the automation would; a page that is public
-    // already cannot be published by hand.
+    // The three ways out of a hold, and that a publication by hand closes it
+    // wherever it was pressed.
     expect(info("Wstrzymane publikacje")).toBe(
-      "Osoby z tą samą datą, których stron nie opublikowano ani automatycznie, ani przyciskiem „Opublikuj z kolejki”, bo ktoś już o nich zdecydował albo coś budzi wątpliwość. " +
-        "Niebieskie to cudza decyzja, bursztynowe czekają na wyjaśnienie. " +
-        "Szkic można opublikować ręcznie z jego strony. Wiersz zostaje wtedy na liście, ze stroną oznaczoną jako publiczna.",
+      "Osoby z tą samą datą i płatnym stanowiskiem, których automat nie opublikował, bo ktoś już o nich zdecydował (niebieskie) albo coś budzi wątpliwość (bursztynowe). " +
+        "„Sprawdź ponownie” powtarza sprawdzenia automatu i publikuje stronę z powiązaniami. " +
+        "„Opublikuj ręcznie” je pomija: powiązania wybierasz sam. " +
+        "„Nie publikuj” przenosi osobę do sekcji „Nie do publikacji”. " +
+        "Strona opublikowana ręcznie znika z listy, skądkolwiek ją opublikowano.",
+    );
+    expect(info("Nie do publikacji")).toBe(
+      "Osoby bez płatnego stanowiska w instytucji publicznej, bez którego automat nikogo nie publikuje, i te odłożone przez administratora. " +
+        "Gdy na stronie pojawi się stanowisko, osoba sama wraca do wstrzymanych.",
     );
     // Not every page on the list is one the automation published; the note
     // goes once the reading stops confirming the page's date.
@@ -860,14 +876,14 @@ describe("/admin/oswiadczenia", () => {
     expect(draft.classes()).toContain("arow--tone-warning");
     expect(draft.get("[data-page-public]").text()).toBe("szkic");
     expect(draft.get("[data-hold-note]").text()).toBe(
-      "Opublikuj ręcznie ze strony osoby, jeśli się zgadza.",
+      "Opublikuj ręcznie, jeśli się zgadza.",
     );
 
     const up = await held("fx0007");
     expect(up.classes()).toContain("arow--tone-info");
     expect(up.get("[data-page-public]").text()).toBe("publiczna");
     expect(up.get("[data-hold-note]").text()).toBe(
-      "Strona jest już publiczna. Oświadczenia na niej nie podpięto, bo datę ustalił administrator.",
+      "Strona jest już publiczna.",
     );
   });
 });

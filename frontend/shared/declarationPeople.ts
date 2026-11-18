@@ -421,13 +421,16 @@ function readingOf(
 }
 
 /** Where a held page waits: its publication's status, a hold's reason, or
- * `unrecorded` where nothing was recorded. */
+ * `unrecorded` where nothing was recorded. A page an admin said will not be
+ * published stays in the stage, under its own detail. */
 function heldDetail(publication: PublicationState | null): string {
   if (!publication) return "unrecorded";
   const { status } = publication;
   switch (status) {
     case "held":
       return publication.reason ? `held:${publication.reason}` : status;
+    case "declined":
+      return status;
     case "queued":
     case "publishing":
     case "published":

@@ -92,8 +92,11 @@ const db = {
       get: async () => snapshot(`${collection}/${id}`),
     }),
   }),
-  getAll: async (...refs: { path: string }[]) =>
-    refs.map((r) => snapshot(r.path)),
+  // A read options object (`fieldMask`) may come last, after the refs.
+  getAll: async (...args: ({ path: string } | { fieldMask?: string[] })[]) =>
+    args
+      .filter((arg): arg is { path: string } => "path" in arg)
+      .map((r) => snapshot(r.path)),
 };
 
 const NOW = new Date("2026-10-29T12:00:00Z");

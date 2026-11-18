@@ -46,7 +46,7 @@
          dates shows only the newest, and these are usually further down it.
          The decisions on them are the same ones. -->
     <p v-if="cropsGone" class="dpub__reason" data-hold-crops-empty>
-      Żaden wycinek nie podaje już innej daty. Sprawdź stronę ponownie.
+      Żaden wycinek nie podaje już innej daty. Sprawdź ponownie.
     </p>
     <section
       v-else-if="showCrops"
@@ -146,7 +146,7 @@
         data-hold-restore
         @click="emit('restore')"
       >
-        Przywróć do wstrzymanych
+        Przywróć
       </v-btn>
       <v-btn
         v-if="actions.decline"

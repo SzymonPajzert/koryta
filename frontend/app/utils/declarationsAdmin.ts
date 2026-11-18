@@ -71,24 +71,24 @@ export const declarationHoldLabels: Record<PublicationHoldReason, string> = {
 /** What an admin can do about a hold, for the open row. */
 export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
   two_pages:
-    "Ta osoba ma w serwisie dwie strony. Połącz je i sprawdź ponownie albo opublikuj właściwą ręcznie.",
+    "Ta osoba ma dwie strony. Połącz je i sprawdź ponownie albo opublikuj właściwą ręcznie.",
   admin_decision: "Opublikuj ręcznie, jeśli się zgadza.",
   needs_split:
-    "Strona jest oznaczona do rozdzielenia. Najpierw ją rozdziel, potem sprawdź ponownie.",
+    "Strona jest do rozdzielenia. Rozdziel ją, potem sprawdź ponownie.",
   kept_hidden:
-    "Ktoś z administratorów zostawił tę stronę ukrytą. Automat tej decyzji nie zmienia, więc wyjdzie tylko opublikowana ręcznie.",
+    "Administrator zostawił tę stronę ukrytą. Wyjdzie tylko opublikowana ręcznie.",
   pending_proposal:
-    "Na stronie czeka propozycja zmiany. Rozpatrz ją, zanim strona wyjdzie. Automat nie publikuje strony, o której zdecydował człowiek, więc potem opublikuj ją ręcznie.",
+    "Na stronie czeka propozycja zmiany. Rozpatrz ją, potem opublikuj ręcznie.",
   name_differs:
     "Czytelnicy odczytali z oświadczenia inne imię albo nazwisko niż na stronie.",
   no_public_post:
-    "Na stronie nie ma pracy ani funkcji, za którą ktoś płaci ze środków publicznych. Sama kandydatura nie wystarcza: oświadczenie składa każdy radny. Jeśli takie stanowisko jest, dodaj je na stronie, a osoba sama wróci na listę wstrzymanych.",
+    "Na stronie nie ma pracy ani funkcji opłacanej ze środków publicznych, a sama kandydatura nie wystarcza. Gdy ją dodasz, osoba wróci do wstrzymanych.",
   no_candidacy_on_page:
     "Strona nie ma kandydatury, dla której znaleziono oświadczenie.",
   ambiguous_candidacy:
-    "W powiecie z oświadczenia pasują dwie kandydatury tej osoby. Nie wiadomo, którą opublikować: właściwą zaznaczysz przy publikacji ręcznej.",
+    "W powiecie z oświadczenia pasują dwie kandydatury tej osoby. Właściwą zaznacz przy publikacji ręcznej.",
   two_places:
-    "Ta sama kandydatura wypada w dwóch miejscach naraz. Sprawdź, czy to na pewno jedna osoba: właściwą zaznaczysz przy publikacji ręcznej.",
+    "Kandydatury wypadają w dwóch miejscach naraz. Właściwą zaznacz przy publikacji ręcznej.",
   no_revision:
     "Strona nie pokazuje ostatniej wersji z importu albo nie ma żadnej. Automat publikuje tylko to, co sprawdził.",
   no_longer_matches:
@@ -98,7 +98,7 @@ export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
   revision_rejected:
     "Ktoś z recenzentów odrzucił wersję tej strony. Automat tej decyzji nie zmienia.",
   conflicting_reading:
-    "Inny odczytany wycinek tej osoby podaje inną datę. Wycofaj ten, który nie jest tej osoby, i sprawdź ponownie.",
+    "Inny wycinek tej osoby podaje inną datę. Wycofaj ten, który nie jest jej, i sprawdź ponownie.",
 };
 
 type HeldRow = Pick<
@@ -124,7 +124,7 @@ function holdIsOver(row: Pick<HeldRow, "reason" | "pagePublic">): boolean {
 export function declarationHoldLabel(row: HeldRow): string {
   if (row.status === "declined") return "decyzja administratora";
   if (holdIsOver(row)) return "strona już publiczna";
-  if (postFound(row)) return "płatne stanowisko już jest";
+  if (postFound(row)) return "jest już płatne stanowisko";
   if (publicationSetAside(row)) return declarationHoldLabels[RULED_OUT];
   return row.reason ? declarationHoldLabels[row.reason] : "wstrzymana";
 }
@@ -135,14 +135,14 @@ export function declarationHoldNote(row: HeldRow): string | null {
     const held = row.reason
       ? ` Była wstrzymana: ${declarationHoldLabels[row.reason]}.`
       : "";
-    return `Administrator zdecydował, że ta strona nie wyjdzie.${held}`;
+    return `Odłożona przez administratora.${held}`;
   }
   if (!row.reason) return null;
   if (holdIsOver(row)) {
-    return "Strona jest już publiczna, więc nie ma czego publikować.";
+    return "Strona jest już publiczna.";
   }
   if (postFound(row)) {
-    return "Na stronie jest już płatne stanowisko, którego wcześniej nie było. Sprawdź stronę ponownie.";
+    return "Na stronie jest już płatne stanowisko. Sprawdź ponownie.";
   }
   return publicationSetAside(row)
     ? declarationHoldNotes[RULED_OUT]
@@ -391,9 +391,9 @@ function whyNothingWentUp(skipped: DrainResult["skipped"]): string | null {
 export function declarationRecheckText(result: RecheckResult): string {
   switch (result.outcome) {
     case "published":
-      return "Opublikowano: strona przeszła sprawdzenia.";
+      return "Opublikowano.";
     case "confirmed":
-      return "Strona jest już publiczna, wiersz zamknięty.";
+      return "Strona była już publiczna. Wiersz zamknięty.";
     case "held":
       return `Nadal wstrzymana: ${declarationHoldLabels[result.reason]}.`;
     case "skipped":
