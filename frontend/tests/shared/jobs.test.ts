@@ -896,7 +896,7 @@ describe("jobHealth", () => {
     // An import someone starts by hand: one run per request, like a capture,
     // but judged by its newest run, with no clock to miss.
     const imports = definition({
-      id: "company_import",
+      id: "extraction_import",
       kind: "triggered",
       schedule: undefined,
       graceMinutes: undefined,
@@ -904,7 +904,7 @@ describe("jobHealth", () => {
     });
     const upload = (
       fields: Partial<JobRun> & Pick<JobRun, "state" | "startedAt">,
-    ) => run({ job: "company_import", trigger: "manual", ...fields });
+    ) => run({ job: "extraction_import", trigger: "manual", ...fields });
     const ended = (
       state: "succeeded" | "partial" | "failed",
       stopReason: string | null = null,
@@ -1025,7 +1025,7 @@ describe("jobHealth", () => {
       // The same goes for the captures, and for an import.
       expect(jobHealth(captures, view, now).status).toBe("unknown");
       const imports = definition({
-        id: "company_import",
+        id: "extraction_import",
         kind: "triggered",
         schedule: undefined,
       });
@@ -1716,6 +1716,21 @@ describe("JOBS", () => {
     for (const job of JOBS.filter((job) => job.kind === "triggered")) {
       expect(job.schedule, job.id).toBeUndefined();
       expect(job.graceMinutes, job.id).toBeUndefined();
+    }
+  });
+
+  it("lists the night's steps with no clock of their own as scheduled", () => {
+    // The night skips the imports when it holds the people back, so a start
+    // of their own would read as missed on every such night.
+    expect(JOBS.filter((job) => job.nightStep).map((job) => job.id)).toEqual([
+      "compressor",
+      "company_import",
+      "people_import",
+      "score_import",
+    ]);
+    for (const job of JOBS.filter((job) => job.nightStep)) {
+      expect(job.kind, job.id).toBe("scheduled");
+      expect(job.schedule, job.id).toBeUndefined();
     }
   });
 

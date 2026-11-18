@@ -57,7 +57,7 @@ test("procesy", PROCESY, async ({ page }, testInfo) => {
     "data-health",
     "partial",
   );
-  // Triggered, and judged by its own run rather than as captures.
+  // A step of the night, judged by its newest run.
   await expect(page.locator('[data-job="company_import"]')).toHaveAttribute(
     "data-health",
     "ok",

@@ -360,6 +360,11 @@ export interface JobDefinition {
   schedule?: JobSchedule;
   /** Said instead of a time when the job has none yet, and why. */
   scheduleNote?: string;
+  /** A step of the night with no start time of its own: it runs when the
+   * night gets to it, or not at all when the night skips it. Its row says „co
+   * noc” where a `schedule` would give the next start, and the night's own
+   * row is what says a night went without it. */
+  nightStep?: true;
   /** A run that has said nothing for this long has stalled. Jobs heartbeat
    * every minute or so while they work, so this is a few missed beats plus
    * the longest single step. */
@@ -406,45 +411,6 @@ export const JOBS: readonly JobDefinition[] = [
     tasks: ["merge-capture-match-people"],
     notes: [
       "Ekstrakcja ma 30 minut (dispatchDeadline kolejki); strona, która tyle stoi w „przetwarzam”, utknęła i nic jej już nie podejmie.",
-    ],
-  },
-  // The imports report one run per `koryta_uploader --submit`, under the id
-  // of the payload type they send. A person upload reports as people_import,
-  // which also has a daily run of its own, so it sits with the scheduled jobs.
-  // score_import and company_import are steps of the night too
-  // (koryta_score_import; koryta_people_import --companies-only before the
-  // people, koryta_company_import after them), but the night's own row is
-  // what says a night did not run them; these are judged by their newest run,
-  // as before.
-  {
-    id: "company_import",
-    kind: "triggered",
-    title: "Import firm",
-    summary:
-      "Firmy przez /api/ingest/company, w nocy dwa razy. Przed importem osób: firmy wysyłanych osób, których nie ma w porannej kopii bazy. Po nim: zmiany firm, które strona już ma.",
-    runsOn:
-      "Kroki nocy na VM koryta-nightly (koryta_nightly): „companies” przed osobami, „company_updates” po nich; ręcznie koryta_company_import",
-    command: "koryta_company_import",
-    heartbeatMinutes: 15,
-    notes: [
-      "Firmę, której nocny krok nie dodał, import osób próbuje dodać jeszcze raz; gdy i jemu się nie uda, zapisuje osobę bez tego zatrudnienia („zatrudnień bez strony firmy”).",
-      "Zmiany firm: do 200 na noc, najpierw te, które stają się publiczne. Zmian nazw i firm, które stałyby się prywatne, noc nie wysyła - wymienia je w ostrzeżeniach.",
-      "Podsumowania nocnych uruchomień - każda firma i co z nią zrobiono - są w koryta-pl-sharedcache/jobs/company_import/runs/.",
-    ],
-  },
-  {
-    id: "score_import",
-    kind: "triggered",
-    title: "Oceny modeli",
-    summary:
-      "Krótka lista każdego modelu oceniającego osoby jako głosy pod jego własnym uid: zmienione oceny zapisuje, a tym, których model już nie ocenia, je wycofuje. Z tych głosów kolejka /eksploruj/nowe bierze kolejność i próg.",
-    runsOn:
-      "Krok nocy na VM koryta-nightly (koryta_nightly), po imporcie osób; ręcznie ./submit_scores.sh prod",
-    command: "koryta_score_import",
-    heartbeatMinutes: 15,
-    notes: [
-      "Modele oceniają też strony utworzone tej nocy przez import osób, choć kopii bazy z 04:00 jeszcze ich nie ma - nowa osoba trafia do kolejki tego samego ranka.",
-      "Model, który nikogo nie ocenił, nie jest wysyłany: wycofałby wszystkie swoje głosy.",
     ],
   },
   {
@@ -585,6 +551,7 @@ export const JOBS: readonly JobDefinition[] = [
       "go run ./cmd/compressor -incremental -hostname rejestr.io (i -hostname api-krs.ms.gov.pl)",
     scheduleNote:
       "Co noc, na początku nocy - po północy UTC bierze cały poprzedni dzień; uruchomień jeszcze nie raportuje",
+    nightStep: true,
     heartbeatMinutes: 30,
     probe: "compressedMirror",
     mirrorHosts: ["rejestr.io", "api-krs.ms.gov.pl"],
@@ -614,6 +581,27 @@ export const JOBS: readonly JobDefinition[] = [
       "Stan bierze się z pliku .overall_export_metadata, który eksport zapisuje na końcu.",
     ],
   },
+  // The night's imports, in its order: company_import on both sides of the
+  // people, then the scores. A night that holds the people back runs none of
+  // them, so they are night steps rather than jobs with a start to miss.
+  {
+    id: "company_import",
+    kind: "scheduled",
+    title: "Import firm",
+    summary:
+      "Firmy przez /api/ingest/company, w nocy dwa razy. Przed importem osób: firmy wysyłanych osób, których nie ma w porannej kopii bazy. Po nim: zmiany firm, które strona już ma.",
+    runsOn:
+      "Kroki nocy na VM koryta-nightly (koryta_nightly): „companies” przed osobami, „company_updates” po nich; ręcznie koryta_company_import",
+    command: "koryta_company_import",
+    scheduleNote: "Co noc, razem z importem osób",
+    nightStep: true,
+    heartbeatMinutes: 15,
+    notes: [
+      "Firmę, której nocny krok nie dodał, import osób próbuje dodać jeszcze raz; gdy i jemu się nie uda, zapisuje osobę bez tego zatrudnienia („zatrudnień bez strony firmy”).",
+      "Zmiany firm: do 200 na noc, najpierw te, które stają się publiczne. Zmian nazw i firm, które stałyby się prywatne, noc nie wysyła - wymienia je w ostrzeżeniach.",
+      "Podsumowania nocnych uruchomień - każda firma i co z nią zrobiono - są w koryta-pl-sharedcache/jobs/company_import/runs/.",
+    ],
+  },
   {
     id: "people_import",
     kind: "scheduled",
@@ -625,6 +613,7 @@ export const JOBS: readonly JobDefinition[] = [
     command: "koryta_people_import --scope priority --max-uploads 100",
     scheduleNote:
       "Co noc, gdy dzisiejsza kopia bazy, przeliczenie potoków i testy na to pozwalają (wiersz „Noc na maszynie koryta-nightly”)",
+    nightStep: true,
     // Building the payloads is one long step that says nothing until it is
     // done; only the upload after it heartbeats.
     heartbeatMinutes: 60,
@@ -634,6 +623,23 @@ export const JOBS: readonly JobDefinition[] = [
       "Porównuje paczki z dzisiejszą kopią bazy: wysyła tylko osoby, którym import zmieniłby coś na stronie, i nie wysyła drugi raz tej samej paczki przez 30 dni.",
       "Strony tworzy tylko świeżo zatrudnionym; strona utworzona komuś, kto według kopii już ją ma, zatrzymuje import jako błąd.",
       "W dni próbne (--dry-run) niczego nie wysyła: uruchomienie kończy się jako „próba - nic nie wysłano”, a „w paczce” mówi, ile osób poszłoby na stronę.",
+    ],
+  },
+  {
+    id: "score_import",
+    kind: "scheduled",
+    title: "Oceny modeli",
+    summary:
+      "Krótka lista każdego modelu oceniającego osoby jako głosy pod jego własnym uid: zmienione oceny zapisuje, a tym, których model już nie ocenia, je wycofuje. Z tych głosów kolejka /eksploruj/nowe bierze kolejność i próg.",
+    runsOn:
+      "Krok nocy na VM koryta-nightly (koryta_nightly), po imporcie osób; ręcznie ./submit_scores.sh prod",
+    command: "koryta_score_import",
+    scheduleNote: "Co noc, razem z importem osób",
+    nightStep: true,
+    heartbeatMinutes: 15,
+    notes: [
+      "Modele oceniają też strony utworzone tej nocy przez import osób, choć kopii bazy z 04:00 jeszcze ich nie ma - nowa osoba trafia do kolejki tego samego ranka.",
+      "Model, który nikogo nie ocenił, nie jest wysyłany: wycofałby wszystkie swoje głosy.",
     ],
   },
   {
