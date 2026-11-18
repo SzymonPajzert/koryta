@@ -30,7 +30,7 @@ export function releaseBackend(): string {
 
 /** koryta.pl's rollouts from before the record existed, newest first, off the
  * App Hosting build logs as of 2026-09-26, as of 2026-10-30 for the twelve
- * from 10-07 on and as of 2026-11-18 for the four from 11-01 on (11-03's
+ * from 10-07 on and as of 2026-11-18 for the six from 11-01 on (11-03's
  * second added no entry): each went live at `at`, when its build finished, with
  * every entry from `newest` down to the next rollout's `newest`. That split is
  * the array order of `QA_ITEMS` - every rollout's new entries turned out to be
@@ -50,6 +50,14 @@ export const ROLLOUTS_BEFORE_RECORD: readonly {
   newest: string;
   at: string | null;
 }[] = [
+  {
+    newest: "oswiadczenia-jeden-wycinek-na-osobe",
+    at: "2026-11-18T11:35:42.000Z",
+  },
+  {
+    newest: "polityka-prywatnosci-zapytania-wyszukiwarki",
+    at: "2026-11-18T10:50:54.000Z",
+  },
   {
     newest: "mapa-strony-bez-daty-24-pazdziernika-1408",
     at: "2026-11-17T14:34:28.000Z",
