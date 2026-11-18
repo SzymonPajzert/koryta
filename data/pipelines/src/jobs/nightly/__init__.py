@@ -83,6 +83,11 @@ The steps, in order (`STEPS`):
                 predator wrote after a crawl chunk, a cut or an upload, with
                 tonight's list, to the site, which counts the declarations in
                 people from them
+    compute_nodes
+                koryta_uploader --type computeNodes on autopush.koryta.pl:
+                the site recounts every page's stats - what the lists filter
+                and sort by, and the line the search box draws under a
+                person - over everything the night sent
     tidy        old export shards and day-named outputs off the disk
 
 Every step but `export` and `tidy` is a process of its own - the jobs and the
@@ -121,6 +126,16 @@ as they are, so a held night still moves the count. No part yet, or no answer
 from the site - a 404 included, before the site has the endpoint - is partial
 (75), and the next night sends again. A refusal, or the site's own error (500)
 again after a wait, fails it: a bug in the count shows on the night.
+
+`compute_nodes` holds nothing back, and nothing holds it: the site recounts
+what it holds, so a held night still brings the counts and the search lines up
+to the day's edits. It asks autopush and never koryta.pl, which share the
+database (decision on 2026-11-18): autopush runs main's code on 4000 MiB,
+koryta.pl older code on 1 GiB, whose recount writes `stats` without the search
+line and so takes it off every person. The robot signs in as for its uploads:
+the site lets the datascience group recount as well as an admin. A refusal,
+or no answer within the 300 s the site gives a request, fails the step, and
+the counts stay as the last recount left them.
 
 `companies` plans tonight's people as the people step plans them - one argv
 for both (`people_argv`), the same outputs on disk, nothing sent in between -
@@ -356,6 +371,10 @@ REGISTER_MARGIN = 5
 #: KORYTA_REJESTR_SECRET names another; an empty one switches the step off.
 REJESTR_SECRET = "rejestr-io-key"
 
+#: Where the recount step asks: main's code, with the memory it needs, never
+#: koryta.pl (see the module doc).
+RECOUNT_ENDPOINT = "https://autopush.koryta.pl"
+
 COMPRESSED_HOSTS = ("rejestr.io", "api-krs.ms.gov.pl")
 COMPRESSED_BUCKET = "koryta-pl-compressed"
 
@@ -514,6 +533,8 @@ STEPS = (
     # has counted: two tries at most, which end inside this limit
     # (`jobs.bip_declarations.FACTS_BACKOFF_S`).
     Step("declarations", "oświadczenia", 15),
+    # One request, which the site cuts off at 300 s.
+    Step("compute_nodes", "statystyki", 10),
     Step("tidy", "porządki", 5, always=True),
 )
 STEP_NAMES = tuple(step.name for step in STEPS)
@@ -1567,6 +1588,17 @@ class Night:
         argv = [bin_path("koryta_bip_declarations"), "send-facts"]
         return self.judge_job(*self.process(step, argv))
 
+    def step_compute_nodes(self, step: Step) -> tuple[str, str, int | None]:
+        argv = [
+            bin_path("koryta_uploader"),
+            "--type",
+            "computeNodes",
+            "--endpoint",
+            RECOUNT_ENDPOINT,
+            "--submit",
+        ]
+        return self.judge_job(*self.process(step, argv))
+
     def step_compress(self, step: Step) -> tuple[str, str, int | None]:
         compressor = os.environ.get("KORYTA_COMPRESSOR")
         if not compressor:
@@ -1649,6 +1681,8 @@ class Night:
             "declarations": "koryta_bip_declarations send-facts: predator's newest "
             "facts part, with tonight's list, to the site, which counts the "
             "declarations in people",
+            "compute_nodes": "koryta_uploader --type computeNodes --endpoint "
+            f"{RECOUNT_ENDPOINT} --submit: the site recounts every page's stats",
             "compress": "compressor -incremental -hostname "
             + " / ".join(COMPRESSED_HOSTS),
             "tidy": f"remove export shards and day-named outputs older than "
