@@ -5,6 +5,7 @@ import datetime
 import pandas as pd
 import pytest
 
+from analysis.extract import SUPERVISORY_ROLE
 from analysis.scores import (
     PEOPLE_SCORE_MODELS,
     CompanyScores,
@@ -15,9 +16,11 @@ from analysis.scores import (
     PeopleScoresSuccession,
     PeopleScoresTurnover,
 )
+from analysis.scores import base as scores_base
 from analysis.scores.base import (
     FULL_RANGE,
     QUEUE_THRESHOLD,
+    RADA_SPOLECZNA_ONLY_CEILING,
     Candidacy,
     CompanyFacts,
     Employment,
@@ -25,6 +28,7 @@ from analysis.scores.base import (
     Population,
     ScoreRange,
     banded_scores,
+    demote_rada_spoleczna_only,
     person_key,
     rejestr_io_id,
 )
@@ -36,6 +40,8 @@ from analysis.scores.facts import (
 )
 from analysis.scores.succession import as_date, successions
 from analysis.scores.turnover import same_region, year_of
+from entities.company_bodies import RADA_SPOLECZNA
+from entities.company_categories import SPZOZ
 from entities.person import is_pipeline_uid
 from scrapers.stores import Pipeline
 
@@ -273,6 +279,122 @@ class TestPopulation:
         )
 
         assert result.shortlist == []
+
+
+class TestRadaSpolecznaCeiling:
+    """People whose only public posts are seats on a rada społeczna, which is
+    unpaid, stay under the queue (decision on 2026-11-11)."""
+
+    COMPANIES = {
+        "hospital": CompanyFacts(
+            name="Szpital SPZOZ",
+            teryt="1465",
+            is_public=True,
+            supervisory_body=RADA_SPOLECZNA,
+        ),
+        "spolka": CompanyFacts(
+            name="Wodociągi sp. z o.o.", teryt="1465", is_public=True
+        ),
+        "club": CompanyFacts(name="Klub sportowy", teryt="1465", is_public=False),
+    }
+
+    @staticmethod
+    def post(krs, role=SUPERVISORY_ROLE, end=None):
+        return Employment(krs=krs, role=role, start="2024-05-01", end=end)
+
+    def held(self, posts, scores):
+        pop = population(posts, seeds={}, companies=self.COMPANIES)
+        return demote_rada_spoleczna_only(scores, pop)
+
+    def test_the_ceiling_is_under_the_queue(self):
+        assert RADA_SPOLECZNA_ONLY_CEILING is not None
+        assert RADA_SPOLECZNA_ONLY_CEILING < QUEUE_THRESHOLD
+
+    def test_a_seat_on_a_rada_spoleczna_alone_is_held_under_the_queue(self):
+        posts = {"Anna": [self.post("hospital")], "Beata": [self.post("hospital")]}
+
+        assert self.held(posts, {"Anna": 5, "Beata": 1}) == {
+            "Anna": RADA_SPOLECZNA_ONLY_CEILING,
+            "Beata": 1,
+        }
+
+    def test_the_hospitals_director_is_not_held(self):
+        posts = {"Anna": [self.post("hospital", role="Zarząd")]}
+
+        assert self.held(posts, {"Anna": 5}) == {"Anna": 5}
+
+    def test_a_public_post_beside_the_seat_carries_the_person_even_ended(self):
+        posts = {"Anna": [self.post("hospital"), self.post("spolka", end="2019-01-01")]}
+
+        assert self.held(posts, {"Anna": 5}) == {"Anna": 5}
+
+    def test_a_post_nobody_showed_to_be_public_does_not(self):
+        posts = {"Anna": [self.post("hospital"), self.post("club", role="Zarząd")]}
+
+        assert self.held(posts, {"Anna": 5}) == {"Anna": RADA_SPOLECZNA_ONLY_CEILING}
+
+    def test_a_spolkas_supervisory_board_is_not_a_rada_spoleczna(self):
+        posts = {"Anna": [self.post("spolka")], "Beata": [self.post("unknown")]}
+
+        assert self.held(posts, {"Anna": 5, "Beata": 4}) == {"Anna": 5, "Beata": 4}
+
+    def test_the_rule_turns_off(self, monkeypatch):
+        monkeypatch.setattr(scores_base, "RADA_SPOLECZNA_ONLY_CEILING", None)
+        posts = {"Anna": [self.post("hospital")]}
+
+        assert self.held(posts, {"Anna": 5}) == {"Anna": 5}
+
+    def test_every_model_writes_the_held_score(self):
+        scorer = model(PeopleScoresTurnover)
+        pop = population(
+            {"Anna": [self.post("hospital")], "Beata": [self.post("spolka")]},
+            seeds={},
+            companies=self.COMPANIES,
+        )
+        scorer.population = lambda ctx: pop
+        scorer.raw_scores = lambda ctx, population: {"Anna": 4.0, "Beata": 1.0}
+
+        output = scorer.process(None)
+
+        # Turnover is floored at the queue: Anna's 5 is held under it.
+        assert dict(zip(output["name"], output["score"])) == {
+            "Anna": RADA_SPOLECZNA_ONLY_CEILING,
+            "Beata": QUEUE_THRESHOLD,
+        }
+
+    def test_the_legal_form_is_read_off_the_register(self):
+        scorer = model(PeopleScoresCapture)
+        scorer.people_payloads.read_or_process = lambda ctx: pd.DataFrame.from_records(
+            [
+                {
+                    "name": "Anna",
+                    "companies": [{"krs": "0000000001", "role": SUPERVISORY_ROLE}],
+                    "elections": [],
+                }
+            ]
+        )
+        scorer.people_koryta.read_or_process = lambda ctx: pd.DataFrame.from_records(
+            [{"id": "n1", "full_name": "Anna", "is_public": False, "parties": []}]
+        )
+        scorer.people_created.read_or_process = lambda ctx: pd.DataFrame()
+        scorer.people_votes.read_or_process = lambda ctx: pd.DataFrame()
+        scorer.companies_krs.read_or_process = lambda ctx: pd.DataFrame.from_records(
+            [
+                {
+                    "krs": "0000000001",
+                    "name": "Szpital",
+                    "is_public": True,
+                    "form": SPZOZ,
+                },
+                {"krs": "0000000002", "name": "Klub", "is_public": None, "form": None},
+            ]
+        )
+
+        result = scorer.population(None)
+
+        assert result.companies["0000000001"].supervisory_body == RADA_SPOLECZNA
+        assert result.companies["0000000002"].supervisory_body == ""
+        assert result.holds_only_rada_spoleczna_seats("Anna")
 
 
 class TestPagesCreatedSinceTheExport:
