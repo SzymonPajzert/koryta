@@ -208,8 +208,10 @@ describe("the words for the job's codes", () => {
   });
 
   it("sends the admin to publish before the proposal, which can erase the date", () => {
+    // Not „the import's version”: where a person's proposal is the newest,
+    // publishing approves that one, and the dialog says so.
     expect(declarationHoldNote(heldRow("pending_proposal"))).toBe(
-      "Na stronie czeka propozycja zmiany. Opublikuj ręcznie wersję z importu, propozycję rozpatrz potem.",
+      "Na stronie czeka propozycja zmiany. Opublikuj ręcznie, a propozycję rozpatrz potem.",
     );
   });
 

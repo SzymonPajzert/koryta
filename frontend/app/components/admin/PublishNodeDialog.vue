@@ -17,8 +17,9 @@
           data-testid="publish-auto-approve"
         >
           Ta strona nie ma zatwierdzonej rewizji, więc opublikujemy jej
-          najnowszą wersję, z {{ autoApproveDate }}. Żeby pokazać inną,
-          zatwierdź ją najpierw na
+          najnowszą wersję,
+          {{ autoApproveProposal ? "propozycję zmiany" : "" }} z
+          {{ autoApproveDate }}. Żeby pokazać inną, zatwierdź ją najpierw na
           <NuxtLink :to="`/admin/rewizje/${nodeId}`">liście rewizji</NuxtLink>.
         </v-alert>
 
@@ -265,6 +266,7 @@ import {
 import { authRequest } from "~/composables/auth";
 import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
 import { electionName } from "~~/shared/electionDays";
+import { isAutomatedUid } from "~~/shared/stats";
 import {
   latestPublishableRevision,
   normalizeUpdateTime,
@@ -312,6 +314,9 @@ const nodeParties = ref<string[]>([]);
  * that every screen offering this dialog says it - the badge on a person's own
  * page has no revision list of its own to consult. */
 const autoApproveDate = ref<string | null>(null);
+/** Whether that version is a person's proposal rather than the import's: the
+ * publication approves it on the reviewer's behalf, unread. */
+const autoApproveProposal = ref(false);
 const selected = ref<string[]>([]);
 const pending = ref(false);
 const saving = ref(false);
@@ -535,6 +540,7 @@ async function load() {
   relationsFailed.value = null;
   selected.value = [];
   autoApproveDate.value = null;
+  autoApproveProposal.value = false;
   // Not fatal either, and separately awaited for that reason: which version is
   // about to go live is worth saying, but not worth refusing to publish over.
   void loadAutoApprove();
@@ -572,6 +578,11 @@ async function loadAutoApprove() {
     const revision = latestPublishableRevision(data.revisions);
     if (!revision) return;
     autoApproveDate.value = revisionDate(revision.update_time);
+    autoApproveProposal.value =
+      revision.update_automatic !== true &&
+      !isAutomatedUid(
+        typeof revision.update_user === "string" ? revision.update_user : null,
+      );
   } catch (error) {
     // The publication itself will still say what it did, so a failure here
     // costs a sentence rather than the action.
