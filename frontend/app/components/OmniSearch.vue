@@ -48,6 +48,17 @@
           <v-list-item-subtitle v-if="item.raw?.subtitle" class="text-wrap">
             {{ item.raw.subtitle }}
           </v-list-item-subtitle>
+          <!-- Who this is, for two people of one name. In the meta ink at full
+               strength: Vuetify's subtitle opacity puts it at 4.29:1, and it
+               is the line a reader picks the right person by. -->
+          <v-list-item-subtitle
+            v-if="item.raw?.line"
+            opacity="1"
+            class="omni-person-line text-ink-neutral text-wrap"
+            data-testid="omni-search-person-line"
+          >
+            {{ item.raw.line }}
+          </v-list-item-subtitle>
         </v-list-item>
       </template>
       <template #no-data>
@@ -119,6 +130,7 @@ import {
   type SettledSearch,
 } from "~~/shared/searchSession";
 import { noteSearchPick } from "~/composables/teaserJourney";
+import { hitLineText, namesakes, type HitLine } from "~~/shared/searchLine";
 import type { NodeType } from "~~/shared/model";
 import type { ProposableNodeType } from "~~/shared/api";
 import { refDebounced } from "@vueuse/core";
@@ -128,6 +140,9 @@ import { authHeaders } from "~/composables/auth";
 const router = useRouter();
 const { push, currentRoute } = router;
 const user = useCurrentUser();
+// TEMP(wariant): przed = no line, a = under every person, b = only under
+// namesakes, c = the place alone under every person.
+const wariant = computed(() => String(currentRoute.value.query.wariant ?? "a")); // TEMP(wariant)
 
 const props = defineProps<{
   width?: string;
@@ -282,6 +297,8 @@ type ListItem = {
   /** The KRS number the hit was found by, where `/api/search` found it by
    * the number typed rather than by its name. */
   krsNumber?: string;
+  /** Under a person: who they are, where and as what (`shared/searchLine.ts`). */
+  line?: string;
   path?: string;
   query?: Record<string, string>;
 };
@@ -360,8 +377,30 @@ const searchData = ref<
     query?: Record<string, string>;
     /** Set on a company found by the KRS number typed. */
     krsNumber?: string;
+    /** Set on a person whose line the reader may see. */
+    line?: HitLine;
   }>
 >([]);
+
+/** The people on the menu another person on it shares a name with
+ * (`namesakes`), by id. */
+const namesakeIds = computed(() => {
+  const people = searchData.value.filter((hit) => hit.type === "person");
+  const shared = namesakes(people.map((hit) => hit.name));
+  return new Set(
+    people.filter((_, index) => shared[index]).map((hit) => hit.id),
+  );
+});
+
+/** The line under a person hit, as the variant draws it. */
+function personLine(hit: { id: string; line?: HitLine }) {
+  if (!hit.line || wariant.value === "przed") return undefined; // TEMP(wariant)
+  if (wariant.value === "b" && !namesakeIds.value.has(hit.id)) {
+    return undefined; // TEMP(wariant)
+  }
+  const form = wariant.value === "c" ? "short" : "full"; // TEMP(wariant)
+  return hitLineText(hit.line, form) || undefined;
+}
 
 async function performSearch(searchTerm: string) {
   loading.value = true;
@@ -482,6 +521,7 @@ const items = computed<ListItem[]>(() => {
         nodeId: item.id,
         unverified: isUnverifiedPerson(item),
         krsNumber: item.krsNumber,
+        line: personLine(item),
         ...routing,
       });
     });
@@ -539,5 +579,23 @@ watch(nodeGroupPicked, (value) => {
 <style scoped>
 .omni-search.v-autocomplete--active-menu :deep(.v-autocomplete__menu-icon) {
   transform: rotate(0deg) !important;
+}
+
+/* The line under a person: two lines at most, at a line height the accents
+   of „ŚWIĘTOKRZYSKI” fit under, as the box clips what overflows it. Its start,
+   the parties and the place, is what tells two people apart; the rest of a
+   180-letter register name is on their page. One line on a phone, where two
+   took the menu from six people to four. */
+.omni-person-line {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: 1.25rem;
+}
+
+@media (max-width: 599.98px) {
+  .omni-person-line {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
 }
 </style>
