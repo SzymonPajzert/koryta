@@ -8,6 +8,7 @@ import {
   PUBLICATIONS,
 } from "./declarations";
 import type { StoredPublication } from "./declarationPublish";
+import { restageDeclarationPeople } from "./declarationPeopleCount";
 
 /**
  * The decisions /admin/oswiadczenia offers on a crop the readers left to an
@@ -46,10 +47,12 @@ import type { StoredPublication } from "./declarationPublish";
  * (`recheckPublication`).
  */
 
-/** The name overview.get.ts caches the overview under. A decision, and a
- * press of "Opublikuj z kolejki", clears it, so the reload after one shows
- * what it did rather than an answer up to two minutes old. Nitro keeps a
- * cached function under `nitro:functions:<name>` in the `cache` storage. */
+/** The name overview.get.ts caches the overview's counts under, for two
+ * minutes on each instance; the lists an admin decides on are read on every
+ * request. Nitro keeps a cached function under `nitro:functions:<name>` in
+ * the `cache` storage. The endpoints' `clear` of it removes nothing (unstorage
+ * clears only mounts below the base, and the entry sits on the root mount):
+ * after a decision only the counts can be up to two minutes old. */
 export const OVERVIEW_CACHE = "declarationOverview";
 export const OVERVIEW_CACHE_BASE = `nitro:functions:${OVERVIEW_CACHE}`;
 
@@ -196,15 +199,15 @@ export async function decideExtract(
   });
 }
 
-/** Reads a page's record in a transaction, refusing a page with none and one
- * not in the state a decision on it starts from: two admins, or two tabs,
- * deciding one page at once cannot both have their way. */
+/** Reads a page's held record in a transaction, refusing a page with none
+ * and one not in the state a decision on it starts from (`accepts`): two
+ * admins, or two tabs, deciding one page at once cannot both have their way. */
 async function decideRecord(
   db: Firestore,
   pageId: string,
-  from: StoredPublication["status"],
-  refusal: string,
-  write: (record: StoredPublication) => Partial<Record<string, unknown>>,
+  accepts: (record: StoredPublication) => boolean,
+  refusal: string | ((record: StoredPublication) => string),
+  write: () => Record<string, unknown>,
 ): Promise<void> {
   const ref = db.collection(PUBLICATIONS).doc(pageId);
   await db.runTransaction(async (tx) => {
@@ -215,19 +218,30 @@ async function decideRecord(
         message: "Nie ma takiej publikacji.",
       });
     }
-    if (record.status !== from) {
-      throw createError({ statusCode: 409, message: refusal });
+    if (!accepts(record)) {
+      throw createError({
+        statusCode: 409,
+        message: typeof refusal === "string" ? refusal : refusal(record),
+      });
     }
-    tx.update(ref, write(record));
+    tx.update(ref, write());
   });
+}
+
+/** Whether a record is a hold an admin said will not be published. */
+export function isDeclined(record: StoredPublication | undefined): boolean {
+  return record?.status === "held" && !!record.declinedAt;
 }
 
 /**
  * An admin's „Nie publikuj” on a held page. The page leaves what waits for an
- * admin and goes with the people who will not be published; no later reading
- * takes it up again (`nextPublication`), and it keeps the reason it was held
- * for, which is what it goes back with (`restorePublication`). Nothing on the
- * page changes: it is still a draft, and whoever publishes it by hand may.
+ * admin and goes with the people who will not be published. The record stays
+ * `held`, with the reason it was held for, and gains `declinedAt`: no later
+ * reading takes it up again (`nextPublication`), a recheck refuses it, and a
+ * release that knows nothing of declining keeps it held as well - except an
+ * admin's-date hold, which such a release hands to the next readers' crop,
+ * and which `claimPublication` then puts back on hold. Nothing on the page
+ * changes: it is still a draft, and whoever publishes it by hand may.
  */
 export async function declinePublication(
   db: Firestore,
@@ -239,19 +253,17 @@ export async function declinePublication(
   await decideRecord(
     db,
     pageId,
-    "held",
-    "Ta publikacja nie jest już wstrzymana.",
-    () => ({
-      status: "declined",
-      declinedBy: uid,
-      declinedAt: at,
-      updatedAt: at,
-    }),
+    (record) => record.status === "held" && !record.declinedAt,
+    (record) =>
+      isDeclined(record)
+        ? "Ta osoba jest już odłożona."
+        : "Ta publikacja nie jest już wstrzymana.",
+    () => ({ declinedBy: uid, declinedAt: at, updatedAt: at }),
   );
 }
 
-/** Takes a „Nie publikuj” back: the page is held again, for what it was held
- * for. */
+/** Takes a „Nie publikuj” back: the page waits for an admin again, for what it
+ * was held for. */
 export async function restorePublication(
   db: Firestore,
   pageId: string,
@@ -260,10 +272,9 @@ export async function restorePublication(
   await decideRecord(
     db,
     pageId,
-    "declined",
+    isDeclined,
     "Tej publikacji nikt już nie odkłada.",
     () => ({
-      status: "held",
       declinedBy: FieldValue.delete(),
       declinedAt: FieldValue.delete(),
       updatedAt: Timestamp.fromDate(now),
@@ -272,16 +283,18 @@ export async function restorePublication(
 }
 
 /**
- * Closes the hold of a page somebody has just published by hand: /api/nodes/publish
- * calls it, whichever screen the admin pressed on. The page is public, so
- * there is nothing left to hold or to decline: the record becomes `confirmed`,
- * as it does when a page goes public while it waits (`publishPage`), and the
- * person leaves the admin's lists. What it was held for stays on the record.
+ * Closes the hold of a page somebody has just published by hand, whichever
+ * screen they pressed on (`afterHandPublication`). The page is public, so
+ * there is nothing left to hold or to decline: the record becomes
+ * `published`, not by the site on its own (`autoPublished` false), with
+ * `handPublished` saying who, when and what it was held for. So the person
+ * counts as published wherever a publication from the queue does: the people
+ * count, the chain, the recent list.
  *
  * Whether a declaration then shows on the page is still read off the crops
  * (`confirmedDeclarations`): one an admin's date settled shows nothing.
  *
- * Returns whether a hold was closed, for the overview's cached answer.
+ * Returns whether a hold was closed.
  */
 export async function closeHoldOnPublication(
   db: Firestore,
@@ -292,18 +305,79 @@ export async function closeHoldOnPublication(
   const ref = db.collection(PUBLICATIONS).doc(pageId);
   return db.runTransaction(async (tx) => {
     const record = (await tx.get(ref)).data() as StoredPublication | undefined;
-    if (record?.status !== "held" && record?.status !== "declined") {
-      return false;
-    }
+    if (record?.status !== "held") return false;
     const at = Timestamp.fromDate(now);
     tx.update(ref, {
-      status: "confirmed",
+      status: "published",
       reason: null,
+      publishedAt: at,
+      autoPublished: false,
       handPublished: { uid, at, held: record.reason ?? null },
+      declinedBy: FieldValue.delete(),
+      declinedAt: FieldValue.delete(),
+      day: FieldValue.delete(),
       updatedAt: at,
     });
     return true;
   });
+}
+
+/**
+ * Puts the hold back on a page taken down again after a publication by hand
+ * closed it, for what it was held for: the person returns to the admin's list
+ * rather than disappearing from every list with the page. A page the site
+ * published itself is not touched: `restoreReverted` and its holds answer for
+ * those.
+ *
+ * Returns whether a hold was put back.
+ */
+export async function reopenHoldOnUnpublication(
+  db: Firestore,
+  pageId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const ref = db.collection(PUBLICATIONS).doc(pageId);
+  return db.runTransaction(async (tx) => {
+    const record = (await tx.get(ref)).data() as StoredPublication | undefined;
+    if (record?.status !== "published" || !record.handPublished) return false;
+    const at = Timestamp.fromDate(now);
+    tx.update(ref, {
+      status: "held",
+      reason: record.handPublished.held ?? "kept_hidden",
+      heldAt: at,
+      handPublished: FieldValue.delete(),
+      publishedAt: FieldValue.delete(),
+      updatedAt: at,
+    });
+    return true;
+  });
+}
+
+/**
+ * What a publication or unpublication of a person by hand does to the
+ * declarations flow, after it is committed: /api/nodes/publish and
+ * /api/revisions/approve call it when a person's page went from draft to
+ * public, or back. A hold is closed, or put back, and the person moves in the
+ * people count. Best effort: a hold left open costs a row on an admin's list,
+ * and a publication refused for it would be worse.
+ */
+export async function afterHandPublication(
+  db: Firestore,
+  pageId: string,
+  uid: string,
+  published: boolean,
+): Promise<void> {
+  try {
+    const changed = published
+      ? await closeHoldOnPublication(db, pageId, uid)
+      : await reopenHoldOnUnpublication(db, pageId);
+    if (changed) await restageDeclarationPeople(db, [pageId]);
+  } catch (error) {
+    console.error(
+      `[declarations] cannot ${published ? "close" : "reopen"} the hold of ${pageId}`,
+      error,
+    );
+  }
 }
 
 /** The pictures of a crop, or null for a crop that does not exist. */

@@ -71,14 +71,15 @@ export const declarationHoldLabels: Record<PublicationHoldReason, string> = {
 /** What an admin can do about a hold, for the open row. */
 export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
   two_pages:
-    "Ta osoba ma dwie strony. Połącz je i sprawdź ponownie albo opublikuj właściwą ręcznie.",
-  admin_decision: "Opublikuj ręcznie, jeśli się zgadza.",
+    "Ta osoba ma dwie strony. Połącz je albo opublikuj właściwą ręcznie.",
+  admin_decision:
+    "Opublikuj ręcznie, jeśli się zgadza. Datę ustalił administrator, więc oświadczenia na stronie nie będzie.",
   needs_split:
     "Strona jest do rozdzielenia. Rozdziel ją, potem sprawdź ponownie.",
   kept_hidden:
     "Administrator zostawił tę stronę ukrytą. Wyjdzie tylko opublikowana ręcznie.",
   pending_proposal:
-    "Na stronie czeka propozycja zmiany. Rozpatrz ją, potem opublikuj ręcznie.",
+    "Na stronie czeka propozycja zmiany. Opublikuj ręcznie wersję z importu, propozycję rozpatrz potem.",
   name_differs:
     "Czytelnicy odczytali z oświadczenia inne imię albo nazwisko niż na stronie.",
   no_public_post:
@@ -86,9 +87,9 @@ export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
   no_candidacy_on_page:
     "Strona nie ma kandydatury, dla której znaleziono oświadczenie.",
   ambiguous_candidacy:
-    "W powiecie z oświadczenia pasują dwie kandydatury tej osoby. Właściwą zaznacz przy publikacji ręcznej.",
+    "W powiecie z oświadczenia pasują dwie kandydatury tej osoby. Przy publikacji ręcznej zaznacz tylko właściwą.",
   two_places:
-    "Kandydatury wypadają w dwóch miejscach naraz. Właściwą zaznacz przy publikacji ręcznej.",
+    "Kandydatury wypadają w dwóch miejscach naraz. Przy publikacji ręcznej zaznacz tylko właściwą.",
   no_revision:
     "Strona nie pokazuje ostatniej wersji z importu albo nie ma żadnej. Automat publikuje tylko to, co sprawdził.",
   no_longer_matches:
@@ -98,7 +99,7 @@ export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
   revision_rejected:
     "Ktoś z recenzentów odrzucił wersję tej strony. Automat tej decyzji nie zmienia.",
   conflicting_reading:
-    "Inny wycinek tej osoby podaje inną datę. Wycofaj ten, który nie jest jej, i sprawdź ponownie.",
+    "Inny wycinek tej osoby podaje inną datę. Popraw jego odczyt albo wycofaj go, jeśli nie jest jej, i sprawdź ponownie.",
 };
 
 type HeldRow = Pick<
@@ -106,8 +107,10 @@ type HeldRow = Pick<
   "status" | "reason" | "pagePublic" | "paidPost"
 >;
 
-/** A page held for having no paid public post that has one now: what held it
- * is gone, which only asking it again can say for the rest. */
+/** A page held for having no paid public post that has one now. A recheck
+ * would publish it without that post where the post was added by hand, since
+ * the automation publishes nobody's unreviewed relation, so it is published by
+ * hand, with the post ticked. */
 function postFound(row: HeldRow): boolean {
   return row.reason === RULED_OUT && row.paidPost === true;
 }
@@ -115,7 +118,9 @@ function postFound(row: HeldRow): boolean {
 /** A page public now has nothing left to publish: a publication by hand closes
  * the hold (`closeHoldOnPublication`), so such a row is one from before that.
  * Two pages with one date, one of them up already, are still a question. */
-function holdIsOver(row: Pick<HeldRow, "reason" | "pagePublic">): boolean {
+export function declarationHoldIsOver(
+  row: Pick<HeldRow, "reason" | "pagePublic">,
+): boolean {
   return row.pagePublic && row.reason !== "two_pages";
 }
 
@@ -123,7 +128,7 @@ function holdIsOver(row: Pick<HeldRow, "reason" | "pagePublic">): boolean {
  * say it: the stored reason, unless that is not what stands now. */
 export function declarationHoldLabel(row: HeldRow): string {
   if (row.status === "declined") return "decyzja administratora";
-  if (holdIsOver(row)) return "strona już publiczna";
+  if (declarationHoldIsOver(row)) return "strona już publiczna";
   if (postFound(row)) return "jest już płatne stanowisko";
   if (publicationSetAside(row)) return declarationHoldLabels[RULED_OUT];
   return row.reason ? declarationHoldLabels[row.reason] : "wstrzymana";
@@ -138,34 +143,61 @@ export function declarationHoldNote(row: HeldRow): string | null {
     return `Odłożona przez administratora.${held}`;
   }
   if (!row.reason) return null;
-  if (holdIsOver(row)) {
+  if (declarationHoldIsOver(row)) {
     return "Strona jest już publiczna.";
   }
   if (postFound(row)) {
-    return "Na stronie jest już płatne stanowisko. Sprawdź ponownie.";
+    return "Na stronie jest już płatne stanowisko. Opublikuj ręcznie i zaznacz je.";
   }
   return publicationSetAside(row)
     ? declarationHoldNotes[RULED_OUT]
     : declarationHoldNotes[row.reason];
 }
 
+/** Holds a recheck can never pass on a draft, whatever an admin does first:
+ * an admin's date by design, and a person's decision about the page, which
+ * resolving it only adds to (`keptHidden`, the rejected and pending
+ * revisions in `pageCheck`). The way out is a publication by hand. */
+const RECHECK_NEVER_PASSES: ReadonlySet<PublicationHoldReason> = new Set([
+  "admin_decision",
+  "kept_hidden",
+  "pending_proposal",
+  "revision_rejected",
+  "name_differs",
+]);
+
 /** What an admin can do about a row of the held lists, and what its open row
- * offers. A page that is public has only its hold to close, and that is all
- * „Sprawdź ponownie” does to it. A draft held on an admin's date cannot pass a
- * check by design. A page with no paid public post asks for nothing: what
- * clears it is the post, which brings it back by itself, and the person's own
- * page still publishes it by hand. */
+ * offers. A page that is public has only its hold to close, which a recheck
+ * does (`declarationRecheckLabel`). A draft is published by hand, checked
+ * again where a check can still pass, or declined. A page with no paid public
+ * post can still be published by hand: its post may be one the pipelines have
+ * not recorded, such as a mayor's office. A declined one is only put back. */
 export function declarationHoldActions(row: DeclarationPublicationRow) {
   const held = row.status === "held";
-  const waiting = held && !row.pagePublic && !publicationSetAside(row);
+  const draft = held && !row.pagePublic;
+  const waiting = draft && !publicationSetAside(row);
   return {
-    publish: waiting,
+    publish: draft,
     recheck:
       (held && row.pagePublic) ||
-      (waiting && row.reason !== "admin_decision"),
-    decline: waiting,
+      (waiting &&
+        !postFound(row) &&
+        !(row.reason && RECHECK_NEVER_PASSES.has(row.reason))),
+    // A public page held for two pages stays held while the other page has
+    // its date; this is how it leaves the list without linking a declaration.
+    decline: waiting || (held && row.pagePublic && row.reason === "two_pages"),
     restore: row.status === "declined",
   };
+}
+
+/** The recheck's button: on a page that is public it only closes the hold,
+ * except two pages with one date, which it asks again. */
+export function declarationRecheckLabel(
+  row: Pick<HeldRow, "reason" | "pagePublic">,
+): string {
+  return declarationHoldIsOver(row)
+    ? "Zamknij wstrzymanie"
+    : "Sprawdź ponownie";
 }
 
 /** Blue for a hold that is somebody's decision, which the automation only
@@ -177,7 +209,7 @@ export function declarationHoldTone(
   reason: PublicationHoldReason | null,
   pagePublic = false,
 ): RowTone {
-  if (holdIsOver({ reason, pagePublic })) return "info";
+  if (declarationHoldIsOver({ reason, pagePublic })) return "info";
   if (reason === "admin_decision") return "warning";
   return reason === "kept_hidden" ||
     reason === "pending_proposal" ||
@@ -393,7 +425,7 @@ export function declarationRecheckText(result: RecheckResult): string {
     case "published":
       return "Opublikowano.";
     case "confirmed":
-      return "Strona była już publiczna. Wiersz zamknięty.";
+      return "Strona była już publiczna. Wstrzymanie zamknięte.";
     case "held":
       return `Nadal wstrzymana: ${declarationHoldLabels[result.reason]}.`;
     case "skipped":

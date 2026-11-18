@@ -97,7 +97,12 @@
                 <v-list-item-title>
                   {{ relation.otherName || relation.otherId }}
                 </v-list-item-title>
+                <!-- The office too: one election groups the runs of all its
+                     offices, so two in one place differ by it alone. -->
                 <v-list-item-subtitle>
+                  <template v-if="relation.position">
+                    {{ relation.position }} ·
+                  </template>
                   {{ placeHint(clash, relation.otherId) }}
                   <span v-if="relation.published"> · już opublikowana</span>
                 </v-list-item-subtitle>

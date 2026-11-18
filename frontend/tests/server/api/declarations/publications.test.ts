@@ -7,7 +7,8 @@ import restore from "../../../../server/api/declarations/publications/[id]/resto
 /** The endpoints behind an admin's decisions on a held page on
  * /admin/oswiadczenia. What each hands to server/utils/declarationDecisions.ts
  * and declarationPublish.ts, which are tested on their own: the gate in front
- * of it, the page, and which cached answers it drops after it. */
+ * of it, the page, which cached answers it drops after it, and that the
+ * person moves in the people count. */
 const mocks = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   globalThis.createError = (err: any) =>
@@ -31,6 +32,7 @@ const mocks = vi.hoisted(() => {
     readingsOfAnotherDay: vi.fn(),
     peopleById: vi.fn(),
     reviewRow: vi.fn(),
+    restageDeclarationPeople: vi.fn(),
   };
 });
 
@@ -63,8 +65,10 @@ vi.mock("../../../../server/utils/declarationOverview", () => ({
   peopleById: mocks.peopleById,
   reviewRow: mocks.reviewRow,
 }));
+vi.mock("../../../../server/utils/declarationPeopleCount", () => ({
+  restageDeclarationPeople: mocks.restageDeclarationPeople,
+}));
 
-const OVERVIEW = "nitro:functions:declarationOverview";
 const event = {} as never;
 
 async function failure(call: Promise<unknown>) {
@@ -134,7 +138,9 @@ describe("api/declarations/publications/[id]/recheck", () => {
       "kowalska",
       "admin-uid",
     );
-    expect(mocks.clear).toHaveBeenCalledWith(OVERVIEW);
+    expect(mocks.restageDeclarationPeople).toHaveBeenCalledWith(db, [
+      "kowalska",
+    ]);
     // Nothing went up, so the pages' answers stand.
     expect(mocks.clear).not.toHaveBeenCalledWith("nitro:handlers");
   });
@@ -145,12 +151,25 @@ describe("api/declarations/publications/[id]/recheck", () => {
     await recheck(event);
 
     expect(mocks.clear).toHaveBeenCalledWith("nitro:handlers");
-    expect(mocks.clear).toHaveBeenCalledWith(OVERVIEW);
+    expect(mocks.restageDeclarationPeople).toHaveBeenCalled();
+  });
+
+  it("moves nobody when the night or an import stopped it", async () => {
+    mocks.recheckPublication.mockResolvedValue({
+      outcome: "skipped",
+      skipped: "night",
+    });
+
+    await expect(recheck(event)).resolves.toMatchObject({
+      outcome: "skipped",
+    });
+
+    expect(mocks.restageDeclarationPeople).not.toHaveBeenCalled();
   });
 });
 
 describe("api/declarations/publications/[id]/decline", () => {
-  it("sets the page aside in the admin's name, and drops the overview", async () => {
+  it("sets the page aside in the admin's name", async () => {
     await expect(decline(event)).resolves.toEqual({ id: "kowalska" });
 
     expect(mocks.declinePublication).toHaveBeenCalledWith(
@@ -158,46 +177,66 @@ describe("api/declarations/publications/[id]/decline", () => {
       "kowalska",
       "admin-uid",
     );
-    expect(mocks.clear).toHaveBeenCalledWith(OVERVIEW);
+    expect(mocks.restageDeclarationPeople).toHaveBeenCalledWith(db, [
+      "kowalska",
+    ]);
   });
 
-  it("drops nothing when the decision was refused", async () => {
+  it("moves nobody when the decision was refused", async () => {
     mocks.declinePublication.mockRejectedValue(
       Object.assign(new Error("Już nie."), { statusCode: 409 }),
     );
 
     expect((await failure(decline(event))).statusCode).toBe(409);
 
-    expect(mocks.clear).not.toHaveBeenCalled();
+    expect(mocks.restageDeclarationPeople).not.toHaveBeenCalled();
   });
 });
 
 describe("api/declarations/publications/[id]/restore", () => {
-  it("puts the page back, and drops the overview", async () => {
+  it("puts the page back", async () => {
     await expect(restore(event)).resolves.toEqual({ id: "kowalska" });
 
     expect(mocks.restorePublication).toHaveBeenCalledWith(db, "kowalska");
-    expect(mocks.clear).toHaveBeenCalledWith(OVERVIEW);
+    expect(mocks.restageDeclarationPeople).toHaveBeenCalledWith(db, [
+      "kowalska",
+    ]);
   });
 });
 
 describe("api/declarations/publications/[id]/crops", () => {
-  it("answers with the crops that read another day, as the rows decide them", async () => {
-    const crop = { get: () => ["kowalska", "nowak"] };
+  it("answers with the crops that read another day, and which an admin can still decide", async () => {
+    const waiting = {
+      get: () => ["kowalska", "nowak"],
+      data: () => ({ status: "agreed", pageMatch: "different" }),
+    };
+    // Another page's declaration, matched to that page already.
+    const settled = {
+      get: () => ["kowalska", "nowak"],
+      data: () => ({ status: "agreed", pageMatch: "same" }),
+    };
     const people = new Map();
-    mocks.readingsOfAnotherDay.mockResolvedValue([crop]);
+    mocks.readingsOfAnotherDay.mockResolvedValue([waiting, settled]);
     mocks.peopleById.mockResolvedValue(people);
     mocks.reviewRow.mockReturnValue({ id: "crop" });
 
-    await expect(crops(event)).resolves.toEqual([{ id: "crop" }]);
+    await expect(crops(event)).resolves.toEqual([
+      { id: "crop", decidable: true },
+      { id: "crop", decidable: false },
+    ]);
 
     expect(mocks.readingsOfAnotherDay).toHaveBeenCalledWith(
       db,
       "kowalska",
       "1979-07-15",
     );
-    expect(mocks.peopleById).toHaveBeenCalledWith(db, ["kowalska", "nowak"]);
-    expect(mocks.reviewRow).toHaveBeenCalledWith(crop, people);
+    expect(mocks.peopleById).toHaveBeenCalledWith(db, [
+      "kowalska",
+      "nowak",
+      "kowalska",
+      "nowak",
+    ]);
+    expect(mocks.reviewRow).toHaveBeenCalledWith(waiting, people);
   });
 
   it("answers with nothing for a page without a date to contradict", async () => {

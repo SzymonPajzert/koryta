@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { requireAdmin } from "../../../../server/utils/auth";
-import { closeHoldOnPublication } from "../../../../server/utils/declarationDecisions";
+import { afterHandPublication } from "../../../../server/utils/declarationDecisions";
 import { notifyRevisionReviewed } from "../../../../server/utils/revisionNotifications";
 import handler from "../../../../server/api/nodes/publish.post";
 
@@ -73,8 +73,7 @@ vi.mock("../../../../server/utils/revisionNotifications", () => ({
 }));
 
 vi.mock("../../../../server/utils/declarationDecisions", () => ({
-  OVERVIEW_CACHE_BASE: "nitro:functions:declarationOverview",
-  closeHoldOnPublication: vi.fn(async () => false),
+  afterHandPublication: vi.fn(async () => {}),
 }));
 
 const { mockReadValidatedBody, mockCacheClear } = vi.hoisted(() => {
@@ -133,60 +132,49 @@ describe("api/nodes/publish", () => {
   });
 
   describe("a person held on /admin/oswiadczenia", () => {
-    const OVERVIEW = "nitro:functions:declarationOverview";
     const person = {
       type: "person",
       name: "X",
       revision_id: { path: "revisions/r" },
     };
 
-    it("closes the hold, and drops the overview that still lists it", async () => {
+    it("closes the hold of a person's page going public, in the admin's name", async () => {
       stored["nodes/node-1"] = person;
-      vi.mocked(closeHoldOnPublication).mockResolvedValueOnce(true);
 
       await handler({} as never);
 
-      expect(closeHoldOnPublication).toHaveBeenCalledWith(
+      expect(afterHandPublication).toHaveBeenCalledWith(
         mockDb,
         "node-1",
         "admin-uid",
+        true,
       );
-      expect(mockCacheClear).toHaveBeenCalledWith(OVERVIEW);
     });
 
-    it("leaves the overview alone when no hold was closed", async () => {
-      stored["nodes/node-1"] = person;
+    it("puts the hold back on a person's page going down", async () => {
+      stored["nodes/node-1"] = { ...person, published: true };
+      requestPublished(false);
 
       await handler({} as never);
 
-      expect(mockCacheClear).not.toHaveBeenCalledWith(OVERVIEW);
-    });
-
-    it("publishes all the same when the hold cannot be closed", async () => {
-      stored["nodes/node-1"] = person;
-      vi.mocked(closeHoldOnPublication).mockRejectedValueOnce(
-        new Error("unavailable"),
+      expect(afterHandPublication).toHaveBeenCalledWith(
+        mockDb,
+        "node-1",
+        "admin-uid",
+        false,
       );
-      const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      await expect(handler({} as never)).resolves.toMatchObject({
-        published: true,
-      });
-
-      expect(mockCommit).toHaveBeenCalled();
-      expect(logged).toHaveBeenCalledOnce();
-      logged.mockRestore();
     });
 
-    it("does not look for a hold on a company, or on a page going down", async () => {
+    it("leaves the hold alone when nothing changed, and on a company", async () => {
+      // Publishing a page already public would otherwise close a two_pages
+      // hold nobody answered.
+      stored["nodes/node-1"] = { ...person, published: true };
+      await handler({} as never);
+
       stored["nodes/node-1"] = { ...person, type: "place" };
       await handler({} as never);
 
-      stored["nodes/node-1"] = { ...person, published: true };
-      requestPublished(false);
-      await handler({} as never);
-
-      expect(closeHoldOnPublication).not.toHaveBeenCalled();
+      expect(afterHandPublication).not.toHaveBeenCalled();
     });
   });
 

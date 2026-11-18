@@ -173,7 +173,11 @@ export type StoredPublication = {
   declinedAt?: Timestamp;
   /** The hold a publication by hand closed (`closeHoldOnPublication`): who
    * published the page, when, and what it was held for. */
-  handPublished?: { uid: string; at: Timestamp; held: PublicationHoldReason | null };
+  handPublished?: {
+    uid: string;
+    at: Timestamp;
+    held: PublicationHoldReason | null;
+  };
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 };
@@ -541,10 +545,12 @@ async function recordPublication(
  *
  * Published and publishing stay what they are: the page is up, or going up.
  * A hold outlasts a later match - it is a doubt nobody has settled - unless
- * the page has become public since, which settles it. So does an admin's no,
- * which keeps the reason it was held for: another crop with the page's date is
- * no answer to it. Two pages with the
- * crop's date hold the page whatever it was waiting for; on a page being
+ * the page has become public since, which settles it, and takes an admin's
+ * no along. An admin's no (`declinedAt`) outlasts every other match, with the
+ * reason it was held for: another crop with the page's date is no answer to
+ * it, nor is a reading that would take over an admin's-date hold. Two pages
+ * with the crop's date hold the page whatever it was waiting for; on a page
+ * being
  * published that is left as the reason for the pass that holds its slot,
  * which holds the page and gives the slot back (`publishPage`): taking the
  * status from under it here would strand the slot.
@@ -566,29 +572,28 @@ function nextPublication(
     declaration: LinkedDeclaration;
     now: Date;
   },
-): Partial<StoredPublication> | null {
+): DocumentData | null {
+  const declined = existing?.status === "held" && !!existing.declinedAt;
   const adminHold =
-    existing?.status === "held" && existing.reason === "admin_decision";
+    existing?.status === "held" &&
+    existing.reason === "admin_decision" &&
+    !declined;
   if (args.byAdmin && existing && !adminHold) return null;
   const before = adminHold && !args.byAdmin ? undefined : existing;
   const was = before?.status;
   const status: PublicationStatus =
     was === "published" || was === "publishing"
       ? was
-      : was === "declined" && args.outcome !== "confirmed"
-        ? was
-        : args.outcome === "queued" && was === "held"
-          ? "held"
-          : args.outcome;
+      : args.outcome === "queued" && was === "held"
+        ? "held"
+        : args.outcome;
   const reason: PublicationHoldReason | null =
     status === "held"
       ? (before?.reason ?? (args.byAdmin ? "admin_decision" : "two_pages"))
-      : status === "declined"
-        ? (before?.reason ?? null)
-        : status === "publishing" &&
-            (args.outcome === "held" || before?.reason === "two_pages")
-          ? "two_pages"
-          : null;
+      : status === "publishing" &&
+          (args.outcome === "held" || before?.reason === "two_pages")
+        ? "two_pages"
+        : null;
   const knownIds = before?.extractIds ?? [];
   const known = before?.declarations ?? [];
   const extractIds = unique([...knownIds, args.extractId]);
@@ -620,6 +625,10 @@ function nextPublication(
       ? { queuedAt: at }
       : {}),
     ...(status === "held" && was !== "held" ? { heldAt: at } : {}),
+    // A page that went public answers the admin's no as well.
+    ...(declined && status !== "held"
+      ? { declinedAt: FieldValue.delete(), declinedBy: FieldValue.delete() }
+      : {}),
   };
 }
 
@@ -821,6 +830,19 @@ async function claimPublication(
     }
     if (publication?.status !== "queued") return null;
 
+    // An admin's no is never queued by this release, but an older one hands
+    // an admin's-date hold to the next readers' crop with the page's date,
+    // declined or not. Such a page goes back to its hold, still declined.
+    if (publication.declinedAt) {
+      tx.update(ref, {
+        status: "held",
+        reason: publication.reason ?? "admin_decision",
+        heldAt: at,
+        updatedAt: at,
+      });
+      return null;
+    }
+
     // A page can come back to the queue with an earlier claim's terms still
     // on its record, so each claim clears the other kind's.
     if (pressedBy) {
@@ -921,10 +943,17 @@ async function publicPages(
  * that does not is held again, for what stops it now, which can be another
  * reason than the one the admin looked at. A page found public already is
  * `confirmed`, which is how a hold left behind by a publication nobody closed
- * leaves the list.
+ * leaves the list - except one held for two pages, which is asked whether
+ * another live page still has its date first: a public page is never checked
+ * by `publishPage`, and confirming it would link a declaration that may be
+ * the other page's.
+ *
+ * A pass that fails before the page went up puts the hold back as it was,
+ * rather than leaving the page `publishing` with no reason; one that fails
+ * after it leaves the claim for the next pass to finish.
  *
  * Throws a 404 for a page with no record and a 409 for one that is not held,
- * or that only a person can publish (`claimHeld`).
+ * that an admin declined, or that only a person can publish (`claimHeld`).
  */
 export async function recheckPublication(
   db: Firestore,
@@ -938,8 +967,36 @@ export async function recheckPublication(
   if (await peopleImportBusy(now)) {
     return { outcome: "skipped", skipped: "import" };
   }
-  const claim = await claimHeld(db, pageId, now, pressedBy);
-  const outcome = await publishPage(db, pageId, now);
+  const { claim, reason } = await claimHeld(db, pageId, now, pressedBy);
+  let outcome: PublishOutcome;
+  try {
+    outcome =
+      reason === "two_pages" && (await stillTwoPages(db, pageId))
+        ? held("two_pages")
+        : await publishPage(db, pageId, now);
+  } catch (error) {
+    // Back on hold as it was, unless the page went up before the failure:
+    // then the claim stays, and the next pass finishes the relations on its
+    // terms, as it does for a press cut short.
+    const page = await db
+      .collection("nodes")
+      .doc(pageId)
+      .get()
+      .then(
+        (snapshot) => snapshot.data(),
+        () => undefined,
+      );
+    if (reason && page && !pageIsPublic(page)) {
+      await releaseClaim(
+        db,
+        pageId,
+        claim,
+        { status: "held", reason },
+        now,
+      ).catch(() => {});
+    }
+    throw error;
+  }
   if (outcome.status === "published") return { outcome: "published" };
   await releaseClaim(db, pageId, claim, outcome, now);
   return outcome.status === "held"
@@ -947,20 +1004,34 @@ export async function recheckPublication(
     : { outcome: "confirmed" };
 }
 
+/** Whether another live page is born on the day of the page's settled crops,
+ * which is what a `two_pages` hold waits on. */
+async function stillTwoPages(db: Firestore, pageId: string): Promise<boolean> {
+  const [publication, page] = await db.getAll(
+    db.collection(PUBLICATIONS).doc(pageId),
+    db.collection("nodes").doc(pageId),
+  );
+  const born = birthDateOf(page?.data());
+  const matching = (
+    await agreedExtracts(db, asStrings(publication?.get("extractIds")))
+  ).filter((extract) => agreedDay(extract) === born);
+  return matching.length > 0 && anotherPageBornThatDay(db, pageId, matching);
+}
+
 /** Claims a held page for the admin who asked, the way a press claims a queued
- * one. The reason goes with it: `pageCheck` takes a `two_pages` on the record
- * at its word, and this is the one claim that asks it again, which is what
- * lets a page go up once its two pages are merged.
+ * one, and says what it was held for. The reason goes with it: `pageCheck`
+ * takes a `two_pages` on the record at its word, and this is the one claim
+ * that asks it again.
  *
- * Only a date of an admin's holds a draft for good: `agreedExtracts` leaves
- * such a crop out, so the page would come back as no longer matching, which it
- * does. The admin publishes it by hand, or not at all. */
+ * A draft held on an admin's date is refused: `agreedExtracts` leaves such a
+ * crop out, so the page would come back as no longer matching. So is a page an
+ * admin declined, until it is put back. */
 async function claimHeld(
   db: Firestore,
   pageId: string,
   now: Date,
   pressedBy: string,
-): Promise<Claim> {
+): Promise<{ claim: Claim; reason: PublicationHoldReason | null }> {
   const ref = db.collection(PUBLICATIONS).doc(pageId);
   const nodeRef = db.collection("nodes").doc(pageId);
   return db.runTransaction(async (tx) => {
@@ -976,6 +1047,12 @@ async function claimHeld(
       throw createError({
         statusCode: 409,
         message: "Ta publikacja nie jest już wstrzymana.",
+      });
+    }
+    if (publication.declinedAt) {
+      throw createError({
+        statusCode: 409,
+        message: "Ta osoba jest odłożona: najpierw ją przywróć.",
       });
     }
     if (
@@ -996,7 +1073,10 @@ async function claimHeld(
       day: FieldValue.delete(),
       updatedAt: at,
     });
-    return { day: null, claimedAt: at };
+    return {
+      claim: { day: null, claimedAt: at },
+      reason: publication.reason ?? null,
+    };
   });
 }
 

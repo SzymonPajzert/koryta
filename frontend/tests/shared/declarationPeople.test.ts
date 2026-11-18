@@ -302,6 +302,21 @@ describe("countPeople", () => {
     expect(snapshot.people).toBe(13);
   });
 
+  it("keeps a person an admin declined in the held stage, under its own detail", () => {
+    const input = site();
+    input.publications.set("held", {
+      status: "held",
+      reason: "two_places",
+      publishedOn: null,
+      declined: true,
+    });
+
+    expect(countPeople(input).entries.get("held")).toMatchObject({
+      stage: "held",
+      detail: "declined",
+    });
+  });
+
   it("draws the site's snapshot", () => {
     const snapshot = peopleSnapshot(countPeople(site()).entries, AT);
 

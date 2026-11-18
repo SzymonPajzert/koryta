@@ -1,5 +1,4 @@
 import { holdRequest } from "~~/server/utils/declarationDecisionRequest";
-import { OVERVIEW_CACHE_BASE } from "~~/server/utils/declarationDecisions";
 import { restageDeclarationPeople } from "~~/server/utils/declarationPeopleCount";
 import { recheckPublication } from "~~/server/utils/declarationPublish";
 import type { RecheckResult } from "~~/shared/declarations";
@@ -18,6 +17,5 @@ export default defineEventHandler(async (event): Promise<RecheckResult> => {
     await useStorage("cache").clear("nitro:handlers");
   }
   if (result.outcome !== "skipped") await restageDeclarationPeople(db, [id]);
-  await useStorage("cache").clear(OVERVIEW_CACHE_BASE);
   return result;
 });

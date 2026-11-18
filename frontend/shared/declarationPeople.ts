@@ -184,6 +184,8 @@ export type PublicationState = {
   reason: string | null;
   /** The Warsaw day it was published. */
   publishedOn: string | null;
+  /** A held page an admin said will not be published (`declinedAt`). */
+  declined?: boolean;
 };
 
 /** What the site knows of one person's page. */
@@ -428,9 +430,8 @@ function heldDetail(publication: PublicationState | null): string {
   const { status } = publication;
   switch (status) {
     case "held":
+      if (publication.declined) return "declined";
       return publication.reason ? `held:${publication.reason}` : status;
-    case "declined":
-      return status;
     case "queued":
     case "publishing":
     case "published":
