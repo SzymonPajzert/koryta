@@ -7,7 +7,6 @@ import type {
   EdgeType,
   Region,
 } from "../model";
-import { DiGraph } from "digraph-js";
 import { personNode, companyNode, regionNode } from "./nodes";
 
 export interface GraphLayout {
@@ -27,14 +26,26 @@ export function getNodeGroups(
   companies: Record<string, Company>,
   regions: Record<string, Region>,
 ) {
-  const placeConnection = new DiGraph();
-  placeConnection.addVertices(
-    ...Object.keys(nodesNoStats).flatMap((key) => [
-      // Corresponds to TraverseState
-      { id: key + SPLIT + "active", adjacentTo: [], body: {} },
-      { id: key + SPLIT + "dead_end", adjacentTo: [], body: {} },
-    ]),
-  );
+  // Two states per node, as TraverseState, each with the states it leads to.
+  // Maps and sets, where digraph-js copied every vertex id to add one and
+  // checked each visit against an array: quadratic in the nodes, and 46 s of
+  // /api/stats/computeNodes on the 2026-11-18 export.
+  const adjacent = new Map<string, string[]>();
+  const linked = new Map<string, Set<string>>();
+  for (const key of Object.keys(nodesNoStats)) {
+    adjacent.set(key + SPLIT + "active", []);
+    adjacent.set(key + SPLIT + "dead_end", []);
+  }
+  // As DiGraph.addEdge: no loop, no second copy, and both ends known.
+  const addEdge = (from: string, to: string) => {
+    const next = adjacent.get(from);
+    if (from === to || !next || !adjacent.has(to)) return;
+    let seen = linked.get(from);
+    if (!seen) linked.set(from, (seen = new Set()));
+    if (seen.has(to)) return;
+    seen.add(to);
+    next.push(to);
+  };
 
   edges.forEach((edge: Edge) => {
     if (!edge.traverse) {
@@ -43,24 +54,43 @@ export function getNodeGroups(
     // If the edge should spread the node group, either map it to active node or dead_end
     // Only active states have out-edges.
     if (edge.traverse.forward) {
-      placeConnection.addEdge({
-        from: edge.source + SPLIT + "active",
-        to: edge.target + SPLIT + edge.traverse.forward,
-      });
+      addEdge(
+        edge.source + SPLIT + "active",
+        edge.target + SPLIT + edge.traverse.forward,
+      );
     }
     if (edge.traverse.backward) {
-      placeConnection.addEdge({
-        from: edge.target + SPLIT + "active",
-        to: edge.source + SPLIT + edge.traverse.backward,
-      });
+      addEdge(
+        edge.target + SPLIT + "active",
+        edge.source + SPLIT + edge.traverse.backward,
+      );
     }
   });
 
+  /** Every state reachable from `root`, each once, depth first in the order
+   * the edges were added - and `root` itself only where a cycle leads back to
+   * it - in the order DiGraph.getDeepChildren gave them. */
+  const deepChildren = (root: string): string[] => {
+    const reached: string[] = [];
+    const visited = new Set<string>();
+    const stack = [...(adjacent.get(root) ?? [])].reverse();
+    while (stack.length > 0) {
+      const state = stack.pop()!;
+      if (visited.has(state)) continue;
+      visited.add(state);
+      reached.push(state);
+      if (state === root) continue;
+      const next = adjacent.get(state)!;
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (!visited.has(next[i]!)) stack.push(next[i]!);
+      }
+    }
+    return reached;
+  };
+
   const entries = Object.entries({ ...companies, ...regions, ...people }).map(
     ([placeID, place]) => {
-      const children = [
-        ...placeConnection.getDeepChildren(placeID + SPLIT + "active"),
-      ]
+      const children = deepChildren(placeID + SPLIT + "active")
         // Remove node state from the ID.
         .map((extendedID) => extendedID.split(SPLIT)[0])
         .filter((id) => {

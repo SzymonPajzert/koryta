@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { DiGraph } from "digraph-js";
 import {
   getNodeGroups,
   getEdges,
@@ -6,8 +7,145 @@ import {
   getGraphBFS,
   pruneOuterRing,
 } from "~~/shared/graph/util";
-import type { Person, Company, Region, Edge as DBEdge } from "~~/shared/model";
+import type {
+  Person,
+  Company,
+  Region,
+  Edge as DBEdge,
+  EdgeType,
+} from "~~/shared/model";
+import { SPLIT } from "~~/shared/graph/model";
 import type { Edge, Node, NodeStats } from "~~/shared/graph/model";
+
+/** `getNodeGroups` as it was until 2026-11-18, on digraph-js: what the linear
+ * walk has to give, group for group and child for child. */
+function digraphNodeGroups(
+  nodesNoStats: Record<string, Node>,
+  edges: Edge[],
+  people: Record<string, Person>,
+  companies: Record<string, Company>,
+  regions: Record<string, Region>,
+) {
+  const placeConnection = new DiGraph();
+  placeConnection.addVertices(
+    ...Object.keys(nodesNoStats).flatMap((key) => [
+      { id: key + SPLIT + "active", adjacentTo: [], body: {} },
+      { id: key + SPLIT + "dead_end", adjacentTo: [], body: {} },
+    ]),
+  );
+  edges.forEach((edge) => {
+    if (!edge.traverse) return;
+    if (edge.traverse.forward) {
+      placeConnection.addEdge({
+        from: edge.source + SPLIT + "active",
+        to: edge.target + SPLIT + edge.traverse.forward,
+      });
+    }
+    if (edge.traverse.backward) {
+      placeConnection.addEdge({
+        from: edge.target + SPLIT + "active",
+        to: edge.source + SPLIT + edge.traverse.backward,
+      });
+    }
+  });
+  const entries = Object.entries({ ...companies, ...regions, ...people }).map(
+    ([placeID, place]) => {
+      const children = [
+        ...placeConnection.getDeepChildren(placeID + SPLIT + "active"),
+      ]
+        .map((extendedID) => extendedID.split(SPLIT)[0])
+        .filter((id) => !!id && !nodesNoStats[id]?.hide) as string[];
+      return {
+        id: placeID,
+        name: place.name,
+        connected: [placeID, ...children],
+        stats: {
+          people: children.filter(
+            (node) => nodesNoStats[node]?.type === "circle",
+          ).length,
+        },
+      };
+    },
+  );
+  entries.push({
+    id: "",
+    name: "Wszystkie",
+    connected: Object.keys(nodesNoStats),
+    stats: { people: Object.keys(people).length },
+  });
+  return entries.sort((a, b) => b.stats.people - a.stats.people);
+}
+
+/** The same numbers for the same seed, every run. */
+function seeded(seed: number): () => number {
+  let state = seed;
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Every edge type, both ways each traverses, and one that has no policy. */
+const EDGE_TYPES = [
+  "employed",
+  "connection",
+  "mentions",
+  "owns",
+  "seat",
+  "comment",
+  "election",
+  "tagged",
+  "unknown",
+] as EdgeType[];
+
+/** People, places and regions, some hidden, an article that is no group's
+ * root, and edges between them at random: loops, the same edge twice, an end
+ * with no node, and a ring of ownership now and then. */
+function randomGraph(random: () => number) {
+  const pick = <T>(items: readonly T[]): T =>
+    items[Math.floor(random() * items.length)]!;
+  const people: Record<string, Person> = {};
+  const companies: Record<string, Company> = {};
+  const regions: Record<string, Region> = {};
+  const ids: string[] = [];
+  const size = 1 + Math.floor(random() * 30);
+  for (let i = 0; i < size; i++) {
+    const kind = pick(["person", "place", "region"] as const);
+    const id = `${kind}-${i}`;
+    const node = {
+      name: id,
+      type: kind,
+      ...(random() < 0.15 ? { hide: true } : {}),
+    };
+    if (kind === "person") people[id] = node as unknown as Person;
+    else if (kind === "place") companies[id] = node as unknown as Company;
+    else regions[id] = node as unknown as Region;
+    ids.push(id);
+  }
+  const nodesNoStats: Record<string, Node> = {
+    ...getNodesNoStats(people, companies, regions, {}),
+    article: { name: "article", type: "document", color: "" },
+  };
+  const ends = [...ids, "article", "missing"];
+  const raw: DBEdge[] = [];
+  const count = Math.floor(random() * size * 3);
+  for (let i = 0; i < count; i++) {
+    const source = pick(ends);
+    const target = random() < 0.1 ? source : pick(ends);
+    raw.push({ id: `e${i}`, source, target, type: pick(EDGE_TYPES) } as DBEdge);
+    if (random() < 0.1) raw.push({ ...raw[raw.length - 1]!, id: `e${i}-2` });
+  }
+  if (size >= 3 && random() < 0.5) {
+    const ring = [pick(ids), pick(ids), pick(ids)];
+    ring.forEach((source, i) => {
+      const target = ring[(i + 1) % ring.length]!;
+      raw.push({ id: `ring${i}`, source, target, type: "owns" } as DBEdge);
+    });
+  }
+  return { nodesNoStats, edges: getEdges(raw), people, companies, regions };
+}
 
 describe("graph utils", () => {
   describe("getNodeGroups", () => {
@@ -82,6 +220,39 @@ describe("graph utils", () => {
       // The region group should NOT include the Candidate's Friend!
       // This verifies that `backward: "dead_end"` correctly stopped the traversal at the Candidate
       expect(regionGroup?.connected).not.toContain("p2");
+    });
+
+    /** The walk replaced digraph-js's, which was quadratic in the nodes, and
+     * every group has to come out as it did: the same children in the same
+     * order, and the same count of people. */
+    it("groups every node as the digraph-js walk did", () => {
+      let reachedPeople = 0;
+      let backToTheRoot = 0;
+      for (let seed = 1; seed <= 400; seed++) {
+        const { nodesNoStats, edges, people, companies, regions } = randomGraph(
+          seeded(seed),
+        );
+
+        const groups = getNodeGroups(
+          nodesNoStats,
+          edges,
+          people,
+          companies,
+          regions,
+        );
+
+        expect(groups, `seed ${seed}`).toEqual(
+          digraphNodeGroups(nodesNoStats, edges, people, companies, regions),
+        );
+        for (const group of groups) {
+          if (group.id === "") continue;
+          reachedPeople += group.stats.people;
+          if (group.connected.slice(1).includes(group.id)) backToTheRoot++;
+        }
+      }
+      // The graphs reach somebody, and some lead back to where they started.
+      expect(reachedPeople).toBeGreaterThan(0);
+      expect(backToTheRoot).toBeGreaterThan(0);
     });
   });
 
