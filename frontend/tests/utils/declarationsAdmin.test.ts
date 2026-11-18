@@ -133,7 +133,7 @@ describe("the words for the job's codes", () => {
     );
     // Published by hand, the page shows no declaration: it says so first.
     const note =
-      "Opublikuj ręcznie, jeśli się zgadza. Datę ustalił administrator, więc oświadczenia na stronie nie będzie.";
+      "Datę ustalił administrator, więc automat nie publikuje. Opublikuj ręcznie, jeśli się zgadza.";
     expect(declarationHoldNotes.admin_decision).toBe(note);
     expect(declarationHoldNote(heldRow("admin_decision"))).toBe(note);
   });

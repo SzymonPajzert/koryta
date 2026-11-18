@@ -1107,7 +1107,7 @@ describe("confirmedDeclarations", () => {
     expect(await linkedOnAPage(firestore, "kowalska-crop")).toBe(true);
   });
 
-  it("lists nothing for a crop an admin settled again on the page's new date", async () => {
+  it("lists a crop an admin settled again on the page's new date", async () => {
     await confirmedWithNamesake();
     await dateCorrected();
 
@@ -1119,8 +1119,9 @@ describe("confirmedDeclarations", () => {
     });
     await matchPages(firestore, "kowalska-crop", LATER);
 
-    // The crop and the page agree now, on the admin's date, which confirms
-    // nothing; the record readers made is left as it was.
+    // The crop and the page agree now, on the admin's date: the page shows
+    // the declaration (decision on 2026-11-18), and the record readers made
+    // is left as it was.
     expect(read("declarationExtracts/kowalska-crop")).toMatchObject({
       agreed: { value: "1980-01-02", by: "admin" },
       pageMatch: "same",
@@ -1128,7 +1129,7 @@ describe("confirmedDeclarations", () => {
     expect(read("declarationPublications/kowalska")).toMatchObject({
       status: "confirmed",
     });
-    expect(await shown()).toEqual([]);
+    expect(await shown()).toMatchObject([{ url: LINK }]);
   });
 
   it("lists nothing on a page without a birth date", async () => {
@@ -3349,6 +3350,29 @@ describe("what an admin does about a held page", () => {
 
       await closeHoldOnPublication(firestore, "kowalska", ADMIN, LATER);
 
+      const shown = await confirmedDeclarations(
+        firestore,
+        record(),
+        read("nodes/kowalska")!,
+      );
+      expect(shown.map((declaration) => declaration.url)).toEqual([
+        "https://bip.strzelin.pl/download/kowalska-crop",
+      ]);
+    });
+
+    it("links the declaration of a page published by hand on an admin's date", async () => {
+      // The automation does not publish on an admin's date; the admin who
+      // publishes the page does, and the page shows the declaration all the
+      // same (decision on 2026-11-18).
+      await heldOnAnAdminsDate();
+      edit("nodes/kowalska", { published: true });
+
+      await closeHoldOnPublication(firestore, "kowalska", ADMIN, LATER);
+
+      expect(record()).toMatchObject({
+        status: "published",
+        handPublished: { held: "admin_decision" },
+      });
       const shown = await confirmedDeclarations(
         firestore,
         record(),

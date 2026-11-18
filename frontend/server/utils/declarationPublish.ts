@@ -1673,12 +1673,14 @@ function oldestFirst(a: StoredRevision, b: StoredRevision): number {
 }
 
 /** The crops still settled on a full date, of those named. One an admin has
- * settled since it was recorded is left out: an admin's date is no match the
- * automation acts on (`matchPages`), so a page whose crop an admin corrected
- * to the page's date is held as no longer matching, not published on it. */
+ * settled since it was recorded is left out unless `byAdmin` says otherwise:
+ * an admin's date is no match the automation acts on (`matchPages`), so a
+ * page whose crop an admin corrected to the page's date is held as no longer
+ * matching, not published on it. */
 async function agreedExtracts(
   db: Firestore,
   ids: readonly string[],
+  { byAdmin = false }: { byAdmin?: boolean } = {},
 ): Promise<DocumentData[]> {
   if (ids.length === 0) return [];
   const snapshots = await db.getAll(
@@ -1688,15 +1690,18 @@ async function agreedExtracts(
     .map((snapshot) => snapshot.data())
     .filter(
       (data): data is DocumentData =>
-        agreedDay(data) !== null && !settledByAdmin(data),
+        agreedDay(data) !== null && (byAdmin || !settledByAdmin(data)),
     );
 }
 
 /**
  * The declarations a page's record may show on the page
  * (/api/nodes/<id>/declarations): those of its crops that still confirm the
- * page's birth date as it stands, settled on that very day by readers or by
- * the job and never by an admin (`agreedExtracts`), each file once.
+ * page's birth date as it stands, settled on that very day, each file once.
+ *
+ * An admin's date counts here, though the automation publishes nothing on it
+ * (`agreedExtracts`): a page somebody published, or whose date an admin
+ * settled, shows its declaration all the same (decision on 2026-11-18).
  *
  * The record lists the crops that matched when it was written, and nothing
  * takes one off it: since then a reviewer may have corrected the page's
@@ -1711,7 +1716,9 @@ export async function confirmedDeclarations(
 ): Promise<LinkedDeclaration[]> {
   const born = birthDateOf(page);
   if (!born) return [];
-  const crops = await agreedExtracts(db, asStrings(record?.extractIds));
+  const crops = await agreedExtracts(db, asStrings(record?.extractIds), {
+    byAdmin: true,
+  });
   return crops
     .filter((crop) => agreedDay(crop) === born)
     .reduce<LinkedDeclaration[]>(

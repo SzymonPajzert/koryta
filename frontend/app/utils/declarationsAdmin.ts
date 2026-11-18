@@ -73,7 +73,7 @@ export const declarationHoldNotes: Record<PublicationHoldReason, string> = {
   two_pages:
     "Ta osoba ma dwie strony. Połącz je albo opublikuj właściwą ręcznie.",
   admin_decision:
-    "Opublikuj ręcznie, jeśli się zgadza. Datę ustalił administrator, więc oświadczenia na stronie nie będzie.",
+    "Datę ustalił administrator, więc automat nie publikuje. Opublikuj ręcznie, jeśli się zgadza.",
   needs_split:
     "Strona jest do rozdzielenia. Rozdziel ją, potem sprawdź ponownie.",
   kept_hidden:
