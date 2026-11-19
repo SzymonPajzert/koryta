@@ -336,8 +336,14 @@ class UnitSeed:
 
 
 def _with_scheme(url: str) -> str:
+    """``url`` with http:// where it names no scheme, its scheme and host in
+    lower case: curl sends the host as written, and SkyCMS answers the
+    catalogue's http://WWW.GLUCHOLAZY.PL with a 500, http://www.glucholazy.pl
+    with its home page (11-13; 282 of the catalogue's websites in capitals)."""
     url = url.strip()
-    return url if re.match(r"^https?://", url, re.I) else f"http://{url}"
+    if not re.match(r"^https?://", url, re.I):
+        url = f"http://{url}"
+    return re.sub(r"^https?://[^/?#]*", lambda m: m.group(0).lower(), url, flags=re.I)
 
 
 def scope_of(url: str, shared_hosts: set[str]) -> str:
