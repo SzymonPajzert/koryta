@@ -9,12 +9,14 @@ swap, not a redesign.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import tarfile
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import BinaryIO
 
 from scrapers.stores import DocRow
 
@@ -27,8 +29,28 @@ class _Bundle:
     part_path: Path
     final_path: Path
     tar: tarfile.TarFile
+    #: The ``.part`` itself, locked while it is written (`in_use`).
+    handle: BinaryIO
     size: int = 0
     index: list[str] = field(default_factory=list)
+
+
+def in_use(part: Path) -> bool:
+    """Whether a running process still writes the ``.part`` bundle ``part``:
+    its `LocalBundleStore` holds a lock on it until the bundle is closed, and
+    the kernel drops the lock when the process dies, so a killed run's
+    ``.part`` is free to repair. A crawl's startup repair re-wrapped two
+    running walks' bundles under the same root, and each walk crashed closing
+    them (11-18)."""
+    try:
+        with part.open("rb") as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            return False
+    except FileNotFoundError:
+        return False  # closed and renamed: `rewrap_part` finds it final
 
 
 class LocalBundleStore:
@@ -59,7 +81,9 @@ class LocalBundleStore:
         directory.mkdir(parents=True, exist_ok=True)
         final_path = directory / f"uid_{uid}.tar.gz"
         part_path = directory / f"uid_{uid}.tar.gz.part"
-        tar = tarfile.open(part_path, mode="w:gz")
+        handle = part_path.open("wb")
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        tar = tarfile.open(fileobj=handle, mode="w:gz")
         bundle = _Bundle(
             host=host,
             uid=uid,
@@ -67,6 +91,7 @@ class LocalBundleStore:
             part_path=part_path,
             final_path=final_path,
             tar=tar,
+            handle=handle,
         )
         self._bundles[host] = bundle
         return bundle
@@ -76,8 +101,11 @@ class LocalBundleStore:
         info = tarfile.TarInfo(name="index.txt")
         info.size = len(index_data)
         bundle.tar.addfile(info, _BytesReader(index_data))
-        bundle.tar.close()
+        bundle.tar.close()  # a tarfile leaves a handle it was given open
+        bundle.handle.flush()
+        # Renamed while still locked, so no repair takes it in between.
         bundle.part_path.rename(bundle.final_path)
+        bundle.handle.close()
         self._bundles.pop(bundle.host, None)
 
     def add(

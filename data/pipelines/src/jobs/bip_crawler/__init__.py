@@ -39,7 +39,7 @@ from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
 from scrapers.common.fetch import use_ca_bundle
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import BipQueue
-from stores.bip_bundles import LocalBundleStore, rewrap_part
+from stores.bip_bundles import LocalBundleStore, in_use, rewrap_part
 from stores.bip_queue import PostgresBipQueue
 from stores.bip_registry import download_subjects_xml
 from stores.tls import ca_bundle
@@ -116,8 +116,8 @@ def ingest_registry(
 
 @contextlib.contextmanager
 def single_crawler(root: Path, refusal: str = "") -> Iterator[None]:
-    """Hold ``root`` for this run: the startup repair re-wraps every ``.part``
-    bundle there, which is only safe when no other crawler writes to it.
+    """Hold ``root`` for this run: no other crawl writes there while the
+    startup repair re-wraps the ``.part`` bundles no process holds (`in_use`).
     ``refusal`` is what to say when another run holds it."""
     root.mkdir(parents=True, exist_ok=True)
     with (root / ".crawl.lock").open("w") as handle:
@@ -159,19 +159,20 @@ def _crawl(args: argparse.Namespace) -> int:
     if not args.no_repair:
         # A SIGKILL/crash leaves .part bundles behind (SIGTERM flushes them).
         # Re-wrap them before crawling so their bytes are kept, not re-fetched.
-        # Single-instance assumption: at startup no crawler is writing to this
-        # --out, so every .part is stale and can be re-wrapped.
+        # Walks and imports may write theirs under the same --out meanwhile:
+        # a .part a running process holds is left to it (`in_use`).
         counts = repair_parts(
             bip_queue,
             root,
             older_than_minutes=0,
             keep_missing=False,
         )
-        if counts["repaired"] or counts["empty"] or counts["failed"]:
+        if any(counts[k] for k in ("repaired", "empty", "failed", "in_use")):
             print(
                 f"startup repair: rewrapped {counts['repaired']}, "
                 f"empty/removed {counts['empty']}, failed {counts['failed']}; "
-                f"pruned {counts['pruned']} doc rows",
+                f"pruned {counts['pruned']} doc rows; "
+                f"left {counts['in_use']} another process still writes",
                 flush=True,
             )
     store = LocalBundleStore(root)
@@ -213,6 +214,15 @@ def _crawl(args: argparse.Namespace) -> int:
     return EXIT_TRY_LATER if coordinator.timed_out else 0
 
 
+def _modified_before(part: Path, cutoff: float) -> bool:
+    """Whether ``part`` was last written before ``cutoff``; a bundle closed
+    and renamed since it was listed is not."""
+    try:
+        return part.stat().st_mtime <= cutoff
+    except FileNotFoundError:
+        return False
+
+
 def repair_parts(
     bip_queue: BipQueue,
     root: Path,
@@ -220,10 +230,19 @@ def repair_parts(
     older_than_minutes: int,
     keep_missing: bool,
 ) -> dict[str, int]:
-    """Re-wrap `.part` bundles left by a killed run; return per-outcome counts."""
+    """Re-wrap `.part` bundles left by a killed run; return per-outcome counts.
+    A bundle a running process still writes is left alone (`in_use`)."""
     cutoff = time.time() - older_than_minutes * 60
-    parts = sorted(p for p in root.rglob("*.part") if p.stat().st_mtime <= cutoff)
-    counts = {"parts": len(parts), "repaired": 0, "empty": 0, "failed": 0, "pruned": 0}
+    old = sorted(p for p in root.rglob("*.part") if _modified_before(p, cutoff))
+    parts = [p for p in old if not in_use(p)]
+    counts = {
+        "parts": len(parts),
+        "repaired": 0,
+        "empty": 0,
+        "failed": 0,
+        "pruned": 0,
+        "in_use": len(old) - len(parts),
+    }
     if not parts:
         return counts
     total = sum(p.stat().st_size for p in parts)
@@ -280,7 +299,8 @@ def cmd_repair(args: argparse.Namespace) -> int:
     print(
         f"rewrapped {counts['repaired']}, empty/removed {counts['empty']}, "
         f"failed {counts['failed']}; pruned {counts['pruned']} doc rows "
-        f"whose member was truncated"
+        f"whose member was truncated; left {counts['in_use']} another process "
+        f"still writes"
     )
     return 0
 
