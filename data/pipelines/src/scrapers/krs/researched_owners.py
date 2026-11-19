@@ -23,9 +23,11 @@ A public body with neither (KOWR, KZN, PARP) is named for the record only.
 
 Every company here is public by the site's rule - any public stake, minority
 included - so `CompaniesKRS` marks it public whatever the owners resolve to.
-Checked 2026-10-09, the three defence companies 2026-10-20, Energa
-Elektrownie Ostrołęka 2026-10-30; a sale changes it, so a source older than a
-year or two is worth reading again before a page quotes it.
+A mutual insurer (TUW) a state group holds counts the same (decision on
+2026-11-19). Checked 2026-10-09, the three defence companies 2026-10-20,
+Energa Elektrownie Ostrołęka 2026-10-30, the 31 the likely-public read found
+2026-11-19; a sale changes it, so a source older than a year or two is worth
+reading again before a page quotes it.
 """
 
 import dataclasses
@@ -67,6 +69,12 @@ ARP = ResearchedOwner("AGENCJA ROZWOJU PRZEMYSŁU S.A.", "0000037957")
 PFR = ResearchedOwner("POLSKI FUNDUSZ ROZWOJU S.A.", "0000466256")
 PGZ = ResearchedOwner("POLSKA GRUPA ZBROJENIOWA S.A.", "0000489456")
 GRUPA_AZOTY = ResearchedOwner("GRUPA AZOTY S.A.", "0000075450")
+KGHM = ResearchedOwner("KGHM POLSKA MIEDŹ S.A.", "0000023302")
+ORLEN = ResearchedOwner("ORLEN S.A.", "0000028860")
+PZU = ResearchedOwner("POWSZECHNY ZAKŁAD UBEZPIECZEŃ S.A.", "0000009831")
+GPW = ResearchedOwner("GIEŁDA PAPIERÓW WARTOŚCIOWYCH W WARSZAWIE S.A.", "0000082312")
+ENEA = ResearchedOwner("ENEA S.A.", "0000012483")
+SKARB_PANSTWA = ResearchedOwner("SKARB PAŃSTWA")
 
 RESEARCHED_OWNERS: dict[str, Researched] = {
     # POSTDATA S.A. (Bydgoszcz), Poczta Polska's IT company.
@@ -375,12 +383,199 @@ RESEARCHED_OWNERS: dict[str, Researched] = {
         ),
         "https://www.umz.zgierz.pl/bip/?bip_umz_did=164",
     ),
+    # Found by the likely-public read of 2026-11-19: S.A.s with several
+    # shareholders, which the register does not name, and companies struck off
+    # with none listed.
+    # GÓRNOŚLĄSKA AGENCJA ROZWOJU REGIONALNEGO: Województwo Śląskie's majority
+    # until 2014-04-15, when Fundusz Górnośląski bought it and then took GARR
+    # over; struck off 2015-01-26.
+    "0000065064": Researched(
+        (ResearchedOwner("FUNDUSZ GÓRNOŚLĄSKI S.A.", "0000042922", ">50%"),),
+        "https://nik.gov.pl/kontrole/wyniki-kontroli-nik/pobierz,lka~p_14_019_201404250756291398412589~id2~01,typ,kj.pdf",
+    ),
+    # MORSKA STOCZNIA REMONTOWA "GRYFIA": the rest is its employees'.
+    "0000009273": Researched(
+        (ResearchedOwner("FUNDUSZ ROZWOJU SPÓŁEK S.A.", "0000285139", "92.36%"),),
+        "https://www.nik.gov.pl/kontrole/wyniki-kontroli-nik/pobierz,lsz~p_22_081_202302081129291675852169~01,typ,kk.pdf",
+    ),
+    # STOCZNIA REMONTOWA NAUTA: the majority MARS took from ARP in 2010; in the
+    # PGZ group since 2014. The fund has no KRS number, so it draws no edge.
+    "0000047582": Researched(
+        (ResearchedOwner("MARS FUNDUSZ INWESTYCYJNY ZAMKNIĘTY"),),
+        "https://pl.wikipedia.org/wiki/Stocznia_Remontowa_Nauta",
+    ),
+    # GAS-TRADING: PGNiG's own 43.41%, ORLEN's since the 2022 merger, and the
+    # 36.17% its subsidiary bought from Bartimpex in 2015.
+    "0000039178": Researched(
+        (
+            dataclasses.replace(ORLEN, share="43.41%"),
+            ResearchedOwner("GAS ASSETS MANAGEMENT SP. Z O.O.", share="36.17%"),
+        ),
+        "https://decyzje.uokik.gov.pl/bp/dec_prez.nsf/43104c28a7a1be23c1257eac006d8dd4/565cbc152c4ea48ac1257ec6007ba926/$FILE/DKK1_421_11_15_SZ_GAM_PGNiG_GASTrading_dec.pdf",
+    ),
+    # KONSORCJUM OLEJÓW PRZEPRACOWANYCH (KOOP), at ORLEN Południe's Jedlicze
+    # refinery: on ORLEN's list of its group's companies, which does not say
+    # which of them holds it, so no edge is drawn.
+    "0000059362": Researched(
+        (ResearchedOwner("GRUPA KAPITAŁOWA ORLEN"),),
+        "https://www.pzu.pl/_fileserver/item/1566428",
+    ),
+    # ZAKŁAD MECHANICZNY "BUMAR-MIKULCZYCE", PGZ group.
+    "0000126115": Researched(
+        (
+            ResearchedOwner(
+                'ZAKŁADY MECHANICZNE "BUMAR-ŁABĘDY" S.A.', "0000016872", "79.46%"
+            ),
+            ResearchedOwner(
+                "POLSKI HOLDING OBRONNY SP. Z O.O.", "0000027151", "19.88%"
+            ),
+        ),
+        "https://bumar-mikulczyce.pl/dla-akcjonariuszy/akcjonariat/",
+    ),
+    # CENTRALNE BIURO KONSTRUKCJI KOTŁÓW: Sefako's since 2012, Sefako being
+    # Towarzystwo Finansowe Silesia's.
+    "0000096004": Researched(
+        (ResearchedOwner('FABRYKA KOTŁÓW "SEFAKO" S.A.', "0000029367", "98.5%"),),
+        "https://www.cbkk.pl/dla_akcjonariuszy-1-1078.html",
+    ),
+    "0000900868": Researched(  # GPW LOGISTICS
+        (dataclasses.replace(GPW, share="95%"),),
+        "https://www.gpw.pl/pub/GPW/files/raporty_roczne/GPW_Group_Integrated_Report_2023.pdf",
+    ),
+    # POLSKA AGENCJA RATINGOWA, struck off 2026-06-03: a third each of GPW,
+    # PFR and BIK in 2019.
+    "0000515329": Researched(
+        (
+            dataclasses.replace(GPW, share="35.86%"),
+            dataclasses.replace(PFR, share="33%"),
+        ),
+        "https://bank.pl/co-dalej-z-polska-agencja-ratingowa/",
+    ),
+    # RE58 (formerly Sigma BIS): PZU's alone from 2015 to 2019, still in the
+    # PZU group's structure in its 2025 report.
+    "0000534906": Researched(
+        (PZU,),
+        "https://annualreport2025.pzu.pl/en/about-pzu-group/group-characteristics/structure-of-the-pzu-group/",
+    ),
+    # REGIONALNA AGENCJA ROZWOJU I RESTRUKTURYZACJI "ODNOWA", struck off 2007:
+    # its liquidation closed at the Ministry of the Treasury, its single founder.
+    "0000039459": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000039459?rejestr=P&format=json",
+    ),
+    "0000061116": Researched(  # TARGI LUBLIN
+        (
+            ResearchedOwner("GMINA LUBLIN"),
+            ResearchedOwner("WOJEWÓDZTWO LUBELSKIE"),
+            ResearchedOwner("MIĘDZYNARODOWE TARGI POZNAŃSKIE SP. Z O.O.", "0000202703"),
+        ),
+        "https://medycyna.lublin.eu/cluster-members/lublin-trade-fairs-s-a/?lang=en",
+    ),
+    # GORZOWSKI RYNEK HURTOWY: series A and B, 86.9%, are local governments'.
+    "0000152226": Researched(
+        (
+            ResearchedOwner("MIASTO GORZÓW WIELKOPOLSKI", share="34.5%"),
+            ResearchedOwner("MIASTO KOSTRZYN NAD ODRĄ"),
+        ),
+        "https://bip.grh.pl/pobierz/31",
+    ),
+    # FUNDUSZ ROZWOJU I PROMOCJI WOJEWÓDZTWA WIELKOPOLSKIEGO; its FINANSOWANIE I
+    # DORADZTWO follows it.
+    "0000094064": Researched(
+        (ResearchedOwner("WOJEWÓDZTWO WIELKOPOLSKIE", share="60%"),),
+        "https://nik.gov.pl/kontrole/wyniki-kontroli-nik/pobierz,lpo~p_14_019_201404250756291398412589~id0~01,typ,kj.pdf",
+    ),
+    "0000336380": Researched(  # GKS GIEKSA KATOWICE
+        (ResearchedOwner("MIASTO KATOWICE", share="89.75%"),),
+        "https://pl.wikipedia.org/wiki/GKS_Katowice_(pi%C5%82ka_no%C5%BCna)",
+    ),
+    "0000018162": Researched(  # MPEC "TERMAL", Lubin
+        (ResearchedOwner("GMINA MIEJSKA LUBIN", share="100%"),),
+        "https://nik.gov.pl/kontrole/wyniki-kontroli-nik/pobierz,lwr~p_14_019_201404250756291398412589~id1~01,typ,kj.pdf",
+    ),
+    "0000516088": Researched(  # MKS ZAGŁĘBIE LUBIN
+        (dataclasses.replace(KGHM, share="100%"),),
+        "https://pl.wikipedia.org/wiki/Zag%C5%82%C4%99bie_Lubin_(pi%C5%82ka_no%C5%BCna)",
+    ),
+    # LUBELSKI WĘGIEL "BOGDANKA", listed: Enea's majority. RG "Bogdanka" and
+    # Górnik Łęczna follow it.
+    "0000004549": Researched(
+        (dataclasses.replace(ENEA, share="64.57%"),),
+        "https://www.stockwatch.pl/inwestor/enea-sa-wraz-z-enea-wytwarzanie-sp-z-o-o.aspx",
+    ),
+    # FABRYKA OBRABIAREK RAFAMET, listed: ARP's majority of the capital.
+    "0000069588": Researched(
+        (dataclasses.replace(ARP, share="50.47%"),),
+        "https://www.stockwatch.pl/inwestor/agencja-rozwoju-przemyslu-sa.aspx",
+    ),
+    # Minority stakes, public by the any-stake rule (decision on 2026-10-07).
+    # TELEFONY PODLASKIE: the rest is Orange Polska's TP Invest (89% in 2011).
+    "0000033429": Researched(
+        (ResearchedOwner("GMINA SOKOŁÓW PODLASKI", share="1.25%"),),
+        "https://sokolowpodlaski.biuletyn.net/fls/bip_pliki/2024_05/BIPF61907B9381704Z/Informacja-dodatkowa__korekta_2022.pdf",
+    ),
+    # GÓRNIK ZABRZE: the city sold the club to LP Holding in 2026 and kept one
+    # share, with a seat on the supervisory board.
+    "0000106227": Researched(
+        (ResearchedOwner("MIASTO ZABRZE", share="1 share"),),
+        "https://cms.law/en/pol/news-information/cms-advises-city-of-zabrze-on-gornik-zabrze-privatisation",
+    ),
+    # WIELKOPOLSKA SIEĆ SZEROKOPASMOWA: the voivodeship's after INEA took up new
+    # shares in 2014 (25.17%), cut to 14% from 2016.
+    "0000343277": Researched(
+        (ResearchedOwner("WOJEWÓDZTWO WIELKOPOLSKIE", share="14%"),),
+        "https://www.telepolis.pl/wiadomosci/inea-wiekszosciowym-akcjonariuszem-wss",
+    ),
+    "0000359854": Researched(  # MOTOR LUBLIN, privately held since 2020
+        (ResearchedOwner("MIASTO LUBLIN", share="14.10%"),),
+        "https://pl.wikipedia.org/wiki/Motor_Lublin_(pi%C5%82ka_no%C5%BCna)",
+    ),
+    # PEC W WAŁBRZYCHU: the gmina had sold half of its 29.99% by 2014.
+    "0000062924": Researched(
+        (ResearchedOwner("GMINA WAŁBRZYCH", share="15%"),),
+        "https://nik.gov.pl/kontrole/wyniki-kontroli-nik/pobierz,lwr~p_14_019_201404250756291398412589~id0~01,typ,kj.pdf",
+    ),
+    # ŁÓDZKI RYNEK HURTOWY "ZJAZDOWA": the city is among the shareholders its
+    # own page shows; the stake is not given.
+    "0000042894": Researched(
+        (ResearchedOwner("MIASTO ŁÓDŹ"),),
+        "https://zjazdowa.com.pl/",
+    ),
+    "0000260820": Researched(  # GÓRNIK ŁĘCZNA, the rest the club association's
+        (ResearchedOwner('LUBELSKI WĘGIEL "BOGDANKA" S.A.', "0000004549", "35%"),),
+        "https://ri.lw.com.pl/pobierz/5690/sprawozdanie-zarzadu-z-dzialalnosci-grupy-kapitalowej-lw-bogdanka-s-a-za-rok-2008-pdf",
+    ),
+    # EKSTRAKLASA: each top-flight club holds 5.1555%, PZPN 7.201%. Public
+    # through the two clubs the public owns.
+    "0000239140": Researched(
+        (
+            ResearchedOwner("MKS ZAGŁĘBIE LUBIN S.A.", "0000516088", "5.1555%"),
+            ResearchedOwner("GKS GIEKSA KATOWICE S.A.", "0000336380", "5.1555%"),
+        ),
+        "https://pl.wikipedia.org/wiki/Ekstraklasa_SA",
+    ),
+    # Mutual insurers a state group holds, public by the decision on
+    # 2026-11-19. TUW PZUW: PZU is its founding member and has consolidated it
+    # at 100% since 2015.
+    "0000587260": Researched(
+        (PZU,),
+        "https://www.bankier.pl/wiadomosc/PZU-utworzy-towarzystwo-ubezpieczen-wzajemnych-3434697.html",
+    ),
+    # POLSKI GAZ TUW, in liquidation: set up by PGNiG for its group, ORLEN's
+    # 100% after the merger, PZU's since 2024.
+    "0000643093": Researched(
+        (PZU,),
+        "https://inwestycje.pl/gielda/pzu-ma-zgode-knf-na-przejecie-polski-gaz-tuw-i-polski-gaz-tuwnz/",
+    ),
+    # TUW "CUPRUM": KGHM's group held 99.49% at the end of 2022.
+    "0000050696": Researched(
+        (dataclasses.replace(KGHM, share="93.8%"),),
+        "https://raportcsr2022.kghm.com/en/noty_objasniajace/12-11",
+    ),
 }
 
 
-KGHM = ResearchedOwner("KGHM POLSKA MIEDŹ S.A.", "0000023302")
 TOTALIZATOR = ResearchedOwner("TOTALIZATOR SPORTOWY SP. Z O.O.", "0000007411")
-SKARB_PANSTWA = ResearchedOwner("SKARB PAŃSTWA")
 KRAKOW = ResearchedOwner("GMINA MIEJSKA KRAKÓW")
 #: GUS's list of general-government (S.13) units, 31.12.2024: dane.gov.pl
 #: dataset 1609, CC BY 4.0. It names each unit and its subsector, not its
@@ -390,9 +585,11 @@ GUS_S13 = "https://dane.gov.pl/pl/dataset/1609"
 #: Foundations and associations a public body set up, and so public by Szymon's
 #: rule of 2026-11-11 ("the public founder counts"), as a public shareholder
 #: makes a company public. The register never names a foundation's founder, so
-#: each was found by hand: 23 by the koryciarze leads of 2026-10-09, the rest
-#: by GUS counting them in the general-government sector, with the founder read
-#: off the source given beside it.
+#: each was found by hand: 23 by the koryciarze leads of 2026-10-09, 17 by the
+#: likely-public read of 2026-11-19, the rest by GUS counting them in the
+#: general-government sector, with the founder read off the source given
+#: beside it. One public founder is enough, beside private ones too (decision
+#: on 2026-11-19).
 #:
 #: A founder is not a shareholder, so `CompaniesKRS.add_public_founders` puts
 #: it in `founded_by` rather than among the owners: the site lists it under
@@ -588,6 +785,123 @@ PUBLIC_FOUNDERS: dict[str, Founded] = {
     ),
     # Fundacja Rozwoju Gminy Kleszczów: S.1313, the gmina's by its name.
     "0000114731": Founded((ResearchedOwner("GMINA KLESZCZÓW"),), GUS_S13),
+    # Found by the likely-public read of 2026-11-19.
+    "0000037031": Founded(  # FUNDACJA ORLEN, first ORLEN - DAR SERCA
+        (ORLEN,),
+        "https://www.orlen.pl/en/about-the-company/our-support/orlen-group-foundations",
+    ),
+    # FUNDACJA KRAJOWEJ GRUPY SPOŻYWCZEJ "POMAGANIE KRZEPI": its statute names
+    # Krajowa Spółka Cukrowa, now KGS, which appoints both of its boards.
+    "0000653638": Founded(
+        (ResearchedOwner("KRAJOWA GRUPA SPOŻYWCZA S.A.", "0000084678"),),
+        "https://www.pomaganie-krzepi.pl/plik,15447,statut-fundacji-vii-2025-pdf.pdf",
+    ),
+    "0000956394": Founded(  # FUNDACJA LEGNICKIEJ SPECJALNEJ STREFY EKONOMICZNEJ
+        (ResearchedOwner("LEGNICKA SPECJALNA STREFA EKONOMICZNA S.A.", "0000033018"),),
+        "https://miedziowefakty.pl/legnicka-specjalna-strefa-ekonomiczna-powolala-swoja-fundacje",
+    ),
+    # FUNDACJA WSSE "INVEST-PARK", put into liquidation by the zone company's
+    # board in 2026.
+    "0001013443": Founded(
+        (
+            ResearchedOwner(
+                'WAŁBRZYSKA SPECJALNA STREFA EKONOMICZNA "INVEST-PARK" SP. Z O.O.',
+                "0000059084",
+            ),
+        ),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0001013443?rejestr=S&format=json",
+    ),
+    # FAPA: set up in 1992 by the Minister of Agriculture for the Treasury.
+    "0000033110": Founded(
+        (SKARB_PANSTWA,), "https://www.fapa.org.pl/fapa-1992-2017/fapa-1992-2017"
+    ),
+    "0000182507": Founded(  # SAPERE AUSO, by the voivodeship's sejmik in 2003
+        (ResearchedOwner("WOJEWÓDZTWO MAŁOPOLSKIE"),), "https://dzieje.pl/node/83788"
+    ),
+    "0000139886": Founded(  # CONVENTION BUREAU - WROCŁAW
+        (
+            ResearchedOwner("GMINA WROCŁAW"),
+            ResearchedOwner(
+                'WROCŁAWSKIE PRZEDSIĘBIORSTWO "HALA LUDOWA" SP. Z O.O.', "0000051000"
+            ),
+        ),
+        "https://convention.wroclaw.pl/wp-content/uploads/2022/08/Statut-Convention-Bureau-Wroclaw.pdf",
+    ),
+    "0000253076": Founded(  # FUNDUSZ GRANTOWY DLA PŁOCKA
+        (
+            ResearchedOwner("GMINA MIASTO PŁOCK"),
+            ORLEN,
+            ResearchedOwner("BASELL ORLEN POLYOLEFINS SP. Z O.O.", "0000143578"),
+        ),
+        "https://www.wilcoproject.eu/book/chapters/50-foundation-grant-fund-for-plock/",
+    ),
+    # ZAKŁAD NARODOWY IM. OSSOLIŃSKICH: a foundation the Act of 5 January 1995
+    # set up, under the culture minister's supervision.
+    "0000090878": Founded(
+        (SKARB_PANSTWA,),
+        "https://api.sejm.gov.pl/eli/acts/DU/1995/121/text/U/D19950121Lj.pdf",
+    ),
+    "0000730670": Founded(  # FUNDACJA INTELIGENTNA MAŁOPOLSKA, at MARR's office
+        (
+            ResearchedOwner(
+                "MAŁOPOLSKA AGENCJA ROZWOJU REGIONALNEGO S.A.", "0000033198"
+            ),
+        ),
+        "https://archiwum.marr.pl/wp-content/uploads/2019/07/serwis-prasowy-MARR-S.A.-01.07.2019.pdf",
+    ),
+    "0000526089": Founded(  # REVITA, Płock
+        (
+            ResearchedOwner(
+                "AGENCJA REWITALIZACJI STARÓWKI ARS SP. Z O.O.", "0000044769"
+            ),
+        ),
+        "https://nowybip.plock.eu/dokumenty/nowybip/dok/2025/MGT8SnzW/0d8b3a3ef6772d2ef10883694f6f3ff3.pdf",
+    ),
+    # FUNDACJA ENEA - ENERGIA WSPÓLNOTY: registered at Enea's head office in
+    # 2025 as Enea wound the older Fundacja Enea down.
+    "0001162550": Founded(
+        (ENEA,),
+        "https://biznes.interia.pl/polska-agencja-prasowa/news-fundacja-enea-energia-wspolnoty-inspiruje-do-dzialan-na-rzec,nId,22598632",
+    ),
+    # FUNDACJA UZDROWISKA SZCZAWNO-JEDLINA "STOKROTKA", struck off 2026: under
+    # the spa company's name and at its address; the spa is the voivodeship's.
+    "0000586292": Founded(
+        (ResearchedOwner("UZDROWISKO SZCZAWNO-JEDLINA S.A.", "0000110745"),),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000586292?rejestr=S&format=json",
+    ),
+    # FUNDACJA PGE ENERGIA CIEPŁA, first Fundacja Elektrowni Rybnik, struck off
+    # 2021: one of PGE's two corporate foundations.
+    "0000204954": Founded(
+        (ResearchedOwner("PGE ENERGIA CIEPŁA S.A.", "0000013479"),),
+        "https://raportzintegrowany2019.gkpge.pl/en/spoleczenstwo/zaangazowanie-spoleczne/",
+    ),
+    # Set up by public and private founders together: public, since any public
+    # founder counts (decision on 2026-11-19). The private ones are not listed.
+    "0000051191": Founded(  # PODLASKA FUNDACJA ROZWOJU REGIONALNEGO
+        (SKARB_PANSTWA,), "https://pfrr.pl/o-fundacji/"
+    ),
+    # FUNDACJA ROZWOJU OŚRODKA AKADEMICKIEGO, Rzeszów: the voivode, the city and
+    # the region's public universities, besides the diocese and an MP.
+    "0000036081": Founded(
+        (
+            SKARB_PANSTWA,
+            ResearchedOwner("GMINA MIASTO RZESZÓW"),
+            ResearchedOwner("POLITECHNIKA RZESZOWSKA"),
+        ),
+        "https://bazhum.muzhp.pl/media/texts/resovia-sacra-studia-teologiczno-filozoficzne-diecezji-rzeszowskiej/2009-tom-16/resovia_sacra_studia_teologiczno_filozoficzne_diecezji_rzeszowskiej-r2009-t16-s287-298.pdf",
+    ),
+    # FUNDACJA OCHRONY WIELKICH JEZIOR MAZURSKICH: two voivodes and the lakes'
+    # towns and gminas, besides seven private persons.
+    "0000042009": Founded(
+        (
+            SKARB_PANSTWA,
+            ResearchedOwner("MIASTO GIŻYCKO"),
+            ResearchedOwner("MIASTO KĘTRZYN"),
+            ResearchedOwner("MIASTO MRĄGOWO"),
+            ResearchedOwner("GMINA RUCIANE-NIDA"),
+        ),
+        "https://jeziora.com.pl/o-nas/",
+    ),
 }
 
 
