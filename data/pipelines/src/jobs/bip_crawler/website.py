@@ -25,12 +25,25 @@ A website links its subordinate bodies' BIPs too, a care home's, a culture
 centre's, a road authority's, and their staff file declarations: a walk there
 credits a namesake's. `bips` puts the BIP a page links as its own first and
 never offers another body's.
+
+Round 1's fix (11-13) let words or a picture on any host outrank a host that
+says BIP, and a theme's or a vendor's labels won: Czarnocin's theme labels its
+session videos on esesja.tv "Łącze zewnętrzne do strony BiP" like its BIP,
+Gorzów Śląski's footer credits "Strony www i Biuletyny Informacji Publicznej"
+to digitalholding.pl, Dzikowiec's hidden "BIP" menu item links onet.pl. And it
+walked one BIP where an office has two, an old and a new one, and its
+declarations were on the other: Ustroń, Rogów, Oborniki, Brudzew (11-18). Now
+a host that says BIP and names the unit's place comes first (`_tier`), another
+host counts only by the link's own words or its picture's file name where it
+names the place, and the office's other BIPs the page links are walked beside
+it (`Bip.also`).
 """
 
 from __future__ import annotations
 
 import html
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from urllib.parse import unquote, urljoin, urlsplit
 
@@ -45,9 +58,10 @@ from scrapers.common.links import decode_html, extract_link_contexts
 NOT_A_UNITS_BIP = frozenset(
     {"bip.gov.pl", "gov.pl", "epuap.gov.pl", "obywatel.gov.pl", "biznes.gov.pl"}
 )
-#: Words that say BIP: the abbreviation, or its name in any case ("Link do
-#: Biuletynu Informacji Publicznej").
-SAYS_BIP = re.compile(r"(?:^| )bip(?: |$)|biuletyn\w* informacji publicznej")
+#: Words that say BIP: the abbreviation, or its name in the singular in any
+#: case ("Link do Biuletynu Informacji Publicznej"); not a vendor's plural,
+#: "Strony www i Biuletyny Informacji Publicznej" (11-18).
+SAYS_BIP = re.compile(r"(?:^| )bip(?: |$)|biuletyn(?:u|em|ie|a)? informacji publicznej")
 #: Another body's host: a care home (dps), a welfare centre (gops, mops), a
 #: culture or sports centre (gok, mosir, moksir), shared services (cuw, cus,
 #: zeas), a road authority (zdp, pzd), a labour office (pup), a school, a
@@ -62,7 +76,8 @@ OTHER_BODY = re.compile(
 #: A BIP's pages about itself, no start: who edits it ("Redakcja BIP"), how to
 #: use it, its accessibility statement. On samorzad.gov.pl Grodzisko Dolne's
 #: "Redakcja BIP" was one of the three links taken, and its archive BIP, where
-#: its declarations are, was left out (11-13).
+#: its declarations are, was left out (11-13). Its host's first page is one:
+#: Ustroń's website links its BIP only as "Deklaracja Dostępności" (11-18).
 _ABOUT_THE_BIP = re.compile(r"redakcj|instrukcj|deklaracj")
 #: Where a lazy image keeps its file until a script shows it: Szczawno-Zdrój's
 #: ``data-orig-src`` under an empty SVG.
@@ -75,8 +90,48 @@ _FILE = re.compile(
     r"(?:$|[?#])",
     re.I,
 )
-#: Words, a picture, a host: how sure a link to a BIP is that it is one.
-WORDS, PICTURE, HOST = 0, 1, 2
+#: How a link says it leads to a BIP: its words, its title or aria-label, its
+#: picture's file name, its picture's alt or title.
+TEXT, LABEL, FILE, ALT = "text", "label", "file", "alt"
+#: Words of a name or a host that name no place (`place_stems`): an office's,
+#: a host's.
+_NO_PLACE = frozenset(
+    "www gmina gminy gminie gminna miasto miasta miejski miejska miejskiej urzad"
+    " urzedu starostwo starostwa powiat powiatu powiatowe powiatowy wojewodztwo"
+    " info home samorzad samorzady umig uzdrowiskowej przy".split()
+)
+#: Words many places' names share, and the beginnings of such words: Wielka
+#: Wieś, Nowe Brzesko, Rabka-Zdrój, Wysokie Mazowieckie.
+_SHARED_WORDS = frozenset(
+    "nowe nowy nowa nowej nowym nowego stary stare stara starym maly mala male"
+    " malym malej duzy duza duze dolna dolny dolne dolnej gorna gorny gorne"
+    " gornej wies wsi".split()
+)
+_SHARED_STARTS = tuple(
+    "wielk mazow podla slask kujaw pomor tatrz zdroj kolon osada krole lubusk"
+    " lubelsk lodzk opolsk malopol dolnosl podkarpac swietokrz warmin mazursk"
+    " zachodniopom".split()
+)
+#: Words a BIP's host may carry before the place it names and still be the
+#: office's own (`_offices`): bip.ug.hajnowka..., archiwumbip.paslek.pl,
+#: oldbip.czarnkowgmina.pl, mst-wabrzezno..., splukow.bip.e-zeto.eu.
+_OFFICE_WORDS = tuple(
+    "archiwum arch old bip biuletyn www umig ugm ug um gmina gminy"
+    " gm miasto mst starostwo spow sp st powiat pow".split()
+)
+_GMINA_WORDS = frozenset("umig ugm ug um gmina gminy gm miasto mst".split())
+_POWIAT_WORDS = frozenset("starostwo spow sp st powiat pow".split())
+#: A link's words that name another body than the office: its utility, its
+#: shared services, a school, a clinic (`_offices`).
+_OTHER_BODY_WORDS = re.compile(
+    r"\b(?:zaklad|centrum|zespol|osrodek|inspektorat|szkol|przedszkol|przychodni"
+    r"|bibliotek|dom pomocy|zlob|cuw|cus|gops|mops|mopr|gok|zgk|zuk|zbk|spzoz)"
+)
+#: What a host label may start with before the place it names: uggozdowo,
+#: gminadzikowiec, umtarnogrod, spkolobrzeg, powiatkoscian.
+_PLACE_PREFIX = re.compile(
+    r"^(?:gmina|gminy|powiat|starostwo|miasto|umig|ugm|ug|um|mst|sp)"
+)
 
 
 @dataclass
@@ -86,11 +141,12 @@ class _Bip:
     host: str
     scope: str
     first: int
-    #: Every link to it, and by the surest each one says BIP (`WORDS`...).
+    #: Every link to it, by how sure it is (`_sure`).
     links: dict[str, int] = field(default_factory=dict)
-
-    def sure(self) -> int:
-        return min(self.links.values())
+    #: What its links say (`TEXT`...).
+    signs: set[str] = field(default_factory=set)
+    #: Its links' words.
+    words: list[str] = field(default_factory=list)
 
 
 def bip_host(host: str) -> bool:
@@ -99,34 +155,33 @@ def bip_host(host: str) -> bool:
     return any("bip" in label or "biuletyn" in label for label in host.split("."))
 
 
-def _image_says(anchor: Tag) -> bool:
-    """Whether a link is a picture that says BIP: an image's alt or title in
-    words, or its file's name ("Logo_BIP_uproszczone.svg", "bip@2x.png"). Not
-    a file name that only spells it out: Kamieniec Ząbkowicki's
-    "Deklaracja-dostępności-Biuletynu-Informacji-Publicznej_.png" links
-    dziennikustaw.gov.pl."""
+def _image_signs(anchor: Tag) -> set[str]:
+    """How a link's picture says BIP: its file's name ("Logo_BIP_uproszczone
+    .svg", "bip@2x.png"), its alt or title in words. Not a file name that only
+    spells it out: Kamieniec Ząbkowicki's "Deklaracja-dostępności-Biuletynu-
+    Informacji-Publicznej_.png" links dziennikustaw.gov.pl."""
+    signs: set[str] = set()
     for image in anchor.find_all("img"):
         if not isinstance(image, Tag):
             continue
         words = fold(f"{image.get('alt') or ''} {image.get('title') or ''}")
         if SAYS_BIP.search(words):
-            return True
+            signs.add(ALT)
         for source in _SOURCES:
             path = urlsplit(str(image.get(source) or "")).path
             if "bip" in unquote(path.rsplit("/", 1)[-1]).lower():
-                return True
-    return False
+                signs.add(FILE)
+    return signs
 
 
-def _said(content: bytes, url: str, content_type: str) -> tuple[set[str], set[str]]:
-    """The addresses of the page's links whose title or aria-label says BIP,
-    and of those whose image does (`_image_says`)."""
+def _signs(content: bytes, url: str, content_type: str) -> dict[str, set[str]]:
+    """How the page's links say BIP, by address: in their words (`TEXT`), their
+    title or aria-label (`LABEL`), their picture (`_image_signs`)."""
     soup = BeautifulSoup(decode_html(content, content_type), "lxml")
     base = soup.find("base", href=True)
     if isinstance(base, Tag) and str(base.get("href") or "").strip():
         url = urljoin(url, str(base.get("href")).strip())
-    worded: set[str] = set()
-    pictured: set[str] = set()
+    found: dict[str, set[str]] = {}
     for anchor in soup.find_all("a", href=True):
         if not isinstance(anchor, Tag):
             continue
@@ -134,12 +189,14 @@ def _said(content: bytes, url: str, content_type: str) -> tuple[set[str], set[st
             target = urljoin(url, str(anchor.get("href") or "").strip()).split("#")[0]
         except ValueError:
             continue
+        signs = found.setdefault(target, set())
+        if SAYS_BIP.search(fold(anchor.get_text(" ", strip=True))):
+            signs.add(TEXT)
         label = fold(f"{anchor.get('title') or ''} {anchor.get('aria-label') or ''}")
         if SAYS_BIP.search(label):
-            worded.add(target)
-        if _image_says(anchor):
-            pictured.add(target)
-    return worded, pictured
+            signs.add(LABEL)
+        signs |= _image_signs(anchor)
+    return found
 
 
 def _page_like(url: str) -> bool:
@@ -151,34 +208,237 @@ def _page_like(url: str) -> bool:
     )
 
 
+def place_stems(home: str, names: Iterable[str]) -> set[str]:
+    """The places a website's host (a shared host's unit path too) and its
+    offices' names name, as the first letters of each word, five of a long
+    one and four of a short one, which a case ending leaves alone ("czarn" of
+    czarnocin.com.pl, "sierp" of Starostwo Powiatowe w Sierpcu, "sacz" of
+    Nowym Sączu), for `names_place`."""
+    words = [
+        _PLACE_PREFIX.sub("", label) if len(label) > 8 else label
+        for label in fold(home).split()
+    ]
+    words += [word for name in names for word in fold(name).split()]
+    return {
+        word[: 5 if len(word) >= 7 else 4]
+        for word in words
+        if len(word) >= 4
+        and word not in _NO_PLACE
+        and word not in _SHARED_WORDS
+        and not word.startswith(_SHARED_STARTS)
+    }
+
+
+def names_place(scope: str, stems: set[str]) -> bool:
+    """Whether a host, or a shared host's unit path, names one of the places
+    (`place_stems`): of the registry's 972 local offices, the 60 whose BIP's
+    host does not say BIP all name their place in it or in their
+    samorzad.gov.pl path (11-18). onet.pl, esesja.tv, digitalholding.pl name
+    none."""
+    flat = re.sub(r"[^a-z0-9]", "", scope.lower())
+    return any(stem in flat for stem in stems)
+
+
+#: Labels a host's own name ends in: bip.csw.pl is csw.pl's, bip.elk.gmina.pl
+#: elk.gmina.pl's (`same_site`).
+_SUFFIX_LABELS = frozenset(
+    "pl com net org info gov edu eu biz waw ug um umig bip gmina powiat"
+    " starostwo miasto".split()
+)
+
+
+def _site(host: str) -> str:
+    labels = host.split(".")
+    first = len(labels) - 1
+    while first > 0 and labels[first] in _SUFFIX_LABELS:
+        first -= 1
+    return ".".join(labels[first:])
+
+
+def same_site(host: str, home: str) -> bool:
+    """Whether two hosts share their own name: a website's BIP under its
+    domain names its place whatever it is called (powiat świecki's
+    bip.csw.pl, powiat warszawski zachodni's bip.pwz.pl, 11-18)."""
+    return _site(host) == _site(home)
+
+
+def _tier(bip: _Bip, home: str, stems: set[str]) -> int | None:
+    """How sure a BIP is that it is the unit's, 0 the surest; None for none.
+
+    0. a host that says BIP (`bip_host`), its link or picture too, and names
+       the unit's place (`names_place`, `same_site`);
+    1. another host's words, where it names the place: Somianka's "Przejdź do
+       serwisu Biuletyn Informacji Publicznej" on samorzad.gov.pl; or on a
+       portal of BIPs the unit's own pages;
+    2. another host's picture by its file's name, where it names the place:
+       Stopnica's bip-big-3-1.png to stopnica.pl/bip/, where its theme's alt
+       is "Logo Bip" on every icon, the council's session videos too, as its
+       aria-label "strony BiP" is on Czarnocin's (11-18);
+    3. a host that says BIP, its link or picture too, naming another place or
+       none: Trąbki Wielkie's ugtr.bip.gov.pl; powiat sierpecki's website links
+       its gminas' BIPs by their logos, its own BIP sierpc.starostwo.gov.pl by
+       a picture (11-18);
+    4. a host that says BIP alone, where it names the place: Somianka's old
+       BIP, under "Nieodpłatna pomoc prawna";
+    5. another host's picture by its alt, where it names the place.
+
+    The website's own pages count by their words alone, a link's title or
+    aria-label too. Another host that names no place of the unit's counts only
+    when it says BIP and its link does too: Budzyń's website links powiat
+    chodzieski's bip4.wokiss.pl/chodziezp for its "Nieodpłatna pomoc prawna",
+    and a walk there credited a namesake's declaration (11-13).
+    """
+    if bip.host == home:
+        return 1 if bip.signs & {TEXT, LABEL} else None
+    named = names_place(bip.scope, stems) or same_site(bip.host, home)
+    if bip_host(bip.host):
+        if bip.signs:
+            return 0 if named else 3
+        return 4 if named else None
+    if not named:
+        return None
+    if TEXT in bip.signs:
+        return 1
+    if FILE in bip.signs:
+        return 2
+    return 5 if ALT in bip.signs else None
+
+
+def level_of(unit: str) -> str:
+    """A unit's level by its TERYT: "powiat" (its gmina's digits 00), "gmina"
+    (a gmina's or a city's), "" (a voivodeship's)."""
+    if len(unit) != 6 or unit.endswith("0000"):
+        return ""
+    return "powiat" if unit.endswith("00") else "gmina"
+
+
+def _cut(text: str, words: tuple[str, ...]) -> list[str] | None:
+    """``text`` as ``words`` one after another, or None when it is not."""
+    found: list[str] = []
+    while text:
+        word = next((w for w in words if text.startswith(w)), None)
+        if word is None:
+            digits = re.match(r"\d+", text)
+            if digits is None:
+                return None
+            word = digits.group(0)
+        found.append(word)
+        text = text[len(word) :]
+    return found
+
+
+def _label(host: str) -> str:
+    """A host's first label of three letters or more that is none of
+    `_OFFICE_WORDS`: "ugtr" of ugtr.ssdip.bip.gov.pl and of ugtr.bip.gov.pl."""
+    return next(
+        (x for x in host.split(".") if len(x) > 2 and x not in _OFFICE_WORDS), ""
+    )
+
+
+def _offices(
+    bip: _Bip, stems: set[str], names: set[str], level: str, first: str
+) -> bool:
+    """Whether a BIP is the office's own, an old, a new or an archive one,
+    which a walk reads beside the one the page links first (on ``first``):
+    its host says BIP and names the unit's place with nothing before the
+    place but the office's words (`_OFFICE_WORDS`) or its name's, or starts
+    with the first's own label (Trąbki Wielkie's ugtr.bip.gov.pl beside
+    ugtr.ssdip.bip.gov.pl); it carries no word of the other level's office
+    (a gmina's website links the powiat's bip.st.hajnowka.wrotapodlasia.pl)
+    and its links' words name no other body. Not Warlubie's
+    przychodnia-warlubie.bip.net.pl, Skierniewice's
+    bip.moprskierniewice.nv.pl, Mędrzechów's bip.malopolska.pl/gopsmedrzechow,
+    Raszków's raszkow.biuletyn.net under "Zakład Gospodarki Komunalnej"."""
+    if not bip_host(bip.host) or (
+        bip.words and all(_OTHER_BODY_WORDS.search(w) for w in bip.words)
+    ):
+        return False
+    host, _, path = bip.scope.partition("/")
+    tokens = [t for t in re.split(r"[^a-z0-9]+", path or host) if t]
+    other = {"gmina": _POWIAT_WORDS, "powiat": _GMINA_WORDS}.get(level, frozenset())
+    if other & set(tokens):
+        return False
+    if not path and (label := _label(host)) and label == _label(first):
+        return True
+    allowed = tuple(sorted({*_OFFICE_WORDS, *names}, key=len, reverse=True))
+    before: list[str] = []
+    for token in tokens:
+        stem = next((s for s in stems if s in token), None)
+        if stem is None:
+            before.append(token)
+            continue
+        cut = _cut("".join([*before, token[: token.index(stem)]]), allowed)
+        return cut is not None and not other & set(cut)
+    return False
+
+
+#: Words, or the start of a host's label, that say a BIP is an archive.
+_ARCHIVE = re.compile(r"archiw")
+_ARCHIVE_LABEL = re.compile(r"^(?:archiw|arch|old)")
+
+
+def _archive(bip: _Bip) -> bool:
+    """Whether a BIP is an old one kept for its documents: every link's words
+    say archive (Rybno's BIP pages link e-bip.pl as "Archiwum BIP", and its
+    BIP is the website's /bip/, 11-18), or its host's label does
+    (archiwumbip.krasocin.com.pl, oldbip.czarnkowgmina.pl)."""
+    if bip.words and all(_ARCHIVE.search(w) for w in bip.words):
+        return True
+    return any(_ARCHIVE_LABEL.match(x) for x in re.split(r"[.\-]", bip.host))
+
+
+def _sure(signs: set[str]) -> int:
+    """How sure one link is: words, a picture, a host."""
+    if signs & {TEXT, LABEL}:
+        return 0
+    return 1 if signs & {FILE, ALT} else 2
+
+
+def _scope_root(url: str, shared_hosts: set[str]) -> str:
+    """The first page of the BIP ``url`` is on: its host's, or its unit path's
+    on a shared host."""
+    parts = urlsplit(url)
+    _, _, path = scope_of(url, shared_hosts).partition("/")
+    depth = len([s for s in path.split("/") if s])
+    segments = [s for s in parts.path.split("/") if s][:depth]
+    return f"{parts.scheme}://{parts.netloc}/" + "/".join(segments)
+
+
 @dataclass(frozen=True)
 class Bip:
-    """A BIP a page links: its links, the surest first, and whether they are
-    the website's own pages (a page of a plain website, not of a portal of BIPs
-    such as samorzad.gov.pl)."""
+    """A BIP a page links: its links, the surest first, whether they are the
+    website's own pages (a page of a plain website, not of a portal of BIPs
+    such as samorzad.gov.pl), whether it is the office's own BIP, which a walk
+    reads beside the first (`_offices`), and whether it is an archive, which
+    is never the first (`_archive`)."""
 
     links: list[str]
     own: bool
+    also: bool = False
+    archive: bool = False
 
 
 def bips(
-    content: bytes, url: str, content_type: str, shared_hosts: set[str]
+    content: bytes,
+    url: str,
+    content_type: str,
+    shared_hosts: set[str],
+    names: Iterable[str] = (),
+    unit: str = "",
 ) -> list[Bip]:
     """The BIPs a page links, the one it links as its own first; [] for none.
 
-    A BIP (a host, or a shared host's unit path) is one when a link to it says
-    BIP in words, or, on another host than the page, by its picture
-    (`_image_says`) or its host's name (`bip_host`); never another body's
-    (`OTHER_BODY`) nor its own page about itself (`_ABOUT_THE_BIP`). First:
+    A BIP is a host, or a shared host's unit path, that its links say is one
+    (`_tier`), never another body's (`OTHER_BODY`). A link to its pages about
+    itself (`_ABOUT_THE_BIP`) stands for its first page. ``names`` are the
+    unit's offices' names, which with the page's host say the unit's place
+    (`place_stems`); ``unit`` its TERYT, whose level tells the other level's
+    office (`_offices`). First:
 
     - not the website's own pages: Radziłów's "Biuletyn Informacji Publicznej"
       is a page of its website that links its BIP. On a portal of BIPs a
       unit's own pages are its BIP: samorzad.gov.pl's;
-    - the surest: words over a picture over a host's name. Stopnica's words
-      "strony BiP" over another link's "Logo Bip" picture, its council's
-      video archive; Somianka's "Przejdź do serwisu Biuletyn Informacji
-      Publicznej" on samorzad.gov.pl over its old BIP, under "Nieodpłatna
-      pomoc prawna";
+    - the surest (`_tier`);
     - on another host: Grodzisko Dolne's banner "BIP" to its archive BIP, which
       holds its declarations, over its samorzad.gov.pl BIP;
     - on the page's own unit path, of a shared host's;
@@ -186,49 +446,62 @@ def bips(
       www.powiat-czestochowski.4bip.pl 29 times, its care home's
       dpsblachownia.4bip.pl once;
     - linked first.
-
-    On another host every link to it counts; on the page's own those that say
-    BIP in words.
     """
     _, links = extract_link_contexts(content, url, content_type)
-    worded, pictured = _said(content, url, content_type)
+    said = _signs(content, url, content_type)
     home, here = host_of(url), scope_of(url, shared_hosts)
+    page = normalize_url(url).rstrip("/")
     found: dict[str, _Bip] = {}
     for index, link in enumerate(links):
         host = host_of(link.url)
-        if (
-            not host
-            or host in NOT_A_UNITS_BIP
-            or not _page_like(link.url)
-            or _ABOUT_THE_BIP.search(fold(link.anchor))
-        ):
+        if not host or host in NOT_A_UNITS_BIP or not _page_like(link.url):
             continue
-        if SAYS_BIP.search(fold(link.anchor)) or link.url in worded:
-            sure = WORDS
-        elif host == home:
+        signs = said.get(link.url, set())
+        start = link.url
+        if _ABOUT_THE_BIP.search(fold(link.anchor)):
+            start = _scope_root(link.url, shared_hosts)
+            if normalize_url(start).rstrip("/") == page:
+                continue
+        if host == home and not signs & {TEXT, LABEL}:
             continue
-        else:
-            sure = PICTURE if link.url in pictured else HOST
         scope = scope_of(link.url, shared_hosts)
         bip = found.setdefault(scope, _Bip(host, scope, index))
-        bip.links[link.url] = min(sure, bip.links.get(link.url, sure))
+        bip.signs |= signs
+        bip.links[start] = min(_sure(signs), bip.links.get(start, 2))
+        if words := fold(link.anchor):
+            bip.words.append(words)
     plain = home not in shared_hosts
+    names = list(names)
+    stems = place_stems(here, names)
+    tiers = {
+        scope: tier
+        for scope, bip in found.items()
+        if not OTHER_BODY.search(bip.scope)
+        and (tier := _tier(bip, home, stems)) is not None
+    }
     ranked = sorted(
-        (
-            b
-            for b in found.values()
-            if (b.sure() < HOST or bip_host(b.host)) and not OTHER_BODY.search(b.host)
-        ),
+        (found[scope] for scope in tiers),
         key=lambda b: (
             plain and b.host == home,
-            b.sure(),
+            tiers[b.scope],
             b.host == home,
             b.scope != here,
             -len(b.links),
             b.first,
         ),
     )
-    return [Bip(_starts(b.links), plain and b.host == home) for b in ranked]
+    named = {w for name in names for w in fold(name).split() if len(w) >= 3}
+    level = level_of(unit)
+    first = next((b.host for b in ranked if b.host != home and not _archive(b)), "")
+    return [
+        Bip(
+            _starts(b.links),
+            plain and b.host == home,
+            b.host != home and _offices(b, stems, named, level, first),
+            _archive(b),
+        )
+        for b in ranked
+    ]
 
 
 def _starts(links: dict[str, int]) -> list[str]:
@@ -241,10 +514,14 @@ def _starts(links: dict[str, int]) -> list[str]:
 
 
 def bip_links(
-    content: bytes, url: str, content_type: str, shared_hosts: set[str]
+    content: bytes,
+    url: str,
+    content_type: str,
+    shared_hosts: set[str],
+    names: Iterable[str] = (),
 ) -> list[str]:
     """The links of the BIP a page links as its own (`bips`); [] for none."""
-    found = bips(content, url, content_type, shared_hosts)
+    found = bips(content, url, content_type, shared_hosts, names)
     return found[0].links if found else []
 
 
@@ -269,8 +546,8 @@ def inner_links(
     Ząbkowicki's logo for its "/biuletyn-informacji-publicznych/" page), then as
     linked, `INNER_PAGES` at most."""
     _, links = extract_link_contexts(content, url, content_type)
-    worded, pictured = _said(content, url, content_type)
-    shown = worded | pictured
+    said = _signs(content, url, content_type)
+    shown = {target for target, signs in said.items() if signs}
     here, page = scope_of(url, shared_hosts), normalize_url(url).rstrip("/")
     found: list[tuple[str, bool]] = []
     for link in links:
