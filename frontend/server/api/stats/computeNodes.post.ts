@@ -30,6 +30,7 @@ import {
   writeRegionStats,
   type RegionStat,
 } from "~~/server/utils/regionStats";
+import { dropCachedResponses } from "~~/server/utils/cachedResponses";
 import { writtenByImportOrReviewed } from "~~/server/utils/provenance";
 import {
   storedSearchLines,
@@ -521,6 +522,9 @@ export default defineEventHandler(async (event) => {
     });
   }
   await writeRegionStats(db, regionRows, new Date());
+  // The cached handlers and the cached home page serve what this just
+  // rewrote; the home map kept its counts from before the recount for hours.
+  await dropCachedResponses("nitro:handlers", "nitro:routes");
 
   return {
     status: "success",
