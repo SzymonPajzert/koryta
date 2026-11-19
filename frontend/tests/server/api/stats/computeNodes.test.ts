@@ -16,6 +16,12 @@ const collections: Record<string, unknown[]> = {
 const selected = new Map<string, string[]>();
 
 const statsDocSet = vi.fn();
+/** What the cache storage holds, and what was removed from it. */
+const cachedKeys: Record<string, string[]> = {
+  "nitro:handlers": ["nitro:handlers:_:apistatsregions.abc.json"],
+  "nitro:routes": ["nitro:routes:_:index.def.json"],
+};
+const cacheRemove = vi.fn();
 const writerUpdate = vi.fn();
 const writerFlush = vi.fn();
 const writerClose = vi.fn();
@@ -62,6 +68,10 @@ vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   globalThis.defineEventHandler = (fn: any) => fn;
 });
+globalThis.useStorage = (() => ({
+  getKeys: async (base: string) => cachedKeys[base] ?? [],
+  removeItem: cacheRemove,
+})) as unknown as typeof globalThis.useStorage;
 globalThis.getRequestHeader = ((_event: unknown, name: string) =>
   name === "Authorization"
     ? authHeader
@@ -363,6 +373,20 @@ describe("POST /api/stats/computeNodes", () => {
       name: "podkarpackie",
       people: 4,
     });
+  });
+
+  /** A cached /api/stats/regions and the cached home page kept serving the
+   * rows from before a recount, so the home map showed no parties for hours. */
+  it("drops the cached handlers and pages once the region rows are written", async () => {
+    await handler({} as never);
+
+    expect(cacheRemove.mock.calls.map(([key]) => key)).toEqual([
+      "nitro:handlers:_:apistatsregions.abc.json",
+      "nitro:routes:_:index.def.json",
+    ]);
+    expect(cacheRemove.mock.invocationCallOrder[0]).toBeGreaterThan(
+      statsDocSet.mock.invocationCallOrder[0]!,
+    );
   });
 
   /** The search box reads the line under a person off the documents its
