@@ -758,12 +758,17 @@ def test_the_odpisy_go_to_the_bulletins_companies_then_public_ones_with_none(
 
     argv, _ = world.command("koryta_krs_odpis")
     assert argv[1:3] == ["--graph", "--changed-since"]
-    # The gap the bulletin never closes, public only by default, and under
-    # the step's one cap: the service tires after ~1,000 documents a run.
-    assert argv[argv.index("--missing") + 1] == "public"
+    # The gap the bulletin never closes: the public companies, then the site's
+    # private ones, by default, and under the step's one cap: the service
+    # tires after ~1,000 documents a run.
+    assert argv[argv.index("--missing") + 1] == "site"
     assert argv[argv.index("--max") + 1] == "300"
 
-    for scope, expected in (("all", ["--missing", "all"]), ("none", [])):
+    for scope, expected in (
+        ("public", ["--missing", "public"]),
+        ("all", ["--missing", "all"]),
+        ("none", []),
+    ):
         world.commands.clear()
         world.objects.clear()
         night.main(["--odpis-missing", scope, "--only", "krs_odpis"])
@@ -774,7 +779,7 @@ def test_the_odpisy_go_to_the_bulletins_companies_then_public_ones_with_none(
     night.main(["--dry-run", "--only", "krs_odpis"])
     assert (
         "koryta_krs_odpis --graph --changed-since <yesterday> --queue "
-        "--missing public --max 300" in capsys.readouterr().out
+        "--missing site --max 300" in capsys.readouterr().out
     )
 
 
@@ -792,11 +797,11 @@ def test_the_odpisy_go_to_the_paid_queues_companies_before_the_gap(world, capsys
 
     argv, _ = world.command("koryta_krs_odpis")
     assert "--queue" not in argv
-    assert argv[argv.index("--missing") + 1] == "public"
+    assert argv[argv.index("--missing") + 1] == "site"
 
     night.main(["--dry-run", "--no-odpis-queue", "--only", "krs_odpis"])
     assert (
-        "koryta_krs_odpis --graph --changed-since <yesterday> --missing public "
+        "koryta_krs_odpis --graph --changed-since <yesterday> --missing site "
         "--max 300" in capsys.readouterr().out
     )
 

@@ -6,10 +6,11 @@
                                            # every company the pipelines know that
                                            # the bulletin names since that day
     koryta_krs_odpis --graph --changed-since 2026-10-08 --queue \
-        --missing public --max 300         # the night's: then the companies the
+        --missing site --max 300           # the night's: then the companies the
                                            # paid job owes rejestr.io for, then
                                            # the public companies with no odpis
-                                           # on file
+                                           # on file, then the site's private
+                                           # ones with none
     python -m jobs.krs_odpis --dry-run     # report the plan, ask nothing
 
 The free half of what `koryta_scrape_krs_paid` buys about a company. An odpis
@@ -36,9 +37,12 @@ then adds the companies whose rejestr.io connections `ScrapeRejestrIO` owes,
 as the last KRS job built it - the paid job buys those only once a free odpis
 was asked for and did not come - the public ones first. ``--missing
 public`` then adds the graph's public companies with no odpis on file at all,
-which the bulletin may never name again, the live ones before those struck off
-(``--missing all``: the private ones after them); a company the service last
-said is in neither register is left out. At most ``--max`` companies a run,
+which the bulletin may never name again, the live ones before those struck off.
+``--missing site`` then adds the companies the site has a page for and the
+pipeline calls private, in `CompaniesLikelyPublic`'s order, so that a public
+owner only the odpis names is read at all; ``--missing all`` then every other
+private one. A company the service last said is in neither register is left
+out. At most ``--max`` companies a run,
 all of these together: the service slows down after about 1,000 documents a
 run.
 
@@ -75,6 +79,7 @@ import pandas as pd
 import requests
 from uuid_extensions import uuid7str  # type: ignore
 
+from analysis.likely_public import CompaniesLikelyPublic
 from conductor import setup_context
 from jobs.krs_common import PINNED, REFRESH_PIPELINES
 from jobs.krs_odpis import crawl, search, store
@@ -82,6 +87,7 @@ from jobs.krs_odpis.log import FLUSH_EVERY, RunLog
 from jobs.krs_odpis.plan import (
     MISSING,
     MISSING_ALL,
+    MISSING_SITE,
     Candidate,
     Plan,
     changed_since,
@@ -187,8 +193,9 @@ def parser() -> argparse.ArgumentParser:
         choices=MISSING,
         help="With --graph: after the companies --changed-since keeps, ask "
         "about the graph's public companies with no odpis pełny on file "
-        "(public), or the private ones after them too (all), under the same "
-        "--max.",
+        "(public), then the site's companies the pipeline calls private, most "
+        "likely public first (site), then every other private one (all), under "
+        "the same --max.",
     )
     parser.add_argument(
         "--max",
@@ -270,6 +277,24 @@ def owed_candidates(
     return owed_by_the_queue(queued, companies, attempts)
 
 
+def site_order(ctx: Context) -> list[str]:
+    """The site's companies the pipeline calls private, most likely public first.
+
+    `CompaniesLikelyPublic` as the last night left it, read and never rebuilt:
+    its tree is the export's and most of the pipelines', far more than this
+    step has minutes for. With no copy on file it is nothing, and the run asks
+    for the public ones alone.
+    """
+    try:
+        leads = CompaniesLikelyPublic().read(ctx)
+    except FileNotFoundError:
+        leads = None
+    if leads is None or leads.empty:
+        print("  [WARN] No CompaniesLikelyPublic on file: no site companies asked.")
+        return []
+    return list(padded_krs(leads["krs"]))
+
+
 def missing_candidates(
     ctx: Context, companies: pd.DataFrame, sources: Sources, scope: str
 ) -> list[Candidate]:
@@ -278,6 +303,7 @@ def missing_candidates(
         sources.stored(ctx),
         last_attempts(ctx),
         private=scope == MISSING_ALL,
+        site=site_order(ctx) if scope in (MISSING_SITE, MISSING_ALL) else (),
     )
 
 

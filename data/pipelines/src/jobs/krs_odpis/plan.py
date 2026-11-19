@@ -37,10 +37,13 @@ REASON_GRAPH = "graph"
 #: A company of the graph with no odpis pełny on file (`without_odpis`).
 REASON_NO_ODPIS = "no_odpis"
 
-#: Which of those a run asks about too (`--missing`): the public ones, or all.
+#: Which of those a run asks about too (`--missing`): the public ones; then the
+#: ones the site has a page for, which the pipeline calls private (site); or
+#: then every private one (all).
 MISSING_PUBLIC = "public"
+MISSING_SITE = "site"
 MISSING_ALL = "all"
-MISSING = (MISSING_PUBLIC, MISSING_ALL)
+MISSING = (MISSING_PUBLIC, MISSING_SITE, MISSING_ALL)
 
 _KRS_LINE = re.compile(r"^\d{10}$")
 
@@ -175,6 +178,7 @@ def without_odpis(
     stored: Collection[str],
     attempts: Mapping[str, str],
     private: bool = False,
+    site: Iterable[str] = (),
 ) -> list[Candidate]:
     """The graph's companies with no odpis pełny on file, in the order to ask.
 
@@ -184,7 +188,13 @@ def without_odpis(
     one a feed names, one that holds only rejestr.io's historical feed - was
     never asked at all: 739 live companies held only that feed on 2026-10-09.
 
-    The public ones first, and the rest only with `private`. Within each, the
+    The public ones first. Then `site`, in the order given: the companies the
+    site has a page for and the pipeline calls private, most likely public
+    first. Nothing else asks for them - a struck-off one is never named by the
+    bulletin again - so a public owner that only the odpis names stays unread:
+    on 2026-11-19, 529 of them had no odpis of any kind, Tauron Ciepło and PGE
+    KWB Bełchatów among them. They need not be in the graph. The rest of the
+    graph only with `private`. Within the graph's groups, the
     live companies come before those the register has struck off
     (`CompaniesKRS`'s `struck_off`): a live company's odpis names the board it
     has now. The struck-off owner rule makes public many old companies of the
@@ -204,10 +214,12 @@ def without_odpis(
     # An output written before the column existed: all of them live, which
     # is the order the gap had then.
     struck = flag(companies.get("struck_off", unknown))
-    owners = [public] + ([~public] if private else [])
-    groups = [
-        krs[owned & standing] for owned in owners for standing in (~struck, struck)
+    groups: list[Iterable[str]] = [
+        krs[public & standing] for standing in (~struck, struck)
     ]
+    groups.append([str(k).zfill(10) for k in site])
+    if private:
+        groups += [krs[~public & standing] for standing in (~struck, struck)]
     ordered: list[str] = []
     for group in groups:
         gap = [
