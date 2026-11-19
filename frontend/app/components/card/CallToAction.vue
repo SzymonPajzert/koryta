@@ -105,7 +105,16 @@
          than printing „0 z 0”. -->
     <template v-if="total">
       <div class="cta__figures">
-        <p class="cta__eyebrow">Sprawdziliśmy już</p>
+        <!-- The link shares the eyebrow's line: a line of its own under the
+             legend made the pane taller than the ask beside it, which left
+             an empty band under the buttons. -->
+        <div class="cta__figures-head">
+          <p class="cta__eyebrow">Sprawdziliśmy już</p>
+          <NuxtLink to="/eksploruj/statystyki" class="cta__stats">
+            Statystyki
+            <v-icon :icon="mdiChevronRight" size="16" />
+          </NuxtLink>
+        </div>
         <!-- Two spans and a space, so the text reads „1 709 z 6 412 osób”
              whichever way the flex row wraps. -->
         <p class="cta__count">
@@ -132,11 +141,6 @@
             <dd>{{ polishNumber(segment.value) }}</dd>
           </div>
         </dl>
-
-        <NuxtLink to="/eksploruj/statystyki" class="cta__stats">
-          Zobacz statystyki
-          <v-icon :icon="mdiChevronRight" size="18" />
-        </NuxtLink>
       </div>
 
       <div class="cta__band">
@@ -474,20 +478,34 @@ onMounted(() => {
   margin: 0;
 }
 
+.cta__figures-head {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
 /* White and underlined: on the blue pane the pale labels are the quiet text,
    so a link has to be the one thing in plain white that is not a number. */
 .cta__stats {
   align-items: center;
   color: inherit;
   display: inline-flex;
+  flex: 0 0 auto;
   font-size: 0.875rem;
   font-weight: 500;
   gap: 2px;
   line-height: 1.25rem;
-  margin-top: 2px;
-  min-height: 44px;
+  position: relative;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* A 44px target without making the eyebrow's line taller. */
+.cta__stats::after {
+  content: "";
+  inset: -12px -8px;
+  position: absolute;
 }
 
 /* The browser's ring is blue on the blue pane. */
