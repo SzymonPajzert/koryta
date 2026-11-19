@@ -10,12 +10,13 @@ const bodyValidator = z.object({
 });
 
 /** A change the owner makes to a task: its status, what it waits on, a line
- * of history. Answers the task as written, so the page shows what the
- * database holds rather than what it asked for. */
+ * of history, an answer picked. Answers the task as written, so the page
+ * shows what the database holds rather than what it asked for, and `also`
+ * the decisions the change closed. */
 export default defineEventHandler(async (event) => {
   await requireOwner(event);
   const { id, patch } = await readValidatedBody(event, (body) =>
     bodyValidator.parse(body),
   );
-  return { task: await updateTask(id, patch, "owner") };
+  return await updateTask(id, patch, "owner");
 });

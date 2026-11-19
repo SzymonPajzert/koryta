@@ -519,7 +519,17 @@ const fit = (duration = 0) => {
   if (bounds.value) void fitBounds(bounds.value, { padding: 0.05, duration });
 };
 
-onPaneReady(() => fit());
+/** Whether the map can be moved yet: before its pane is ready, a move is
+ * lost, and the pane's first view is set here instead. */
+let ready = false;
+
+// A task picked before the map was drawn - „Na mapie” on the list, a link -
+// is the first view, in the middle; otherwise everything.
+onPaneReady(() => {
+  ready = true;
+  if (props.selected) void bringIntoView(props.selected, 0);
+  else fit();
+});
 
 /** A task picked while the map did not draw it: a filter or a focus left it
  * out. The page clears those to show it, and it is brought into view once it
@@ -547,7 +557,7 @@ watch(
 
 /** Brings a task into the middle, close enough to read, out of any fold it
  * was in. */
-async function bringIntoView(id: string) {
+async function bringIntoView(id: string, duration = 300) {
   if (reveal(id)) await nextTick();
   const position = placement.value.positions.get(id);
   if (!position) {
@@ -557,7 +567,7 @@ async function bringIntoView(id: string) {
   setCenter(
     position.x + TASK_NODE_WIDTH / 2,
     position.y + TASK_NODE_HEIGHT / 2,
-    { zoom: Math.max(viewport.value.zoom, 0.8), duration: 300 },
+    { zoom: Math.max(viewport.value.zoom, 0.8), duration },
   );
 }
 
@@ -569,7 +579,7 @@ watch(
     const fromMap = id === clicked;
     clicked = null;
     awaited = null;
-    if (id && !fromMap) void bringIntoView(id);
+    if (id && !fromMap && ready) void bringIntoView(id);
   },
 );
 

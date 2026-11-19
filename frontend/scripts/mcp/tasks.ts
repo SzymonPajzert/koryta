@@ -52,6 +52,7 @@ const SECTION_TITLES: Record<TaskSection, string> = {
   mine: "Ready - for the owner",
   agents: "Ready - for an agent",
   blocked: "Blocked - waiting on another task",
+  decided: "Decided - an option picked, waiting for what follows from it",
   ideas: "Ideas - nobody committed to them",
   parked: "Parked - put aside on purpose",
   closed: "Closed - done or dropped",
@@ -64,22 +65,33 @@ export type ListView =
   | "mine"
   | "agents"
   | "blocked"
+  | "decided"
   | "ideas"
   | "parked"
   | "closed"
   | "all";
 
 const VIEW_SECTIONS: Record<ListView, readonly TaskSection[]> = {
-  open: ["goals", "mine", "agents", "blocked", "ideas", "parked"],
+  open: ["goals", "mine", "agents", "blocked", "decided", "ideas", "parked"],
   ready: ["mine", "agents"],
   goals: ["goals"],
   mine: ["mine"],
   agents: ["agents"],
   blocked: ["blocked"],
+  decided: ["decided"],
   ideas: ["ideas"],
   parked: ["parked"],
   closed: ["closed"],
-  all: ["goals", "mine", "agents", "blocked", "ideas", "parked", "closed"],
+  all: [
+    "goals",
+    "mine",
+    "agents",
+    "blocked",
+    "decided",
+    "ideas",
+    "parked",
+    "closed",
+  ],
 };
 
 export type ListArgs = {

@@ -9,6 +9,7 @@ import {
   TASKS_COLLECTION,
   applyTaskPatch,
   dependencyProblem,
+  finishedDecisions,
   newTask,
   patchedDependsOn,
   taskFromData,
@@ -99,12 +100,14 @@ export async function createTask(
   });
 }
 
+/** Changes a task, and closes the decisions the change finishes (see
+ * `finishedDecisions`): `also` are those, as written. */
 export async function updateTask(
   id: string,
   patch: z.output<typeof taskPatchSchema>,
   by: TaskActor,
   db = opsDb(),
-): Promise<Task> {
+): Promise<{ task: Task; also: Task[] }> {
   const collection = db.collection(TASKS_COLLECTION);
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(collection);
@@ -118,13 +121,14 @@ export async function updateTask(
       current.dependsOn,
     );
     if (problem) throw refuse(problem);
-    const { task } = applyTaskPatch(
-      current,
-      patch,
-      by,
-      new Date().toISOString(),
-    );
+    const now = new Date().toISOString();
+    const { task } = applyTaskPatch(current, patch, by, now);
     tx.set(collection.doc(id), toDoc(task));
-    return task;
+    const after = tasks.map((t) => (t.id === id ? task : t));
+    const also = finishedDecisions(after, by, now);
+    for (const decision of also) {
+      tx.set(collection.doc(decision.id), toDoc(decision));
+    }
+    return { task, also };
   });
 }

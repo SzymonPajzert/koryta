@@ -5,11 +5,13 @@ import {
   mdiRobotOutline,
   mdiRocketLaunchOutline,
   mdiScaleBalance,
+  mdiSourceMerge,
   mdiWrenchOutline,
 } from "@mdi/js";
 import type { RowTone } from "~/composables/rowTone";
 import {
   isClosed,
+  type MergeState,
   type PriorityChoice,
   type Task,
   type TaskKind,
@@ -27,6 +29,7 @@ import {
 export const taskKindConfig: Record<TaskKind, { title: string; icon: string }> =
   {
     action: { title: "Operacja", icon: mdiRocketLaunchOutline },
+    merge: { title: "Scalenie", icon: mdiSourceMerge },
     task: { title: "Zadanie", icon: mdiWrenchOutline },
     decision: { title: "Decyzja", icon: mdiScaleBalance },
     idea: { title: "Pomysł", icon: mdiLightbulbOutline },
@@ -144,6 +147,12 @@ export const taskSectionConfig: Record<
     tone: "neutral",
     info: "Czekają na inne zadanie. Przejdą wyżej same, gdy tamto zostanie zamknięte.",
   },
+  decided: {
+    title: "Podjęte decyzje",
+    short: "Podjęta",
+    tone: "info",
+    info: "Wybór zapadł, a to, co z niego wynika, jeszcze trwa. Wybór można zmienić. Decyzja zamknie się sama, gdy wszystko, co z niej wynika, będzie zamknięte.",
+  },
   ideas: {
     title: "Pomysły",
     short: "Pomysł",
@@ -163,6 +172,34 @@ export const taskSectionConfig: Record<
     info: "Zrobione albo porzucone.",
   },
 };
+
+/** What the last check of main found for a merge, in a word, and the
+ * surface its tag is drawn on (`bg-surface-*` paints the matching ink). */
+export const mergeStateConfig: Record<
+  MergeState,
+  { title: string; surface: "success" | "warning" | "muted" | "danger" }
+> = {
+  merged: { title: "na main", surface: "success" },
+  partial: { title: "część na main", surface: "warning" },
+  open: { title: "poza main", surface: "muted" },
+  gone: { title: "gałąź usunięta", surface: "danger" },
+};
+
+/** A merge's title without the „Merge <branch>:” its branch already says,
+ * for a line that shows the branch beside it. Other titles stay whole. */
+export function mergeTitle(task: Task): string {
+  const branch = task.branches[0];
+  if (task.kind !== "merge" || !branch) return task.title;
+  const escaped = branch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const rest = task.title.replace(
+    new RegExp(
+      `^(?:review and )?(?:merge|land|scal(?: gałąź)?)\\s+(?:the\\s+)?${escaped}(?:\\s+branch)?\\s*[:,-]?\\s*`,
+      "i",
+    ),
+    "",
+  );
+  return rest || task.title;
+}
 
 /** Tasks to pick from in a field, as its items. Closed ones stay pickable -
  * a dependency on something done is a record of the order things happened
