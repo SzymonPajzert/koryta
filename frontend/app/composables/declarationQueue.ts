@@ -3,12 +3,13 @@ import type {
   AnswerVerdict,
   DeclarationAnswer,
   DeclarationAnswerResult,
+  DeclarationProgress,
   DeclarationQueue,
   DeclarationTask,
 } from "~~/shared/declarations";
 import { useCurrentUser } from "vuefire";
 import { authRequest } from "~/composables/auth";
-import { typedFromValue } from "~/utils/declarationReading";
+import { milestoneCrossed, typedFromValue } from "~/utils/declarationReading";
 
 /** A request the server turned down, with the reason to give the reader. */
 export type Refusal = { status: number; message: string };
@@ -312,6 +313,12 @@ export function useDeclarationQueue() {
   /** Crops still waiting for a reader, and this reader's own count. */
   const open = ref<number | null>(null);
   const mine = ref<DeclarationQueue["mine"] | null>(null);
+  /** Crops that want no more readers, and this reader's part in them, which
+   * is asked for on its own after the first crop (`loadProgress`). */
+  const settledCrops = ref<number | null>(null);
+  const progress = ref<DeclarationProgress | null>(null);
+  /** The milestone this sitting's latest answers went past, if any. */
+  const milestone = ref<number | null>(null);
   const loadState = ref<"idle" | "loading" | "ready" | "error">("idle");
   /** Why the queue could not load (`loadState` "error"), when the server
    * said: the day's room for readers without a vote is used up, say. */
@@ -359,7 +366,13 @@ export function useDeclarationQueue() {
   function absorb(result: DeclarationQueue, seq: number): number {
     if (seq > applied) {
       applied = seq;
+      // A count that was on the page before this one: the first of a visit
+      // reached nothing just now, whatever it says.
+      const crossed =
+        mine.value && milestoneCrossed(mine.value.total, result.mine.total);
+      if (crossed) milestone.value = crossed;
       open.value = result.open;
+      settledCrops.value = result.settledCrops;
       mine.value = result.mine;
     }
     const incoming = [result.task, ...result.upcoming].filter(
@@ -405,6 +418,24 @@ export function useDeclarationQueue() {
     }
   }
 
+  /** This reader's part in how far the readers got, for the page to ask for
+   * once its first crop is on screen, which must not wait for it. A failure
+   * says nothing: the page goes on without it. A crop settled while this is on
+   * its way may be in the answer or not, one crop either way until the next
+   * visit. */
+  async function loadProgress() {
+    const asked = generation;
+    try {
+      const result = await readerRequest<DeclarationProgress>(
+        "/api/declarations/progress",
+        { method: "GET", timeout: 20_000 },
+      );
+      if (asked === generation) progress.value = result;
+    } catch (err) {
+      console.error("Failed to load the reader's part in the readings", err);
+    }
+  }
+
   async function refill() {
     const asked = generation;
     refilling.value = true;
@@ -445,6 +476,14 @@ export function useDeclarationQueue() {
       );
       if (asked !== generation) return;
       absorb(result, seq);
+      // A skip can settle a crop too, as the third that calls it unreadable,
+      // but it is no reading of the reader's.
+      if (result.settled && body.verdict !== "skip" && progress.value) {
+        progress.value = {
+          ...progress.value,
+          settled: progress.value.settled + 1,
+        };
+      }
       if (seq > shown) {
         shown = seq;
         answered.value = {
@@ -526,6 +565,9 @@ export function useDeclarationQueue() {
     queue.value = queue.value.filter((entry) => entry.draft !== null);
     open.value = null;
     mine.value = null;
+    settledCrops.value = null;
+    progress.value = null;
+    milestone.value = null;
     exhausted.value = false;
     refilling.value = false;
     answered.value = null;
@@ -541,6 +583,9 @@ export function useDeclarationQueue() {
     queue,
     open,
     mine,
+    settledCrops,
+    progress,
+    milestone,
     loadState,
     refusal,
     refilling,
@@ -550,6 +595,7 @@ export function useDeclarationQueue() {
     given,
     failure,
     start,
+    loadProgress,
     answer,
     reset,
     keepTyped,

@@ -66,14 +66,15 @@ const served = (
   task: ids[0] ? crop(ids[0]) : null,
   upcoming: ids.slice(1).map(crop),
   open: 40,
-  mine: { today: 0, total: 0 },
+  settledCrops: 60,
+  mine: { today: 0, total: 0, found: 0 },
   ...over,
 });
 
 const answeredA1 = (
   over: Partial<DeclarationAnswerResult> = {},
 ): DeclarationAnswerResult => ({
-  ...served(["a2", "a3"], { mine: { today: 1, total: 1 } }),
+  ...served(["a2", "a3"], { mine: { today: 1, total: 1, found: 0 } }),
   settled: false,
   answered: { id: "a1" },
   ...over,
@@ -541,6 +542,160 @@ describe("useDeclarationQueue", () => {
  * limit of the day, an address to confirm, a crop that is gone), so the page
  * shows it in place of its own line, and a reader stopped by a limit is told
  * why rather than to try again. */
+describe("useDeclarationQueue, how far the readers got", () => {
+  it("takes the crops settled from what every response says", async () => {
+    const reading = await signedInReading(["a1", "a2", "a3"]);
+    expect(reading.settledCrops.value).toBe(60);
+
+    mockAuthRequest.mockResolvedValueOnce(answeredA1({ settledCrops: 61 }));
+    await reading.answer(crop("a1"), { verdict: "date", value: "1979-07-15" });
+
+    expect(reading.settledCrops.value).toBe(61);
+  });
+
+  it("asks for the reader's part when told to, and for nothing before", async () => {
+    const reading = await signedInReading(["a1", "a2", "a3"]);
+    expect(reading.progress.value).toBeNull();
+
+    mockAuthRequest.mockResolvedValueOnce({ settled: 88, votes: true });
+    await reading.loadProgress();
+
+    expect(mockAuthRequest).toHaveBeenLastCalledWith(
+      "/api/declarations/progress",
+      {
+        method: "GET",
+        timeout: 20_000,
+        retryStatusCodes: RETRY_STATUS_CODES,
+      },
+    );
+    expect(reading.progress.value).toEqual({ settled: 88, votes: true });
+  });
+
+  it("goes on without the reader's part when it cannot be had", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const reading = await signedInReading(["a1", "a2", "a3"]);
+
+    mockAuthRequest.mockRejectedValueOnce(new Error("503"));
+    await reading.loadProgress();
+
+    expect(reading.progress.value).toBeNull();
+    expect(reading.failure.value).toBe("");
+    expect(reading.loadState.value).toBe("ready");
+  });
+
+  it("adds a crop the reader's own reading settled to their part, and no other", async () => {
+    const reading = await signedInReading(["a1", "a2", "a3"]);
+    mockAuthRequest.mockResolvedValueOnce({ settled: 88, votes: true });
+    await reading.loadProgress();
+
+    mockAuthRequest.mockResolvedValueOnce(answeredA1({ settled: false }));
+    await reading.answer(crop("a1"), { verdict: "date", value: "1979-07-15" });
+    expect(reading.progress.value?.settled).toBe(88);
+
+    mockAuthRequest.mockResolvedValueOnce({
+      ...saved("a2", ["a3", "a4", "a5"]),
+      settled: true,
+    });
+    await reading.answer(crop("a2"), { verdict: "date", value: "1971-09-03" });
+    expect(reading.progress.value?.settled).toBe(89);
+  });
+
+  it("leaves the reader's part alone when a skip settles a crop", async () => {
+    const reading = await signedInReading(["a1", "a2", "a3"]);
+    mockAuthRequest.mockResolvedValueOnce({ settled: 88, votes: true });
+    await reading.loadProgress();
+
+    mockAuthRequest.mockResolvedValueOnce(answeredA1({ settled: true }));
+    await reading.answer(crop("a1"), { verdict: "skip" });
+
+    expect(reading.progress.value?.settled).toBe(88);
+  });
+
+  it("notes the milestone an answer went past, and none on the visit's first count", async () => {
+    reader.value = { uid: "me" };
+    mockAuthRequest.mockResolvedValueOnce(
+      served(["a1", "a2", "a3"], { mine: { today: 9, total: 99, found: 3 } }),
+    );
+    const reading = useDeclarationQueue();
+    await reading.start();
+    expect(reading.milestone.value).toBeNull();
+
+    mockAuthRequest.mockResolvedValueOnce(
+      answeredA1({ mine: { today: 10, total: 100, found: 3 } }),
+    );
+    await reading.answer(crop("a1"), { verdict: "date", value: "1979-07-15" });
+
+    expect(reading.milestone.value).toBe(100);
+  });
+
+  it("does not take a count that overtook another for a milestone reached twice", async () => {
+    reader.value = { uid: "me" };
+    mockAuthRequest.mockResolvedValueOnce(
+      served(["a1", "a2", "a3"], { mine: { today: 8, total: 98, found: 3 } }),
+    );
+    const reading = useDeclarationQueue();
+    await reading.start();
+
+    const first = later<DeclarationAnswerResult>();
+    const second = later<DeclarationAnswerResult>();
+    mockAuthRequest
+      .mockReturnValueOnce(first.response)
+      .mockReturnValueOnce(second.response);
+    const savingA1 = reading.answer(crop("a1"), {
+      verdict: "date",
+      value: "1979-07-15",
+    });
+    const savingA2 = reading.answer(crop("a2"), {
+      verdict: "date",
+      value: "1971-09-03",
+    });
+    second.land(
+      saved("a2", ["a3", "a4", "a5"], {
+        mine: { today: 10, total: 100, found: 3 },
+      }),
+    );
+    await savingA2;
+    expect(reading.milestone.value).toBe(100);
+    reading.milestone.value = null;
+
+    first.land(
+      saved("a1", ["a3", "a4", "a5"], {
+        mine: { today: 9, total: 99, found: 3 },
+      }),
+    );
+    await savingA1;
+
+    expect(reading.milestone.value).toBeNull();
+    expect(reading.mine.value?.total).toBe(100);
+  });
+
+  it("forgets all of it when a sign-in starts the queue over", async () => {
+    const reading = await signedInReading(["a1", "a2", "a3"]);
+    mockAuthRequest.mockResolvedValueOnce({ settled: 88, votes: true });
+    await reading.loadProgress();
+    reading.milestone.value = 100;
+
+    reading.reset();
+
+    expect(reading.settledCrops.value).toBeNull();
+    expect(reading.progress.value).toBeNull();
+    expect(reading.milestone.value).toBeNull();
+  });
+
+  it("drops an answer about the reader before a sign-in", async () => {
+    const reading = await signedInReading(["a1", "a2", "a3"]);
+    const asked = later<{ settled: number; votes: boolean }>();
+    mockAuthRequest.mockReturnValueOnce(asked.response);
+    const loading = reading.loadProgress();
+
+    reading.reset();
+    asked.land({ settled: 0, votes: false });
+    await loading;
+
+    expect(reading.progress.value).toBeNull();
+  });
+});
+
 describe("refusalOf", () => {
   it.each([
     [429, NO_ACCOUNT],

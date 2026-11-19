@@ -73,6 +73,7 @@ const served = (
   task: crop(ids[0]!),
   upcoming: ids.slice(1).map(crop),
   open: 40,
+  settledCrops: 60,
   mine,
 });
 

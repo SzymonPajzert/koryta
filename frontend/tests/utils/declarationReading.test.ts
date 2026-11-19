@@ -4,6 +4,9 @@ import {
   documentHost,
   dotTyped,
   lineParts,
+  milestoneCrossed,
+  nextMilestone,
+  READING_MILESTONES,
   readingWords,
   readTyped,
   typedFromValue,
@@ -280,4 +283,26 @@ describe("lineParts", () => {
       ).toBe(message);
     },
   );
+});
+
+describe("the milestones a reader's count reaches", () => {
+  it("names the next one, and none past the last", () => {
+    expect(nextMilestone(0)).toBe(1);
+    expect(nextMilestone(1)).toBe(10);
+    expect(nextMilestone(90)).toBe(100);
+    expect(nextMilestone(100)).toBe(250);
+    expect(nextMilestone(READING_MILESTONES.at(-1)!)).toBeNull();
+  });
+
+  it("says which one a count went past, the highest of several", () => {
+    expect(milestoneCrossed(0, 1)).toBe(1);
+    expect(milestoneCrossed(99, 100)).toBe(100);
+    expect(milestoneCrossed(9, 60)).toBe(50);
+  });
+
+  it("says nothing for a count that passed none, or went back", () => {
+    expect(milestoneCrossed(100, 101)).toBeNull();
+    expect(milestoneCrossed(100, 100)).toBeNull();
+    expect(milestoneCrossed(120, 90)).toBeNull();
+  });
 });
