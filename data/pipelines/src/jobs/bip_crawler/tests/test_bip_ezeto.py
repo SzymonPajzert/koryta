@@ -1,16 +1,32 @@
 """ZETO Lublin's e-zeto BIPs: a list's further pages behind buttons, one address
 a page, a seeker's documents under their names, and a councillor's own page
-read before the menu's declarations tree. The markup is Żółkiewka's, powiat
-świdnicki's and powiat bolesławiecki's (11-13)."""
+read before the menu's declarations tree, on e-zeto pages alone. The markup is
+Żółkiewka's, powiat świdnicki's and powiat bolesławiecki's (11-13)."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
+from jobs.bip_crawler import ezeto
 from jobs.bip_crawler.ezeto import documents, pager
 from jobs.bip_crawler.tests.test_people_mode_review import PDF, html, row, search
 from scrapers.bip.classify import normalize_url
-from scrapers.bip.people import Seeker
+from scrapers.bip.people import Seeker, link_score
+from scrapers.common.links import LinkContext
+
+Page = tuple[int, str, bytes]
 
 HOST = "https://u1.pl"
+#: What every e-zeto page's head says.
+AUTHOR = b'<meta name="author" content="ZETO Lublin, marketing@zeto.lublin.pl">'
+
+
+def ezeto_html(title: str, body: str) -> Page:
+    """An e-zeto page: `html`'s, its author in its head."""
+    status, content_type, page = html(title, body)
+    return status, content_type, page.replace(b"<head>", b"<head>" + AUTHOR, 1)
+
+
 #: Where a pager's button names the list: Żółkiewka's 2018-2023 term (mnu6, 122).
 LIST = "%26value%255B0%255D%3Dmnu6%26value%255B1%255D%3D122"
 PLACE = (
@@ -334,17 +350,14 @@ TERM = (
 )
 YEARS = (2021, 2022, 2023)
 OWN = f"{HOST}/bip/318_spboleslawiec/fckeditor/file/Oswiadczenia/VI kadencja"
+HIS = f"{HOST}/index.php?type=4&func=selectsite&value%5B0%5D=mnu55&value%5B1%5D=12"
 
 
-def test_a_councillors_own_page_is_read_before_the_menus_declarations(
-    tmp_path,
-) -> None:
-    # The tree scored up to 9.5 and his name 5.5: the walk read 29 pages and
-    # never opened his (11-13). Two pages: the term's, then his.
-    his = f"{HOST}/index.php?type=4&func=selectsite&value%5B0%5D=mnu55&value%5B1%5D=12"
-    sites = {
-        HOST: html("VI kadencja", MENU + TERM),
-        his: html(
+def boleslawiec(page: Callable[[str, str], Page] = ezeto_html) -> dict[str, Page]:
+    """The VI term's page and the councillor's, each under the left menu."""
+    return {
+        HOST: page("VI kadencja", MENU + TERM),
+        HIS: page(
             "Jacek Łuczkowski",
             MENU
             + "".join(
@@ -365,7 +378,11 @@ def test_a_councillors_own_page_is_read_before_the_menus_declarations(
             for year in YEARS
         },
     }
-    _, store, web, _ = search(
+
+
+def two_pages(tmp_path, sites):
+    """A walk of two pages for Jacek Łuczkowski."""
+    return search(
         tmp_path,
         sites,
         [row("l", "u1", "Jacek", "ŁUCZKOWSKI")],
@@ -374,5 +391,38 @@ def test_a_councillors_own_page_is_read_before_the_menus_declarations(
         pages_per_candidacy=1,
         max_unit_pages=2,
     )
+
+
+def test_a_councillors_own_page_is_read_before_the_menus_declarations(
+    tmp_path,
+) -> None:
+    # The tree scored up to 9.5 and his name 5.5: the walk read 29 pages and
+    # never opened his (11-13). Two pages: the term's, then his.
+    _, store, web, _ = two_pages(tmp_path, boleslawiec())
     assert store.outcomes["l"].status == "found"
     assert not any("mnu12" in call or "mnu77" in call for call in web.calls)
+
+
+def test_other_platforms_read_a_declarations_menu_before_a_full_name(
+    tmp_path,
+) -> None:
+    # The same pages on another platform: its declarations menu first, as
+    # before 11-13 (at 12 Tarnów's per-seeker searches went first, 11-18).
+    _, store, web, _ = two_pages(tmp_path, boleslawiec(html))
+    assert store.outcomes["l"].status != "found"
+    assert any("mnu12" in call for call in web.calls)
+
+
+def test_a_full_name_outscores_the_menu_on_e_zeto_pages_alone() -> None:
+    seekers = [Seeker.of("l", "Jacek", "ŁUCZKOWSKI")]
+    his = LinkContext(HIS, "Jacek Łuczkowski")
+    menu = LinkContext(
+        f"{HOST}/index.php?type=4&func=selectsite&value%5B0%5D=mnu12&value%5B1%5D=1",
+        "OŚWIADCZENIA MAJĄTKOWE",
+    )
+    assert link_score(his, seekers, 1, full_name=ezeto.FULL_NAME) > link_score(
+        menu, seekers, 1
+    )
+    assert link_score(his, seekers, 1) < link_score(menu, seekers, 1)
+    assert ezeto.is_page(ezeto_html("Rada Powiatu", "")[2])
+    assert not ezeto.is_page(html("Rada Powiatu", "ZETO Lublin")[2])

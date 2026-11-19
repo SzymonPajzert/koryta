@@ -99,7 +99,7 @@ def _fate(
         return "low value", -99.0
     if not frontier.in_scope(target):
         return "off scope", -99.0
-    score = link_score(link, seekers, DEPTH + 1, prefer)
+    score = link_score(link, seekers, DEPTH + 1, prefer, view.full_name)
     if score <= -3:
         return "left", score
     if target not in queued:

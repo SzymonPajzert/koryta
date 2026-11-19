@@ -19,6 +19,9 @@ heading and links it as "przejdź do dokumentu", its name only in the link's
 title: powiat świdnicki's councillors' declarations ranked last of a page's
 167 links, and a walk of 119 pages opened none (11-13). `documents` gives a
 seeker's document its name.
+
+Its left menu outscores a councillor's own page (`FULL_NAME`), so the links of
+its pages (`is_page`) score a seeker's full name higher than other platforms'.
 """
 
 from __future__ import annotations
@@ -31,6 +34,20 @@ from urllib.parse import parse_qsl, unquote, urljoin
 from scrapers.bip.people import Seeker, declarants
 from scrapers.common.links import LinkContext
 
+#: What a link naming a seeker by first name and surname scores on an e-zeto
+#: page (`scrapers.bip.people.link_score`): above any declarations menu, whose
+#: links score up to 9.5 at depth 1. Powiat bolesławiecki's left menu, ~940
+#: links on every page, holds an "OŚWIADCZENIA MAJĄTKOWE" tree of officials and
+#: offices scoring 7.5 to 9.5, while "Jacek Łuczkowski" scored 5.5: the walk
+#: read 29 pages and never opened him; at 12 it found him in 3 pages (11-13).
+#: That menu lists every term's councillors as well, and a page is queued at
+#: the score of its first link: a name in its menu counts as one in the content.
+#: Not on other platforms: at 12 Madkom's search box, asked for each seeker by
+#: name, went before the rest of Tarnów's BIP, 136 of the 197 pages a 6-minute
+#: walk read, 58 of 262 at 3 (11-18).
+FULL_NAME = 12.0
+#: Its template's author, on every page.
+_AUTHOR = re.compile(rb"<meta\s+name=[\"']author[\"']\s+content=[\"']ZETO Lublin", re.I)
 _MARK = b"dispNaviBar"
 #: A tag whose quoted values may hold a ">": the next pages' button is value=">".
 _INPUT = re.compile(r"""<input\b(?:[^>"']|"[^"]*"|'[^']*')*>""", re.I)
@@ -48,6 +65,11 @@ def _attributes(tag: str) -> dict[str, str]:
         )
         for m in _ATTRIBUTE.finditer(tag)
     }
+
+
+def is_page(content: bytes) -> bool:
+    """Whether a page is an e-zeto BIP's, its author in its head."""
+    return _AUTHOR.search(content[:16_384]) is not None
 
 
 def _number(name: str) -> int:
