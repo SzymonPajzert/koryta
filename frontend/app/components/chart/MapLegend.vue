@@ -112,6 +112,14 @@ const props = defineProps<{
 
 const LEAD_STEPS = ["do 45%", "45-59%", "60%+"];
 
+/** The style block's colours. A local and not `ink` itself: in dev, an
+ * import only the style block reads is missing from the SSR context. */
+const text = {
+  primary: ink.primary,
+  secondary: ink.secondary,
+  muted: ink.muted,
+};
+
 /** „Udział X wśród osób z partią”, X in the genitive. A party missing here
  * reads „X: udział wśród osób z partią”. */
 const GENITIVE: Record<string, string> = {
@@ -167,7 +175,7 @@ const swatch = (fill: string) => ({ background: fill });
   margin: 16px auto 0;
   font-size: 0.75rem;
   line-height: 1rem;
-  color: v-bind("ink.secondary");
+  color: v-bind("text.secondary");
   font-variant-numeric: tabular-nums;
 }
 
@@ -175,7 +183,7 @@ const swatch = (fill: string) => ({ background: fill });
   font-size: 0.8125rem;
   line-height: 1.125rem;
   font-weight: 500;
-  color: v-bind("ink.primary");
+  color: v-bind("text.primary");
   text-align: center;
   text-wrap: balance;
 }
@@ -226,7 +234,7 @@ const swatch = (fill: string) => ({ background: fill });
   padding-right: 8px;
   text-align: right;
   font-weight: 500;
-  color: v-bind("ink.primary");
+  color: v-bind("text.primary");
 }
 
 .map-legend__cell {
@@ -303,7 +311,7 @@ const swatch = (fill: string) => ({ background: fill });
   .map-legend__ramp-name {
     margin-right: 4px;
     font-weight: 500;
-    color: v-bind("ink.primary");
+    color: v-bind("text.primary");
   }
 
   .map-legend__ramp-step {
@@ -316,7 +324,7 @@ const swatch = (fill: string) => ({ background: fill });
   .map-legend__caption {
     display: block;
     margin-top: -2px;
-    color: v-bind("ink.muted");
+    color: v-bind("text.muted");
   }
 
   .map-legend__items {
