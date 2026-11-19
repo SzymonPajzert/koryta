@@ -33,6 +33,11 @@ SERVERS = {
     # hosts below sit on this address too, listed one by one after the same
     # refusal.
     "176.119.62.218": "SkyCMS",
+    # The offices' BIPs on bip.org.pl (ug<name>.bip.org.pl, 22 units, 11-13):
+    # the crawler's name gets an HTTP/2 INTERNAL_ERROR or an empty reply, a
+    # browser 200, and robots.txt answers a browser with an HTML page, so there
+    # is none. Somianka walked as a browser found 3 of 3.
+    "195.117.178.13": "bip.org.pl",
 }
 
 #: Hosts, without www.
