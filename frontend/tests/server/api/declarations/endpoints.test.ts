@@ -6,6 +6,7 @@ import answer from "../../../../server/api/declarations/[id]/answer.post";
 import claim from "../../../../server/api/declarations/claim.post";
 import found from "../../../../server/api/declarations/found.get";
 import next from "../../../../server/api/declarations/next.get";
+import progress from "../../../../server/api/declarations/progress.get";
 import sweep from "../../../../server/api/declarations/sweep.post";
 import publishQueued from "../../../../server/api/declarations/publish-queued.post";
 import {
@@ -51,6 +52,7 @@ const mocks = vi.hoisted(() => {
     queueFor: vi.fn(),
     admitToQueue: vi.fn(),
     claimAnswers: vi.fn(),
+    settledWithReader: vi.fn(),
     findsOf: vi.fn(),
     /** What `getFirestore` hands the endpoints: nothing to read, unless a
      * test runs the real claim against something. */
@@ -90,6 +92,7 @@ vi.mock("../../../../server/utils/declarations", async (original) => ({
   queueFor: mocks.queueFor,
   admitToQueue: mocks.admitToQueue,
   claimAnswers: mocks.claimAnswers,
+  settledWithReader: mocks.settledWithReader,
 }));
 vi.mock("../../../../server/utils/declarationFinds", () => ({
   findsOf: mocks.findsOf,
@@ -122,6 +125,7 @@ const QUEUE = {
   task: null,
   upcoming: [],
   open: 0,
+  settledCrops: 0,
   mine: { today: 1, total: 1 },
 };
 const ON_A_DAY = {
@@ -415,6 +419,42 @@ describe("api/declarations/next", () => {
 
     await expect(next({} as never)).rejects.toMatchObject({ statusCode: 401 });
     expect(mocks.queueFor).not.toHaveBeenCalled();
+  });
+});
+
+describe("api/declarations/progress", () => {
+  it("gives a reader who votes the settled crops with their reading", async () => {
+    mocks.settledWithReader.mockResolvedValue(88);
+
+    expect(await progress({} as never)).toEqual({ settled: 88, votes: true });
+    expect(mocks.settledWithReader).toHaveBeenCalledWith(mocks.db, "reader");
+    expect(globalThis.setResponseHeader).toHaveBeenCalledWith(
+      expect.anything(),
+      "Cache-Control",
+      "private, no-store",
+    );
+  });
+
+  it("reads nothing for a reader without an account", async () => {
+    mocks.request.headers = { "x-reader-id": READER };
+
+    expect(await progress({} as never)).toEqual({ settled: 0, votes: false });
+    expect(mocks.settledWithReader).not.toHaveBeenCalled();
+  });
+
+  it("reads nothing for an account nobody confirmed", async () => {
+    mocks.getUser.mockResolvedValue(UNCONFIRMED);
+
+    expect(await progress({} as never)).toEqual({ settled: 0, votes: false });
+    expect(mocks.settledWithReader).not.toHaveBeenCalled();
+  });
+
+  it("turns down a request with neither a token nor a reader id", async () => {
+    mocks.request.headers = {};
+
+    await expect(progress({} as never)).rejects.toMatchObject({
+      statusCode: 401,
+    });
   });
 });
 

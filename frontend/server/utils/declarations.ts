@@ -16,6 +16,7 @@ import {
   answerVotes,
   READ_NAMES,
   READER_ID_PATTERN,
+  settledStatuses,
   settleReading,
   type DeclarationAnswer,
   type DeclarationQueue,
@@ -385,9 +386,14 @@ export async function queueFor(
 ): Promise<DeclarationQueue> {
   const today = warsawDate();
   const mine = db.collection(ANSWERS).where("uid", "==", uid);
-  const [tasks, open, total, todays, found] = await Promise.all([
+  const [tasks, open, settled, total, todays, found] = await Promise.all([
     nextTasks(db, uid, count, exclude, people),
     db.collection(EXTRACTS).where("status", "==", "open").count().get(),
+    db
+      .collection(EXTRACTS)
+      .where("status", "in", [...settledStatuses])
+      .count()
+      .get(),
     mine.where("counted", "==", true).count().get(),
     mine.where("counted", "==", true).where("day", "==", today).count().get(),
     db.collection(READER_FINDS).where("uid", "==", uid).count().get(),
@@ -396,12 +402,47 @@ export async function queueFor(
     task: tasks[0] ?? null,
     upcoming: tasks.slice(1),
     open: open.data().count,
+    settledCrops: settled.data().count,
     mine: {
       total: total.data().count,
       today: todays.data().count,
       found: found.data().count,
     },
   };
+}
+
+/**
+ * How many settled crops carry a reading of this reader's that voted: their
+ * part of the progress under the form on /oswiadczenia. A reading without a
+ * vote had no say in what settled, so it is not one of them, whether a browser
+ * gave it or an account before its address was confirmed.
+ *
+ * An answer does not say what became of its crop, and a crop does not say who
+ * read it (`summaryOf`), so this reads the crop behind each of the reader's
+ * answers. That is why the page asks for it once a visit, apart from the
+ * counts that come back with every answer: the reads grow with what the reader
+ * has read, and the crop on screen must not wait for them.
+ */
+export async function settledWithReader(
+  db: Firestore,
+  uid: string,
+): Promise<number> {
+  const voted = await db
+    .collection(ANSWERS)
+    .where("uid", "==", uid)
+    .where("counted", "==", true)
+    .where("votes", "==", true)
+    .select("extractId")
+    .get();
+  if (voted.empty) return 0;
+  const crops = await db.getAll(
+    ...voted.docs.map((doc) =>
+      db.collection(EXTRACTS).doc(String(doc.get("extractId"))),
+    ),
+    { fieldMask: ["status"] },
+  );
+  const settled: ReadonlySet<unknown> = new Set(settledStatuses);
+  return crops.filter((crop) => settled.has(crop.get("status"))).length;
 }
 
 /** What a crop's answers add up to, kept on the crop: how many read which

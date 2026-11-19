@@ -118,21 +118,33 @@ export class ReadingDesk {
   readonly answers: { id: string; body: DeclarationAnswer }[] = [];
   private remaining: DeclarationTask[];
   private open: number;
+  private settledCrops: number;
   private mine: DeclarationQueue["mine"];
 
   constructor(
     crops: DeclarationTask[],
-    counts: { open: number; mine: DeclarationQueue["mine"] },
+    counts: {
+      open: number;
+      settledCrops?: number;
+      mine: DeclarationQueue["mine"];
+    },
   ) {
     this.remaining = [...crops];
     this.open = counts.open;
+    this.settledCrops = counts.settledCrops ?? 0;
     this.mine = { ...counts.mine };
   }
 
   /** `GET /api/declarations/next?count=N`. */
   next(count: number): DeclarationQueue {
     const [task = null, ...upcoming] = this.remaining.slice(0, count);
-    return { task, upcoming, open: this.open, mine: { ...this.mine } };
+    return {
+      task,
+      upcoming,
+      open: this.open,
+      settledCrops: this.settledCrops,
+      mine: { ...this.mine },
+    };
   }
 
   /** `POST /api/declarations/<id>/answer`, or null for a crop not on the
@@ -147,6 +159,7 @@ export class ReadingDesk {
     const settled = body.verdict !== "skip";
     if (settled) {
       this.open -= 1;
+      this.settledCrops += 1;
       this.mine.today += 1;
       this.mine.total += 1;
     }

@@ -317,6 +317,16 @@ export const extractStatuses = [
 ] as const;
 export type ExtractStatus = (typeof extractStatuses)[number];
 
+/** A crop that wants no more readers: its date agreed, its line found
+ * unreadable, or its readers at odds, which an admin takes up. With the open
+ * crops these are all a reader can ever read: a crop the cutter failed on
+ * never reached them, and a withdrawn one is gone. */
+export const settledStatuses = [
+  "agreed",
+  "unreadable",
+  "disputed",
+] as const satisfies readonly ExtractStatus[];
+
 /** A full date or a year: which one a reading is, or null for neither. */
 export function readingKind(value: string): "date" | "year" | null {
   if (/^\d{4}$/.test(value)) return "year";
@@ -627,6 +637,9 @@ export type DeclarationQueue = {
   upcoming: DeclarationTask[];
   /** Crops still waiting for a reader, and what this reader has done. */
   open: number;
+  /** Crops that want no more readers (`settledStatuses`): over these and
+   * `open`, how far all the readers got. */
+  settledCrops: number;
   mine: {
     today: number;
     total: number;
@@ -852,6 +865,18 @@ export type DeclarationFactsResult = {
   people: number;
   stages: Record<PeopleStage, number>;
   unknownReasons: Record<string, number>;
+};
+
+/** `GET /api/declarations/progress`: this reader's part in how far the
+ * readers got. */
+export type DeclarationProgress = {
+  /** Settled crops (`settledStatuses`) with a reading of this reader's that
+   * voted. A crop takes two readers at least, so these overlap with other
+   * readers' and add up to more than the crops settled. */
+  settled: number;
+  /** Whether this reader's answers vote now: a reader without one has no part
+   * in what settles, and is told what would give them one. */
+  votes: boolean;
 };
 
 /** `POST /api/declarations/<id>/answer`. */

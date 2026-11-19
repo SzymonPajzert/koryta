@@ -161,6 +161,35 @@ export function answerWords(
   }
 }
 
+/**
+ * The readings at which a reader reaches a milestone: what the tally's
+ * „Sprawdzono” says, skips left out. Steep at the start, so the first reading
+ * shows there is a ladder and the tenth comes within a sitting, and spaced
+ * further apart as the counts grow: of the 121 readers by 2026-11-06, 69 had
+ * passed 10, 24 passed 100 and 4 passed 500, and the most any had read was 627.
+ *
+ * Worked out from the server's count every time, and never stored. That is
+ * what makes a milestone worth showing: nothing a reader can write to says how
+ * many they read, as `users/{uid}`, which its owner may write, would.
+ */
+export const READING_MILESTONES = [
+  1, 10, 50, 100, 250, 500, 1000, 2500,
+] as const;
+
+/** The next milestone past `readings`, or null past the last. */
+export function nextMilestone(readings: number): number | null {
+  return READING_MILESTONES.find((step) => step > readings) ?? null;
+}
+
+/** The milestone a count went past on its way from `before` to `after`, the
+ * highest where it passed several, or null for none. */
+export function milestoneCrossed(before: number, after: number): number | null {
+  const crossed = READING_MILESTONES.filter(
+    (step) => before < step && step <= after,
+  );
+  return crossed.at(-1) ?? null;
+}
+
 /** A piece of a line of copy: a hyphenated word, kept whole, or the text
  * between two such words. */
 export type LinePart = { text: string; whole: boolean };

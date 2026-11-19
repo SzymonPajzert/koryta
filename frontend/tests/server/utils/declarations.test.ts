@@ -15,6 +15,7 @@ import {
   recordAnswer,
   READER_DAILY_LIMIT,
   ROOM_SHARDS,
+  settledWithReader,
   VOTELESS_ASK_DAILY_LIMIT,
   VOTELESS_DAILY_LIMIT,
   type DeclarationReader,
@@ -44,8 +45,8 @@ vi.mock("firebase-admin/auth", () => ({
 
 /**
  * A Firestore double that runs queries for real over an in-memory map:
- * equality filters, ordering on several fields, a cursor, limits, count(),
- * getAll, increments, and transactions whose writes land only when the
+ * equality and `in` filters, ordering on several fields, a cursor, limits,
+ * count(), getAll, increments, and transactions whose writes land only when the
  * function returns. It notes the queries transactions run, and how many
  * answers each read. A transaction that reads a document in `aborting` fails
  * as one that lost to contention every time the client library tried it,
@@ -94,7 +95,12 @@ function run(query: Query) {
     .filter((path) => path.startsWith(`${query.collection}/`))
     .map(snapshot)
     .filter((doc) =>
-      query.filters.every(([field, value]) => doc.get(field) === value),
+      query.filters.every(([field, value]) => {
+        const among = (value as { __in?: unknown[] } | null)?.__in;
+        return among
+          ? among.includes(doc.get(field))
+          : doc.get(field) === value;
+      }),
     );
   docs.sort((a, b) => {
     for (const [field, dir] of query.orders) {
@@ -114,8 +120,12 @@ function run(query: Query) {
 function queryOf(base: Query) {
   const make = (q: Query): Record<string, unknown> => ({
     __query: q,
-    where: (field: string, _op: string, value: unknown) =>
-      make({ ...q, filters: [...q.filters, [field, value]] }),
+    where: (field: string, op: string, value: unknown) =>
+      make({
+        ...q,
+        filters: [...q.filters, [field, op === "in" ? { __in: value } : value]],
+      }),
+    select: () => make(q),
     orderBy: (field: string, dir: "asc" | "desc" = "asc") =>
       make({ ...q, orders: [...q.orders, [field, dir]] }),
     limit: (max: number) => make({ ...q, max }),
@@ -145,8 +155,9 @@ const db = {
       };
     },
   }),
-  getAll: async (...refs: { path: string }[]) =>
-    refs.map((ref) => snapshot(ref.path)),
+  // What comes after the references is the read's options, a field mask say.
+  getAll: async (...refs: { path?: string }[]) =>
+    refs.flatMap((ref) => (ref.path ? [snapshot(ref.path)] : [])),
   runTransaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
     const writes: (() => void)[] = [];
     const tx = {
@@ -862,6 +873,56 @@ describe("queueFor", () => {
         "theirs",
       ]);
     });
+  });
+});
+
+describe("how far the readers got", () => {
+  it("counts the crops that want no more readers, and neither those that failed nor those withdrawn", async () => {
+    crop("open", { rand: 0.1 });
+    crop("agreed", { status: "agreed" });
+    crop("unreadable", { status: "unreadable" });
+    crop("disputed", { status: "disputed" });
+    crop("failed", { status: "failed" });
+    crop("withdrawn", { status: "withdrawn" });
+
+    const queue = await queueFor(firestore, "a", 1);
+
+    expect(queue.open).toBe(1);
+    expect(queue.settledCrops).toBe(3);
+  });
+
+  it("gives a reader the settled crops their readings voted on", async () => {
+    crop("settled");
+    crop("unreadable");
+    crop("still-open");
+    crop("withdrawn");
+    await answer("a", "1979-07-15", "settled");
+    await answer("b", "1979-07-15", "settled");
+    await answer("a", "1979-07-15", "unreadable");
+    await answer("a", "1979-07-15", "still-open");
+    await answer("a", "1979-07-15", "withdrawn");
+    stored.get("declarationExtracts/unreadable")!.status = "unreadable";
+    stored.get("declarationExtracts/withdrawn")!.status = "withdrawn";
+
+    expect(await settledWithReader(firestore, "a")).toBe(2);
+    expect(await settledWithReader(firestore, "b")).toBe(1);
+  });
+
+  it("gives a reader nothing for a skip, or for a reading with no vote", async () => {
+    crop("skipped", { status: "agreed" });
+    crop("voteless", { status: "agreed" });
+    await skipAs(voter("a"), "skipped");
+    await answerAs(unconfirmed("a"), "1979-07-15", "voteless");
+
+    expect(await settledWithReader(firestore, "a")).toBe(0);
+  });
+
+  it("gives a reader who read nothing nothing, without reading a crop", async () => {
+    const getAll = vi.spyOn(db, "getAll");
+
+    expect(await settledWithReader(firestore, "a")).toBe(0);
+    expect(getAll).not.toHaveBeenCalled();
+    getAll.mockRestore();
   });
 });
 
