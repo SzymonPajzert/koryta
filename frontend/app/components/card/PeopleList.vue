@@ -13,8 +13,17 @@
     </v-card-text>
   </v-card>
   <v-card v-else border class="pt-2 mt-2 mx-auto" max-width="400" rounded="lg">
-    <v-card-title>
-      {{ props.region.name }}
+    <v-card-title class="d-flex align-center ga-2">
+      <span class="flex-grow-1 text-wrap">{{ props.region.name }}</span>
+      <v-btn
+        :icon="mdiClose"
+        variant="text"
+        size="small"
+        aria-label="Odznacz powiat"
+        title="Odznacz"
+        data-testid="people-list-close"
+        @click="emit('close')"
+      />
     </v-card-title>
     <v-divider />
 
@@ -85,7 +94,7 @@
 </template>
 
 <script lang="ts" setup>
-import { mdiChevronRight } from "@mdi/js";
+import { mdiChevronRight, mdiClose } from "@mdi/js";
 import { computed } from "vue";
 import type { Powiat } from "~/composables/entity/regions";
 import type { PersonRich } from "~~/shared/model";
@@ -97,6 +106,9 @@ import { generateEntityUrl } from "~~/shared/slugs";
 const props = defineProps<{
   region: Powiat | undefined;
 }>();
+
+/** The reader unpicked the powiat. */
+const emit = defineEmits<{ close: [] }>();
 
 /** What the card says before a region has been picked.
  *

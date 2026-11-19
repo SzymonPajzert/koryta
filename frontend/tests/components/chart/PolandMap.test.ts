@@ -104,25 +104,25 @@ describe("PolandMap", () => {
     expect(wrapper.find('[data-testid="map-hover"]').exists()).toBe(false);
   });
 
-  it("keeps the picked powiat outlined until another is picked", async () => {
+  it("outlines the powiat it is told is picked, and only while it is", async () => {
     const wrapper = await mountMap();
     const first = pathOf(wrapper, "Powiat 0204");
-    const second = pathOf(wrapper, "Powiat 0205");
-    const picked = () =>
-      wrapper.find('[data-testid="map-picked"] path').attributes("d");
+    const picked = () => wrapper.find('[data-testid="map-picked"] path');
 
+    // A click only says which powiat it was: the explorer holds the pick.
     await first.trigger("click");
-    expect(picked()).toBe(first.attributes("d"));
-    expect(wrapper.emitted("click")).toHaveLength(1);
+    expect(wrapper.emitted("click")?.[0]?.[0]).toMatchObject({
+      teryt: expect.stringMatching(/^0?204$/),
+    });
+    expect(picked().exists()).toBe(false);
 
-    // Pointing elsewhere outlines that one too, and leaving keeps the pick.
-    await second.trigger("mouseenter");
-    expect(wrapper.find('[data-testid="map-hover"]').exists()).toBe(true);
-    await wrapper.find("svg").trigger("mouseleave");
-    expect(picked()).toBe(first.attributes("d"));
+    await wrapper.setProps({
+      picked: { teryt: "204", d: first.attributes("d") },
+    });
+    expect(picked().attributes("d")).toBe(first.attributes("d"));
 
-    await second.trigger("click");
-    expect(picked()).toBe(second.attributes("d"));
+    await wrapper.setProps({ picked: null });
+    expect(picked().exists()).toBe(false);
   });
 
   it("opens on the leading party, shaded by its share", async () => {

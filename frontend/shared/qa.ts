@@ -67,6 +67,7 @@ export const QA_ITEMS: QaItem[] = [
       "Otwórz stronę główną: powiaty są pomarańczowe (PO), granatowe (PiS) i zielone (PSL), a nie jednakowo różowe.",
       "Kliknij „PiS” nad mapą: mapa i legenda pod nią pokazują udział PiS w każdym powiecie.",
       "Najedź na powiat: dostaje obrys, a podpowiedź wymienia osoby z każdej partii.",
+      "Kliknij powiat: zostaje obrysowany, a obok jest lista jego osób. Kliknij go drugi raz albo ✕ na liście: zaznaczenie znika.",
       "Na telefonie przesuń rząd partii w bok.",
     ],
     link: "/?widok=mapa",
