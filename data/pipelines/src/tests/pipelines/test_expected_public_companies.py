@@ -14,11 +14,14 @@ The basis says how settled a row is.
   `researched_owner` (`RESEARCHED_OWNERS`), `regon_code` (REGON's ownership
   code), `wikipedia_owner` (an owner only the company's article names),
   `rule_public_founder` (2026-11-11: a foundation or association a public body
-  set up, `PUBLIC_FOUNDERS`), and `evidence_not_public` for a company nobody
-  public owns, founded or joins. These are checked against `companies_merged`
-  every time.
-- A proposal: `proposed_public_members`
-  (decide-public-foundations-and-associations), `proposed_formerly_public`
+  set up, `PUBLIC_FOUNDERS`; 2026-11-19: one public founder is enough),
+  `rule_public_members` (2026-11-19: an association whose ordinary members are
+  all public bodies, `PUBLIC_MEMBERS`), `rule_mixed_members` (the same day: one
+  with private ordinary members too stays not public), and
+  `evidence_not_public` for a company nobody public owns, founded or joins.
+  These are checked against `companies_merged` every time.
+- A proposal: `proposed_public_members` (an association not checked yet, or one
+  waiting on another decision), `proposed_formerly_public`
   (decide-formerly-public-companies) and `proposed_not_public` (chambers and
   guilds whose members nobody has checked). They are always skipped. Checking
   one only records the answer; the row is enforced once the change that makes
@@ -58,6 +61,8 @@ RULES = (
     "regon_code",
     "wikipedia_owner",
     "rule_public_founder",
+    "rule_public_members",
+    "rule_mixed_members",
     "evidence_not_public",
 )
 PROPOSALS = (
@@ -66,7 +71,7 @@ PROPOSALS = (
     "proposed_not_public",
 )
 #: The bases a `not_public` row may have.
-NOT_PUBLIC_BASES = ("evidence_not_public", "proposed_not_public")
+NOT_PUBLIC_BASES = ("evidence_not_public", "proposed_not_public", "rule_mixed_members")
 KRS = re.compile(r"\d{10}")
 #: A Firestore id, for a page with no KRS number (Ministerstwo Obrony Narodowej).
 NODE_ID = re.compile(r"[A-Za-z0-9]{20}")

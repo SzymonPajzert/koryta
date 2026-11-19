@@ -15,6 +15,7 @@ from entities.person import PERSON_FEED
 from scrapers.krs.coverage import parse_person_connections_url
 from scrapers.krs.data import (
     PUBLIC_FOUNDER,
+    PUBLIC_MEMBER,
     REGON_PUBLIC_IDENTITY,
     REGON_PUBLIC_OWNERSHIP,
     TREASURY_STAKE,
@@ -31,6 +32,7 @@ from scrapers.krs.public_bodies import public_body
 from scrapers.krs.researched_owners import (
     FUND_HOLDERS,
     PUBLIC_FOUNDERS,
+    PUBLIC_MEMBERS,
     RESEARCHED_OWNERS,
     ResearchedOwner,
 )
@@ -799,6 +801,28 @@ class CompaniesKRS(Pipeline[KrsCompany]):
                     company.founded_by.append(resolved)
         return marked
 
+    def add_public_members(self) -> int:
+        """Mark public the associations whose members are all public bodies.
+
+        `PUBLIC_MEMBERS` names them; the register never lists an association's
+        members. No member is drawn, as owner or founder: a union of gminas has
+        dozens, and none of them owns it. The body is marked public itself,
+        which carries the flag down to what it owns. A body the crawl does not
+        describe is left out. Returns how many it marked.
+        """
+        marked = 0
+        for krs in PUBLIC_MEMBERS:
+            company = self.companies.get(krs)
+            if company is None:
+                continue
+            if not company.is_public:
+                self.company_sources[krs] = self.company_sources.get(krs, set()) | {
+                    Source("hardcoded", reason=PUBLIC_MEMBER)
+                }
+            company.is_public = True
+            marked += 1
+        return marked
+
     def resolve_founder(
         self, founder: ResearchedOwner, company: KrsCompany
     ) -> Owner | None:
@@ -999,6 +1023,8 @@ class CompaniesKRS(Pipeline[KrsCompany]):
         print(f"Researched owners: {marked} of {len(RESEARCHED_OWNERS)} companies")
         founded = self.add_public_founders()
         print(f"Public founders: {founded} of {len(PUBLIC_FOUNDERS)} bodies")
+        joined_by = self.add_public_members()
+        print(f"Public members: {joined_by} of {len(PUBLIC_MEMBERS)} associations")
 
         public_krss = self.compute_public_krss(hardcoded)
         parent_to_children = self.build_parent_to_children()

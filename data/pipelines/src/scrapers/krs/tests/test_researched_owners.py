@@ -8,9 +8,13 @@ import pandas as pd
 
 from entities.company import Company as KrsCompany
 from entities.company import Owner, Source
-from scrapers.krs.data import PUBLIC_FOUNDER
+from scrapers.krs.data import PUBLIC_FOUNDER, PUBLIC_MEMBER
 from scrapers.krs.list import CompaniesKRS
-from scrapers.krs.researched_owners import PUBLIC_FOUNDERS, RESEARCHED_OWNERS
+from scrapers.krs.researched_owners import (
+    PUBLIC_FOUNDERS,
+    PUBLIC_MEMBERS,
+    RESEARCHED_OWNERS,
+)
 from scrapers.map.jst import SKARB_PANSTWA, JstIndex
 
 POSTDATA = "0000117218"
@@ -277,3 +281,51 @@ def test_founding_twice_records_each_founder_once():
     p.add_public_founders()
 
     assert len(p.companies[ZOO_KRAKOW].founded_by) == 1
+
+
+POMORSKIE_W_UE = "0000214552"
+GDANSK_OWNED = "0000006553"
+
+
+def test_every_members_entry_says_who_and_where_and_is_listed_once():
+    for krs, members in PUBLIC_MEMBERS.items():
+        assert re.fullmatch(r"\d{10}", krs), krs
+        assert members.source.startswith(("https://", "http://")), krs
+        assert members.members.strip(), krs
+    assert not PUBLIC_MEMBERS.keys() & PUBLIC_FOUNDERS.keys()
+    assert not PUBLIC_MEMBERS.keys() & RESEARCHED_OWNERS.keys()
+
+
+def test_the_expected_file_lists_exactly_the_member_bodies():
+    """Each `rule_public_members` row is a body here, and each body has a row."""
+    with EXPECTED.open(newline="", encoding="utf-8") as file:
+        rows = {
+            row["krs"]
+            for row in csv.DictReader(file)
+            if row["basis"] == "rule_public_members"
+        }
+
+    assert rows == PUBLIC_MEMBERS.keys()
+
+
+def test_an_association_of_public_bodies_is_public_with_no_member_drawn():
+    p = pipeline(POMORSKIE_W_UE, GDANSK_OWNED)
+
+    assert p.add_public_members() == 1
+
+    body = p.companies[POMORSKIE_W_UE]
+    assert body.is_public
+    assert body.parents == [] and body.founded_by == []
+    assert p.company_sources[POMORSKIE_W_UE] == {
+        Source("hardcoded", reason=PUBLIC_MEMBER)
+    }
+    assert not p.companies[GDANSK_OWNED].is_public
+
+
+def test_an_association_public_already_gains_no_members_source():
+    p = pipeline(POMORSKIE_W_UE)
+    p.companies[POMORSKIE_W_UE].is_public = True
+
+    p.add_public_members()
+
+    assert POMORSKIE_W_UE not in p.company_sources
