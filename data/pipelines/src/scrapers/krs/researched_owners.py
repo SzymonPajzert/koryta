@@ -1011,6 +1011,61 @@ PUBLIC_FOUNDERS: dict[str, Founded] = {
 }
 
 
+@dataclasses.dataclass(frozen=True)
+class Members:
+    """Who an association's ordinary members are, all of them public bodies."""
+
+    members: str
+    source: str
+
+
+#: Associations, unions and employers' organisations whose ordinary (voting)
+#: members are all public bodies - gminas, powiaty, województwa, their unions,
+#: public hospitals, municipal or state companies - and so public by the
+#: decision on 2026-11-19, as a public founder makes a foundation public. One
+#: with private ordinary members too stays private (the same decision);
+#: supporting members without a vote do not count either way. The register
+#: never lists members, so each was checked by hand, with the source given
+#: beside it. No member is drawn as an owner: `CompaniesKRS.add_public_members`
+#: marks the body itself.
+PUBLIC_MEMBERS: dict[str, Members] = {
+    # Checked on 2026-10-09 among the koryciarze leads.
+    "0000214552": Members(  # "POMORSKIE W UNII EUROPEJSKIEJ"
+        "Samorząd Województwa Pomorskiego, cities, powiaty and gminas: all 32"
+        " ordinary members; 20 supporting members",
+        "https://pomorskieregion.eu/en/about-us/",
+    ),
+    "0000010489": Members(  # "DOLNY ŚLĄSK W UNII EUROPEJSKIEJ"
+        "17 local governments of Dolnośląskie",
+        "https://umwd.dolnyslask.pl/index.php?id=3338",
+    ),
+    # STOWARZYSZENIE POLSKICH REGIONÓW KORYTARZA TRANSPORTOWEGO BAŁTYK-ADRIATYK
+    "0000421737": Members(
+        "the voivodeships along the corridor; supporting members without a vote",
+        "https://bac.pl/statut/",
+    ),
+    # ZWIĄZEK PRACODAWCÓW PODMIOTÓW LECZNICZYCH SAMORZĄDU WOJEWÓDZTWA MAZOWIECKIEGO
+    "0000241357": Members(
+        "medical entities the Mazowieckie voivodeship owns",
+        "https://www.pfsz.org/szpitalne-organizacje-partnerskie/",
+    ),
+    # ZWIĄZEK PRACODAWCÓW-MAZOWIECKIE POROZUMIENIE SZPITALI POWIATOWYCH
+    "0000254858": Members(
+        "powiat-owned hospitals of Mazowieckie",
+        "https://ozpsp.pl/czlonkowie/mazowieckie",
+    ),
+    "0000040079": Members(  # ZWIĄZEK REGIONALNYCH PORTÓW LOTNICZYCH
+        "11 regional airport companies, owned by voivodeships, cities and PPL",
+        "https://rejestr.io/krs/40079/zwiazek-regionalnych-portow-lotniczych",
+    ),
+    # FUNDACJA "DOLNOŚLĄSKIE FORUM WODOCIĄGOWE": a foundation with members.
+    "0000049893": Members(
+        "about 51 municipal water companies of Dolnośląskie and Dresden's",
+        "https://www.kierunekwodkan.pl/konferencja,2318,108690.html",
+    ),
+}
+
+
 #: Closed-end investment funds (FIZ) whose certificates a public company holds,
 #: by the fund's REGON. A fund has no KRS number and no entry in REGON's public
 #: catalogue, so the companies the register names it as the owner of read as
