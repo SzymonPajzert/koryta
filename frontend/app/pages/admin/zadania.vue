@@ -467,7 +467,7 @@ const KIND_FILTERS = {
 type KindFilter = keyof typeof KIND_FILTERS;
 const KIND_TITLES: Record<TaskKind, string> = {
   decision: "Decyzje",
-  merge: "Scalenia",
+  merge: "Merge",
   action: "Operacje",
   task: "Zadania",
   idea: "Pomysły",

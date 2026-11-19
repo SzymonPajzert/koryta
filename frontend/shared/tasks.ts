@@ -155,6 +155,9 @@ export type Task = {
   /** Who set `priority`: an agent may raise a level, but not lower one the
    * owner set. */
   prioritySetBy?: TaskActor;
+  /** What a decision asks, in a sentence, shown above its answers; the
+   * title stands in for it where there is none. */
+  question?: string;
   /** A decision's answers. */
   options?: TaskOption[];
   /** The key of the option the agent who filed it would pick. */
@@ -272,6 +275,9 @@ export function taskFromData(id: string, data: Record<string, unknown>): Task {
   if (typeof data.source === "string") task.source = data.source;
   const closedAt = isoTime(data.closedAt);
   if (closedAt) task.closedAt = closedAt;
+  if (typeof data.question === "string" && data.question.trim()) {
+    task.question = data.question;
+  }
   const options = optionList(data.options);
   if (options.length > 0) task.options = options;
   if (
@@ -367,6 +373,7 @@ export const taskCreateSchema = z.object({
   rank: z.number().finite().optional(),
   priority: priority.optional(),
   source: z.string().max(500).optional(),
+  question: z.string().trim().max(300).optional(),
   options: options.optional(),
   /** The key of the option the one filing it would pick. */
   recommended: optionKey.optional(),
@@ -394,6 +401,8 @@ export const taskPatchSchema = z
     removeDependsOn: dependsOn.optional(),
     /** A line for the task's history. */
     note: z.string().trim().min(1).max(2000).optional(),
+    /** What a decision asks; empty or `null` takes it away. */
+    question: z.string().trim().max(300).nullable().optional(),
     /** A decision's answers, all of them; an empty list takes them away. */
     options: options.optional(),
     /** `null` takes the recommendation away. */
@@ -686,6 +695,7 @@ export type TaskEdit = Pick<
   | "links"
   | "branches"
   | "priority"
+  | "question"
   | "options"
   | "recommended"
 >;
@@ -712,6 +722,9 @@ export function taskEditPatch(task: Task, edited: TaskEdit): TaskPatch | null {
   }
   if ((edited.priority ?? null) !== (task.priority ?? null)) {
     patch.priority = edited.priority ?? null;
+  }
+  if ((edited.question ?? "") !== (task.question ?? "")) {
+    patch.question = edited.question || null;
   }
   if (!sameOptions(edited.options, task.options)) {
     patch.options = [...(edited.options ?? [])];
@@ -811,6 +824,10 @@ function applyOptions(
 ) {
   const title = (key: string) =>
     next.options?.find((o) => o.key === key)?.title ?? key;
+  if (patch.question !== undefined) {
+    if (patch.question) next.question = patch.question;
+    else delete next.question;
+  }
   if (patch.options !== undefined) {
     if (patch.options.length > 0) next.options = patch.options;
     else delete next.options;
@@ -910,6 +927,7 @@ export function newTask(
     ];
   }
   if (input.source !== undefined) task.source = input.source;
+  if (input.question) task.question = input.question;
   if (input.options && input.options.length > 0) {
     task.options = input.options;
     if (input.options.some((o) => o.key === input.recommended)) {

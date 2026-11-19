@@ -101,6 +101,15 @@
           class="mb-4"
           data-task-options-editor
         >
+          <v-text-field
+            v-model="form.question"
+            label="Pytanie"
+            placeholder="Jak oznaczać noc z ostrzeżeniami?"
+            variant="outlined"
+            density="comfortable"
+            :counter="300"
+            data-task-question-field
+          />
           <div class="text-caption text-medium-emphasis mb-1">Opcje</div>
           <div
             v-for="(option, index) in form.options"
@@ -274,6 +283,7 @@ const empty = () => ({
   tags: [] as string[],
   links: [] as string[],
   branches: [] as string[],
+  question: "",
   options: [] as TaskOption[],
   recommended: null as string | null,
 });
@@ -298,6 +308,7 @@ watch(open, (isOpen) => {
           tags: [...task.tags],
           links: [...task.links],
           branches: [...task.branches],
+          question: task.question ?? "",
           options: (task.options ?? []).map((o) => ({ ...o })),
           recommended: task.recommended ?? null,
         }
@@ -324,13 +335,18 @@ const candidates = computed(() =>
 
 /** The options with words in them, and the recommendation if it is one of
  * them. Only a decision has either. */
-function decisionFields(): Pick<TaskCreate, "options" | "recommended"> {
-  if (form.kind !== "decision") return { options: [], recommended: undefined };
+function decisionFields(): Pick<
+  TaskCreate,
+  "question" | "options" | "recommended"
+> {
+  if (form.kind !== "decision") {
+    return { question: "", options: [], recommended: undefined };
+  }
   const options = form.options
     .map((o) => ({ key: o.key, title: o.title.trim() }))
     .filter((o) => o.title);
   const recommended = options.find((o) => o.key === form.recommended)?.key;
-  return { options, recommended };
+  return { question: form.question.trim(), options, recommended };
 }
 
 const trimmed = (values: string[]) => [

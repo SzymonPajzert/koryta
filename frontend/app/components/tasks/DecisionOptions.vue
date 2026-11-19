@@ -4,12 +4,13 @@
     :class="{ 'task-options--picked': !!task.picked }"
     data-task-options
   >
+    <!-- The question first, then the answers to it. -->
     <div class="task-options__head">
-      <span class="task-options__label">
-        {{ task.picked ? "Wybrano" : "Wybierz" }}
-      </span>
+      <h3 class="task-options__question" data-task-question>
+        {{ task.question || task.title }}
+      </h3>
       <span v-if="task.picked" class="text-caption text-medium-emphasis">
-        {{ formatTaskDate(task.picked.at) }} ·
+        Wybrano {{ formatTaskDate(task.picked.at) }} ·
         {{ taskActorLabel(task.picked.by) }}
       </span>
     </div>
@@ -196,14 +197,20 @@ function confirm() {
 
 .task-options__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 2px 12px;
+  margin-bottom: 8px;
 }
 
-.task-options__label {
-  font-size: 0.875rem;
+/* What is asked, above its answers: the one line of the block that leads. */
+.task-options__question {
+  margin: 0;
+  font-size: 1rem;
   font-weight: 600;
+  line-height: 1.35;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
 }
 
 .task-options__list {
