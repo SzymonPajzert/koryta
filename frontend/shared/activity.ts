@@ -9,7 +9,9 @@
  * column is more legend than chart. What a reader wants from the page is who is
  * rating, who is proposing, who is citing, and how much of it reached the
  * public; the finer splits are still in the collections, and nothing here is the
- * audit trail.
+ * audit trail. Reading a declaration's crop on /oswiadczenia was added as a
+ * fifth on 2026-11-02: it is the one way to help that needs no knowledge of
+ * the people involved, and it is where most of the readers are.
  *
  * Two interactions are missing on purpose, because nothing timestamps them:
  * the per-category tallies `/api/votes/vote` writes inline onto a node or edge
@@ -26,6 +28,7 @@ export const activityKinds = [
   "revision",
   "noteSource",
   "publication",
+  "reading",
 ] as const;
 
 export type ActivityKind = (typeof activityKinds)[number];
@@ -57,6 +60,7 @@ export function emptyActivityCounts(): ActivityCounts {
     revision: 0,
     noteSource: 0,
     publication: 0,
+    reading: 0,
   };
 }
 
@@ -69,6 +73,7 @@ export const activityKindLabels: Record<ActivityKind, string> = {
   revision: "Propozycja zmiany",
   noteSource: "Źródło lub zgłoszenie",
   publication: "Opublikowane osoby",
+  reading: "Odczyt oświadczenia",
 };
 
 /** One sentence per kind, for the tooltip that explains what is being counted.
@@ -81,4 +86,6 @@ export const activityKindDescriptions: Record<ActivityKind, string> = {
     "Wpis w notatce: podlinkowane źródło, prośba o poprawkę albo zgłoszenie brakujących danych.",
   publication:
     "Strona osoby albo instytucji udostępniona publicznie. Powiązania opublikowane razem z nią to ta sama decyzja, więc liczą się raz — a nie raz na powiązanie.",
+  reading:
+    "Wycinek oświadczenia majątkowego odczytany na /oswiadczenia: przepisana data urodzenia albo informacja, że jej tam nie ma lub nie da się jej odczytać. Odczyty bez konta liczą się od chwili, gdy przejmie je konto.",
 };

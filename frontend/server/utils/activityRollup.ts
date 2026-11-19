@@ -66,8 +66,10 @@ export type DailyRollup = {
  *    a day on which nobody voted.
  * 4: what the declarations' automation publishes on its own is counted, apart
  *    (`automatic`). A day stored under 3 dropped it with the other robots.
+ * 5: readings on /oswiadczenia (`reading`). A day stored under 4 never read
+ *    `declarationAnswers`, so it would come back as a day nobody read a crop.
  */
-const ROLLUP_VERSION = 4;
+const ROLLUP_VERSION = 5;
 
 const COLLECTION = "activityDaily";
 

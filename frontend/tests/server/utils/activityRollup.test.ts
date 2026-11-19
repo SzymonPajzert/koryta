@@ -298,7 +298,7 @@ describe("ensureDailyRollups", () => {
   it("reads a stored day instead of counting it again", async () => {
     const db = fakeDb({
       "activityDaily/2026-08-19": {
-        version: 4,
+        version: 5,
         date: "2026-08-19",
         totals: { vote: 4 },
         truncated: [],
@@ -365,7 +365,7 @@ describe("ensureDailyRollups", () => {
     // 20th for nothing.
     const db = fakeDb({
       "activityDaily/2026-08-20": {
-        version: 4,
+        version: 5,
         date: "2026-08-20",
         totals: {},
         contributors: {},
@@ -404,7 +404,7 @@ describe("ensureDailyRollups", () => {
 
     await ensureDailyRollups(db as never, ["2026-08-19", "2026-08-20"]);
     expect(db.store.get("activityDaily/2026-08-19")).toMatchObject({
-      version: 4,
+      version: 5,
       automatic: 1,
     });
     expect(db.store.get("activityDaily/2026-08-20")).not.toHaveProperty(
@@ -421,12 +421,12 @@ describe("ensureDailyRollups", () => {
   });
 
   it("recounts a day that was stored under an older counting rule", async () => {
-    // The rule has changed four times - article nodes, then the migration
+    // The rule has changed five times - article nodes, then the migration
     // scripts, then the merge down to four kinds, then the automation counted
-    // apart - so a day counted under an older one has to be thrown away, or the
-    // change would only ever apply to days nobody had looked at yet. The third
-    // also renamed the fields, so a version-2 day would come back as one on
-    // which nobody voted.
+    // apart, then the readings on /oswiadczenia - so a day counted under an
+    // older one has to be thrown away, or the change would only ever apply to
+    // days nobody had looked at yet. The third also renamed the fields, so a
+    // version-2 day would come back as one on which nobody voted.
     const db = fakeDb({
       "activityDaily/2026-08-19": {
         version: 1,

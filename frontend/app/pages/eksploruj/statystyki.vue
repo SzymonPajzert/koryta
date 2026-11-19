@@ -527,6 +527,8 @@ const activityTiles = computed(() => {
         ? `${activityKindDescriptions[kind]} ${AUTOMATIC_TOOLTIP}`
         : activityKindDescriptions[kind],
       color: activityColors[kind],
+      // The one kind with a page of its own where anybody can add to it.
+      to: kind === "reading" ? "/oswiadczenia" : undefined,
     };
   });
 });

@@ -426,6 +426,107 @@ describe("collectPublications", () => {
   });
 });
 
+describe("collectReadings", () => {
+  /** What `Timestamp.fromDate` leaves on an answer, as the admin SDK reads it. */
+  const stamp = (iso: string) => ({ toDate: () => new Date(iso) });
+  const answer = (fields: Record<string, unknown>) => ({
+    extractId: "x1",
+    uid: "anna",
+    verdict: "date",
+    value: "1970-05-12",
+    votes: true,
+    counted: true,
+    at: stamp(AT),
+    ...fields,
+  });
+  const readings = async (answers: Doc[]) =>
+    (
+      await collectActivityEvents(
+        fakeDb({ declarationAnswers: answers }),
+        WINDOW,
+      )
+    ).events;
+
+  it("counts every crop a reader said something about", async () => {
+    // A date, a line with no date on it, and one nobody can read are all a
+    // reading: the reader looked at the crop and answered.
+    expect(
+      await readings([
+        answer({}),
+        answer({ verdict: "empty", value: null }),
+        answer({ verdict: "unreadable", value: null }),
+      ]),
+    ).toEqual([
+      { uid: "anna", at: AT, kind: "reading" },
+      { uid: "anna", at: AT, kind: "reading" },
+      { uid: "anna", at: AT, kind: "reading" },
+    ]);
+  });
+
+  it("drops a skip, as the reader's own tally does", async () => {
+    expect(
+      await readings([
+        answer({ verdict: "skip", value: null, counted: false }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("drops an answer written before `counted` was, by its verdict", async () => {
+    expect(
+      await readings([
+        answer({ verdict: "skip", value: null, counted: undefined }),
+        answer({ counted: undefined }),
+      ]),
+    ).toEqual([{ uid: "anna", at: AT, kind: "reading" }]);
+  });
+
+  it("leaves out a browser's answers until an account takes them over", async () => {
+    expect(
+      await readings([
+        answer({
+          uid: "anon:0b9a3f4e-2a1c-4d6b-9e8f-7a6b5c4d3e2f",
+          votes: false,
+        }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("dates a reading an account took over by the claim, not by the reading", async () => {
+    // Given without an account last week, so last week's day never counted
+    // it; it counts on the day it became the account's.
+    const claimedAt = "2026-08-25T18:30:00.000Z";
+    expect(
+      await readings([
+        answer({
+          at: stamp("2026-08-18T09:00:00.000Z"),
+          claimedFrom: "anon:0b9a3f4e-2a1c-4d6b-9e8f-7a6b5c4d3e2f",
+          claimedAt: stamp(claimedAt),
+        }),
+      ]),
+    ).toEqual([{ uid: "anna", at: claimedAt, kind: "reading" }]);
+  });
+
+  it("asks for both dates as timestamps, and counts an answer both return once", async () => {
+    const fields: string[] = [];
+    const { events } = await collectActivityEvents(
+      fakeDb(
+        { declarationAnswers: [answer({})] },
+        (collection, field, value) => {
+          if (collection !== "declarationAnswers") return;
+          fields.push(field);
+          // `Timestamp.fromDate` is stubbed to hand back its Date: a string
+          // bound would match none of the answers, which are all Timestamps.
+          expect(value).toBeInstanceOf(Date);
+        },
+      ),
+      { sinceIso: "2026-08-01T00:00:00.000Z", untilIso: AT },
+    );
+
+    expect(fields.sort()).toEqual(["at", "at", "claimedAt", "claimedAt"]);
+    expect(events).toEqual([{ uid: "anna", at: AT, kind: "reading" }]);
+  });
+});
+
 describe("collectActivityEvents", () => {
   it("reads every collection that records an interaction", async () => {
     const { events } = await collectActivityEvents(
@@ -439,6 +540,7 @@ describe("collectActivityEvents", () => {
         audit: [
           { user: "admin", at: AT, action: "publish", collection: "nodes" },
         ],
+        declarationAnswers: [{ uid: "bob", verdict: "date", at: AT }],
       }),
       WINDOW,
     );
@@ -448,6 +550,7 @@ describe("collectActivityEvents", () => {
     expect(events.map((event) => event.kind).sort()).toEqual([
       "noteSource",
       "publication",
+      "reading",
       "revision",
       "vote",
       "vote",

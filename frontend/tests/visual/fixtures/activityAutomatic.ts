@@ -18,7 +18,8 @@ import { NOW } from "../clock";
  * REAL
  *   PEOPLE_DAYS: production's /api/stats/activity?days=30 of 2026-10-31,
  *     counts only (vote, revision, noteSource, publication), its days moved
- *     to end on NOW
+ *     to end on NOW. No readings (`reading`): the stats did not count them
+ *     yet, and this fixture is about the automation
  * DERIVED
  *   AUTOMATIC_DAYS: the automation's first week at the cap of 50
  *   the feed: made up, with surnames that match nobody in the PKW or KRS
@@ -72,7 +73,7 @@ const countsOf = ([vote, revision, noteSource, publication]: [
   number,
   number,
   number,
-]): ActivityCounts => ({ vote, revision, noteSource, publication });
+]): ActivityCounts => ({ vote, revision, noteSource, publication, reading: 0 });
 
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
 

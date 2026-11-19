@@ -156,14 +156,20 @@ const monthStats = (): ActivityStats => {
     const vote = index === 27 ? 12 : index === 29 ? 5 : 0;
     return {
       date: date.toISOString().slice(0, 10),
-      counts: { vote, revision: 0, noteSource: 0, publication: 0 },
+      counts: { vote, revision: 0, noteSource: 0, publication: 0, reading: 0 },
       total: vote,
     };
   });
   return {
     window: { since: daily[0]!.date, until: daily[29]!.date, days: 30 },
     identified: false,
-    totals: { vote: 17, revision: 0, noteSource: 0, publication: 0 },
+    totals: {
+      vote: 17,
+      revision: 0,
+      noteSource: 0,
+      publication: 0,
+      reading: 0,
+    },
     total: 17,
     daily,
     contributorCount: 2,
