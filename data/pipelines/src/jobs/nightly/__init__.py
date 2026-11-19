@@ -163,8 +163,12 @@ came into the graph after its last register entry is not named by the
 bulletin until its next one, so `--changed-since` alone does not ask for it;
 and `krs_paid` buys a company only once its free odpis was asked for and did
 not come, so one in the queue that nothing asks for is neither fetched nor
-bought - 960 of the queue's 1,024 on 2026-10-15, 493 of them private. The
-private ones outside the queue wait behind `--odpis-missing all`. The service
+bought - 960 of the queue's 1,024 on 2026-10-15, 493 of them private. Then
+come the companies the site has a page for and the pipeline calls private,
+most likely public first (`--odpis-missing site`): nothing else reads them,
+and a public owner only their odpis names stays hidden - 529 had no odpis of
+any kind on 2026-11-19. The rest of the private ones wait behind
+`--odpis-missing all`. The service
 slows down after about 1,000 documents a run; `--odpis-max` caps the step,
 queue, gap and all.
 
@@ -356,11 +360,11 @@ ASIDE = ".held"
 #: a night with one export they read the same again, in about a minute.
 SCORES_REFRESH = ("KorytaPeople", "KorytaVotes", "KorytaFacts", "CompanyScores")
 
-#: `--odpis-missing`: which graph companies with no odpis pełny on file the
-#: odpis step asks about after the bulletin's - the public ones (the
-#: default), all of them, or none.
+#: `--odpis-missing`: which companies with no odpis pełny on file the odpis
+#: step asks about after the bulletin's - the graph's public ones, then the
+#: site's private ones (site, the default), then all the graph's, or none.
 ODPIS_MISSING_NONE = "none"
-ODPIS_MISSING = ("public", "all", ODPIS_MISSING_NONE)
+ODPIS_MISSING = ("public", "site", "all", ODPIS_MISSING_NONE)
 
 #: Minutes the register step leaves itself inside its time limit: it stops
 #: asking, writes what it read and reports, rather than be stopped mid-read -
@@ -1982,10 +1986,11 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--odpis-missing",
         choices=ODPIS_MISSING,
-        default="public",
+        default="site",
         help="After the companies the bulletin named, the odpis step asks for "
         "the graph's public companies with no odpis pełny on file (public), "
-        "the private ones after them too (all), or neither (none). "
+        "then the site's companies the pipeline calls private (site), then "
+        "every other private one (all), or none of them (none). "
         "Default: %(default)s.",
     )
     parser.add_argument(

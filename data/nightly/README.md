@@ -26,7 +26,7 @@ order, each with a time limit and its output in the night's log:
 | `export`          | waits for tonight's export: the newest one with its `.overall_export_metadata`, taken at most 6 h before the night                                 |
 | `krs_free`        | `koryta_scrape_krs_free --max-minutes 60`: the bulletin, then api-krs                                                                              |
 | `krs_register`    | `koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25`: who owns each newly registered company                                |
-| `krs_odpis`       | `koryta_krs_odpis --graph --changed-since <yesterday> --queue --missing public --max 300`: odpisy pełne, see below                                 |
+| `krs_odpis`       | `koryta_krs_odpis --graph --changed-since <yesterday> --queue --missing site --max 300`: odpisy pełne, see below                                   |
 | `krs_paid`        | `koryta_scrape_krs_paid --scope fallback --max-calls 50`: rejestr.io for what the free sources could not give                                      |
 | `rebuild_held`    | `koryta <Name> --refresh <Name>` for each held pipeline whose code changed since this VM last built it (below)                                     |
 | `reprocess`       | `koryta --all-pipelines --refresh all`, as the CI nightly, less the article branch, the BIP documents and the slow static sources (`HELD`)         |
@@ -131,8 +131,17 @@ whatever enters the graph. Within each, companies never asked come first, then
 those whose last attempt got no answer; one the service said is in neither
 register is not asked again.
 
-The private companies with none on file - 9,095 more on 2026-10-09, about 39
-nights after the public ones - wait for `--odpis-missing all`. The service slows
+Then the companies the site has a page for and the pipeline calls private
+(`--missing site`), in `CompaniesLikelyPublic`'s order, most likely public
+first. Nothing else asks for them: a struck-off one is never named by the
+bulletin again, so a public owner only its odpis names stays hidden. On
+2026-11-19, 529 of them had no odpis of any kind and about 2,300 no odpis
+pełny parsed: two weeks or so of the room the step had left in November, when
+it asked for 3 to 250 of its 300 a night. The step reads last night's list and
+never rebuilds it.
+
+The other private companies with none on file - 9,095 on 2026-10-09 - wait
+for `--odpis-missing all`. The service slows
 down after about 1,000 documents a run, which `--odpis-max` keeps the step well
 under, queue, gap and all: while the queue's companies take the nights, the
 gap waits for them. An odpis that does not come is what `krs_paid` buys
@@ -541,8 +550,9 @@ way, and the timer runs the night on a VM that is already up too.
   a night of 100 had room for 34 of them and for none of the unpublished
   pages behind them, a night of 150 for all 50 and 29 of those.
 - **The private companies' odpisy too.** `KORYTA_NIGHTLY_ARGS=--odpis-missing all`;
-  `none` leaves the gap out, as before 2026-10-09, and `--no-odpis-queue` the
-  queue's companies, as before 2026-10-15.
+  `public` leaves out the site's private ones, as before 2026-11-19, `none`
+  the whole gap, as before 2026-10-09, and `--no-odpis-queue` the queue's
+  companies, as before 2026-10-15.
 - **More of the register.** `KORYTA_NIGHTLY_ARGS=--register-backlog 2000`.
   What it would read, without reading:
   `koryta_krs_register_owners --new-registrations --dry-run`.
@@ -570,9 +580,10 @@ shared cache grows by the night's backups as `main`; how long it keeps them is
 
 - rejestr.io for a company the free odpis has not been asked about: the
   night's `krs_odpis` asks for the bulletin's, then the queue's, then the
-  public ones with no odpis on file, 300 in all, so a company waits its turn
-  there; a private company with none that the queue does not owe waits for
-  `--odpis-missing all` or a hand run of `koryta_krs_odpis`.
+  public ones with no odpis on file, then the site's private ones, 300 in
+  all, so a company waits its turn there; a private company with none that
+  neither the queue nor the site names waits for `--odpis-missing all` or a
+  hand run of `koryta_krs_odpis`.
 - Companies: `CompaniesPayloads --only-changed` is not sent; a person's missing
   company is created on the way, as the uploader always did.
 - `test_rejestrio_coverage.py`: it walks the whole rejestr.io prefix twice, an
