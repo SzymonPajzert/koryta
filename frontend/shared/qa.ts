@@ -74,11 +74,12 @@ export const QA_ITEMS: QaItem[] = [
     id: "linki-do-statystyk",
     title: "Linki do statystyk",
     description:
-      "Na /eksploruj/statystyki prowadzą teraz stopka, liczby na stronie głównej, /pomoc i /o-nas.",
+      "Na /eksploruj/statystyki prowadzą teraz stopka, liczby na stronie głównej i /o-nas. Z góry /pomoc zniknęły liczba sprawdzonych osób i notka o koncie.",
     steps: [
       "Na stronie głównej obok „Sprawdziliśmy już” kliknij „Statystyki”.",
       "W stopce, pod „Na stronie”, kliknij „Statystyki”.",
-      "Na /pomoc i /o-nas (przy „Koryta.pl to przede wszystkim społeczność”) kliknij link do statystyk.",
+      "Na /o-nas, przy „Koryta.pl to przede wszystkim społeczność”, kliknij „Zobacz, kto tworzy koryta.pl”.",
+      "Na /pomoc pod tytułem jest tylko jeden akapit, a zaraz pod nim „Możesz sprawdzać osoby”.",
     ],
     link: "/",
     area: "public",

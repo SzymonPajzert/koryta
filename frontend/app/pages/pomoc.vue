@@ -2,31 +2,12 @@
   <div class="pomoc">
     <!-- Header -->
     <h1 class="text-h4 font-weight-bold mb-2">Jak możesz pomóc</h1>
-    <p class="text-body-1 text-medium-emphasis pomoc__measure mb-4">
+    <p class="text-body-1 text-medium-emphasis pomoc__measure mb-8">
       Koryta.pl prowadzą ochotnicy - po godzinach i bez sponsorów. Niżej jest
       wszystko, co można przy tym robić: od jednej minuty do stałej współpracy.
       <NuxtLink to="/o-nas" class="text-ink-info"
         >Dowiedz się więcej o projekcie</NuxtLink
       >.
-    </p>
-    <p
-      v-if="total"
-      class="text-body-2 text-medium-emphasis pomoc__measure mb-1"
-    >
-      Sprawdziliśmy {{ polishNumber(checked) }} z
-      {{ polishCountingGenitive(total, "osoby", "osób") }}. Reszty nikt jeszcze
-      nie sprawdzał.
-      <NuxtLink to="/eksploruj/statystyki" class="text-ink-info text-no-wrap"
-        >Zobacz statystyki</NuxtLink
-      >.
-    </p>
-    <!-- The answer to „czy muszę mieć konto?”, put where it decides whether a
-         reader scrolls at all. The page used to promise „nie potrzebujesz
-         konta” directly above two links that both carry the auth middleware. -->
-    <p class="text-caption text-medium-emphasis pomoc__measure mb-8">
-      Przy każdej rzeczy piszemy, czego wymaga: nic, konta albo wpłaty. Konto
-      zakładasz w niecałą minutę, a po zalogowaniu wracasz dokładnie w to
-      miejsce, z którego klikasz.
     </p>
 
     <!-- Checking people first, ahead of the cost order the rest of the page
@@ -509,7 +490,7 @@ import { useStats } from "~/composables/stats/useStats";
 import { useFeedbackDialog } from "~/composables/feedbackDialog";
 import { trackGoal } from "~/composables/analytics";
 import { noteKindConfig } from "~/composables/notes";
-import { polishCountingGenitive, polishNumber } from "~/composables/polish";
+import { polishNumber } from "~/composables/polish";
 import type { HelpTask } from "~~/shared/analytics";
 import type { ProposableNodeType } from "~~/shared/api";
 
@@ -548,8 +529,7 @@ useSeoMeta({
     "Sześć sposobów, żeby pomóc: zgłoś nam coś w minutę, dopisz brakującą osobę albo spółkę, sprawdzaj kolejkę, dołącz do zespołu, wesprzyj finansowo albo przyślij poprawkę do kodu. Przy każdej rzeczy piszemy, czy trzeba konta.",
 });
 
-const { total, approved, reviewed, toCheck } = useStats();
-const checked = computed(() => approved.value + reviewed.value);
+const { toCheck } = useStats();
 
 const task = (name: HelpTask) =>
   trackGoal("cta:task", { task: name, from: "pomoc" });
