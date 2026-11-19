@@ -16,6 +16,9 @@
       Sprawdziliśmy {{ polishNumber(checked) }} z
       {{ polishCountingGenitive(total, "osoby", "osób") }}. Reszty nikt jeszcze
       nie sprawdzał.
+      <NuxtLink to="/eksploruj/statystyki" class="text-ink-info text-no-wrap"
+        >Zobacz statystyki</NuxtLink
+      >.
     </p>
     <!-- The answer to „czy muszę mieć konto?”, put where it decides whether a
          reader scrolls at all. The page used to promise „nie potrzebujesz
