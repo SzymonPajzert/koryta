@@ -304,6 +304,27 @@ def test_unit_seeds_merge_both_lists(terc):
     ]
 
 
+def test_a_website_in_capitals_is_asked_for_in_lower_case(terc):
+    # SkyCMS answers the host as curl writes it: http://WWW.GLUCHOLAZY.PL 500,
+    # http://www.glucholazy.pl its home page (11-13).
+    rows = [
+        catalogue_row(
+            "urzędy miast i gmin",
+            "Urząd Gminy Chorkówka",
+            "PODKARPACKIE",
+            "krośnieński",
+            "Chorkówka",
+            www,
+        )
+        for www in ("WWW.CHORKOWKA.PL", "HTTPS://BIP.CHORKOWKA.PL/Strona/Glowna?ID=1")
+    ]
+    seeds = unit_seeds([], pd.DataFrame(rows), terc)
+    assert seeds["180701"].www_urls == [
+        "http://www.chorkowka.pl",
+        "https://bip.chorkowka.pl/Strona/Glowna?ID=1",
+    ]
+
+
 def test_unit_names_for_people(terc):
     assert terc.unit_name("140302") == "Garwolin (gmina wiejska)"
     assert terc.unit_name("140305") == "Łaskarzew (gmina miejsko-wiejska)"
