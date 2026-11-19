@@ -88,7 +88,9 @@ class LinkContext:
     Piksa"): a menu has no headings, its nesting says where a link leads.
     ``frame`` says it stands in the site's frame around the page's own
     content, the same on every page: a menu, the site's header or footer, a
-    sidebar (`_frame_elements`).
+    sidebar (`_frame_elements`). ``caption`` is the title of the table the link
+    stands in (`_table_title`): Gliwice heads each person's table with their
+    name and labels the files "2024 za rok 2024".
     """
 
     url: str
@@ -97,6 +99,7 @@ class LinkContext:
     heading: str = ""
     path: str = ""
     frame: bool = False
+    caption: str = ""
 
 
 _BLOCKS = ("tr", "li", "p", "dd", "dt")
@@ -254,6 +257,26 @@ def _path(anchor: Tag, labels: dict[int, tuple[int, str]]) -> str:
 def _text(node: object) -> str:
     raw = node.get_text(" ", strip=True) if isinstance(node, Tag) else str(node)
     return " ".join(raw.split())
+
+
+def _table_title(table: Tag) -> str:
+    """A table's title: its ``<caption>``, or a header cell its first row holds
+    alone, spanning the columns (`LinkContext.caption`). A spanning cell further
+    down heads a part of the table, not the table."""
+    caption = table.find("caption", recursive=False)
+    if isinstance(caption, Tag) and (text := _text(caption)):
+        return text[:200]
+    for row in table.find_all("tr"):
+        if row.find_parent("table") is not table:
+            continue
+        cells = row.find_all(["th", "td"], recursive=False)
+        if not cells:
+            continue
+        span = str(cells[0].get("colspan") or "1").strip()
+        if len(cells) == 1 and cells[0].name == "th" and span.isdigit():
+            return _text(cells[0])[:200] if int(span) > 1 else ""
+        return ""
+    return ""
 
 
 def _links_in(node: object) -> bool:
@@ -445,6 +468,7 @@ def extract_link_contexts(
     seen: set[str] = set()
     rows: _Rows = {}
     labels: dict[int, tuple[int, str]] = {}
+    captions: dict[int, str] = {}
     for anchor, absolute, frame in anchors:
         if absolute in seen:
             continue
@@ -461,5 +485,12 @@ def extract_link_contexts(
             previous = None
         heading = _text(previous)[:200] if previous is not None else ""
         path = _path(anchor, labels)
-        links.append(LinkContext(absolute, text, row, heading, path, framed))
+        caption = ""
+        if isinstance(table := anchor.find_parent("table"), Tag):
+            if id(table) not in captions:
+                captions[id(table)] = _table_title(table)
+            caption = captions[id(table)]
+        links.append(
+            LinkContext(absolute, text, row, heading, path, framed, caption=caption)
+        )
     return title, links
