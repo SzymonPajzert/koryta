@@ -173,9 +173,10 @@ const monthStats = (): ActivityStats => {
     total: 17,
     daily,
     contributorCount: 2,
-    contributors: [],
-    namedCount: 0,
-    self: null,
+    rankings: {
+      changes: { count: 0, rows: [], self: null },
+      readings: { count: 0, rows: [], self: null },
+    },
     truncated: [],
   };
 };

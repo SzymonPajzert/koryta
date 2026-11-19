@@ -14,12 +14,12 @@
           {{ stats ? polishNumber(shownTotal) : "—"
           }}<span
             v-if="stats?.truncated.length"
-            title="Dolna granica: w tym okresie było więcej zmian, niż zdążyliśmy policzyć."
+            title="Dolna granica: w tym okresie było więcej działań, niż zdążyliśmy policzyć."
             >+</span
           >
         </span>
         <span v-if="stats" class="amc__who">
-          {{ nominativeNoun(shownTotal, "zmiana", "zmiany", "zmian") }}
+          {{ nominativeNoun(shownTotal, "działanie", "działania", "działań") }}
           od
           {{ polishCountingGenitive(stats.contributorCount, "osoby", "osób")
           }}<template v-if="stats.automatic > 0"> i automatu</template>
@@ -34,7 +34,7 @@
     <div class="amc__plot">
       <p v-if="failed" class="amc__empty">Nie udało się pobrać wykresu.</p>
       <p v-else-if="stats && !busiest" class="amc__empty">
-        W tym okresie nikt nic nie zmieniał.
+        W tym okresie nikt nic nie zrobił.
       </p>
       <template v-else-if="stats">
         <ClientOnly>
@@ -51,7 +51,7 @@
         <!-- The columns say nothing to a screen reader; the one fact they
              lead with does, and the full page has the table. -->
         <p v-if="busiest" class="d-sr-only">
-          Najwięcej zmian było {{ fullDayLabel(busiest.date) }}:
+          Najwięcej działań było {{ fullDayLabel(busiest.date) }}:
           {{ busiest.total }}.
         </p>
       </template>
@@ -115,7 +115,7 @@ const busiest = computed(() =>
 );
 
 const series = computed(() => [
-  { name: "Zmiany", data: daily.value.map((day) => day.total) },
+  { name: "Działania", data: daily.value.map((day) => day.total) },
 ]);
 
 const options = computed(() => monthChartOptions(daily.value));

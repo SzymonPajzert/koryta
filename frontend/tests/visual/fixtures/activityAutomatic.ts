@@ -120,13 +120,18 @@ export const automaticActivity: ActivityStats = {
   total: sum(Object.values(totals)),
   daily,
   contributorCount: 3,
-  contributors: [
-    contributor(1, "Z•••••", totals),
-    contributor(2, "j•••••", countsOf([6, 21, 11, 0])),
-    contributor(3, "k•••••", countsOf([19, 8, 4, 3])),
-  ],
-  namedCount: 0,
-  self: null,
+  rankings: {
+    changes: {
+      count: 3,
+      rows: [
+        contributor(1, "Z•••••", totals),
+        contributor(2, "j•••••", countsOf([6, 21, 11, 0])),
+        contributor(3, "k•••••", countsOf([19, 8, 4, 3])),
+      ],
+      self: null,
+    },
+    readings: { count: 0, rows: [], self: null },
+  },
   truncated: [],
   automatic: sum(AUTOMATIC_DAYS),
 };

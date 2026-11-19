@@ -91,4 +91,70 @@ describe("StatsActivityTimeline", () => {
 
     expect(tooltipTitle("13 wrz")).toBe("13 wrz");
   });
+
+  describe("with readings", () => {
+    const withReadings = daily.map((day, index) => ({
+      ...day,
+      counts: { ...day.counts, reading: index === 29 ? 1200 : 0 },
+      total: day.total + (index === 29 ? 1200 : 0),
+    }));
+
+    type ChartOptions = {
+      chart: { group?: string; id?: string };
+      xaxis: { labels: { style?: { colors?: unknown } } };
+      yaxis: { labels: { minWidth?: number } };
+    };
+
+    async function charts() {
+      chartDrawnAt(1100);
+      const wrapper = await mountSuspended(ActivityTimeline, {
+        props: { daily: withReadings },
+        global: { stubs: { apexchart: Apexchart } },
+      });
+      await nextTick();
+      return {
+        wrapper,
+        drawn: wrapper.findAllComponents(Apexchart).map((chart) => ({
+          options: chart.props("options") as ChartOptions,
+          series: chart.props("series") as { name: string; data: number[] }[],
+        })),
+      };
+    }
+
+    it("stacks the four kinds of change and draws the readings apart under them", async () => {
+      const { drawn } = await charts();
+
+      expect(drawn).toHaveLength(2);
+      expect(drawn[0]!.series.map((series) => series.name)).toEqual([
+        "Ocena",
+        "Propozycja zmiany",
+        "Źródło lub zgłoszenie",
+        "Opublikowane osoby",
+      ]);
+      expect(drawn[1]!.series.map((series) => series.name)).toEqual([
+        "Odczyt oświadczenia",
+      ]);
+      expect(drawn[1]!.series[0]!.data.at(-1)).toBe(1200);
+    });
+
+    it("lines the two charts' days up", async () => {
+      const { drawn } = await charts();
+      const [stack, band] = drawn.map((chart) => chart.options);
+
+      // One group shows the pointer's day in both.
+      expect(stack!.chart.group).toBe(band!.chart.group);
+      expect(stack!.chart.id).not.toBe(band!.chart.id);
+      expect(stack!.yaxis.labels.minWidth).toBe(band!.yaxis.labels.minWidth);
+      // The dates are laid out under both, so the columns are as wide, and
+      // drawn under the readings alone.
+      expect(stack!.xaxis.labels.style?.colors).toBe("transparent");
+      expect(band!.xaxis.labels.style?.colors).not.toBe("transparent");
+    });
+
+    it("counts every action in the subtitle", async () => {
+      const { wrapper } = await charts();
+
+      expect(wrapper.text()).toContain("1380 działań w 30 dniach");
+    });
+  });
 });

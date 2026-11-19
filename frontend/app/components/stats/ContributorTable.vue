@@ -10,13 +10,33 @@
       <v-card-subtitle class="text-wrap">{{ subtitle }}</v-card-subtitle>
     </v-card-item>
 
+    <!-- Who changed the data and who read crops, each ranked by their own
+         count: in one ranking the readers filled the top 25 (decision on
+         2026-11-19). -->
+    <v-tabs
+      v-model="tab"
+      color="ink-sage"
+      density="compact"
+      class="contributors__tabs"
+      data-testid="contributors-tabs"
+    >
+      <v-tab
+        v-for="name in rankingNames"
+        :key="name"
+        :value="name"
+        :data-testid="`contributors-tab-${name}`"
+      >
+        {{ TAB_LABELS[name] }}
+      </v-tab>
+    </v-tabs>
+
     <v-card-text :class="{ 'contributors--stale': loading }">
       <v-alert
-        v-if="contributors.length === 0"
+        v-if="rows.length === 0"
         type="info"
         variant="tonal"
         density="compact"
-        text="W tym okresie nikt nie zmieniał danych."
+        :text="EMPTY[tab]"
       />
 
       <div v-else class="contributors__scroll">
@@ -25,9 +45,13 @@
             <tr>
               <th class="text-left">#</th>
               <th class="text-left">Użytkownik</th>
-              <th class="text-left" style="min-width: 140px">Rozkład</th>
+              <!-- A ranking of one kind has no mix to name: its bar is only
+                   the count against the top one's. -->
+              <th class="text-left" style="min-width: 140px">
+                {{ mixed ? "Rozkład" : "" }}
+              </th>
               <th
-                v-for="kind in activityKinds"
+                v-for="kind in columnKinds"
                 :key="kind"
                 class="text-right d-none d-md-table-cell"
               >
@@ -43,13 +67,15 @@
                   </template>
                 </v-tooltip>
               </th>
-              <th class="text-right">Razem</th>
+              <th class="text-right">
+                {{ mixed ? "Razem" : TAB_LABELS[tab] }}
+              </th>
               <th class="text-right">Ostatnio</th>
             </tr>
           </thead>
           <tbody>
             <tr
-              v-for="(row, index) in contributors"
+              v-for="(row, index) in rows"
               :key="row.key"
               :class="{ 'contributors__row--self': row.isSelf }"
             >
@@ -77,7 +103,7 @@
                   :style="{ width: mixWidth(row) }"
                 >
                   <span
-                    v-for="kind in activityKinds"
+                    v-for="kind in shownKinds"
                     v-show="row.counts[kind] > 0"
                     :key="kind"
                     class="contributors__mix-part"
@@ -89,7 +115,7 @@
                 </div>
               </td>
               <td
-                v-for="kind in activityKinds"
+                v-for="kind in columnKinds"
                 :key="kind"
                 class="text-right stats-numeric d-none d-md-table-cell"
                 :class="{ 'text-disabled': row.counts[kind] === 0 }"
@@ -132,7 +158,7 @@
         >
           Twoje miejsce:
           <strong class="text-high-emphasis">{{ self!.rank }}</strong>
-          z {{ contributorCount }} — {{ selfTotalLabel }} w tym okresie.
+          z {{ count }}, {{ selfTotalLabel }} w tym okresie.
         </div>
 
         <!-- The invitation, and the only place the setting is explained to
@@ -167,14 +193,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { mdiTrophyOutline, mdiArrowRight } from "@mdi/js";
 import {
-  activityKinds,
   activityKindLabels,
   activityKindDescriptions,
+  rankingKinds,
+  rankingNames,
+  type RankingName,
 } from "~~/shared/activity";
-import type { ActivityContributor } from "~~/server/api/stats/activity.get";
+import type {
+  ActivityContributor,
+  ActivityRanking,
+} from "~~/server/api/stats/activity.get";
 import { activityColors, formatDaysAgo } from "~/utils/chartTheme";
 import { polishCounting } from "~/composables/polish";
 
@@ -189,17 +220,17 @@ import { polishCounting } from "~/composables/polish";
  * An admin still sees the whole identity, and their rows still link into the
  * review queue, because the uid arrives only for them.
  *
- * The per-row bar shows the mix of what a person did, in the same colours the
- * timeline uses, and its width scales with their total — so the ranking is
+ * The per-row bar shows the mix of what a person changed, in the same colours
+ * the timeline uses, and its width scales with their total — so the ranking is
  * readable at a glance while the numbers stay in the columns beside it.
+ * Readings are one kind, ranked on their own tab, where the bar is the count
+ * alone.
  */
 const props = defineProps<{
-  contributors: ActivityContributor[];
+  /** One per tab; null until the response lands. */
+  rankings: Record<RankingName, ActivityRanking> | null;
   identified: boolean;
-  contributorCount: number;
   windowDays: number;
-  /** Where the reader stands overall, ranked slice or not. */
-  self?: { rank: number; total: number } | null;
   /** Whether anybody is signed in, which decides what the invitation offers. */
   signedIn?: boolean;
   /** Whether the reader has already turned their own name on. */
@@ -207,13 +238,42 @@ const props = defineProps<{
   loading?: boolean;
 }>();
 
+const TAB_LABELS: Record<RankingName, string> = {
+  changes: "Zmiany",
+  readings: "Skany",
+};
+
+const EMPTY: Record<RankingName, string> = {
+  changes: "W tym okresie nikt nie zmieniał danych.",
+  readings: "W tym okresie nikt nic nie odczytał.",
+};
+
+/** What the reader's own total is a count of, by its three Polish forms. */
+const TOTAL_NOUNS: Record<RankingName, [string, string, string]> = {
+  changes: ["zmiana", "zmiany", "zmian"],
+  readings: ["skan", "skany", "skanów"],
+};
+
+/** The scans open first, for now (decision on 2026-11-19). */
+const tab = ref<RankingName>("readings");
+
+const ranking = computed(() => props.rankings?.[tab.value] ?? null);
+const rows = computed(() => ranking.value?.rows ?? []);
+const count = computed(() => ranking.value?.count ?? 0);
+const self = computed(() => ranking.value?.self ?? null);
+
+const shownKinds = computed(() => rankingKinds[tab.value]);
+/** Whether the tab ranks several kinds, which then each get a column, a part
+ * of the bar and a „Razem”. */
+const mixed = computed(() => shownKinds.value.length > 1);
+/** A column per kind only beside a „Razem” they add up to. */
+const columnKinds = computed(() => (mixed.value ? shownKinds.value : []));
+
 const subtitle = computed(() => {
   const window =
-    props.windowDays === 1
-      ? "Zmiany z dzisiaj"
-      : `Zmiany z ostatnich ${props.windowDays} dni`;
+    props.windowDays === 1 ? "Dzisiaj" : `Ostatnie ${props.windowDays} dni`;
   return `${window} · ${polishCounting(
-    props.contributorCount,
+    count.value,
     "osoba",
     "osoby",
     "osób",
@@ -221,7 +281,7 @@ const subtitle = computed(() => {
 });
 
 const topTotal = computed(() =>
-  Math.max(1, ...props.contributors.map((row) => row.total)),
+  Math.max(1, ...rows.value.map((row) => row.total)),
 );
 
 const mixWidth = (row: ActivityContributor) =>
@@ -241,17 +301,17 @@ const proposalsTo = (uid: string) =>
   `/admin/rewizje?author=${encodeURIComponent(uid)}&status=all&automatic=all#kolejka`;
 
 const mixLabel = (row: ActivityContributor) =>
-  activityKinds
+  shownKinds.value
     .filter((kind) => row.counts[kind] > 0)
     .map((kind) => `${activityKindLabels[kind]}: ${row.counts[kind]}`)
     .join(", ");
 
 const selfBelowTheFold = computed(
-  () => !!props.self && !props.contributors.some((row) => row.isSelf),
+  () => !!self.value && !rows.value.some((row) => row.isSelf),
 );
 
 const selfTotalLabel = computed(() =>
-  polishCounting(props.self?.total ?? 0, "działanie", "działania", "działań"),
+  polishCounting(self.value?.total ?? 0, ...TOTAL_NOUNS[tab.value]),
 );
 
 const callToAction = computed(() => {
@@ -288,6 +348,13 @@ const callToAction = computed(() => {
 
 .contributors__scroll {
   overflow-x: auto;
+}
+
+/* In line with the card's title, over a hairline that the table starts
+   under. */
+.contributors__tabs {
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  padding: 0 8px;
 }
 
 /* The reader's own row. A tint rather than a border: the row keeps its height,

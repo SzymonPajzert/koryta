@@ -131,6 +131,13 @@ describe("/oswiadczenia/znalezione", () => {
     expect(text(wrapper, ".of-lead")).toBe(
       "Dzięki Twoim odczytom znaleziono 2 osoby.",
     );
+    // What everybody read, under it on a line of its own.
+    expect(
+      wrapper.findAll(".of-lead").map((p) => p.text().replace(/\s+/g, " ")),
+    ).toEqual([
+      "Dzięki Twoim odczytom znaleziono 2 osoby.",
+      "Ile wycinków odczytali wszyscy razem, zobaczysz w statystykach.",
+    ]);
   });
 
   it("says how many it found in the right form, and that it shows the newest of more", async () => {
@@ -183,7 +190,11 @@ describe("/oswiadczenia/znalezione", () => {
         .findAllComponents({ name: "VBtn" })
         .map((button) => button.props("to")),
     ).toEqual(["/oswiadczenia"]);
-    expect(wrapper.find(".of-lead").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Dzięki Twoim odczytom");
+    // The way to what everybody read stays at the top, on its own line.
+    expect(
+      wrapper.get('[data-testid="declaration-stats-link"]').text(),
+    ).toContain("zobaczysz w statystykach");
   });
 
   it("says so when the list does not come, and asks again", async () => {

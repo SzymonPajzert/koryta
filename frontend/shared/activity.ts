@@ -68,6 +68,28 @@ export function totalActivity(counts: ActivityCounts): number {
   return activityKinds.reduce((sum, kind) => sum + counts[kind], 0);
 }
 
+/** The kinds that change the data: stacked together on the day chart and
+ * ranked together. Readings change nothing and outnumber the rest, so they
+ * have a band and a ranking of their own (decision on 2026-11-19). */
+export const changeKinds = activityKinds.filter(
+  (kind): kind is Exclude<ActivityKind, "reading"> => kind !== "reading",
+);
+
+export function totalChanges(counts: ActivityCounts): number {
+  return changeKinds.reduce((sum, kind) => sum + counts[kind], 0);
+}
+
+/** The rankings on /eksploruj/statystyki, each over its own kinds, in the
+ * order their tabs stand. */
+export const rankingKinds = {
+  changes: changeKinds,
+  readings: ["reading"],
+} as const satisfies Record<string, readonly ActivityKind[]>;
+
+export type RankingName = keyof typeof rankingKinds;
+
+export const rankingNames = Object.keys(rankingKinds) as RankingName[];
+
 export const activityKindLabels: Record<ActivityKind, string> = {
   vote: "Ocena",
   revision: "Propozycja zmiany",
