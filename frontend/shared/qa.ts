@@ -59,13 +59,25 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "strona-eksploruj",
+    title: "Strona /eksploruj ze wszystkimi sposobami przeglądania",
+    description:
+      "/eksploruj zbiera w kartach tabelę, nowe osoby, okrągły staż, rady szpitali, statystyki, wykresy, tematy i źródła. W stopce zastąpiła „Rady szpitali” i „Okrągły staż”, a stopka ma teraz kolumny „Na stronie” i „O projekcie”.",
+    steps: [
+      "W stopce, pod „Na stronie”, kliknij „Eksploruj”. „O nas”, „Kontakt” i „Działaj z nami” są w kolumnie obok, nad „Informacjami prawnymi”.",
+      "Kliknij kilka kart: każda prowadzi na swoją stronę, a liczby na kartach są pogrupowane („10 348 osób”).",
+    ],
+    link: "/eksploruj",
+    area: "public",
+  },
+  {
     id: "linki-do-statystyk",
     title: "Linki do statystyk",
     description:
       "Na /eksploruj/statystyki prowadzą teraz stopka, liczby na stronie głównej, /pomoc i /o-nas.",
     steps: [
       "Na stronie głównej obok „Sprawdziliśmy już” kliknij „Statystyki”.",
-      "W stopce, pod „O projekcie”, kliknij „Statystyki”.",
+      "W stopce, pod „Na stronie”, kliknij „Statystyki”.",
       "Na /pomoc i /o-nas (przy „Koryta.pl to przede wszystkim społeczność”) kliknij link do statystyk.",
     ],
     link: "/",

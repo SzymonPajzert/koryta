@@ -36,18 +36,24 @@
         </div>
       </v-col>
 
-      <v-col v-for="(section, i) in sections" :key="i" cols="6" md="3">
-        <p class="text-body-1 font-weight-bold mb-3">{{ section.title }}</p>
+      <v-col v-for="(column, i) in columns" :key="i" cols="6" md="3">
+        <div
+          v-for="(section, j) in column"
+          :key="section.title"
+          :class="{ 'mt-6': j > 0 }"
+        >
+          <p class="text-body-1 font-weight-bold mb-3">{{ section.title }}</p>
 
-        <div v-for="item in section.items" :key="item.title">
-          <v-btn
-            class="text-none px-0 justify-start"
-            exact
-            :to="item.link"
-            :ripple="false"
-            :text="item.title"
-            variant="plain"
-          />
+          <div v-for="item in section.items" :key="item.title">
+            <v-btn
+              class="text-none px-0 justify-start"
+              exact
+              :to="item.link"
+              :ripple="false"
+              :text="item.title"
+              variant="plain"
+            />
+          </div>
         </div>
       </v-col>
     </v-row>
@@ -61,38 +67,53 @@
 
 <script lang="ts" setup>
 import { mdiFacebook, mdiGithub, mdiInstagram, mdiTwitter } from "@mdi/js";
-const sections = [
-  {
-    title: "O projekcie",
-    items: [
-      { title: "O nas", link: "/o-nas" },
-      { title: "Tematy", link: "/tematy" },
-      // The only way to /blog on a phone: the app bar's links are desktop's.
-      { title: "Blog", link: "/blog" },
-      { title: "Rady szpitali", link: "/eksploruj/szpitale" },
-      { title: "Okrągły staż", link: "/eksploruj/staz" },
-      { title: "Statystyki", link: "/eksploruj/statystyki" },
-      { title: "Źródła", link: "/zrodla" },
-      // EventFeed bounds the home feed so a reader can reach "the footer,
-      // which is where the contact address and the source links live", and
-      // the qa entry for it says the same - but there was no way to the
-      // address from here, so somebody hunting for „kontakt" scrolled to the
-      // bottom and found nothing.
-      { title: "Kontakt", link: "/o-nas#kontakt" },
-      // The app bar only carries this above 960px, so on a phone, on any page
-      // but the home page, the footer is the whole of how somebody finds
-      // their way to helping. It goes where the app bar's and the home page's
-      // do (decision on 2026-11-17); /oswiadczenia links /pomoc at its foot.
-      { title: "Działaj z nami", link: "/oswiadczenia" },
-    ],
-  },
-  {
-    title: "Informacje prawne",
-    items: [
-      { title: "Regulamin", link: "/plik/regulamin" },
-      { title: "Polityka prywatności", link: "/plik/polityka_prywatnosci" },
-    ],
-  },
+type Section = { title: string; items: { title: string; link: string }[] };
+
+// Two columns: what is on the site, then the project and the legal pages
+// stacked, so both run about as long (decision on 2026-11-19).
+const columns: Section[][] = [
+  [
+    {
+      title: "Na stronie",
+      items: [
+        { title: "Tematy", link: "/tematy" },
+        // The only way to /blog on a phone: the app bar's links are desktop's.
+        { title: "Blog", link: "/blog" },
+        // One link for the explore pages, to the page that lists them all
+        // (decision on 2026-11-19).
+        { title: "Eksploruj", link: "/eksploruj" },
+        { title: "Statystyki", link: "/eksploruj/statystyki" },
+        { title: "Źródła", link: "/zrodla" },
+      ],
+    },
+  ],
+  [
+    {
+      title: "O projekcie",
+      items: [
+        { title: "O nas", link: "/o-nas" },
+        // EventFeed bounds the home feed so a reader can reach "the footer,
+        // which is where the contact address and the source links live", and
+        // the qa entry for it says the same - but there was no way to the
+        // address from here, so somebody hunting for „kontakt" scrolled to
+        // the bottom and found nothing.
+        { title: "Kontakt", link: "/o-nas#kontakt" },
+        // The app bar only carries this above 960px, so on a phone, on any
+        // page but the home page, the footer is the whole of how somebody
+        // finds their way to helping. It goes where the app bar's and the
+        // home page's do (decision on 2026-11-17); /oswiadczenia links /pomoc
+        // at its foot.
+        { title: "Działaj z nami", link: "/oswiadczenia" },
+      ],
+    },
+    {
+      title: "Informacje prawne",
+      items: [
+        { title: "Regulamin", link: "/plik/regulamin" },
+        { title: "Polityka prywatności", link: "/plik/polityka_prywatnosci" },
+      ],
+    },
+  ],
 ];
 
 // Icon-only buttons: the label is the only name a screen reader gets for each.
