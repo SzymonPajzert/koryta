@@ -1054,6 +1054,21 @@ def _tiers_name(
     return [], False
 
 
+def _captioned(
+    link: LinkContext, seekers: list[Seeker], first_names: frozenset[str]
+) -> list[tuple[Seeker, bool]]:
+    """The seekers the title of the link's table names by first name too, when
+    nothing nearer named anybody (`candidates`). A title can only give a file to
+    its person: one naming nobody sought, or naming them as anything but
+    themselves, takes nothing from the page's title below (round 1's breadcrumb
+    joined into the heading did, 11-13)."""
+    text = fold(link.caption)
+    if not text or EXPLANATION.search(text):
+        return []
+    named, _ = _named(text, "", seekers, [link.caption], first_names)
+    return [(s, True) for s, first in named if first]
+
+
 def candidates(
     page_url: str,
     page_title: str,
@@ -1068,7 +1083,8 @@ def candidates(
     """Document links on one page that name one of the seekers, or that name nobody.
 
     A link names whoever its label (or address) names; failing that, its row or
-    list item; failing that, the heading over it; failing that, the page's title
+    list item; failing that, the heading over it; failing that, a seeker its
+    table's title names by first name too (`_captioned`); failing that, the page's title
     (a page about one person, "Jan Kowalski - oświadczenia majątkowe", lends that
     person its documents). A tier that names somebody who is not a seeker ends
     the search: the link is theirs, not anybody's from a wider tier. So does one
@@ -1195,6 +1211,13 @@ def candidates(
             # "Wzory druków: Radni, Członkowie Zarządu" swallows its page, the
             # person's name too, and took the slots of 10 (11-13).
             named, somebody_else = [], True
+        elif (
+            not named
+            and not somebody_else
+            and not site_file
+            and (captioned := _captioned(link, seekers, first_names))
+        ):
+            named = captioned
         elif not named and not somebody_else and page_people and not site_file:
             named = [(s, s.named_in(title)[1] or lent) for s in page_people]
         declaration_like = bool(
