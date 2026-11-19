@@ -185,6 +185,36 @@ export const scheduledFirestoreExport = onSchedule(
   },
 );
 
+/**
+ * A daily copy of the owner's task list (`agent-tasks`, written by the agents
+ * as ops-writer and by the site) in its own bucket, so a bad write or a
+ * migration on the list can be undone. A few thousand documents, so the
+ * export's reads cost nothing worth counting. Restore with
+ * `gcloud firestore import <prefix> --database=agent-tasks`.
+ */
+export const scheduledOpsTasksExport = onSchedule(
+  {
+    schedule: "every day 04:20",
+    timeZone: "Europe/Warsaw",
+    region: "europe-west1",
+  },
+  async (_event: unknown) => {
+    const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT;
+    if (!projectId) throw new Error("No project ID found");
+    const timestamp = new Date().toISOString();
+    try {
+      const [response] = await adminClient.exportDocuments({
+        name: adminClient.databasePath(projectId, "agent-tasks"),
+        outputUriPrefix: `gs://koryta-pl-firestore-backups/agent-tasks/date=${timestamp}`,
+      });
+      logger.info(`Operation Name: ${response.name}`);
+    } catch (err) {
+      logger.error(err);
+      throw new Error("Export of agent-tasks failed", { cause: err });
+    }
+  },
+);
+
 export { onVoteWritten } from "./votes";
 export { onNoteWritten } from "./notes";
 export { onEdgeWritten, sweepEdgeStats } from "./edges";
