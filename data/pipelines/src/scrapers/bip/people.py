@@ -562,6 +562,28 @@ def link_score(
     return score - 0.5 * depth
 
 
+#: What a link labelled with somebody the unit does not seek loses
+#: (`somebody_else`), after the cut, so a small unit still reads them all.
+#: Powiat iławski's list links each of ~700 declarations under the filer's
+#: name, 2 above its pager, and its walk read 150 of them, two of the six it
+#: sought among them (11-18). 5 puts them below the list's pages five levels
+#: of its pager down (0.5 a level) and above the site's menu, which a
+#: declarations page lifts as much (`DECLARATIONS_BONUS`).
+SOMEBODY_ELSE = 5.0
+
+
+def somebody_else(
+    link: LinkContext, seekers: list[Seeker], first_names: frozenset[str]
+) -> bool:
+    """Whether a link's label names a person (`person_named`: "Marcin
+    Bednarczyk Członek Zarządu", "Daniel Zalewski, oświadczenie majątkowe")
+    whom no seeker's surname in its label or address could be."""
+    if not person_named(link.anchor, first_names):
+        return False
+    text = fold(link.anchor) + " " + url_words(link.url)
+    return not any(s.named_in(text)[0] for s in seekers)
+
+
 def declarants(link: LinkContext, seekers: list[Seeker]) -> set[tuple[str, str]]:
     """The names of the seekers whose declaration a link's label says it is,
     first name and all, or its row around a bare "Pokaż" (Rybnik: "Joanna

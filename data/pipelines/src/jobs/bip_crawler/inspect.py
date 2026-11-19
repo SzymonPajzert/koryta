@@ -50,7 +50,15 @@ from jobs.bip_crawler.people import (
 from jobs.bip_crawler.people_list import list_policy, read_list, read_list_file
 from jobs.bip_crawler.walk import MemoryDocIndex, access, chosen, folded
 from scrapers.bip.classify import host_of, is_low_value_url, normalize_url
-from scrapers.bip.people import Candidate, Seeker, choose, fold, link_score
+from scrapers.bip.people import (
+    SOMEBODY_ELSE,
+    Candidate,
+    Seeker,
+    choose,
+    fold,
+    link_score,
+    somebody_else,
+)
 from scrapers.common.fetch import use_ca_bundle
 from scrapers.common.links import LinkContext
 from scrapers.stores import DeclarationFile, PersonRow
@@ -90,6 +98,7 @@ def _fate(
     seekers: list[Seeker],
     prefer: re.Pattern[str] | None,
     view: PageView,
+    first_names: frozenset[str] = frozenset(),
 ) -> tuple[str, float]:
     """What the walk does with a link (`_Frontier.follow`), and its score."""
     target = normalize_url(link.url)
@@ -102,6 +111,8 @@ def _fate(
     score = link_score(link, seekers, DEPTH + 1, prefer, view.full_name)
     if score <= -3:
         return "left", score
+    if somebody_else(link, seekers, first_names):
+        score -= SOMEBODY_ELSE
     if target not in queued:
         return ("seen" if frontier.has(target) else "left"), score + view.bonus
     return "follows", score + view.bonus
@@ -147,7 +158,8 @@ def page_lines(
     names = {r.key: f"{r.first_name} {r.last_name} ({r.election_year})" for r in rows}
     shown = list(dict.fromkeys(view.links + view.follow))
     fates = {
-        link: _fate(link, frontier, queued, seekers, prefer, view) for link in shown
+        link: _fate(link, frontier, queued, seekers, prefer, view, search.first_names)
+        for link in shown
     }
     shown.sort(key=lambda x: (not credits.get(x.url), -fates[x][1]))
     pattern = re.compile(grep, re.I) if grep else None
