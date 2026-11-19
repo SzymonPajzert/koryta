@@ -571,6 +571,112 @@ RESEARCHED_OWNERS: dict[str, Researched] = {
     "0000050696": Researched(
         (dataclasses.replace(KGHM, share="93.8%"),),
         "https://raportcsr2022.kghm.com/en/noty_objasniajace/12-11",
+    ),  # A state enterprise, an SPZOZ or a research institute struck off: its
+    # founding organ (organ założycielski) is what it belongs to, and only the
+    # odpis pełny names it, the odpis aktualny of a struck-off entry being
+    # empty. A wojewoda or a minister founds for the Treasury. Found by the
+    # likely-public read of 2026-11-06, each organ read off the register.
+    # WZZ HERBAPOL in privatisation: WOJEWODA MAZOWIECKI.
+    "0000052831": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000052831?rejestr=P&format=json",
+    ),
+    # Szpital Wojewódzki OLK in Przemyśl: MINISTER TRANSPORTU I GOSPODARKI MORSKIEJ.
+    "0000005169": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000005169?rejestr=S&format=json",
+    ),
+    # The Brudziński children's hospital, merged into UCK WUM: MINISTER
+    # ZDROWIA, then WARSZAWSKI UNIWERSYTET MEDYCZNY.
+    "0000158332": Researched(
+        (ResearchedOwner("WARSZAWSKI UNIWERSYTET MEDYCZNY"),),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000158332?rejestr=S&format=json",
+    ),
+    # BZLiP BEZALIN: WOJEWODA ŚLĄSKI.
+    "0000062895": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000062895?rejestr=P&format=json",
+    ),
+    # the Ziętek rheumatology hospital in Ustroń: WOJEWODA KATOWICKI.
+    "0000174051": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000174051?rejestr=S&format=json",
+    ),
+    # PUHiT Kraków: WOJEWODA MAŁOPOLSKI.
+    "0000056563": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000056563?rejestr=P&format=json",
+    ),
+    # SPZOZ w Gostycynie: GMINA GOSTYCYN.
+    "0000002454": Researched(
+        (ResearchedOwner("GMINA GOSTYCYN"),),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000002454?rejestr=S&format=json",
+    ),
+    # ZOZ w Lubinie: STAROSTWO POWIATOWE W LUBINIE.
+    "0000011395": Researched(
+        (ResearchedOwner("POWIAT LUBIŃSKI"),),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000011395?rejestr=S&format=json",
+    ),
+    # ZOZ w Złotoryi: WOJEWODA LEGNICKI.
+    "0000019042": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000019042?rejestr=S&format=json",
+    ),
+    # PDPS PZL-Bielsko: WOJEWODA ŚLĄSKI.
+    "0000021144": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000021144?rejestr=P&format=json",
+    ),
+    # Wojewódzki Szpital Bródnowski: SAMORZĄD WOJEWÓDZTWA MAZOWIECKIEGO.
+    "0000026621": Researched(
+        (ResearchedOwner("WOJEWÓDZTWO MAZOWIECKIE"),),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000026621?rejestr=S&format=json",
+    ),
+    # RPRD w Rybniku: WOJEWODA ŚLĄSKI.
+    "0000036343": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000036343?rejestr=P&format=json",
+    ),
+    # CF "CEFARM" Warszawa: WOJEWODA MAZOWIECKI.
+    "0000039792": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000039792?rejestr=P&format=json",
+    ),
+    # Fabryka Tarcz Ściernych: WOJEWODA WARSZAWSKI.
+    "0000041921": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000041921?rejestr=P&format=json",
+    ),
+    # SPZOZ w Brzezinach: POWIAT ŁÓDZKI WSCHODNI, then POWIAT BRZEZIŃSKI.
+    "0000047145": Researched(
+        (ResearchedOwner("POWIAT BRZEZIŃSKI"),),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000047145?rejestr=S&format=json",
+    ),
+    # PP Pracownie Konserwacji Zabytków: MINISTER SKARBU PAŃSTWA.
+    "0000065931": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000065931?rejestr=P&format=json",
+    ),
+    # OPAKOMET in privatisation: WOJEWODA MAŁOPOLSKI.
+    "0000067518": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000067518?rejestr=P&format=json",
+    ),
+    # Instytut Medycyny Pracy i Zdrowia Środowiskowego: RADA MINISTRÓW, then
+    # MINISTER ZDROWIA.
+    "0000084423": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000084423?rejestr=P&format=json",
+    ),
+    # PPKS w Świdwinie: WOJEWODA ZACHODNIOPOMORSKI.
+    "0000095659": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000095659?rejestr=P&format=json",
+    ),
+    # PPKS w Żywcu: WOJEWODA BIELSKI, then WOJEWODA ŚLĄSKI.
+    "0000120006": Researched(
+        (SKARB_PANSTWA,),
+        "https://api-krs.ms.gov.pl/api/krs/OdpisPelny/0000120006?rejestr=P&format=json",
     ),
 }
 
