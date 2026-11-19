@@ -197,7 +197,9 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   `normalize_url` gives one address: the query encoded whole, as the server
   answers a pager's page only. A list that names a document in its heading
   alone, its link saying "przejdź do dokumentu", has that link read under the
-  document's name when the name says it is a seeker's declaration.
+  document's name when the name says it is a seeker's declaration. On its
+  pages a seeker's full name adds 12 to a link's score, elsewhere 3: its left
+  menu's declarations tree outscored a councillor's own page.
 - One crawler per `--out`: the startup repair re-wraps every `.part` bundle
   there, so a second run on the same directory refuses to start
   (`.crawl.lock`).

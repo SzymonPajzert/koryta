@@ -113,6 +113,7 @@ from scrapers.bip.classify import (
 from scrapers.bip.people import (
     ASSETS,
     DECLARATION,
+    FULL_NAME,
     Candidate,
     Seeker,
     candidates,
@@ -238,13 +239,15 @@ class UnitSearch:
 class PageView:
     """What a walk made of one page (`PeopleSearch._read_page`), for
     `koryta_scrape_bip page`: its title, the links candidates() read, the
-    links it follows, and what a declarations page's own links score above
-    the rest (`DECLARATIONS_BONUS`)."""
+    links it follows, what a declarations page's own links score above the
+    rest (`DECLARATIONS_BONUS`), and what a seeker's full name scores there
+    (`FULL_NAME`)."""
 
     title: str
     links: list[LinkContext]
     follow: list[LinkContext]
     bonus: float
+    full_name: float = FULL_NAME
 
 
 #: Hosts no unit's BIP lives on, though a unit's website may link to them.
@@ -350,11 +353,13 @@ class _Frontier:
         prefer: re.Pattern[str] | None = None,
         bonus: float = 0.0,
         page: str = "",
+        full_name: float = FULL_NAME,
     ) -> None:
         """Queue a page's links to other pages; files are for the download.
         ``bonus`` lifts those a declarations page leads to, after the cut, so a
         section of tenders it links stays out (`DECLARATIONS_BONUS`); ``page``
-        is that page's address, whose pager leads to more of it (`_pager`)."""
+        is that page's address, whose pager leads to more of it (`_pager`);
+        ``full_name`` what a seeker's full name scores on its platform."""
         # ESC's VelaBIP links a page's older versions, <page>/<n>, each beside
         # a comparison with it, <page>/porownaj/<n>/<m> (`is_low_value_url`):
         # copies of the page. A list's pages, /lista/<slug>/<n>, have none.
@@ -375,7 +380,7 @@ class _Frontier:
                 or not self.in_scope(target)
             ):
                 continue
-            score = link_score(link, seekers, depth, prefer)
+            score = link_score(link, seekers, depth, prefer, full_name)
             if score > -3:
                 says = says_declarations(link)
                 if says or (bonus and _pager(page, link)):
@@ -1337,10 +1342,13 @@ class PeopleSearch:
         says = bool(led or filed or DECLARATION.search(folded_title))
         bonus = DECLARATIONS_BONUS if says else 0.0
         self._read_whole(frontier, result, where or title, says, seekers, depth, prefer)
+        full_name = ezeto.FULL_NAME if ezeto.is_page(result.content) else FULL_NAME
         if depth < self.options.max_depth:
-            frontier.follow(follow, seekers, depth + 1, prefer, bonus, result.url)
+            frontier.follow(
+                follow, seekers, depth + 1, prefer, bonus, result.url, full_name
+            )
         self._tell_page(out, out.found[before:], result.url, depth, led, lender)
-        return PageView(title, links, follow, bonus)
+        return PageView(title, links, follow, bonus, full_name)
 
     def _tell_page(
         self,
