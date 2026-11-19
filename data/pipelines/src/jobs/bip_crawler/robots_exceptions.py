@@ -95,6 +95,12 @@ FILES: dict[str, str] = {
     "powiat-leszczynski.archiwum.bip.net.pl": (
         "powiat leszczyński (archive): forbids /pliki/, 6 candidacies"
     ),
+    # 11-18, round 2: the new BIPs' open pages link these archives' files; with
+    # them the walks found Ciechocinek 7 of 10, Słubice 9 of 9.
+    "mst-ciechocinek.arch.rbip.mojregion.info": (
+        "Ciechocinek (archive): Disallow: / to all, 10 candidacies"
+    ),
+    "slubice.archiwum.bip.net.pl": "Słubice (archive): forbids /pliki/, 9 candidacies",
 }
 #: Hosts whose robots.txt keeps out every crawler but search engines, or all: (b).
 SITES: dict[str, str] = {
@@ -245,6 +251,8 @@ SITES: dict[str, str] = {
     "bip.skwierzyna.pl": "Skwierzyna: Disallow: / to all, 4 candidacies",
     "bip.opalenica.pl": "Opalenica: Disallow: / to all, 4 candidacies",
     "bip.budzyn.pl": "Budzyń: Disallow: / to all, 1 candidacy",
+    # 11-18, round 2: a walk past it (as a browser: trol.pl) found 9 of 9.
+    "bip-olszanka.2clicks.pl": "Olszanka: Disallow: / to all, 9 candidacies",
 }
 
 
