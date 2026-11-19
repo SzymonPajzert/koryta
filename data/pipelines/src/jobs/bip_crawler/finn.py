@@ -6,7 +6,7 @@ declarations in an iframe of e-Urząd, ``https://eurzad.finn.pl/<client>/#!/
 rejestry/<symbol>/...``, its address entity-encoded; the walk read the page and
 found no file on it. The app, one host for every FINN client, draws a register
 from JSON-RPC calls, each a POST of ``{"id": 1, "method": ..., "params": [...]}``
-to ``https://eurzad.finn.pl/<client>/rpc/routeRejestryServiceManager<N>``, every
+to ``https://eurzad.finn.pl/<client>/rpc/routeIRejestryServiceManager<N>``, every
 param and the answer's ``result`` JSON in a string:
 
 - N=0, no params: the client's registers, ``[{symbol, nazwa}]``;
@@ -121,7 +121,7 @@ class Eurzad:
     def _call(self, client: str, route: int, params: list[str]) -> Any:
         """A route's answer; None when there was none (a failure, robots.txt,
         a "not now"), which is not kept: a later walk asks again."""
-        method = f"/rpc/routeRejestryServiceManager{route}"
+        method = f"/rpc/routeIRejestryServiceManager{route}"
         answer = self.post(
             f"{EURZAD}/{client}{method}", {"id": 1, "method": method, "params": params}
         )

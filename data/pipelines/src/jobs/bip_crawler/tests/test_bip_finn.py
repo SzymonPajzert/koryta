@@ -59,9 +59,9 @@ class App:
     def post(
         self, url: str, payload: dict[str, Any], timeout: float = 15.0, ua: str = ""
     ) -> HttpResult:
-        route = int(url.rsplit("routeRejestryServiceManager", 1)[1])
+        route = int(url.rsplit("routeIRejestryServiceManager", 1)[1])
         assert url.startswith(APP + "/rpc/")
-        assert payload["method"] == f"/rpc/routeRejestryServiceManager{route}"
+        assert payload["method"] == f"/rpc/routeIRejestryServiceManager{route}"
         params = payload["params"]
         self.calls.append((route, params))
         result: Any
