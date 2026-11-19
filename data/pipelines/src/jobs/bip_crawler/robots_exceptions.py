@@ -253,6 +253,11 @@ SITES: dict[str, str] = {
     "bip.budzyn.pl": "Budzyń: Disallow: / to all, 1 candidacy",
     # 11-18, round 2: a walk past it (as a browser: trol.pl) found 9 of 9.
     "bip-olszanka.2clicks.pl": "Olszanka: Disallow: / to all, 9 candidacies",
+    # e-zeto under the powiat's own name, its robots.txt read on 11-18. Past
+    # it, at e-zeto's 15 s, walks found 24 of 24 (11-13) and 5 of 5 (11-18).
+    "bip.powiatboleslawiecki.pl": (
+        "powiat bolesławiecki: search engines only, 24 candidacies"
+    ),
 }
 
 
