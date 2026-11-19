@@ -48,6 +48,7 @@ names no later owner.
 """
 
 import dataclasses
+import re
 import typing
 
 import pandas as pd
@@ -88,6 +89,36 @@ MEMBERSHIP_FORMS = (
 )
 
 
+#: Public companies and bodies a foundation is often named after, as a
+#: foundation's name inflects them. The register never names a foundation's
+#: founder, and of the foundations named after a public company that the
+#: likely-public read of 2026-11-19 checked, 7 of 8 had it as their founder:
+#: Fundacja ORLEN, the KGS, LSSE, WSSE, Enea, PGE EC and Szczawno-Jedlina ones.
+PUBLIC_NAMESAKES = re.compile(
+    r"\b(ORLEN|PGE|ENEA|KGHM|PZU|LOTOS|TAURON|ENERGA|PGNIG|JSW|PKP|PKO|PEKAO|PWPW"
+    r"|PGZ|PGG|PERN|CIECH|AZOTY|LOTTO|TVP|POLREGIO|BGK|ARP)\b"
+    r"|KRAJOW\w* (GRUP\w* SPOŻYWCZ|SPÓŁK\w* CUKROW)|POCZT\w* POLSK|TOTALIZATOR"
+    r"|SPECJALN\w* STREF\w* EKONOMICZN|UZDROWISK|PARK\w* ŚLĄSK|LAS\w* PAŃSTWOW"
+    r"|PORT\w* LOTNICZ|POLSKIEGO RADIA|TELEWIZJI POLSKIEJ"
+)
+#: A local government a foundation is named for: "Fundacja Rozwoju Gminy
+#: Zelów". Weaker: some were set up by residents for their gmina.
+LOCAL_NAMESAKES = re.compile(r"\b(ROZWOJU )?(MIASTA|GMINY|POWIATU|WOJEWÓDZTWA) \w")
+
+
+def founder_hint(name: object, form: str | None) -> str | None:
+    """The public body a foundation's name points to as its founder, if any."""
+    if not isinstance(name, str):
+        return None
+    if not (form == "FUNDACJA" or "FUNDACJ" in name or "FUNDUSZ GRANTOWY" in name):
+        return None
+    if found := PUBLIC_NAMESAKES.search(name):
+        return f"company: {found.group(0)}"
+    if LOCAL_NAMESAKES.search(name):
+        return "local government"
+    return None
+
+
 @dataclasses.dataclass
 class LikelyPublic:
     krs: str
@@ -115,6 +146,9 @@ class LikelyPublic:
     held_to_end: bool = False
     #: Whether the legal form is one of `MEMBERSHIP_FORMS`.
     membership_body: bool = False
+    #: For a foundation, the public body its name carries (`founder_hint`), the
+    #: likeliest founder: the register never names one.
+    founder_hint: str | None = None
 
 
 def public_company_names(companies: pd.DataFrame) -> frozenset[str]:
@@ -254,10 +288,12 @@ def likely_public(
                 public_owner_until=until,
                 held_to_end=held,
                 membership_body=bool(form and form.startswith(MEMBERSHIP_FORMS)),
+                founder_hint=founder_hint(place.name, form),
             )
         )
     df = pd.DataFrame([dataclasses.asdict(row) for row in rows], columns=columns)
-    named = df["public_owner"].notna()
+    # A founder the name points to ranks as a public owner that left would.
+    named = df["public_owner"].notna() | df["founder_hint"].notna()
     to_end = df["held_to_end"].astype(bool)
     membership = df["membership_body"].astype(bool)
     df["_rank"] = (

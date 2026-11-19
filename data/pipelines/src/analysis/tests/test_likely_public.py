@@ -6,6 +6,7 @@ import pandas as pd
 from analysis.likely_public import (
     KORYCIARZ,
     CompaniesLikelyPublic,
+    founder_hint,
     likely_public,
     owner_history,
     public_company_names,
@@ -237,6 +238,37 @@ def test_a_held_public_owner_comes_before_one_that_left_and_any_crowd():
 
     assert list(df["node"]) == ["held", "left", "crowd", "chamber"]
     assert df.set_index("node").loc["chamber", "membership_body"]
+
+
+def test_a_foundation_named_after_a_public_body_carries_a_founder_hint():
+    assert founder_hint("FUNDACJA ORLEN (Płock)", "FUNDACJA") == "company: ORLEN"
+    assert (
+        founder_hint('FUNDACJA KRAJOWEJ GRUPY SPOŻYWCZEJ S.A. "POMAGANIE KRZEPI"', None)
+        == "company: KRAJOWEJ GRUPY SPOŻYWCZ"
+    )
+    assert founder_hint("FUNDACJA ROZWOJU GMINY ZELÓW", None) == "local government"
+    # Only a foundation: an association's name says who its members are.
+    assert founder_hint("STOWARZYSZENIE GMIN POLSKICH", "STOWARZYSZENIE") is None
+    assert founder_hint("FUNDACJA KROPLA ŻYCIA (Mysłowice)", "FUNDACJA") is None
+    assert founder_hint(None, "FUNDACJA") is None
+
+
+def test_a_foundation_with_a_founder_hint_ranks_with_an_owner_that_left():
+    nodes = pd.DataFrame(
+        [
+            {**place("crowd", "0000000002", False), "legalForm": "FUNDACJA"},
+            {
+                **place("orlen", "0000000003", False, "FUNDACJA ORLEN"),
+                "legalForm": "FUNDACJA",
+            },
+        ]
+    )
+    rows = [employed(p, "crowd") for p in "abc"] + [employed("a", "orlen")]
+
+    df = likely_public(nodes, edges(*rows), PEOPLE, COMPANIES)
+
+    assert list(df["node"]) == ["orlen", "crowd"]
+    assert df.set_index("node").loc["orlen", "founder_hint"] == "company: ORLEN"
 
 
 class Source:
