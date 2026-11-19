@@ -5,7 +5,7 @@
         v-if="hasData"
         :key="drawKey"
         type="bar"
-        height="340"
+        :height="height"
         :options="options"
         :series="series"
       />
@@ -13,7 +13,7 @@
         {{ emptyText }}
       </div>
       <template #fallback>
-        <v-skeleton-loader type="image" height="340" />
+        <v-skeleton-loader type="image" :height="height" />
       </template>
     </ClientOnly>
   </div>
@@ -61,13 +61,36 @@ const props = withDefaults(
     valueTitle: string;
     /** Said in place of the chart when every column is empty. */
     emptyText: string;
-    /** Apexcharts' own legend under the columns. Off only where something
-     * else beside the chart names every band with its colour. */
-    legend?: boolean;
+    /** Apexcharts' own legend under the columns, or over them with
+     * "top". Off only where something else beside the chart names every band
+     * with its colour. */
+    legend?: boolean | "top";
     /** Each column as shares of its day rather than counts. */
     shares?: boolean;
+    height?: number;
+    /** The dates under the columns. Off for a chart drawn over another one
+     * of the same days, which carries them: they are still laid out, with no
+     * ink, because the room apexcharts keeps for the last one decides how wide
+     * the columns are, and the two charts' columns have to line up. */
+    dateAxis?: boolean;
+    /** Charts of the same days drawn one under another: one name for all of
+     * them shows the pointer's day in each, and each one an `id` of its own.
+     * They must share `valueAxisWidth` too, or their columns do not line up. */
+    group?: string;
+    id?: string;
+    /** The value axis's labels at this width, whatever their figures. */
+    valueAxisWidth?: number;
   }>(),
-  { ends: () => [], legend: true, shares: false },
+  {
+    ends: () => [],
+    legend: true,
+    shares: false,
+    height: 340,
+    dateAxis: true,
+    group: undefined,
+    id: undefined,
+    valueAxisWidth: undefined,
+  },
 );
 
 /** Past this many columns a value on every cap is noise rather than a label. */
@@ -185,11 +208,16 @@ const options = computed(() => {
       type: "bar",
       stacked: true,
       ...(props.shares ? { stackType: "100%" } : {}),
+      ...(props.group ? { group: props.group, id: props.id } : {}),
     },
     colors: props.bands.map((band) => band.color),
     ...barPlotOptions(),
     stroke: { ...barPlotOptions().stroke, width: SEGMENT_GAP_PX },
-    legend: { ...base.legend, show: props.legend },
+    legend: {
+      ...base.legend,
+      show: props.legend !== false,
+      ...(props.legend === "top" ? { position: "top" as const } : {}),
+    },
     // Only where it is needed, so a chart whose dates fit is drawn as before.
     ...(lastDateRoom.value
       ? { grid: { ...base.grid, padding: { right: lastDateRoom.value } } }
@@ -221,9 +249,13 @@ const options = computed(() => {
       // other day of a month whether the chart was 1100px wide or 230px.
       labels: {
         ...base.xaxis.labels,
+        ...(props.dateAxis
+          ? {}
+          : { style: { ...base.xaxis.labels.style, colors: "transparent" } }),
         rotate: 0,
         formatter: everyNthDayLabel(props.dates.length, labelStep.value),
       },
+      axisTicks: { ...base.xaxis.axisTicks, show: props.dateAxis },
     },
     yaxis: {
       ...base.yaxis,
@@ -232,6 +264,7 @@ const options = computed(() => {
       forceNiceScale: true,
       labels: {
         ...base.yaxis.labels,
+        ...(props.valueAxisWidth ? { minWidth: props.valueAxisWidth } : {}),
         formatter: (value: number) =>
           props.shares ? `${Math.round(value)}%` : String(Math.round(value)),
       },

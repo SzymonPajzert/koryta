@@ -73,10 +73,8 @@
 
     <StatsContributorTable
       class="mb-4"
-      :contributors="activity?.contributors ?? []"
+      :rankings="activity?.rankings ?? null"
       :identified="activity?.identified ?? false"
-      :contributor-count="activity?.contributorCount ?? 0"
-      :self="activity?.self ?? null"
       :signed-in="!!user"
       :profile-public="profilePublic"
       :window-days="days"
@@ -283,13 +281,18 @@ import {
   activityKindDescriptions,
   activityRanges,
   defaultActivityRange,
+  totalChanges,
   type ActivityRange,
 } from "~~/shared/activity";
 import type { DatabaseStats } from "~~/server/api/stats/database.get";
 import type { ActivityStats } from "~~/server/api/stats/activity.get";
 import { publicProfileEnabled } from "~~/shared/profile";
 import { authRequest, useAuthState } from "~/composables/auth";
-import { polishCounting, polishNumber } from "~/composables/polish";
+import {
+  polishCounting,
+  polishCountingGenitive,
+  polishNumber,
+} from "~/composables/polish";
 import { foldAutomaticPublications } from "~/utils/activityAutomatic";
 import {
   activityColors,
@@ -502,19 +505,23 @@ const AUTOMATIC_TOOLTIP =
   "Wliczamy też strony, które serwis opublikował sam: czytelnicy odczytali z oświadczenia majątkowego tę samą datę urodzenia, która jest na stronie osoby. Nie są niczyją zmianą, więc nie liczą się do rankingu.";
 
 /** The tiles and the timeline count the automation's publications in
- * „Opublikowane osoby”; the ranking, which reads the response's own
- * contributors, never does. */
+ * „Opublikowane osoby”; the rankings, which read the response's own,
+ * never do. */
 const folded = computed(() =>
   activity.value ? foldAutomaticPublications(activity.value) : null,
 );
 
 /** One tile per interaction kind — the direct answer to "jakie zmiany", in the
- * same colours the timeline stacks them in. Under „Opublikowane osoby”, how
- * many of them the automation published, where it published any. */
+ * same colours the timeline draws them in. Under „Opublikowane osoby”, how
+ * many of them the automation published, where it published any. The kinds
+ * that change the data as shares of the changes; readings, apart from them as
+ * on the chart and in the ranking, with how many people read. */
 const activityTiles = computed(() => {
   const stats = folded.value;
   const automatic = activity.value?.automatic ?? 0;
   if (!stats) return [];
+  const changes = totalChanges(stats.totals);
+  const readers = activity.value?.rankings.readings.count ?? 0;
   return activityKinds.map((kind) => {
     const byAutomation = kind === "publication" && automatic > 0;
     return {
@@ -522,7 +529,9 @@ const activityTiles = computed(() => {
       value: stats.totals[kind],
       hint: byAutomation
         ? `w tym ${polishNumber(automatic)} automatycznie`
-        : formatPercent(stats.totals[kind], stats.total),
+        : kind === "reading"
+          ? `od ${polishCountingGenitive(readers, "osoby", "osób")}`
+          : formatPercent(stats.totals[kind], changes),
       tooltip: byAutomation
         ? `${activityKindDescriptions[kind]} ${AUTOMATIC_TOOLTIP}`
         : activityKindDescriptions[kind],

@@ -40,9 +40,10 @@ function stats(overrides: Partial<ActivityStats> = {}): ActivityStats {
     total: 1773,
     daily,
     contributorCount: 9,
-    contributors: [],
-    namedCount: 0,
-    self: null,
+    rankings: {
+      changes: { count: 0, rows: [], self: null },
+      readings: { count: 0, rows: [], self: null },
+    },
     truncated: [],
     automatic: 0,
     ...overrides,
@@ -118,7 +119,7 @@ describe("ActivityMonthChart", () => {
     const wrapper = await mountCard();
 
     expect(wrapper.find(".d-sr-only").text()).toBe(
-      "Najwięcej zmian było niedz., 13 wrz: 253.",
+      "Najwięcej działań było niedz., 13 wrz: 253.",
     );
   });
 
@@ -140,7 +141,7 @@ describe("ActivityMonthChart", () => {
     mockAuthRequest.mockResolvedValue({ ...quiet, total: 0 });
     const wrapper = await mountCard();
 
-    expect(wrapper.text()).toContain("W tym okresie nikt nic nie zmieniał.");
+    expect(wrapper.text()).toContain("W tym okresie nikt nic nie zrobił.");
     expect(wrapper.find("apexchart-stub").exists()).toBe(false);
   });
 

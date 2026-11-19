@@ -19,7 +19,9 @@
     <!-- Whom the reader found is known in the browser only, where the token
          is: the server render draws the title and a placeholder. -->
     <ClientOnly>
-      <p v-if="finds && finds.total > 0" class="of-lead">
+      <!-- What one reader found, then on a line of its own what everybody
+           read, at the top of the page (decision on 2026-11-19). -->
+      <p v-if="state !== 'loading' && finds && finds.total > 0" class="of-lead">
         Dzięki Twoim odczytom znaleziono
         <strong>{{ polishNumber(finds.total) }}</strong>
         {{ plural(finds.total, "osobę", "osoby", "osób") }}.
@@ -28,6 +30,16 @@
         <template v-if="finds.total > FOUND_LIST_LIMIT">
           Pokazujemy ostatnie {{ polishNumber(finds.people.length) }}.
         </template>
+      </p>
+      <p
+        v-if="state !== 'loading'"
+        class="of-lead"
+        data-testid="declaration-stats-link"
+      >
+        Ile wycinków odczytali wszyscy razem, zobaczysz w
+        <NuxtLink to="/eksploruj/statystyki" class="text-ink-info"
+          >statystykach</NuxtLink
+        >.
       </p>
 
       <div class="of-work">
@@ -125,18 +137,6 @@
         </div>
       </template>
     </ClientOnly>
-
-    <!-- What one reader found, then what everybody read: the same line as at
-         the foot of /oswiadczenia, outside ClientOnly so the server render
-         carries it. -->
-    <footer class="of-more">
-      <p data-testid="declaration-stats-link">
-        Ile wycinków odczytali wszyscy razem, zobaczysz w statystykach -
-        <NuxtLink to="/eksploruj/statystyki" class="text-ink-info"
-          >koryta.pl/eksploruj/statystyki</NuxtLink
-        >.
-      </p>
-    </footer>
   </div>
 </template>
 
@@ -267,6 +267,10 @@ onMounted(async () => {
   text-wrap: pretty;
 }
 
+.of-lead + .of-lead {
+  margin-top: 4px;
+}
+
 .of-lead strong {
   color: rgb(var(--v-theme-ink-strong));
   font-variant-numeric: tabular-nums;
@@ -355,21 +359,6 @@ onMounted(async () => {
 
 .of-action {
   letter-spacing: 0.01em;
-}
-
-/* The foot of the page, ruled off as on /oswiadczenia. */
-.of-more {
-  border-top: 1px solid rgba(var(--v-border-color), 0.12);
-  color: rgb(var(--v-theme-ink-neutral));
-  font-size: 0.9375rem;
-  line-height: 1.5;
-  margin: 40px 0 0;
-  padding-top: 16px;
-  text-wrap: pretty;
-}
-
-.of-more p {
-  margin: 0;
 }
 
 .of-empty {

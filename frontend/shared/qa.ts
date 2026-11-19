@@ -60,15 +60,15 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
 export const QA_ITEMS: QaItem[] = [
   {
     id: "odczyty-oswiadczen-w-statystykach",
-    title: "Odczyty z /oswiadczenia liczą się w statystykach",
+    title: "Skany z /oswiadczenia w statystykach, osobno od zmian",
     description:
-      "Statystyki liczą teraz piąty rodzaj pracy, „Odczyt oświadczenia”: każdy wycinek odczytany na /oswiadczenia przez zalogowaną osobę, bez pominiętych. Jest w kafelkach, na wykresie dni, w rankingu i w podsumowaniu miesiąca na /aktywnosc. Odczyty bez konta liczą się, gdy przejmie je konto, w dniu przejęcia. /oswiadczenia i /oswiadczenia/znalezione mają na dole link do statystyk.",
+      "Statystyki liczą teraz skany oświadczeń odczytane na /oswiadczenia, osobno od zmian w danych: mają swój kafelek, swój pasek pod wykresem dni i zakładkę „Skany” w rankingu, otwieraną jako pierwszą. Liczą się skany zalogowanych, bez pominiętych; skany bez konta dochodzą, gdy przejmie je konto. Podsumowanie miesiąca na /aktywnosc liczy działania, skany razem ze zmianami.",
     steps: [
       "Zaloguj się i odczytaj kilka wycinków na /oswiadczenia, jeden pomiń.",
-      "Na dole /oswiadczenia kliknij koryta.pl/eksploruj/statystyki: kafelek „Odczyt oświadczenia” liczy Twoje odczyty bez pominiętego, a Ty jesteś w rankingu z tą liczbą w kolumnie „Odczyt oświadczenia”.",
-      "Kliknij kafelek „Odczyt oświadczenia”: wraca na /oswiadczenia.",
-      "Na /oswiadczenia/znalezione na dole jest ten sam link do statystyk.",
-      "Bez logowania odczytaj wycinek w innej przeglądarce: liczby w statystykach się nie zmieniają. Zaloguj się tam: odczyt dochodzi do dzisiejszego dnia.",
+      "Na /eksploruj/statystyki ranking otwiera się na „Skany”: jesteś tam z liczbą odczytów bez pominiętego. „Zmiany” to ranking ocen, propozycji, źródeł i publikacji.",
+      "Pod wykresem „Co się działo w bazie” skany mają swój pasek z własną skalą. Kafelek „Odczyt oświadczenia” prowadzi na /oswiadczenia.",
+      "Na /oswiadczenia/znalezione pod liczbą znalezionych osób jest link do statystyk.",
+      "Bez logowania odczytaj wycinek w innej przeglądarce: liczby się nie zmieniają. Zaloguj się tam: odczyt dochodzi do dzisiejszego dnia.",
     ],
     link: "/eksploruj/statystyki",
     area: "public",

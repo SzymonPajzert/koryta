@@ -84,7 +84,7 @@ function dayTooltip(daily: MonthDay[]) {
     return (
       `<div class="amc-tip">` +
       `<div>${fullDayLabel(day.date)}</div>` +
-      `<div class="amc-tip__total">${polishCountingGrouped(day.total, "zmiana", "zmiany", "zmian")}</div>` +
+      `<div class="amc-tip__total">${polishCountingGrouped(day.total, "działanie", "działania", "działań")}</div>` +
       `<ul class="amc-tip__kinds">${kinds}</ul>` +
       `</div>`
     );

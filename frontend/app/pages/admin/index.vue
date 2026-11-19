@@ -369,9 +369,8 @@
     </div>
 
     <StatsContributorTable
-      :contributors="weekly?.contributors ?? []"
+      :rankings="weekly?.rankings ?? null"
       :identified="weekly?.identified ?? false"
-      :contributor-count="weekly?.contributorCount ?? 0"
       :window-days="WEEKLY_DAYS"
       :loading="pending"
     />

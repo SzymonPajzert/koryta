@@ -96,7 +96,7 @@ describe("month chart options", () => {
     const html = tooltip({ dataPointIndex: 29 });
 
     expect(html).toContain("czw., 24 wrz");
-    expect(html).toContain("1253 zmiany");
+    expect(html).toContain("1253 działania");
     expect(html).toContain("<span>Propozycja zmiany</span><b>1162</b>");
     expect(html).toContain("<span>Ocena</span><b>12</b>");
     expect(tooltip({ dataPointIndex: 30 })).toBe("");
