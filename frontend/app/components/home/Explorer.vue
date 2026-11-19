@@ -36,7 +36,7 @@
         <v-tabs-window :model-value="tab">
           <v-tabs-window-item value="map">
             <HomeHeading title="Mapa koryciarstwa" center />
-            <ChartPolandMap @click="pickRegion" />
+            <ChartPolandMap :picked="region" @click="pickRegion" />
           </v-tabs-window-item>
           <v-tabs-window-item value="graph">
             <HomeHeading title="Zmiany na stanowiskach" center />
@@ -93,7 +93,11 @@
           v-if="tab === 'oswiadczenia' && people"
           :people="people"
         />
-        <CardPeopleList v-show="tab === 'map'" :region="region" />
+        <CardPeopleList
+          v-show="tab === 'map'"
+          :region="region"
+          @close="region = undefined"
+        />
       </v-col>
     </v-row>
   </v-container>
@@ -269,6 +273,11 @@ function countSwitch(value: unknown) {
  * a long breakdown but a legitimate one, and it is the only place the site
  * would learn which parts of the country people look for. */
 function pickRegion(picked: Powiat) {
+  // A second click on the picked powiat unpicks it.
+  if (region.value?.teryt === picked.teryt) {
+    region.value = undefined;
+    return;
+  }
   region.value = picked;
   trackGoal("home-explorer:pick", { panel: "map", value: picked.teryt });
 }

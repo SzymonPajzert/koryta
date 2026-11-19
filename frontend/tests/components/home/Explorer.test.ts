@@ -1,3 +1,4 @@
+import { nextTick } from "vue";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushPromises } from "@vue/test-utils";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
@@ -289,6 +290,39 @@ describe("HomeExplorer", () => {
 
     expect(underlined(wrapper)).toEqual(["Stanowiska", "Stanowiska"]);
     expect(wrapper.text()).toContain("Zmiany na stanowiskach");
+  });
+
+  describe("the picked powiat", () => {
+    const powiat = { teryt: "211", d: "M 0 0", name: "Powiat lubiński" };
+    const picked = (wrapper: Awaited<ReturnType<typeof mount>>) => ({
+      map: wrapper.findComponent({ name: "ChartPolandMap" }).props("picked"),
+      card: wrapper.findComponent({ name: "CardPeopleList" }).props("region"),
+    });
+
+    it("is unpicked by a second click on it", async () => {
+      const wrapper = await mount();
+      const map = wrapper.findComponent({ name: "ChartPolandMap" });
+
+      map.vm.$emit("click", powiat);
+      await nextTick();
+      expect(picked(wrapper)).toEqual({ map: powiat, card: powiat });
+
+      map.vm.$emit("click", powiat);
+      await nextTick();
+      expect(picked(wrapper)).toEqual({ map: undefined, card: undefined });
+    });
+
+    it("is unpicked by the card's close button", async () => {
+      const wrapper = await mount();
+      wrapper
+        .findComponent({ name: "ChartPolandMap" })
+        .vm.$emit("click", powiat);
+      await nextTick();
+
+      wrapper.findComponent({ name: "CardPeopleList" }).vm.$emit("close");
+      await nextTick();
+      expect(picked(wrapper)).toEqual({ map: undefined, card: undefined });
+    });
   });
 
   describe("a link to a panel", () => {

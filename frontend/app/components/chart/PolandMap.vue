@@ -19,10 +19,14 @@ import {
 } from "~/utils/regionMap";
 import { partyChipPaint, partyColors } from "~~/shared/misc";
 
+const props = defineProps<{
+  /** The powiat whose people the card beside the map lists, outlined so the
+   * list says which patch it belongs to. The explorer holds it: a second
+   * click and the card's close button both unpick it. */
+  picked?: Powiat | null;
+}>();
+
 const hovered = ref<Powiat | null>(null);
-/** The powiat whose people the card beside the map lists: outlined until
- * another is picked, so the list says which patch it belongs to. */
-const picked = ref<Powiat | null>(null);
 
 const { data: regionStats } = authFetch("/api/stats/regions", {
   lazy: true,
@@ -94,9 +98,9 @@ const leaders = computed(() => {
 
 const outlines = computed(() => {
   const drawn = [];
-  if (picked.value)
-    drawn.push({ key: "map-picked", d: picked.value.d, width: 2.5 });
-  if (hovered.value && hovered.value.teryt !== picked.value?.teryt)
+  if (props.picked)
+    drawn.push({ key: "map-picked", d: props.picked.d, width: 2.5 });
+  if (hovered.value && hovered.value.teryt !== props.picked?.teryt)
     drawn.push({ key: "map-hover", d: hovered.value.d, width: 1.5 });
   return drawn;
 });
@@ -140,7 +144,6 @@ onMounted(() => {
 
 const emit = defineEmits(["click", "update:hovered"]);
 const click = (region: Powiat) => {
-  picked.value = region;
   emit("click", region);
 };
 </script>
