@@ -1,16 +1,18 @@
 """The BIP an office's website links to (`website`), and a walk that starts
-from the website: the snippets are the websites' own (11-13)."""
+from the website: the snippets are the websites' own (11-13, 11-18)."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
 from jobs.bip_crawler import website
-from jobs.bip_crawler.people import PeopleOptions, PeopleSearch
+from jobs.bip_crawler.people import PeopleOptions, PeopleSearch, _foreign
 from jobs.bip_crawler.people_list import to_search
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from jobs.bip_crawler.tests.test_people_mode_review import PDF, Web, html, row
+from scrapers.bip.classify import host_of
 from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
 from scrapers.common.ratelimit import HostTokenBucket
@@ -227,9 +229,11 @@ def test_on_a_portal_the_units_own_bip_pages_outweigh_a_host_name():
     ]
 
 
-def test_words_outweigh_a_picture():
-    # Stopnica: both pictures' alt is "Logo Bip"; the council's video archive
-    # says what it is in its aria-label.
+def test_a_pictures_file_name_outweighs_its_alt():
+    # Stopnica: both pictures' alt is "Logo Bip", and the theme's aria-labels
+    # are no link's own words (Czarnocin's says "strony BiP" on its session
+    # videos, 11-18); the BIP's picture is bip-big-3-1.png, the council's video
+    # archive's ic-sesje-rady.svg.
     body = (
         '<a href="https://stopnica.sesja.pl/" target="_blank" aria-label="Łącze '
         'zewnętrzne do transmisji rady"> <img alt="Logo Bip" src="https://umig.'
@@ -335,6 +339,186 @@ def test_a_refresh_says_where_the_page_sends_the_browser():
     assert website.refresh(noscript, "http://a.pl/") == ""
 
 
+def offered(
+    body: str, url: str, names: tuple[str, ...] = (), unit: str = ""
+) -> list[tuple[list[str], bool, bool]]:
+    """The BIPs a page offers: (links, own, also walked)."""
+    found = website.bips(page(body), url, "text/html", SHARED, names, unit)
+    return [(b.links, b.own, b.also) for b in found]
+
+
+def test_a_host_that_says_bip_outranks_a_themes_and_a_vendors_labels():
+    # Czarnocin: the theme gives its session videos on esesja.tv the BIP's
+    # label and alt, and links them first; its 4 were found on its BIP, none
+    # from esesja.tv (11-18).
+    czarnocin = (
+        '<a href="https://esesja.tv/transmisja_na_zywo/1392/rada-gminy-w-czarnocinie'
+        '.htm" target="_blank" aria-label="Łącze zewnętrzne do strony BiP"> <img '
+        'alt="Logo Bip" src="https://czarnocin.com.pl/wp-content/themes/wp-realnet/'
+        'images/ic-sesje-rady.svg" class="h-7"></a>'
+        '<a href="https://bip.czarnocin.com.pl" target="_blank" aria-label="Łącze '
+        'zewnętrzne do strony BiP"> <img alt="Logo Bip" class="h-6" src="https://'
+        'czarnocin.com.pl/wp-content/themes/wp-realnet/images/bip-big-3-1.png"></a>'
+    )
+    assert links(MENU + czarnocin, "https://czarnocin.com.pl/") == [
+        "https://bip.czarnocin.com.pl"
+    ]
+    # Gorzów Śląski: its BIP's logo, and in the footer the vendor's "Strony
+    # www i Biuletyny Informacji Publicznej", which is no BIP at all.
+    gorzow = (
+        '<a href="http://bip.gorzowslaski.pl/"><img src="/assets/gfx/links/bip.svg" '
+        'alt="Biuletyn Informacji Publicznej"></a>'
+        '<a href="https://digitalholding.pl" target="_blank" rel="noopener" '
+        'title="Digital Holding Sp. z o. o. Strony www i Biuletyny Informacji '
+        'Publicznej">Digital Holding sp. z o.o.</a>'
+    )
+    assert [x[0] for x in offered(MENU + gorzow, "https://gorzowslaski.pl/")] == [
+        ["http://bip.gorzowslaski.pl/"]
+    ]
+    # Otwock: its e-Urząd's button is a picture with alt "BIP" too.
+    otwock = (
+        '<a href="https://eurzad.otwock.pl/" target="_blank"><img class="eurzad_img"'
+        ' src="https://otwock.pl/images/button-B.jpg" alt="BIP" /></a>'
+        '<a href="https://bip.otwock.pl/" target="_blank"><img src="https://otwock'
+        '.pl/images/ikony-top-solo-k-01-bip.svg" alt="BIP" /></a>'
+    )
+    assert links(otwock + MENU, "https://www.otwock.pl/") == ["https://bip.otwock.pl/"]
+
+
+def test_another_host_counts_only_where_it_names_the_units_place():
+    # Dzikowiec: a hidden "BIP" menu item left on onet.pl, the vendor's credit
+    # "system BIP", and the website's own BIP pages, where its 3 were found.
+    body = (
+        '<a href="https://gminadzikowiec.pl/5070-urzad-gminy.html" title="menu BIP" '
+        'role="menuitem"> BIP </a>'
+        '<a href="https://onet.pl" title="menu BIP" role="menuitem"> BIP </a>'
+        '<a href="https://pro3w.pl" target="_blank" title="Strony dla JST, system '
+        'BIP, obsługa Rady Miasta i Gminy, System głosowań">PRO3W</a>'
+    )
+    names = ("Urząd Gminy Dzikowiec",)
+    assert offered(MENU + body, "https://gminadzikowiec.pl/", names) == [
+        (["https://gminadzikowiec.pl/5070-urzad-gminy.html"], True, False)
+    ]
+    # Budzyń's page on samorzad.gov.pl: powiat chodzieski's BIP for its legal
+    # aid, a host alone that names another place, is none of Budzyń's.
+    budzyn = (
+        '<a href="https://bip4.wokiss.pl/chodziezp/bip/nieodplatna-pomoc-prawna1.'
+        'html"><img src="/documents/baner.png" alt="Nieodpłatna pomoc prawna"></a>'
+    )
+    url = "https://samorzad.gov.pl/web/gmina-budzyn"
+    assert offered(budzyn, url, ("Urząd Miasta i Gminy Budzyń",)) == []
+
+
+def test_the_places_a_website_and_its_offices_name():
+    dzikowiec = website.place_stems("gminadzikowiec.pl", ["Urząd Gminy Dzikowiec"])
+    assert dzikowiec == {"dziko"}
+    assert not website.names_place("onet.pl", dzikowiec)
+    assert not website.names_place(
+        "esesja.tv", website.place_stems("czarnocin.com.pl", [])
+    )
+    somianka = website.place_stems("somianka.pl", [])
+    assert website.names_place("samorzad.gov.pl/web/gmina-somianka", somianka)
+    # "w Nowym Sączu": four letters of a short word, none of a word many
+    # places share.
+    sacz = website.place_stems("nowosadecki.pl", ["Starostwo Powiatowe w Nowym Sączu"])
+    assert sacz == {"nowos", "sacz"}
+    assert website.names_place("bip.powiat.nowy-sacz.pl", sacz)
+    assert not website.place_stems("", ["Urząd Gminy Wielka Wieś"])
+    # A BIP under the website's own name, whatever it is called.
+    assert website.same_site("bip.csw.pl", "csw.pl")
+    assert website.same_site("bip.elk.gmina.pl", "elk.gmina.pl")
+    assert not website.same_site("ugtr.bip.gov.pl", "trabkiw.ug.gov.pl")
+
+
+def test_a_link_to_a_bips_page_about_itself_stands_for_its_first_page():
+    # Ustroń links its BIP only as "Deklaracja Dostępności": its 5 were found
+    # there, and none since that link was dropped (11-18).
+    body = (
+        '<a href="https://bip.ustron.pl/deklaracja-dostepnosci" >Deklaracja '
+        "Dostępności</a>"
+    )
+    names = ("URZĄD MIASTA USTROŃ",)
+    assert offered(MENU + body, "https://miasto.ustron.pl/", names) == [
+        (["https://bip.ustron.pl/"], False, True)
+    ]
+
+
+def test_the_offices_other_bips_are_walked_too_never_other_bodies():
+    # Trąbki Wielkie: two BIPs of the office's, under the same label, and the
+    # utility's; its 4 were found on the one it links second (11-18).
+    trabki = (
+        '<a href="https://ugtr.ssdip.bip.gov.pl/rada-gminy/rada-gminy-trabki-wielkie'
+        '.html">Rada Gminy</a>'
+        '<a href="https://ugtr.ssdip.bip.gov.pl/oferty-pracy/aktualne-ogloszenia-o-'
+        'prace.html">Oferty Pracy Urzędu Gminy na BIP</a>'
+        '<a href="https://ugtr.bip.gov.pl/"><img src="/images/bip.png" alt="Biuletyn'
+        ' Informacji Publicznej"></a>'
+        '<a href="http://zgkimtrabki.bip.gov.pl/">ZGKiM</a>'
+    )
+    found = offered(
+        trabki + MENU,
+        "https://trabkiw.ug.gov.pl/",
+        ("Urząd Gminy Trąbki Wielkie",),
+        "220408",
+    )
+    assert [(links[0], also) for links, _, also in found] == [
+        (
+            "https://ugtr.ssdip.bip.gov.pl/oferty-pracy/aktualne-ogloszenia-o-prace.html",
+            True,
+        ),
+        ("https://ugtr.bip.gov.pl/", True),
+    ]
+    # Hajnówka: its old BIPs, and the powiat's "st", which is another office.
+    hajnowka = (
+        '<a href="https://bip-ughajnowka.podlaskie.eu/"><img src="/bip.png" alt="BIP">'
+        "</a>"
+        '<a href="https://bip.ug.hajnowka.wrotapodlasia.pl/referendum/">Referendum</a>'
+        '<a href="http://bip.st.hajnowka.wrotapodlasia.pl/bezplatna_pomoc_prawna/">'
+        "Bezpłatna pomoc prawna</a>"
+        '<a href="https://zuk.hajnowka.bip-gmina.pl/">Zakład Usług Komunalnych</a>'
+        '<a href="https://przychodnia-hajnowka.bip.net.pl/">Przychodnia</a>'
+    )
+    found = offered(
+        hajnowka + MENU,
+        "https://www.gmina-hajnowka.pl/",
+        ("Urząd Gminy Hajnówka",),
+        "200506",
+    )
+    assert [(links[0], also) for links, _, also in found] == [
+        ("https://bip-ughajnowka.podlaskie.eu/", True),
+        ("https://bip.ug.hajnowka.wrotapodlasia.pl/referendum/", True),
+        ("http://bip.st.hajnowka.wrotapodlasia.pl/bezplatna_pomoc_prawna/", False),
+        ("https://zuk.hajnowka.bip-gmina.pl/", False),
+        ("https://przychodnia-hajnowka.bip.net.pl/", False),
+    ]
+
+
+def test_an_archive_bip_is_walked_beside_the_current_one_never_first():
+    # Stara Kamienica links its archives in words before its BIP's logo.
+    body = (
+        '<a href="https://starakamienica.archiwum.bip.net.pl/">Archiwalny BIP '
+        "(2018-2021)</a>"
+        '<a href="https://stara-kamienica.bipgmina.pl/">Archiwalny BIP (2008-2018)'
+        "</a>"
+        '<a href="https://starakamienica.bip.net.pl/"><img src="/img/bip.png" '
+        'alt="BIP"></a>'
+    )
+    found = website.bips(
+        page(body + MENU),
+        "https://www.starakamienica.pl/",
+        "text/html",
+        SHARED,
+        ["Urząd Gminy Stara Kamienica"],
+        "020609",
+    )
+    assert [b.archive for b in found] == [True, True, False]
+    assert _foreign(found) == [
+        "https://starakamienica.bip.net.pl/",
+        "https://starakamienica.archiwum.bip.net.pl/",
+        "https://stara-kamienica.bipgmina.pl/",
+    ]
+
+
 # -- walks from a website --------------------------------------------------------
 
 
@@ -353,7 +537,12 @@ class Moved(Web):
 
 
 def walk(
-    tmp_path: Path, web: Web, seeds: dict[str, UnitSeed], rows: list[PersonRow]
+    tmp_path: Path,
+    web: Web,
+    seeds: dict[str, UnitSeed],
+    rows: list[PersonRow],
+    robots_allowed: Callable[[str], bool] = lambda url: True,
+    sitemaps: bool = False,
 ) -> MemoryBipPeopleStore:
     store = MemoryBipPeopleStore()
     search = PeopleSearch(
@@ -361,8 +550,9 @@ def walk(
         cast("BipQueue", FakeFrontier([])),
         LocalBundleStore(tmp_path / "b"),
         seeds,
-        PeopleOptions(workers=1, sitemaps=False),
+        PeopleOptions(workers=1, sitemaps=sitemaps),
         fetch=web.fetch,
+        robots_allowed=robots_allowed,
         limiter=HostTokenBucket(0),
         sleep=lambda s: None,
     )
@@ -467,22 +657,25 @@ def test_a_bip_start_that_sends_the_browser_on_is_followed(tmp_path):
     assert store.outcomes["n"].status == "found"
 
 
-def test_a_bip_that_does_not_answer_gives_way_to_the_one_the_websites_page_links(
-    tmp_path,
-):
+def test_a_bip_that_does_not_answer_is_kept_not_one_another_page_links(tmp_path):
     # Radziłów: an election banner leads to the old Wrota Podlasia BIP, which
-    # answers nothing; the website's own BIP page links the new one.
+    # answers nothing; the website's own BIP page links the new one. Round 1
+    # went on to whatever answered next, and that was another body's BIP as
+    # often (11-13): the walk says unreachable, as it did before.
+    old = (
+        "https://bip-ugradzilow.wrotapodlasia.pl/aktualnosci_1/wybory-prezydenta-rp"
+        "-2025/"
+    )
     bip = "https://bip-ugradzilow.podlaskie.eu"
     sites = {
         "https://radzilow.pl": html(
             "Gmina Radziłów",
             '<a href="https://radzilow.pl/biuletyn-informacji-publicznej/">Biuletyn '
-            "Informacji Publicznej</a>"
-            '<a href="https://bip-ugradzilow.wrotapodlasia.pl/aktualnosci_1/wybory-'
-            'prezydenta-rp-2025/" target="_blank"><img src="https://radzilow.pl/wp-'
-            'content/uploads/2025/01/wybory-prezydent-2025.jpg" alt="Wybory '
-            'Prezydenta RP 2025"></a>',
+            f'Informacji Publicznej</a><a href="{old}" target="_blank"><img src='
+            '"https://radzilow.pl/wp-content/uploads/2025/01/wybory-prezydent-2025.jpg"'
+            ' alt="Wybory Prezydenta RP 2025"></a>',
         ),
+        old: (0, "", b""),
         "https://radzilow.pl/biuletyn-informacji-publicznej": html(
             "Biuletyn Informacji Publicznej – Gmina Radziłów",
             f'<a href="{bip}">/https://bip-ugradzilow.podlaskie.eu/</a>',
@@ -490,11 +683,263 @@ def test_a_bip_that_does_not_answer_gives_way_to_the_one_the_websites_page_links
         bip: html("BIP", f'<a href="{bip}/oswiadczenia">Oświadczenia majątkowe</a>'),
         **declarations(bip, "Grzegorz Chyliński"),
     }
+    web = Web(sites)
     seeds = {"u1": UnitSeed("u1", www_urls=["https://radzilow.pl/"])}
     rows = [row("c", "u1", "Grzegorz", "Chyliński")]
-    store = walk(tmp_path, Web(sites), seeds, rows)
+    store = walk(tmp_path, web, seeds, rows)
+    assert store.units["u1"].roots == [old]
+    assert (store.outcomes["c"].status, store.outcomes["c"].reason) == (
+        "not_found",
+        "unreachable",
+    )
+    assert not any("podlaskie.eu" in call for call in web.calls)
+
+
+def test_a_bip_that_keeps_the_crawler_out_is_kept_never_another_bodys(tmp_path):
+    # Budzyń: its BIP's robots.txt says no to every crawler, and round 1 went on
+    # to powiat chodzieski's BIP, the next its page links, and credited a
+    # powiat councillor's declaration to a gmina councillor of the same surname
+    # (11-13). The walk says robots, as it did before.
+    own = "https://samorzad.gov.pl/web/gmina-budzyn"
+    powiat = "https://bip4.wokiss.pl/chodziezp"
+    sites = {
+        "http://www.budzyn.pl": (
+            200,
+            "text/html",
+            f'<meta http-equiv="refresh" content="0;URL={own}">'.encode(),
+        ),
+        own: html(
+            "Gmina Budzyń",
+            '<a href="https://bip.budzyn.pl/budzyn/">BIP Gminy Budzyń</a>'
+            f'<a href="{powiat}/">BIP Starostwa Powiatowego w Chodzieży</a>',
+        ),
+        f"{powiat}/": html(
+            "BIP Starostwa", f'<a href="{powiat}/oswiadczenia">Oświadczenia</a>'
+        ),
+        **declarations(powiat, "Krzysztof Kaczmarek"),
+    }
+    web = Web(sites)
+    seeds = {
+        "u1": UnitSeed(
+            "u1", www_urls=["http://www.budzyn.pl"], names=["Urząd Gminy Budzyń"]
+        )
+    }
+    rows = [row("k", "u1", "Krzysztof", "Kaczmarek")]
+    store = walk(tmp_path, web, seeds, rows, lambda url: "bip.budzyn.pl" not in url)
+    assert store.units["u1"].roots == ["https://bip.budzyn.pl/budzyn/"]
+    assert (store.outcomes["k"].status, store.outcomes["k"].reason) == (
+        "not_found",
+        "robots",
+    )
+    assert not any("wokiss" in call for call in web.calls)
+
+
+def test_a_bip_that_answers_an_error_is_kept_not_the_website(tmp_path):
+    # Konopiska's BIP answered one 500, and round 1 walked its website instead
+    # (17 found there before, 11-13): an error is for a later run to retry.
+    bip = "https://www.bip.konopiska.akcessnet.net/"
+    sites = {
+        "https://www.konopiska.pl": html(
+            "Gmina Konopiska",
+            f'<a href="{bip}" class="d-block" data-bs-title="Przejdź do BIP"><svg '
+            'class="svg-bip"></svg></a>'
+            f'<a href="{bip}index.php?idg=3&amp;id=17&amp;x=68">Podatki</a>'
+            '<a href="https://www.konopiska.pl/oswiadczenia">Oświadczenia majątkowe '
+            "pracowników</a>",
+        ),
+        bip: (500, "text/html", b"<html>Internal Server Error</html>"),
+        f"{bip}index.php?idg=3&id=17&x=68": (500, "text/html", b"<html></html>"),
+    }
+    web = Web(sites)
+    seeds = {
+        "u1": UnitSeed(
+            "u1", www_urls=["https://www.konopiska.pl"], names=["Urząd Gminy Konopiska"]
+        )
+    }
+    store = walk(tmp_path, web, seeds, [row("n", "u1", "Jan", "Nowak")])
+    assert {host_of(r) for r in store.units["u1"].roots} == {
+        "bip.konopiska.akcessnet.net"
+    }
+    assert (store.outcomes["n"].status, store.outcomes["n"].reason) == (
+        "not_found",
+        "unreachable",
+    )
+    assert "https://www.konopiska.pl/oswiadczenia" not in web.calls
+
+
+def test_a_powiats_own_bip_is_kept_over_its_gminas_by_their_logos(tmp_path):
+    # Powiat sierpecki's website: its BIP under a "bip logo" picture, its
+    # gminas' BIPs under their coats of arms, and round 1 went on to
+    # Szczutowo's when its own did not answer (11-13).
+    bip = "http://www.sierpc.starostwo.gov.pl/"
+    sites = {
+        "https://powiat.sierpc.pl": html(
+            "Powiat Sierpecki",
+            f'<a href="{bip}"><img class="header-images" src="https://powiat.sierpc'
+            '.pl/wp-content/themes/powiat.sierpc.pl/assets/images/bip_logo.png" '
+            'alt="bip logo"></a>'
+            '<a href="http://uggozdowo.bip.org.pl/"><img src="https://powiat.sierpc'
+            '.pl/wp-content/themes/powiat.sierpc.pl/assets/images/gminy/Gozdowo.png"'
+            ' alt=""></a>'
+            '<a href="https://szczutowo.nowybip.pl/"><img src="https://powiat.sierpc'
+            ".pl/wp-content/themes/powiat.sierpc.pl/assets/images/gminy/Szczutowo"
+            '.png" alt=""></a>',
+        ),
+        bip: (0, "", b""),
+        "https://szczutowo.nowybip.pl/": html(
+            "BIP Szczutowo", '<a href="/oswiadczenia">Oświadczenia majątkowe</a>'
+        ),
+        **declarations("https://szczutowo.nowybip.pl", "Jan Nowak"),
+    }
+    web = Web(sites)
+    seeds = {
+        "u1": UnitSeed(
+            "u1",
+            www_urls=["https://powiat.sierpc.pl"],
+            names=["Starostwo Powiatowe w Sierpcu"],
+        )
+    }
+    store = walk(tmp_path, web, seeds, [row("n", "u1", "Jan", "Nowak")])
     assert store.units["u1"].roots == [bip]
-    assert store.outcomes["c"].status == "found"
+    assert store.outcomes["n"].reason == "unreachable"
+    assert not any("szczutowo" in c or "gozdowo" in c for c in web.calls)
+
+
+def test_the_offices_other_bip_is_walked_beside_the_one_it_links_first(tmp_path):
+    # Ustroń's "BiP" leads to its old BIP, which answers nothing; its 5 were
+    # found on the new one, which its website links only as "Deklaracja
+    # Dostępności" (11-18).
+    old = "http://www.ustron.bip.info.pl/"
+    bip = "https://bip.ustron.pl"
+    sites = {
+        "https://miasto.ustron.pl": html(
+            "Urząd Miasta Ustroń",
+            f'<a href="{bip}/deklaracja-dostepnosci" >Deklaracja Dostępności</a>'
+            f'<a href="{old}" target="top">BiP</a>' + MENU,
+        ),
+        old: (0, "", b""),
+        f"{bip}/": html(
+            "BIP Ustroń", f'<a href="{bip}/oswiadczenia">Oświadczenia majątkowe</a>'
+        ),
+        **declarations(bip, "Jan Nowak"),
+    }
+    seeds = {
+        "u1": UnitSeed(
+            "u1", www_urls=["https://miasto.ustron.pl"], names=["URZĄD MIASTA USTROŃ"]
+        )
+    }
+    store = walk(tmp_path, Web(sites), seeds, [row("n", "u1", "Jan", "Nowak")])
+    assert store.units["u1"].roots == [old, f"{bip}/"]
+    assert store.outcomes["n"].status == "found"
+
+
+def test_each_start_hosts_sitemaps_are_read(tmp_path):
+    # Ustroń's walk starts from its old BIP, which answers nothing, and its new
+    # one, whose sitemap names its declarations' pages: only the first start's
+    # were read, and the walk found 0 of 8 where it had found 5 (11-18).
+    old = "http://www.ustron.bip.info.pl/"
+    bip = "https://bip.ustron.pl"
+    page = f"{bip}/artykul/28154-oswiadczenie-majatkowe-radny-pawel-waszek"
+    sites = {
+        "https://miasto.ustron.pl": html(
+            "Urząd Miasta Ustroń",
+            f'<a href="{bip}/deklaracja-dostepnosci">Deklaracja Dostępności</a>'
+            f'<a href="{old}">BiP</a>' + MENU,
+        ),
+        old: (0, "", b""),
+        f"{bip}/": html("BIP Ustroń", '<a href="/aktualnosci">Aktualności</a>'),
+        f"{bip}/robots.txt": (200, "text/plain", f"Sitemap: {bip}/map.xml".encode()),
+        f"{bip}/map.xml": (
+            200,
+            "application/xml",
+            f"<urlset><url><loc>{page}</loc></url></urlset>".encode(),
+        ),
+        page: html(
+            "Oświadczenie majątkowe - radny Paweł Waszek",
+            f'<a href="{bip}/f/1.pdf">radny Paweł Waszek.pdf</a>',
+        ),
+        f"{bip}/f/1.pdf": (200, "application/pdf", PDF + b"waszek"),
+    }
+    web = Web(sites)
+    seeds = {
+        "u1": UnitSeed(
+            "u1", www_urls=["https://miasto.ustron.pl"], names=["URZĄD MIASTA USTROŃ"]
+        )
+    }
+    rows = [row("w", "u1", "Paweł", "Waszek")]
+    store = walk(tmp_path, web, seeds, rows, sitemaps=True)
+    assert store.units["u1"].roots == [old, f"{bip}/"]
+    assert store.outcomes["w"].status == "found"
+    assert f"{bip}/map.xml" in web.calls
+
+
+def test_the_bip_the_websites_own_bip_page_leads_to_is_walked_too(tmp_path):
+    # Bieżuń: its "Biuletyn Informacji Publicznej" page answers 302 to
+    # bip.biezun.pl, where its 2024 declarations are; the link that says
+    # www.bip.biezun.nv.pl is its old BIP's, which answers nothing (11-18).
+    new = "https://bip.biezun.pl"
+    old = "http://www.bip.biezun.nv.pl"
+    own = "https://www.biezun.pl/5,biuletyn-informacji-publicznej"
+    sites = {
+        "https://www.biezun.pl": html(
+            "Bieżuń",
+            f'<a href="{own}">Biuletyn Informacji Publicznej</a>'
+            f'<a href="{old}">www.bip.biezun.nv.pl</a>' + MENU,
+        ),
+        old: (0, "", b""),
+        f"{new}/": html(
+            "BIP Bieżuń", f'<a href="{new}/oswiadczenia">Oświadczenia majątkowe</a>'
+        ),
+        **declarations(new, "Barbara Rogowska"),
+    }
+    web = Moved(sites, {own: f"{new}/"})
+    seeds = {
+        "u1": UnitSeed(
+            "u1",
+            www_urls=["https://www.biezun.pl"],
+            names=["Urząd Miasta i Gminy Bieżuń"],
+        )
+    }
+    store = walk(tmp_path, web, seeds, [row("r", "u1", "Barbara", "Rogowska")])
+    assert store.units["u1"].roots == [f"{new}/", old]
+    assert store.outcomes["r"].status == "found"
+
+
+def test_a_start_that_moved_to_a_shared_host_keeps_to_the_units_path(tmp_path):
+    # Powiat nowosądecki's BIP answers 302 to its path on bip.malopolska.pl,
+    # and the walk took the whole host in, ~100 units' BIPs: a namesake's
+    # declaration in powiat limanowski's could be credited (11-18).
+    own = "https://bip.malopolska.pl/nowosadecki"
+    other = "https://bip.malopolska.pl/limanowski"
+    sites = {
+        "https://www.nowosadecki.pl": html(
+            "Powiat Nowosądecki",
+            '<a href="http://www.bip.powiat.nowy-sacz.pl/" title="Biuletyn Informacji'
+            ' Publicznej"> Biuletyn Informacji Publicznej </a>' + MENU,
+        ),
+        own: html(
+            "BIP Starostwa Powiatowego w Nowym Sączu",
+            f'<a href="{own}/oswiadczenia">Oświadczenia majątkowe</a>'
+            f'<a href="{other}/oswiadczenia">Oświadczenia majątkowe - Powiat '
+            "Limanowski</a>",
+        ),
+        **declarations(own, "Jan Nowak"),
+        **declarations(other, "Ewa Lis"),
+    }
+    web = Moved(sites, {"http://www.bip.powiat.nowy-sacz.pl/": own})
+    seeds = {
+        "u1": UnitSeed(
+            "u1",
+            www_urls=["https://www.nowosadecki.pl"],
+            names=["Starostwo Powiatowe w Nowym Sączu"],
+        ),
+        "u2": UnitSeed("u2", bip_urls=[other], scopes=["bip.malopolska.pl/limanowski"]),
+    }
+    rows = [row("n", "u1", "Jan", "Nowak"), row("l", "u1", "Ewa", "Lis")]
+    store = walk(tmp_path, web, seeds, rows)
+    assert store.outcomes["n"].status == "found"
+    assert store.outcomes["l"].status == "not_found"
+    assert not any("limanowski" in call for call in web.calls)
 
 
 def test_a_website_that_keeps_its_declarations_keeps_its_bip(tmp_path):
@@ -517,6 +962,65 @@ def test_a_website_that_keeps_its_declarations_keeps_its_bip(tmp_path):
     assert store.units["u1"].roots == ["https://www.ugburzenin.pl/bip"]
     assert store.outcomes["l"].status == "found"
     assert not any("powiat-sieradz" in call for call in web.calls)
+
+
+def test_a_bip_section_of_the_website_that_lists_declarations_is_its_bip(tmp_path):
+    # A website's /bip section, linked by a picture and the office's name,
+    # lists its declarations: it is the BIP, not one it links elsewhere.
+    own = "https://gminax.pl/bip"
+    sites = {
+        "https://gminax.pl": html(
+            "Gmina X",
+            f'<a href="{own}/"><img src="/images/herb.png" alt=""></a>'
+            f'<a href="{own}/">Urząd Gminy X</a>' + MENU,
+        ),
+        f"{own}/": html(
+            "BIP Gminy X",
+            f'<a href="{own}/oswiadczenia">Oświadczenia majątkowe</a>'
+            '<a href="https://gminax.e-bip.pl/">Biuletyn Informacji Publicznej</a>',
+        ),
+        **declarations(own, "Ewa Lis"),
+    }
+    web = Web(sites)
+    seeds = {"u1": UnitSeed("u1", www_urls=["https://gminax.pl"])}
+    store = walk(tmp_path, web, seeds, [row("l", "u1", "Ewa", "Lis")])
+    assert store.units["u1"].roots == [f"{own}/"]
+    assert store.outcomes["l"].status == "found"
+    assert not any("e-bip.pl" in call for call in web.calls)
+
+
+def test_an_archive_bip_is_never_the_one_a_website_starts_from(tmp_path):
+    # Rybno: its /bip/ section links e-bip.pl as "Archiwum BIP", and round 1
+    # walked that; the councillors' declarations are in the section, two
+    # levels down (5 found from the website before, 11-18).
+    own = "https://gminarybno.com/bip"
+    sites = {
+        "https://gminarybno.com": html(
+            "Gmina Rybno",
+            f'<a href="{own}/"><img src="/images/herb.png" alt=""></a>'
+            f'<a href="{own}/">Urząd Gminy Rybno</a>' + MENU,
+        ),
+        f"{own}/": html(
+            "Strona główna - Gmina Rybno",
+            f'<a href="{own}/organy">Organy władzy samorządowej</a>'
+            '<a href="http://e-bip.pl/Start/23334">Archiwum BIP</a>',
+        ),
+        f"{own}/organy": html(
+            "Organy władzy samorządowej",
+            f'<a href="{own}/oswiadczenia">Oświadczenia majątkowe</a>',
+        ),
+        **declarations(own, "Sylwia Feliga"),
+    }
+    web = Web(sites)
+    seeds = {
+        "u1": UnitSeed(
+            "u1", www_urls=["https://gminarybno.com"], names=["Urząd Gminy Rybno"]
+        )
+    }
+    store = walk(tmp_path, web, seeds, [row("f", "u1", "Sylwia", "Feliga")])
+    assert store.units["u1"].roots == ["https://gminarybno.com"]
+    assert store.outcomes["f"].status == "found"
+    assert not any("e-bip.pl" in call for call in web.calls)
 
 
 def test_a_link_that_says_bip_and_leads_off_the_website_is_its_bip(tmp_path):

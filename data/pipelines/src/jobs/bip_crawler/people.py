@@ -919,7 +919,7 @@ class PeopleSearch:
                 continue
             if not result.ok or not self._is_page(result):
                 continue
-            roots.extend(self._website_bip(result))
+            roots.extend(self._website_bip(result, seed))
         roots = list(dict.fromkeys(roots))[:3]
         scopes = [_split_scope(scope_of(r, self.shared_hosts)) for r in roots]
         return roots, scopes, "" if roots else reason
@@ -937,21 +937,32 @@ class PeopleSearch:
             result = self._get(sent)
         return result
 
-    def _website_bip(self, page: HttpResult) -> list[str]:
+    def _website_bip(self, page: HttpResult, seed: UnitSeed) -> list[str]:
         """Where a website's walk starts: the website itself when its host says
-        BIP; else the first BIP of another host it links that answers
-        (`website.bips`); else one its own BIP pages link, or with none of
-        those the pages a level down (`website.inner_links`); else its own BIP
-        pages, or the website: some offices keep the BIP on it."""
+        BIP; else the BIP of another host it links first (`website.bips`),
+        whether it answers or not, so the walk says robots, unreachable or
+        throttled as it did before round 1 (11-18), with the office's other
+        BIPs it links (`_foreign`) and the one its own BIP page leads to;
+        else one its own BIP pages link, or with none of those the pages a
+        level down (`website.inner_links`); else its own BIP pages, or the
+        website: some offices keep the BIP on it."""
         home = host_of(page.url)
         if website.bip_host(home):
             return [page.url]
-        bips = website.bips(
-            page.content, page.url, page.content_type, self.shared_hosts
-        )
-        if found := self._answering(bips):
-            return found
+        bips = self._bips(page, seed)
         own = next((b.links for b in bips if b.own), [])
+        if found := _foreign(bips):
+            # The BIP the website's own BIP page leads to is the one the
+            # website itself names: Bieżuń's /5,biuletyn-informacji-publicznej
+            # answers 302 to bip.biezun.pl, where its 2024 declarations are,
+            # and the link that says www.bip.biezun.nv.pl is its old BIP's,
+            # which answers nothing (11-18).
+            page_url = normalize_url(page.url)
+            first = next((u for u in own if normalize_url(u) != page_url), "")
+            sent = self._leaves(first, home) if first else ""
+            if sent and host_of(sent) not in {host_of(u) for u in found}:
+                return [sent, *found][:3]
+            return found
         below = [(u, True) for u in own[: website.INNER_PAGES]] or website.inner_links(
             page.content, page.url, page.content_type, self.shared_hosts
         )
@@ -959,42 +970,41 @@ class PeopleSearch:
             result = self._get(url)
             if isinstance(result, str) or not result.ok or not self._is_page(result):
                 continue
-            there = host_of(result.url)
-            if there != home:
+            if host_of(result.url) != home:
                 # A link that says BIP and leads off the website is the BIP's:
                 # powiat kościański's banner /blue.php?id=103 answers 302 to
                 # bip3.wokiss.pl/koscianp/.
-                if (
-                    says
-                    and there not in website.NOT_A_UNITS_BIP
-                    and not website.OTHER_BODY.search(there)
-                ):
+                if says and _elsewhere(result.url, home):
                     return [result.url]
                 continue
-            if own and website.keeps_declarations(
+            # A page of the website's own BIP, by its link's words or address,
+            # that lists its declarations is its BIP, whatever BIP else it
+            # links: Burzenin's /bip (11-13).
+            if says and website.keeps_declarations(
                 result.content, result.url, result.content_type
             ):
-                break
-            found = self._answering(
-                website.bips(
-                    result.content, result.url, result.content_type, self.shared_hosts
-                )
-            )
-            if found:
+                return own or [result.url]
+            if found := _foreign(self._bips(result, seed)):
                 return found
         return own or [page.url]
 
-    def _answering(self, bips: list[website.Bip]) -> list[str]:
-        """The links of the first BIP of another host that answers: Radziłów's
-        website links an article on bip-ugradzilow.wrotapodlasia.pl, which no
-        longer does, and its BIP page bip-ugradzilow.podlaskie.eu."""
-        for bip in bips:
-            if bip.own:
-                continue
-            answer = self._get(bip.links[0])
-            if isinstance(answer, HttpResult) and answer.ok and self._is_page(answer):
-                return bip.links
-        return []
+    def _leaves(self, url: str, home: str) -> str:
+        """Where a page of the website ``url`` leads off it (`_elsewhere`), ""
+        when it answers no page or stays."""
+        result = self._get(url)
+        if isinstance(result, str) or not result.ok or not self._is_page(result):
+            return ""
+        return result.url if _elsewhere(result.url, home) else ""
+
+    def _bips(self, page: HttpResult, seed: UnitSeed) -> list[website.Bip]:
+        return website.bips(
+            page.content,
+            page.url,
+            page.content_type,
+            self.shared_hosts,
+            seed.names,
+            seed.unit,
+        )
 
     def _budget(self, candidacies: int) -> int:
         """Pages a unit's walk may read (see `PeopleOptions.unit_pages`)."""
@@ -1075,11 +1085,16 @@ class PeopleSearch:
                 [u for h, _ in frontier.scopes for u in self.known.get(h, ())],
             )
         ]
-        if self.options.sitemaps and roots:
+        # Each start host's sitemaps, not the first's alone: Ustroń's walk starts
+        # from its old BIP, which answers nothing, beside its new one (11-18).
+        firsts: dict[str, str] = {}
+        for root in roots:
+            firsts.setdefault(host_of(root), root)
+        for root in firsts.values() if self.options.sitemaps else ():
             try:
-                sources.append(("sitemap", self._sitemap_urls(roots[0])))
+                sources.append(("sitemap", self._sitemap_urls(root)))
             except Exception:  # noqa: BLE001 - an optional step fails alone
-                logger.warning("unit %s: sitemaps of %s failed", out.unit, roots[0])
+                logger.warning("unit %s: sitemaps of %s failed", out.unit, root)
         for source, urls in sources:
             files: list[LinkContext] = []
             for url in dict.fromkeys(urls):
@@ -1448,8 +1463,11 @@ class PeopleSearch:
     def _sent_on(self, frontier: _Frontier, page: HttpResult, depth: int) -> None:
         """Where a page sends the browser on, brought into the walk."""
         if depth == 0:
-            # A start page that redirected elsewhere brings its host into scope.
-            frontier.adopt(host_of(page.url))
+            # A start page that redirected elsewhere brings where it went into
+            # scope, a shared host's unit path alone: powiat nowosądecki's
+            # www.bip.powiat.nowy-sacz.pl answers 302 to bip.malopolska.pl's
+            # /nowosadecki, a host of ~100 units' BIPs (11-18).
+            frontier.adopt(*_split_scope(scope_of(page.url, self.shared_hosts)))
             # One that sends the browser on with a <meta> refresh, where it
             # sends it (`website.refresh`): a shared host's unit path only.
             if sent := website.refresh(page.content, page.url):
@@ -1458,7 +1476,7 @@ class PeopleSearch:
         # A frameset is a redirect too: Świdnica's BIP, www.bip.um.swidnica.pl,
         # is one <frame> of bip.swidnica.nv.pl (11-05: one page read, nothing).
         for frame in _frames(page.content, page.url):
-            frontier.adopt(host_of(frame))
+            frontier.adopt(*_split_scope(scope_of(frame, self.shared_hosts)))
             frontier.add(normalize_url(frame), 100.0, depth, frame)
 
     def _read_eurzad(
@@ -1862,6 +1880,32 @@ def server_of(host: str) -> str:
     except (OSError, UnicodeError):
         return host
     return str(info[0][4][0]) if info else host
+
+
+def _elsewhere(url: str, home: str) -> bool:
+    """Whether ``url`` is off the website ``home`` and may be a unit's BIP: no
+    portal of every BIP's, no other body's (`website.OTHER_BODY`)."""
+    there = host_of(url)
+    return (
+        there != home
+        and there not in website.NOT_A_UNITS_BIP
+        and not website.OTHER_BODY.search(there)
+    )
+
+
+def _foreign(bips: list[website.Bip]) -> list[str]:
+    """The links of the first BIP of another host than the website's own that
+    is no archive, and the first of each other BIP of the office's it links
+    (`website.Bip.also`), three at most: Ustroń's "BiP" leads to its old BIP,
+    which answers nothing, and its 5 were found on the new one, which it links
+    only as "Deklaracja Dostępności"; Rogów's, Oborniki's and Brudzew's on the
+    one they link second (11-18)."""
+    foreign = [b for b in bips if not b.own]
+    top = next((b for b in foreign if not b.archive), None)
+    if top is None:
+        return []
+    also = [b.links[0] for b in foreign if b is not top and b.also][:2]
+    return top.links[: 3 - len(also)] + also
 
 
 def _split_scope(scope: str) -> tuple[str, str]:
