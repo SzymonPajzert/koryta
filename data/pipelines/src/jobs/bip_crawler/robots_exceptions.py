@@ -237,6 +237,14 @@ SITES: dict[str, str] = {
         "powiat kolbuszowski (old BIP archive): Disallow: / to all, 26 candidacies"
     ),
     "bip.lubenia.pl": "Lubenia: Disallow: / to all, 7 candidacies",
+    # 11-13, round 2: walks past these found what robots.txt kept out:
+    # Lubliniec 7 of 7, Sulejówek 9 of 11, Skwierzyna 3 of 4, Opalenica 3 of 4,
+    # Budzyń 1 of 1.
+    "lubliniec.bip.info.pl": "Lubliniec: search engines only, 7 candidacies",
+    "bip.sulejowek.pl": "Sulejówek: Disallow: / to all, 11 candidacies",
+    "bip.skwierzyna.pl": "Skwierzyna: Disallow: / to all, 4 candidacies",
+    "bip.opalenica.pl": "Opalenica: Disallow: / to all, 4 candidacies",
+    "bip.budzyn.pl": "Budzyń: Disallow: / to all, 1 candidacy",
 }
 
 
