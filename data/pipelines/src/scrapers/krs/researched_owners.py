@@ -1049,11 +1049,6 @@ PUBLIC_MEMBERS: dict[str, Members] = {
         "medical entities the Mazowieckie voivodeship owns",
         "https://www.pfsz.org/szpitalne-organizacje-partnerskie/",
     ),
-    # ZWIĄZEK PRACODAWCÓW-MAZOWIECKIE POROZUMIENIE SZPITALI POWIATOWYCH
-    "0000254858": Members(
-        "powiat-owned hospitals of Mazowieckie",
-        "https://ozpsp.pl/czlonkowie/mazowieckie",
-    ),
     "0000040079": Members(  # ZWIĄZEK REGIONALNYCH PORTÓW LOTNICZYCH
         "11 regional airport companies, owned by voivodeships, cities and PPL",
         "https://rejestr.io/krs/40079/zwiazek-regionalnych-portow-lotniczych",
@@ -1062,6 +1057,436 @@ PUBLIC_MEMBERS: dict[str, Members] = {
     "0000049893": Members(
         "about 51 municipal water companies of Dolnośląskie and Dresden's",
         "https://www.kierunekwodkan.pl/konferencja,2318,108690.html",
+    ),
+    # Checked on 2026-11-19 by the likely-public read: every ordinary member
+    # a public body, as the statute or the members list says.
+    # STOWARZYSZENIE GMIN I POWIATÓW MAŁOPOLSKI
+    "0000182275": Members(
+        (
+            "94 gminas and 7 powiats of historical Małopolska; statute §7: an ordinary "
+            "member can only be a gmina, powiat or województwo"
+        ),
+        "https://sgpm.krakow.pl/",
+    ),
+    # EUROREGION NYSA
+    "0000055755": Members(
+        "46 members: 39 gminas, 6 powiats and the Dolnośląskie województwo",
+        "https://www.euroregion-nysa.pl/index.php/pl/start-pln/gminy-czlonkowskie",
+    ),
+    # STOWARZYSZENIE GMIN POLSKICH EUROREGIONU POMERANIA
+    "0000005393": Members(
+        (
+            "92 gminas and powiats of zachodniopomorskie; statute §10.1: an ordinary "
+            "member can only be a gmina or powiat of that województwo"
+        ),
+        "https://pomerania.org.pl/?page_id=460",
+    ),
+    # STOWARZYSZENIE GMIN UZDROWISKOWYCH RZECZPOSPOLITEJ POLSKIEJ
+    "0000136278": Members(
+        (
+            "47 spa and resort gminas (Krynica-Zdrój, Ciechocinek, Kołobrzeg, Sopot, "
+            "Kraków...); statute §4.1: ordinary members are gminas"
+        ),
+        "http://sgurp.pl/pl/1028/0/czlonkowie.html",
+    ),
+    # STOWARZYSZENIE GMIN I POWIATÓW "DOLNOŚLĄSKA KRAINA ROWEROWA"
+    "0000098618": Members(
+        "14 gminas and 2 powiats (milicki, trzebnicki)",
+        "http://dolnoslaskakrainarowerowa.pl/o-nas",
+    ),
+    # STOWARZYSZENIE GMIN POLSKICH EUROREGIONU GLACENSIS
+    "0000094436": Members(
+        (
+            "38: 34 gminas and 4 powiats; statute: 'Członkiem zwyczajnym może być każda"
+            " gmina'"
+        ),
+        "https://euroregion-glacensis.ng.pl/37",
+    ),
+    # KONWENT WSPÓŁPRACY SAMORZĄDOWEJ POLSKA-UKRAINA
+    "0000372491": Members(
+        (
+            "26 local governments of every level; statute §9-10: ordinary members can "
+            "only be Polish local government units"
+        ),
+        (
+            "https://bip.gmina.kolobrzeg.pl/fileadmin/bip_files/ugkolobrzeg/statut_KWSP"
+            "U_.pdf"
+        ),
+    ),
+    # STOWARZYSZENIE GMIN POLSKA SIEĆ ENERGIE CITES
+    "0000129013": Members(
+        (
+            "40 cities and gminas (Warszawa, Bydgoszcz, Bielsko-Biała, Konin, Zamość, "
+            "Żory...), Metropolia Bydgoszcz and a Lithuanian gmina; statute..."
+        ),
+        "https://www.pnec.org.pl/pl/stowarzyszenie/czlonkowie-zwyczajni",
+    ),
+    # STOWARZYSZENIE "METROPOLIA WARSZAWA"
+    "0000203026": Members(
+        (
+            "79: 70 gminas including m.st. Warszawa, and 9 powiats; statute §11.1: "
+            "gminas and powiats of the Warsaw capital region"
+        ),
+        "https://sm.waw.pl/gminy-stowarzyszone/",
+    ),
+    # ZWIĄZEK GMIN WIEJSKICH RZECZYPOSPOLITEJ POLSKIEJ
+    "0000088063": Members(
+        (
+            "About 650 rural and urban-rural gminas; statute §10.1: any rural or "
+            "urban-rural gmina"
+        ),
+        "https://www.zgwrp.pl/lista-gmin-czlonkowskich/",
+    ),
+    # STOWARZYSZENIE GMIN POLSKICH EUROREGIONU PRADZIAD
+    "0000036957": Members(
+        (
+            "47: 42 gminas and 5 powiats of Opolskie; statute §11.1: gminas and powiats"
+            " of the Opolskie województwo"
+        ),
+        "https://europradziad.pl/o-euroregionie-pradziad/czlonkowie/gminy-polskie/",
+    ),
+    # ZWIĄZEK GMIN POMORSKICH
+    "0000055250": Members(
+        "Gminas only: 89 in September 2019; statute §9: ordinary members are gminas",
+        (
+            "https://rada.wladyslawowo.pl/pliki/wladyslawowo/zalaczniki/671/zal-nr-1-do"
+            "-iv-65-2024.pdf"
+        ),
+    ),
+    # STOWARZYSZENIE GMIN I POWIATÓW WIELKOPOLSKI
+    "0000062601": Members(
+        (
+            "179: 154 gminas and cities including Poznań, and 25 powiats; statute §8: "
+            "the association groups gminas and powiats"
+        ),
+        "https://sgipw.wlkp.pl/cms/8563/czlonkowie",
+    ),
+    # STOWARZYSZENIE GMIN POLSKICH EUROREGIONU "PRO EUROPA VIADRINA"
+    "0000078219": Members(
+        "28 gminas and 3 powiats of northern Lubuskie; statute §10: gminas and powiats",
+        "https://www.euroregion-viadrina.pl/czlonkowie.html",
+    ),
+    # ZWIĄZEK GMIN I POWIATÓW SUBREGIONU ZACHODNIEGO WOJEWÓDZTWA ŚLĄSKIEGO Z SIEDZIBĄ W
+    # RYBNIKU
+    "0000107150": Members(
+        (
+            "28: 25 gminas and cities and 3 powiats; an ordinary member can only be a "
+            "gmina or powiat of the subregion"
+        ),
+        "https://subregion.pl/stowarzyszenie/czlonkowie/",
+    ),
+    # FEDERACJA REGIONALNYCH ZWIĄZKÓW GMIN I POWIATÓW RP
+    "0000227293": Members(
+        (
+            "18 regional associations of local governments (SGiPM, Związek Gmin "
+            "Pomorskich, SGU RP, PSST, Związek Miast i Gmin Morskich...), together..."
+        ),
+        "https://lubliniec.starostwo.gov.pl/pobierz/309aea457b8f49864e35df8e5263b28f",
+    ),
+    # STOWARZYSZENIE GMIN GÓRNICZYCH W POLSCE
+    "0000041508": Members(
+        (
+            "21 gminas listed as members by a KRS-data aggregator (Bestwina, Bieruń, "
+            "Czerwionka-Leszczyny, Gierałtowice, Pszów, Radlin, Wałbrzych,..."
+        ),
+        "https://krs-pobierz.pl/gmin-gorniczych-w-polsce-i0000041508",
+    ),
+    # STOWARZYSZENIE AGLOMERACJA WROCŁAWSKA
+    "0000476062": Members(
+        (
+            "35 gminas and powiats of the Wrocław agglomeration; statute §8: gminas and"
+            " powiats"
+        ),
+        (
+            "https://www.oborniki-slaskie.pl/sites/default/files/projekt_aglomeracja_wr"
+            "oclawska.pdf"
+        ),
+    ),
+    # STOWARZYSZENIE "EUROREGION NIEMEN"
+    "0000060828": Members(
+        "35: the Podlaskie województwo, 6 powiats, 6 cities and 22 gminas",
+        "https://niemen.org.pl/czlonkowie/",
+    ),
+    # KUJAWSKO-POMORSKIE SAMORZĄDOWE STOWARZYSZENIE SALUTARIS
+    "0000438932": Members(
+        (
+            "108 members, local government units paying per-resident fees (gminas, "
+            "powiats, the województwo)"
+        ),
+        (
+            "https://bip.kujawsko-pomorskie.pl/download/attachment/83667/informacja-o-d"
+            "zialalnosci-kujawsko-pomorskiego-samorzadowego-stowarzyszenia-salutaris.pd"
+            "f"
+        ),
+    ),
+    # ZRZESZENIE GMIN WOJEWÓDZTWA LUBUSKIEGO
+    "0000003707": Members(
+        "all 82 gminas of the Lubuskie voivodeship",
+        (
+            "https://lubuskie.pl/wiadomosci/25046/dialog-i-zintegrowane-dzialania-to-kl"
+            "ucz-do-rozwoju-lubuskiego-.pdf"
+        ),
+    ),
+    # STOWARZYSZENIE POWIATÓW I GMIN DORZECZA BZURY
+    "0000130227": Members(
+        (
+            "powiats and gminas of the Bzura basin; registered statute clause: 'jest "
+            "stowarzyszeniem jednostek samorządu terytorialnego związanych z..."
+        ),
+        "https://rejestr.io/krs/0000130227",
+    ),
+    # STOWARZYSZENIE JEDNOSTEK SAMORZĄDU TERYTORIALNEGO NA RZECZ BUDOWY DRÓG
+    # EKSPRESOWYCH S-8
+    "0000314359": Members(
+        "gminas and powiats along the S-8 and S-14 routes; no list or count found",
+        "https://www.gov.pl/attachment/b25a00be-a04a-4cc1-b6f1-2bf37f9ad849",
+    ),
+    # METROPOLIA POZNAŃ
+    "0000384961": Members(
+        "23 local governments: Miasto Poznań, Powiat Poznański and 21 gminas and towns",
+        "https://www.metropoliapoznan.pl/o-nas",
+    ),
+    # STOWARZYSZENIE AGLOMERACJA KONIŃSKA
+    "0000929270": Members(
+        "16: Miasto Konin, Powiat Koniński and 14 gminas",
+        "https://aglomeracjakoninska.org/o-nas/czlonkowie/",
+    ),
+    # STOWARZYSZENIE GMIN RZECZYPOSPOLITEJ POLSKIEJ REGION KOZŁA
+    "0000164296": Members(
+        "6 gminas: Babimost, Kargowa, Siedlec, Zbąszyń, Zbąszynek, Trzciel",
+        "https://pl.wikipedia.org/wiki/Region_Kozła",
+    ),
+    # STOWARZYSZENIE SĄDECKI OBSZAR FUNKCJONALNY
+    "0000914712": Members(
+        "17: Miasto Nowy Sącz and 16 gminas of powiat nowosądecki",
+        "https://gminagrybow.pl/edc_media/Manager/Projekt-strategii-zit-sof.pdf",
+    ),
+    # STOWARZYSZENIE GMIN "MAŁE TRÓJMIASTO KASZUBSKIE"
+    "0000051326": Members(
+        "3 towns: Wejherowo, Reda, Rumia",
+        "https://pl.wikipedia.org/wiki/Małe_Trójmiasto_Kaszubskie",
+    ),
+    # STOWARZYSZENIE AGLOMERACJA KALISKO-OSTROWSKA
+    "0000547613": Members(
+        (
+            "25 local governments: Kalisz, Ostrów Wielkopolski, 7 urban-rural and 13 "
+            "rural gminas, 3 powiats"
+        ),
+        "https://sako-info.pl/o-nas/czlonkowie/",
+    ),
+    # WIELKOPOLSKI OŚRODEK KSZTAŁCENIA I STUDIÓW SAMORZĄDOWYCH
+    "0000078584": Members(
+        (
+            "279 local governments: 249 gminas from six voivodeships and 30 "
+            "Wielkopolska powiats; statute: ordinary members are local government units"
+        ),
+        "http://www2.wokiss.pl/o-wokiss/",
+    ),
+    # STOWARZYSZENIE GMIN I POWIATÓW ZLEWNI RZEKI JEZIORKI
+    "0000036195": Members(
+        "12: powiats grójecki, piaseczyński, żyrardowski and 9 gminas",
+        (
+            "https://www.konstancinjeziorna.pl/news/zastepczyni-burmistrza-nowa-prezesk"
+            "a-zarzadu-krainy-jeziorki"
+        ),
+    ),
+    # STOWARZYSZENIE ZDROWYCH MIAST POLSKICH
+    "0000196073": Members(
+        "38 cities and gminas; statute § 6: ordinary members are gminas or powiats",
+        "https://www.szmp.pl/staff",
+    ),
+    # STOWARZYSZENIE GORLICKI OBSZAR FUNKCJONALNY
+    "0000930319": Members(
+        (
+            "3 gminas: Miasto Gorlice, Gmina Gorlice, Gmina Sękowa (its founders, "
+            "October 2021)"
+        ),
+        "https://gof.gorlice.pl/o-nas/",
+    ),
+    # ZWIĄZEK MIAST I GMIN NADWIŚLAŃSKICH
+    "0000062847": Members(
+        (
+            "cities on the Vistula, 24 in 2013 (named Związek Miast Nadwiślańskich "
+            "until its statute was rewritten in 2026)"
+        ),
+        (
+            "https://mst-solec-kujawski.arch.rbip.mojregion.info/wp-content/uploads/sit"
+            "es/122/2012/07/statut_ZMN_2012.pdf"
+        ),
+    ),
+    # STOWARZYSZENIE SAMORZĄDÓW POWIATU TOMASZOWSKIEGO
+    "0000064144": Members(
+        (
+            "all local governments of powiat tomaszowski (Lubelskie): the powiat and "
+            "its gminas; founders were Powiat Tomaszowski, Miasto Tomaszów..."
+        ),
+        (
+            "https://www.kronikatygodnia.pl/artykul/56593,jubileusz-stowarzyszenia-samo"
+            "rzadow-powiatu-tomaszowskiego-wspolnie-dzialaja-od-25-lat"
+        ),
+    ),
+    # STOWARZYSZENIE GMIN ZACHODNIEGO MAZOWSZA MAZOVIA
+    "0000211876": Members(
+        (
+            "7 gminas: Błonie, Brwinów, Leszno, Michałowice, Milanówek, Nadarzyn, "
+            "Podkowa Leśna"
+        ),
+        "https://www.brwinow.pl/aktualnosci/839-20-lecie-stowarzyszenia-mazovia.html",
+    ),
+    # STOWARZYSZENIE JEDNOSTEK SAMORZĄDU TERYTORIALNEGO NA RZECZ BUDOWY DROGI
+    # EKSPRESOWEJ S-12
+    "0000266482": Members(
+        (
+            "17 local governments: powiats sieradzki, piotrkowski, zwoleński, "
+            "jarociński; Radom, Pionki; gminas Sulejów, Opatówek, Jaraczewo, Zwoleń,..."
+        ),
+        (
+            "https://wartowiedziec.pl/komunikacja-i-transport/32550-samorzdy-na-rzecz-b"
+            "udowy-drogi-ekspersowej-s12"
+        ),
+    ),
+    # MAZOWIECKIE STOWARZYSZENIE GMIN NA RZECZ ROZWOJU SPOŁECZEŃSTWA INFORMACYJNEGO
+    "0000306210": Members(
+        (
+            "Mazowsze gminas; founders (Sochaczew, February 2008) included Błonie, "
+            "Ciechanów, Gostynin, Grodzisk Mazowiecki, Kozienice, Legionowo and..."
+        ),
+        "https://mssi.pl/o-nas/",
+    ),
+    # STOWARZYSZENIE SAMORZĄDÓW EUROREGION ROZTOCZE
+    "0000846540": Members(
+        (
+            "local governments of Roztocze in Lubelskie and Podkarpackie (Powiat "
+            "Tomaszowski sits on its board); no count or full list found"
+        ),
+        (
+            "https://www.zpp.pl/storage/library/2024-08/169f1d8c40f4a97ff6203f3aaef49c7"
+            "d.pdf"
+        ),
+    ),
+    # STOWARZYSZENIE OBSZARU PROWADZENIA POLITYKI TERYTORIALNEJ POWIATU INOWROCŁAWSKIEGO
+    "0001015510": Members(
+        (
+            "7: Powiat Inowrocławski (leader) and gminas Kruszwica, Janikowo, Pakość, "
+            "Złotniki Kujawskie, Gniewkowo, Dąbrowa Biskupia"
+        ),
+        (
+            "https://cms-v2-files.idcom-jst.pl/sites/12/wiadomosci/120987/files/za._1_s"
+            "trategia_terytorialna_oppt_inowrocawia-2025_08_15.pdf"
+        ),
+    ),
+    # POROZUMIENIE GMIN GÓRSKICH RZECZYPOSPOLITEJ POLSKIEJ
+    "0001040259": Members(
+        (
+            "mountain gminas meeting statutory conditions, reported as close to 20, "
+            "e.g. Szczyrk, Wisła, Istebna, Świeradów-Zdrój, Duszniki-Zdrój,..."
+        ),
+        "https://wiadomosci.ox.pl/istebna-tez-za-porozumieniem,85770",
+    ),
+    # PODKARPACKIE STOWARZYSZENIE SAMORZĄDÓW TERYTORIALNYCH
+    "0000008338": Members(
+        (
+            "147 Podkarpackie local governments: the województwo, 18 powiats, 15 "
+            "cities, 28 urban-rural gminas, 85 rural gminas"
+        ),
+        "https://psst.rzeszow.pl/index.php/czlonkostwo/czlonkowie",
+    ),
+    # STOWARZYSZENIE GMIN DORZECZA GÓRNEJ ODRY Z SIEDZIBĄ W RACIBORZU
+    "0000004694": Members(
+        (
+            "22 gminas of powiats raciborski, głubczycki, rybnicki and wodzisławski "
+            "(Polish side of Euroregion Silesia)"
+        ),
+        "https://www.euroregion-silesia.pl/index,czlonkowie-strony-polskiej,31.html",
+    ),
+    # STOWARZYSZENIE GMIN RZECZYPOSPOLITEJ POLSKIEJ EUROREGION BAŁTYK
+    "0000042453": Members(
+        (
+            "43: 42 gminas of Pomorskie and Warmińsko-Mazurskie (incl. Gdańsk, Gdynia, "
+            "Elbląg, Olsztyn) and Powiat Bartoszycki"
+        ),
+        (
+            "https://eurobalt.org.pl/stowarzyszenie-gmin-rp-euroregion-baltyk/gminy-czl"
+            "onkowskie-stowarzyszenia-gmin-rp-euroregionu-baltyk/"
+        ),
+    ),
+    # STOWARZYSZENIE GMIN, POWIATÓW I WOJEWÓDZTW "DROGA S11"
+    "0000271208": Members(
+        (
+            "55 gminas, powiats and województwa along the planned S11 in "
+            "Zachodniopomorskie, Wielkopolskie, Opolskie and Śląskie (59 in 2016)"
+        ),
+        "https://www.koszalin.pl/pl/printpdf/10774",
+    ),
+    # STOWARZYSZENIE METROPOLIA KRAKOWSKA
+    "0000514292": Members(
+        (
+            "15 gminas: Kraków and Biskupice, Czernichów, Igołomia-Wawrzeńczyce, "
+            "Kocmyrzów-Luborzyca, Liszki, Michałowice, Mogilany, Niepołomice,..."
+        ),
+        "http://www.metropoliakrakowska.pl/stowarzyszenie/o-nas",
+    ),
+    # STOWARZYSZENIE SAMORZĄDÓW EUROREGIONU "BUG"
+    "0000047411": Members(
+        (
+            "65 Lubelskie local governments per the site (62 listed): Województwo "
+            "Lubelskie, 4 powiats (bialski, łęczyński, parczewski, włodawski),..."
+        ),
+        "https://euroregionbug.pl/czlonkowie-stowarzyszenia/",
+    ),
+    # ZWIĄZEK GMIN I POWIATÓW SUBREGIONU CENTRALNEGO WOJEWÓDZTWA ŚLĄSKIEGO
+    "0000485018": Members(
+        "81 gminas and powiats of Śląskie",
+        "https://subregioncentralny.pl/o-nas",
+    ),
+    # ZWIĄZEK GMIN I POWIATÓW SUBREGIONU PÓŁNOCNEGO WOJEWÓDZTWA ŚLĄSKIEGO
+    "0000821458": Members(
+        (
+            "34: 31 gminas (incl. Częstochowa, Myszków, Kłobuck) and 3 powiats "
+            "(częstochowski, kłobucki, myszkowski)"
+        ),
+        "https://www.subregion-polnocny.pl/stowarzyszenie/czlonkowie/",
+    ),
+    # ZWIĄZEK MIAST I GMIN MORSKICH
+    "0000045355": Members(
+        (
+            "27 coastal cities and gminas (e.g. Gdańsk, Gdynia, Sopot, Szczecin, "
+            "Świnoujście, Kołobrzeg, Elbląg, Hel, Łeba)"
+        ),
+        "https://zmigm.org.pl/delagaci-2024-2029/",
+    ),
+    # ZWIĄZEK MIAST POLSKICH
+    "0000069153": Members(
+        "390 cities",
+        "https://pl.wikipedia.org/wiki/Związek_Miast_Polskich",
+    ),
+    # ZWIĄZEK POWIATÓW POLSKICH
+    "0000094303": Members(
+        "315 powiats and cities with powiat rights",
+        "https://pl.wikipedia.org/wiki/Związek_Powiatów_Polskich",
+    ),
+    # ZWIĄZEK SAMORZĄDÓW POLSKICH
+    "0000689669": Members(
+        "gminas, powiats and województwa, over 100 members in 2023",
+        "https://api.sejm.gov.pl/sejm/term9/prints/3284/3284.pdf",
+    ),
+    # ZWIĄZEK WOJEWÓDZTW RZECZYPOSPOLITEJ POLSKIEJ
+    "0000117252": Members(
+        "all 16 województwa",
+        "https://pl.wikipedia.org/wiki/Związek_Województw_Rzeczypospolitej_Polskiej",
+    ),
+    # ŁÓDZKI OBSZAR METROPOLITALNY
+    "0000511578": Members(
+        (
+            "27: Miasto Łódź, 4 powiats (brzeziński, łódzki wschodni, pabianicki, "
+            "zgierski) and 22 gminas, as founding members"
+        ),
+        "https://www.lom.lodz.pl/wp-content/uploads/Statut_tekst_jedn_29_09_22.pdf",
+    ),
+    # ŚLĄSKI ZWIĄZEK GMIN I POWIATÓW
+    "0000070883": Members(
+        "170: 154 gminas and 16 powiats of Śląskie",
+        "https://silesia.org.pl/gminy-i-powiaty/",
     ),
 }
 
