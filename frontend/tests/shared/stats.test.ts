@@ -10,6 +10,12 @@ import {
   PUBLISH_CHANCE_MODEL,
 } from "~~/shared/stats";
 import type { Edge, VoteDocument, Note } from "~~/shared/model";
+import type { UnpaidSeats } from "~~/shared/companyBodies";
+
+/** A hospital's rada społeczna: the seats on the organ are not posts. */
+const hospitalSeats = new Map<string, UnpaidSeats>([
+  ["szpital", "supervisory"],
+]);
 
 describe("shared/stats.ts", () => {
   beforeEach(() => {
@@ -419,7 +425,7 @@ describe("shared/stats.ts", () => {
           edges,
           new Set(["szpital", "public-co"]),
           {},
-          new Set(["szpital"]),
+          hospitalSeats,
         );
 
         // The 2024 seat is the most recent thing this person did, and it must
@@ -435,7 +441,7 @@ describe("shared/stats.ts", () => {
           [councilSeat],
           new Set(["szpital"]),
           {},
-          new Set(["szpital"]),
+          hospitalSeats,
         );
 
         // The seat is still a fact about the person, so they stay in the
@@ -460,7 +466,7 @@ describe("shared/stats.ts", () => {
           edges,
           new Set(["szpital"]),
           {},
-          new Set(["szpital"]),
+          hospitalSeats,
         );
 
         expect(stats.all.latestEmploymentStart).toBe("2024-01-01");
@@ -472,7 +478,7 @@ describe("shared/stats.ts", () => {
           [{ ...councilSeat, target: "public-co" } as Edge],
           new Set(["public-co"]),
           {},
-          new Set(["szpital"]),
+          hospitalSeats,
         );
 
         expect(stats.all.latestEmploymentStart).toBe("2024-01-01");
@@ -502,7 +508,7 @@ describe("shared/stats.ts", () => {
               [councilSeat],
               new Set(["szpital"]),
               {},
-              new Set(["szpital"]),
+              hospitalSeats,
             ).all.latestEmploymentStart,
           ).toBe(null);
         });
@@ -529,6 +535,51 @@ describe("shared/stats.ts", () => {
             ),
           ).toBe(false);
         });
+      });
+    });
+
+    describe("posts at a place whose statute pays nobody", () => {
+      // An association of gminy: its board is the mayors of its members, and
+      // its statute pays none of them (`Company.paidSeats`).
+      const board = {
+        target: "zwiazek",
+        type: "employed",
+        name: "Zarząd",
+        start_date: "2024-01-01T00:00:00Z",
+      } as Edge;
+      const audit = { ...board, name: "Rada Nadzorcza" } as Edge;
+      const unpaid = new Map<string, UnpaidSeats>([["zwiazek", "all"]]);
+
+      it("drops every post there, the board's too", () => {
+        const stats = computeEdgeStats(
+          [board, audit],
+          new Set(["zwiazek"]),
+          {},
+          unpaid,
+        );
+
+        expect(stats.all.latestEmploymentStart).toBe(null);
+        expect(stats.all.currentlyEmployed).toBe(false);
+        expect(stats.all.currentlyEmployedTargetNodeIds).toEqual([]);
+        // Still a fact about the person: the place stays a target.
+        expect(stats.all.targetNodeIds).toEqual(["zwiazek"]);
+      });
+
+      it("agrees one edge at a time", () => {
+        const zwiazek = { isPublic: true, paidSeats: false };
+        expect(isPublicEmployment(board, zwiazek)).toBe(false);
+        expect(isPublicEmployment(audit, zwiazek)).toBe(false);
+      });
+
+      it("counts a rada społeczna that its statute pays", () => {
+        const szpital = {
+          isPublic: true,
+          supervisoryBody: "rada-spoleczna",
+          paidSeats: true,
+        };
+        expect(
+          isPublicEmployment({ ...audit, target: "szpital" }, szpital),
+        ).toBe(true);
       });
     });
 
@@ -706,7 +757,7 @@ describe("shared/stats.ts", () => {
         ...fields,
       }) as Edge;
     const elections = (edges: Edge[]) =>
-      computeEdgeStats(edges, new Set(), {}, new Set(), "p1");
+      computeEdgeStats(edges, new Set(), {}, new Map(), "p1");
 
     /** The question is whether the election gave them a seat: a council
      * won and a mayoralty lost on the same day is a win. */

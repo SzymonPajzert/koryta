@@ -192,6 +192,51 @@ class TestTheNode:
             == []
         )
 
+    def test_an_answer_on_pay_the_node_lacks_is_a_change(self):
+        # Absent is "nobody said", which `false` is not.
+        assert changes(payload(paid_seats="unpaid", paid_seats_reason="Statut")) == [
+            COMPANY_FIELDS
+        ]
+
+    def test_the_same_answer_on_pay_is_not(self):
+        stored = {"paidSeats": False, "paidSeatsReason": "Statut"}
+        assert (
+            changes(
+                payload(paid_seats="unpaid", paid_seats_reason="Statut"),
+                node_rows=nodes(company=stored),
+            )
+            == []
+        )
+
+    def test_a_new_reason_for_the_same_answer_is_a_change(self):
+        stored = {"paidSeats": False, "paidSeatsReason": "Statut"}
+        assert changes(
+            payload(paid_seats="unpaid", paid_seats_reason="Statut, par. 21"),
+            node_rows=nodes(company=stored),
+        ) == [COMPANY_FIELDS]
+
+    def test_withdrawing_an_answer_on_pay_is_a_change_only_where_one_is(self):
+        stored = {"paidSeats": False, "paidSeatsReason": "Statut"}
+        assert changes(
+            payload(paid_seats="", paid_seats_reason=""),
+            node_rows=nodes(company=stored),
+        ) == [COMPANY_FIELDS]
+        assert changes(payload(paid_seats="", paid_seats_reason="")) == []
+
+    def test_an_answer_on_pay_a_person_gave_is_not_overwritten(self):
+        stored = {
+            "paidSeats": True,
+            "paidSeatsReason": "Uchwała zjazdu",
+            "paidSeatsSource": "manual",
+        }
+        assert (
+            changes(
+                payload(paid_seats="unpaid", paid_seats_reason="Statut"),
+                node_rows=nodes(company=stored),
+            )
+            == []
+        )
+
     def test_a_register_field_the_payload_omits_leaves_the_node_alone(self):
         # A payload from a pipeline that predates `legal_form` must not clear it.
         assert (

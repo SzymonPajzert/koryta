@@ -14,6 +14,9 @@ from scrapers.krs.researched_owners import (
     PUBLIC_FOUNDERS,
     PUBLIC_MEMBERS,
     RESEARCHED_OWNERS,
+    STATUTE_PAY,
+    UNREAD_STATUTE,
+    seat_pay,
 )
 from scrapers.map.jst import SKARB_PANSTWA, JstIndex
 
@@ -329,3 +332,29 @@ def test_an_association_public_already_gains_no_members_source():
     p.add_public_members()
 
     assert POMORSKIE_W_UE not in p.company_sources
+
+
+def test_every_statute_read_says_what_and_where_for_a_body_of_public_members():
+    for krs, pay in STATUTE_PAY.items():
+        assert len(krs) == 10 and krs.isdigit(), krs
+        assert krs in PUBLIC_MEMBERS, krs
+        assert pay.says.strip(), krs
+        assert pay.source.startswith("http"), krs
+
+
+def test_a_body_of_public_members_is_unpaid_until_its_statute_is_read():
+    unread = next(krs for krs in PUBLIC_MEMBERS if krs not in STATUTE_PAY)
+    pay = seat_pay(unread)
+    assert pay is not None and pay.paid is False
+    assert pay.reason == UNREAD_STATUTE
+    assert seat_pay(int(unread)) == pay
+
+
+def test_a_statute_read_gives_its_own_answer_and_reason():
+    for krs, pay in STATUTE_PAY.items():
+        assert seat_pay(krs) == pay
+        assert pay.reason == f"{pay.says} {pay.source}"
+
+
+def test_any_other_company_has_no_answer():
+    assert seat_pay("0000028860") is None  # ORLEN

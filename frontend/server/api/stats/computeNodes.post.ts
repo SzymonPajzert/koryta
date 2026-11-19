@@ -20,7 +20,7 @@ import {
 import { computeNodeStats } from "~~/shared/stats";
 import { queueTier } from "~~/shared/queueTiers";
 import { pageIsPublic } from "~~/shared/model";
-import { bodyIsPaidPost } from "~~/shared/companyBodies";
+import { unpaidSeatsByPlace, type UnpaidSeats } from "~~/shared/companyBodies";
 import { getEdges, getNodesNoStats, getNodeGroups } from "~~/shared/graph/util";
 import { partyColors } from "~~/shared/misc";
 import {
@@ -55,6 +55,7 @@ const FIELDS = {
     // Places: which posts count.
     "isPublic",
     "supervisoryBody",
+    "paidSeats",
     // People: queueTier.
     "wikipedia",
     "rejestrIo",
@@ -128,7 +129,7 @@ function buildNodeUpdateData(
   nodeGroupSizeMap: Record<string, number>,
   targetCounts: Record<string, Set<string>>,
   publicPlaceIds: ReadonlySet<string>,
-  unpaidSeatPlaceIds: ReadonlySet<string>,
+  unpaidSeats: ReadonlyMap<string, UnpaidSeats>,
   nodeFactsCount: number,
   nodeFactTypes: ReadonlySet<string>,
   searchLines: (
@@ -149,7 +150,7 @@ function buildNodeUpdateData(
     nodeVotes,
     publicPlaceIds,
     transitiveTargets,
-    unpaidSeatPlaceIds,
+    unpaidSeats,
     nodeFactsCount,
     node.id,
   );
@@ -302,16 +303,12 @@ export default defineEventHandler(async (event) => {
       .map(([id]) => id),
   );
 
-  // Institutions whose supervisory organ is one nobody is paid to sit on - the
-  // SPZOZ hospitals and their rada społeczna. A seat there is dropped from the
-  // employment counters the same way a seat at a place nobody could show is
-  // publicly owned is. `supervisoryBody` is absent on every other company, so
-  // this is 243 of the 4,047 places.
-  const unpaidSeatPlaceIds = new Set(
-    Object.entries(placesMap)
-      .filter(([, place]) => !bodyIsPaidPost(place.supervisoryBody))
-      .map(([id]) => id),
-  );
+  // Institutions where some posts are not jobs: the SPZOZ hospitals, whose
+  // rada społeczna nobody is paid to sit on, and those whose statute pays
+  // nobody at all (`paidSeats`). Such a post is dropped from the employment
+  // counters the same way a post at a place nobody could show is publicly
+  // owned is.
+  const unpaidSeats = unpaidSeatsByPlace(Object.entries(placesMap));
 
   const nodesNoStats = getNodesNoStats(
     peopleMap,
@@ -480,7 +477,7 @@ export default defineEventHandler(async (event) => {
       nodeGroupSizeMap,
       targetCounts,
       publicPlaceIds,
-      unpaidSeatPlaceIds,
+      unpaidSeats,
       factsByNode[node.id] ?? 0,
       factTypesByNode[node.id] ?? noFactTypes,
       searchLines,

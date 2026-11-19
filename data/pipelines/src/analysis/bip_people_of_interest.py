@@ -35,6 +35,7 @@ leave out the crops of the people the site would not put up anyway
 
 import argparse
 import hashlib
+import math
 import re
 import unicodedata
 from functools import cache
@@ -317,21 +318,43 @@ def names_a_supervisory_seat(role: object) -> bool:
     return isinstance(role, str) and bool(SUPERVISORY_SEAT.search(_fold(role)))
 
 
+def seat_answer(value: object) -> bool | None:
+    """A company's `paidSeats` off the export: absent and NaN say nothing,
+    `false` says nobody is paid."""
+    if value is None or value is pd.NA:
+        return None
+    if isinstance(value, float) and math.isnan(value):
+        return None
+    return bool(value)
+
+
 def pages_with_a_public_post(nodes: pd.DataFrame, edges: pd.DataFrame) -> set[str]:
     """The pages with a paid post, current or ended, at a public company: the
     site's `pagesWithAPublicPost` and `isPublicEmployment`, off the export.
 
     `isPublic` true and nothing weaker; a removed edge does not count, a draft
-    one does, and so does a company still in draft. A seat on an organ nobody is
-    paid to sit on (a hospital's rada społeczna) is not a post.
+    one does, and so does a company still in draft. No post at a company whose
+    statute pays nobody (`paidSeats` false) is one, and nor is a seat on an
+    organ nobody is paid to sit on (a hospital's rada społeczna) unless the
+    statute says it is paid (`unpaidSeats` in frontend/shared/companyBodies.ts).
     """
     places = nodes[flag(nodes["isPublic"])]
-    unpaid = set(places.loc[places["supervisoryBody"].isin(UNPAID_BODIES), "id"])
+    stated = places["paidSeats"] if "paidSeats" in places else [None] * len(places)
+    answers = [seat_answer(value) for value in stated]
+    said = pd.Series([a is not None for a in answers], index=places.index, dtype=bool)
+    paid = pd.Series([a is True for a in answers], index=places.index, dtype=bool)
+    nobody_paid = set(places.loc[said & ~paid, "id"])
+    unpaid_organ = set(
+        places.loc[places["supervisoryBody"].isin(UNPAID_BODIES) & ~said, "id"]
+    )
     public = set(places["id"])
     live = edges[~flag(edges["deleted"])] if "deleted" in edges else edges
     jobs = live[(live["type"] == "employed") & live["target"].isin(public)]
-    seat = jobs["target"].isin(unpaid) & jobs["name"].map(names_a_supervisory_seat)
-    return {str(source) for source in jobs.loc[~seat, "source"]}
+    seat = jobs["target"].isin(unpaid_organ) & jobs["name"].map(
+        names_a_supervisory_seat
+    )
+    unpaid = seat | jobs["target"].isin(nobody_paid)
+    return {str(source) for source in jobs.loc[~unpaid, "source"]}
 
 
 def unit_level(teryt: str) -> str:

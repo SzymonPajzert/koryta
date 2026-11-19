@@ -1491,6 +1491,468 @@ PUBLIC_MEMBERS: dict[str, Members] = {
 }
 
 
+@dataclasses.dataclass(frozen=True)
+class SeatPay:
+    """What a body's statute says about pay for sitting on its organs."""
+
+    paid: bool
+    #: The statute's words, in Polish: the site shows them as the reason.
+    says: str
+    source: str = ""
+
+    @property
+    def reason(self) -> str:
+        return " ".join(part for part in (self.says, self.source) if part)
+
+
+#: What the statutes of the `PUBLIC_MEMBERS` bodies say about pay. A seat on
+#: such a body is unpaid unless its statute pays it, and any money counts: a
+#: salary, a lump sum or per-diems, also where the statute only lets an organ
+#: grant them, but not a refund of costs (decision on 2026-11-19). An
+#: association pays its board only where the statute says so (art. 10 ust. 1
+#: pkt 5a Prawa o stowarzyszeniach), so a statute that says nothing counts as
+#: unpaid too. The site shows `says` and `source` as the reason beside the
+#: answer, and a person can change both there.
+#:
+#: Read on 2026-11-19, 49 of the 62: no statute text was found for the rest
+#: (~/.cache/koryta/likely-public-2026-11-19/statute-pay-2026-11-19.csv). A
+#: statute changes, so a source older than a year or two is worth reading
+#: again before it is quoted.
+STATUTE_PAY: dict[str, SeatPay] = {
+    # The statute pays: a salary, per-diems or a lump sum, or lets an organ grant them.
+    "0000088063": SeatPay(  # ZWIĄZEK GMIN WIEJSKICH RZECZYPOSPOLITEJ POLSKIEJ
+        paid=True,
+        says=(
+            "Statut, § 28 ust. 5: „Członkowie Zarządu pobierają wynagrodzenie z"
+            " tytułu pełnionej funkcji”. Zgromadzenie Ogólne ustala też"
+            " wynagrodzenie członków Komisji Rewizyjnej (§ 22 ust. 3 lit. g)."
+        ),
+        source="https://www.zgwrp.pl/wp-content/uploads/2023/01/Statut-ZGWRP-z-dnia-23-maja-2022-r.pdf",
+    ),
+    "0000055250": SeatPay(  # ZWIĄZEK GMIN POMORSKICH
+        paid=True,
+        says=(
+            "Statut, § 23 pkt 7: Zgromadzenie Ogólne decyduje „o przyznaniu i"
+            " wysokości diet i ryczałtu dla Zarządu Związku”."
+        ),
+        source="https://rada.wladyslawowo.pl/pliki/wladyslawowo/zalaczniki/671/zal-nr-1-do-iv-65-2024.pdf",
+    ),
+    "0000062601": SeatPay(  # STOWARZYSZENIE GMIN I POWIATÓW WIELKOPOLSKI
+        paid=True,
+        says=(
+            "Statut, § 17 pkt 9: Zjazd ustala „diety dla członków Zarządu i komisji”."
+        ),
+        source="https://sgipw.wlkp.pl/cms/8562/statut",
+    ),
+    "0000476062": SeatPay(  # STOWARZYSZENIE AGLOMERACJA WROCŁAWSKA
+        paid=True,
+        says=(
+            "Statut, § 20 ust. 7: „Członkom Zarządu przysługuje wynagrodzenie z"
+            " tytułu pełnienia funkcji lub zatrudnienia na podstawie umowy o"
+            " pracę lub innego stosunku prawnego, ustalonego uchwałą Zjazdu.”"
+        ),
+        source="https://udanin.biuletyn.net/fls/bip_pliki/2026_05/BIPF652DAA6B7D955Z/Uchwala.XXV.172.2026.2026-05-26.pdf",
+    ),
+    "0000060828": SeatPay(  # STOWARZYSZENIE "EUROREGION NIEMEN"
+        paid=True,
+        says=(
+            "Statut, § 19 pkt 6: Konferencja Krajowa ustala „zasady"
+            " wynagradzania członków organów Stowarzyszenia”."
+        ),
+        source="https://niemen.org.pl/wp-content/uploads/2024/09/Tekst-jednolity-Statutu-1.pdf",
+    ),
+    "0000130227": SeatPay(  # STOWARZYSZENIE POWIATÓW I GMIN DORZECZA BZURY
+        paid=True,
+        says=(
+            "Statut, § 13 pkt 10: Walne Zebranie może przyznać członkom Zarządu"
+            " i Komisji Rewizyjnej diety i ustala ich wysokość."
+        ),
+        source="https://rada.gminakutno.pl/pliki/gminakutno/zalaczniki/186/uchwala-nr-xiii-87-2025-1.pdf",
+    ),
+    "0000078584": SeatPay(  # WIELKOPOLSKI OŚRODEK KSZTAŁCENIA I STUDIÓW SAMORZĄDOWYCH
+        paid=True,
+        says=(
+            "Statut, § 18 ust. 1a: „Za czynności związane z pełnioną funkcją"
+            " członkowie Zarządu Stowarzyszenia mogą otrzymywać wynagrodzenie.”"
+        ),
+        source="http://www2.wokiss.pl/pliki/Statut_WOKiSS_2022.pdf",
+    ),
+    "0000062847": SeatPay(  # ZWIĄZEK MIAST I GMIN NADWIŚLAŃSKICH
+        paid=True,
+        says=(
+            "Statut, § 11 ust. 8: „Członkowie Zarządu mogą otrzymywać"
+            " wynagrodzenie w związku z pełnioną funkcją w Zarządzie.”"
+        ),
+        source="https://zmign.org.pl/wp-content/uploads/2026/09/%F0%9F%93%84Statut-ZMiGN_tekstjednolity.pdf",
+    ),
+    "0000211876": SeatPay(  # STOWARZYSZENIE GMIN ZACHODNIEGO MAZOWSZA MAZOVIA
+        paid=True,
+        says=(
+            "Statut, § 16 pkt 7: Walne Zebranie decyduje „o wysokości"
+            " wynagrodzenia Prezesa Zarządu oraz o przyznaniu i wysokości diet"
+            " i ryczałtu dla członków Zarządu Stowarzyszenia”."
+        ),
+        source="https://mazovia-sgzm.pl/wp-content/uploads/2025/03/Statut_Stowarzyszenia_Mazovia_zalacznik_do_uchwaly_5.2024_tekst-jednolity_2024_02_27.pdf",
+    ),
+    "0000008338": SeatPay(  # PODKARPACKIE STOWARZYSZENIE SAMORZĄDÓW TERYTORIALNYCH
+        paid=True,
+        says=(
+            "Statut, § 21 pkt 9: Ogólne Zgromadzenie ustala „zasady"
+            " otrzymywania wynagrodzenia przez członków ZS za czynności"
+            " wykonywane w związku z pełnioną funkcją”."
+        ),
+        source="http://www.psst.rzeszow.pl/index.php/informacje-o-stowarzyszeniu/statut",
+    ),
+    "0000514292": SeatPay(  # STOWARZYSZENIE METROPOLIA KRAKOWSKA
+        paid=True,
+        says=(
+            "Statut, § 18 ust. 9: „Członkowie Zarządu mogą otrzymywać"
+            " wynagrodzenie za czynności wykonywane w związku z pełnioną"
+            " funkcją.”"
+        ),
+        source="http://www.metropoliakrakowska.pl/uploaded_files/1674046483_1674028739statut-stowarzyszenia.pdf",
+    ),
+    "0000821458": SeatPay(  # ZWIĄZEK GMIN I POWIATÓW SUBREGIONU PÓŁNOCNEGO WOJEWÓDZTWA
+        paid=True,
+        says=(
+            "Statut, § 16 ust. 8: „Członkom Zarządu może przysługiwać"
+            " wynagrodzenie za czynności wykonywane w związku z pełnioną"
+            " funkcją.”"
+        ),
+        source="https://www.subregion-polnocny.pl/wp-content/uploads/2023/05/Zal.-1-do-Uchwaly-3.2023_statut-tekst-jednol..pdf",
+    ),
+    "0000045355": SeatPay(  # ZWIĄZEK MIAST I GMIN MORSKICH
+        paid=True,
+        says=(
+            "Statut, § 12 ust. 4: członkowie Zarządu „pobierają (...) jedynie"
+            " diety za udział w posiedzeniach w wysokości ustalonej przez Walne"
+            " Zebranie Delegatów”; tak samo Komisja Rewizyjna (§ 13 ust. 7)."
+        ),
+        source="https://zmigm.org.pl/wp-content/uploads/2025/12/STATUT-Uchwala-58-2066-2025.pdf",
+    ),
+    "0000069153": SeatPay(  # ZWIĄZEK MIAST POLSKICH
+        paid=True,
+        says=(
+            "Statut, § 28: członkowie Zarządu „pobierają (...) jedynie diety za"
+            " udział w posiedzeniach w wysokości ustalonej przez Zgromadzenie"
+            " Ogólne”; tak samo Komisja Rewizyjna (§ 38 ust. 5)."
+        ),
+        source="https://www.miasta.pl/strefa-dla-miast/dokumenty/1539?locale=pl",
+    ),
+    # The statute says the functions are unpaid, or refunds costs only.
+    "0000421737": SeatPay(  # STOWARZYSZENIE POLSKICH REGIONÓW KORYTARZA TRANSPORTOWEGO
+        paid=False,
+        says=(
+            "Statut, § 30 ust. 2: członkom organów przysługuje tylko zwrot"
+            " kosztów udziału w ich pracach."
+        ),
+        source="https://bac.pl/statut/",
+    ),
+    "0000055755": SeatPay(  # EUROREGION NYSA
+        paid=False,
+        says=(
+            "Statut, § 23 ust. 4: „Osoby wchodzące w skład organów"
+            " Stowarzyszenia pełnią swoje funkcje nieodpłatnie.”"
+        ),
+        source="https://www.euroregion-nysa.pl/images/BIP/Statut_EUROREGIONU_NYSA.pdf",
+    ),
+    "0000005393": SeatPay(  # STOWARZYSZENIE GMIN POLSKICH EUROREGIONU POMERANIA
+        paid=False,
+        says=(
+            "Statut, § 20 ust. 8: „Członkowie Zarządu nie otrzymują"
+            " wynagrodzenia za czynności wykonywane w związku z pełnioną"
+            " funkcją.”"
+        ),
+        source="https://pomerania.org.pl/wp-content/uploads/2026/01/Statut_SGPEP_2025.pdf",
+    ),
+    "0000129013": SeatPay(  # STOWARZYSZENIE GMIN POLSKA SIEĆ ENERGIE CITES
+        paid=False,
+        says=(
+            "Statut, § 27 i § 35: członkowie Zarządu i Komisji Rewizyjnej „nie"
+            " otrzymują z tytułu pełnienia swych funkcji wynagrodzenia”, tylko"
+            " zwrot uzasadnionych kosztów."
+        ),
+        source="https://www.pnec.org.pl/images/stories/PNEC/dokumenty/STATUT_2019.pdf",
+    ),
+    "0000078219": SeatPay(  # STOWARZYSZENIE GMIN POLSKICH EUROREGIONU "PRO EUROPA VIADR
+        paid=False,
+        says=(
+            "Statut, § 5 ust. 1: „Działalność Stowarzyszenia opiera się na"
+            " pracy społecznej reprezentantów zrzeszonych gmin i powiatów.”"
+        ),
+        source="http://www.euroregion-viadrina.pl/files/statut_www_14102009-1.pdf",
+    ),
+    "0000107150": SeatPay(  # ZWIĄZEK GMIN I POWIATÓW SUBREGIONU ZACHODNIEGO WOJEWÓDZTWA
+        paid=False,
+        says=(
+            "Statut, § 18 ust. 5 i § 25 ust. 6: członkom Zarządu i Komisji"
+            " Rewizyjnej „nie przysługuje wynagrodzenie za czynności wykonywane"
+            " w związku z pełnioną funkcją”."
+        ),
+        source="https://bip.subregion.pl/wp-content/uploads/sites/3/2026/10/Statut_24.03.2025.pdf",
+    ),
+    "0000227293": SeatPay(  # FEDERACJA REGIONALNYCH ZWIĄZKÓW GMIN I POWIATÓW RP
+        paid=False,
+        says=(
+            "Statut, § 25: „Członkowie organów i ciał kolegialnych Federacji"
+            " pełnią swe funkcje społecznie.”"
+        ),
+        source="https://federacja.krakow.pl/statut.html",
+    ),
+    "0000438932": SeatPay(  # KUJAWSKO-POMORSKIE SAMORZĄDOWE STOWARZYSZENIE SALUTARIS
+        paid=False,
+        says=(
+            "Statut, § 14 ust. 1 i § 16 ust. 1: członkowie Zarządu i Komisji"
+            " Rewizyjnej „wykonują swoje obowiązki nieodpłatnie”."
+        ),
+        source="https://gm-zbiczno.arch.rbip.mojregion.info/wp-content/plugins/download-attachments/includes/download.php?id=8857",
+    ),
+    "0000003707": SeatPay(  # ZRZESZENIE GMIN WOJEWÓDZTWA LUBUSKIEGO
+        paid=False,
+        says=(
+            "Statut, § 3: „Działalność Zrzeszenia opiera się na społecznej"
+            " pracy jego członków”."
+        ),
+        source="https://lubuskiegminy.pl/statut/",
+    ),
+    "0000384961": SeatPay(  # METROPOLIA POZNAŃ
+        paid=False,
+        says=(
+            "Statut, § 24 pkt 9: Rada Metropolii ustala tylko zasady zwrotu"
+            " kosztów podróży członków Zarządu i Komisji Rewizyjnej."
+        ),
+        source="https://bip-v1-files.idcom-jst.pl/sites/47092/wiadomosci/317625/files/427_2010.pdf",
+    ),
+    "0000929270": SeatPay(  # STOWARZYSZENIE AGLOMERACJA KONIŃSKA
+        paid=False,
+        says=(
+            "Statut, § 13 ust. 3: „Członkowie władz Stowarzyszenia pełnią swe"
+            " funkcję nieodpłatnie.”"
+        ),
+        source="https://aglomeracjakoninska.org/wp-content/uploads/2022/09/Statut-Stowarzyszenia-Aglomeracja-Koninska.pdf",
+    ),
+    "0000547613": SeatPay(  # STOWARZYSZENIE AGLOMERACJA KALISKO-OSTROWSKA
+        paid=False,
+        says=(
+            "Statut, § 15 ust. 3: „Członkowie władz Stowarzyszenia pełnią swe"
+            " funkcję nieodpłatnie.”"
+        ),
+        source="https://sako-info.pl/pobierz/2803",
+    ),
+    "0000196073": SeatPay(  # STOWARZYSZENIE ZDROWYCH MIAST POLSKICH
+        paid=False,
+        says=(
+            "Statut, § 10 ust. 5: „Praca członków Zarządu i Komisji Rewizyjnej"
+            " wykonywana jest nieodpłatnie.”"
+        ),
+        source="https://www.szmp.pl/_files/ugd/f806a0_8b7b3e3d7fc94bdcaaf4eef8cac869f3.pdf",
+    ),
+    "0000846540": SeatPay(  # STOWARZYSZENIE SAMORZĄDÓW EUROREGION ROZTOCZE
+        paid=False,
+        says=(
+            "Statut, § 26: „Członkowie Komisji Rewizyjnej wykonują swoje"
+            " funkcje nieodpłatnie.” O pieniądzach dla Zarządu statut nic nie"
+            " mówi."
+        ),
+        source="https://euroregionroztocze.org.pl/stowarzyszenie-samorza%cc%a8dow-euroregion-roztocze/statut/",
+    ),
+    "0000004694": SeatPay(  # STOWARZYSZENIE GMIN DORZECZA GÓRNEJ ODRY Z SIEDZIBĄ W RACI
+        paid=False,
+        says=(
+            "Statut, § 9 ust. 3 pkt 4: „Członkowie Komisji Rewizyjnej nie"
+            " otrzymują z tytułu pełnienia funkcji wynagrodzenia ani zwrotu"
+            " kosztów.” O pieniądzach dla Zarządu statut nic nie mówi."
+        ),
+        source="https://www.euroregion-silesia.pl/files/strony/dokumenty/01%20-%20Za%C5%82.%201%20-%20STATUT.pdf",
+    ),
+    "0000042453": SeatPay(  # STOWARZYSZENIE GMIN RZECZYPOSPOLITEJ POLSKIEJ EUROREGION B
+        paid=False,
+        says=(
+            "Statut, § 13 i § 14: członkowie Zarządu i Komisji Rewizyjnej nie"
+            " pobierają wynagrodzenia za pełnienie funkcji."
+        ),
+        source="https://eurobalt.org.pl/stowarzyszenie-gmin-rp-euroregion-baltyk/statut/",
+    ),
+    "0000047411": SeatPay(  # STOWARZYSZENIE SAMORZĄDÓW EUROREGIONU "BUG"
+        paid=False,
+        says=(
+            "Statut, § 25: „Członkowie Zarządu wykonują czynności w związku z"
+            " pełnioną funkcją bez wynagrodzenia.”"
+        ),
+        source="https://euroregionbug.pl/statut-stowarzyszenia/",
+    ),
+    "0000094303": SeatPay(  # ZWIĄZEK POWIATÓW POLSKICH
+        paid=False,
+        says=(
+            "Statut, § 12 ust. 2: „Członkowie Zarządu i Komisji Rewizyjnej"
+            " pełnią swe funkcje honorowo.”"
+        ),
+        source="https://www.zpp.pl/storage/files/2019-08//f1279f02a4d049293eb7f9b76465375e3312.pdf",
+    ),
+    "0000511578": SeatPay(  # ŁÓDZKI OBSZAR METROPOLITALNY
+        paid=False,
+        says=(
+            "Statut, § 23 pkt 9: Rada Stowarzyszenia ustala tylko zasady zwrotu"
+            " kosztów podróży członków Zarządu i Komisji Rewizyjnej."
+        ),
+        source="https://www.lom.lodz.pl/wp-content/uploads/Statut_tekst_jedn_29_09_22.pdf",
+    ),
+    "0000070883": SeatPay(  # ŚLĄSKI ZWIĄZEK GMIN I POWIATÓW
+        paid=False,
+        says=(
+            "Statut, § 29 ust. 4b: członkowie Komisji Rewizyjnej „nie otrzymują"
+            " wynagrodzeń, diet, ani też zwrotu kosztów”. O pieniądzach dla"
+            " Zarządu statut nic nie mówi."
+        ),
+        source="https://silesia.org.pl/wp-content/plugins/download-attachments/includes/download.php?id=16652",
+    ),
+    # The statute says nothing about money for a function.
+    "0000214552": SeatPay(  # "POMORSKIE W UNII EUROPEJSKIEJ"
+        paid=False,
+        says=(
+            "Statut nie przewiduje wynagrodzenia, diet ani ryczałtu za funkcje"
+            " w organach."
+        ),
+        source="https://pomorskieregion.eu/wp-content/uploads/2021/06/Statut-Stowarzyszenia-Pomorskie-w-Unii-Europejskiej.pdf",
+    ),
+    "0000241357": SeatPay(  # ZWIĄZEK PRACODAWCÓW PODMIOTÓW LECZNICZYCH SAMORZĄDU WOJEWÓ
+        paid=False,
+        says=(
+            "Statut, § 3 ust. 4: „Związek opiera swą działalność na pracy"
+            " społecznej swoich członków.” O pieniądzach dla Zarządu statut nic"
+            " nie mówi."
+        ),
+        source="http://web.archive.org/web/20260513131410/http://szpitalemazowieckie.pl/statut.php",
+    ),
+    "0000182275": SeatPay(  # STOWARZYSZENIE GMIN I POWIATÓW MAŁOPOLSKI
+        paid=False,
+        says=(
+            "Statut nie przewiduje wynagrodzenia, diet ani ryczałtu za funkcje"
+            " w organach."
+        ),
+        source="https://sgpm.krakow.pl/statut.html",
+    ),
+    "0000136278": SeatPay(  # STOWARZYSZENIE GMIN UZDROWISKOWYCH RZECZPOSPOLITEJ POLSKIE
+        paid=False,
+        says=(
+            "Statut nie przewiduje wynagrodzenia, diet ani ryczałtu za funkcje"
+            " w organach."
+        ),
+        source="https://sgurp.pl/pl/1026/0/statut.html",
+    ),
+    "0000094436": SeatPay(  # STOWARZYSZENIE GMIN POLSKICH EUROREGIONU GLACENSIS
+        paid=False,
+        says=(
+            "Statut nie przewiduje wynagrodzenia, diet ani ryczałtu za funkcje"
+            " w organach."
+        ),
+        source="https://euroregion-glacensis.ng.pl/media/download/2493",
+    ),
+    "0000372491": SeatPay(  # KONWENT WSPÓŁPRACY SAMORZĄDOWEJ POLSKA-UKRAINA
+        paid=False,
+        says=(
+            "Statut, § 6 ust. 1: „Działalność Konwentu opiera się na społecznej"
+            " pracy Członków.” O pieniądzach dla Zarządu statut nic nie mówi."
+        ),
+        source="http://kwspu.pl/wp-content/uploads/Statut_Konwentu_2023.pdf",
+    ),
+    "0000203026": SeatPay(  # STOWARZYSZENIE "METROPOLIA WARSZAWA"
+        paid=False,
+        says=(
+            "Statut nie przewiduje wynagrodzenia, diet ani ryczałtu za funkcje"
+            " w organach."
+        ),
+        source="https://sm.waw.pl/statut/",
+    ),
+    "0000036957": SeatPay(  # STOWARZYSZENIE GMIN POLSKICH EUROREGIONU PRADZIAD
+        paid=False,
+        says=(
+            "Statut, § 3: „Stowarzyszenie opiera swoja działalność na"
+            " społecznej pracy członków.” O pieniądzach dla Zarządu statut nic"
+            " nie mówi."
+        ),
+        source="https://europradziad.pl/o-euroregionie-pradziad/statuty-i-strategie/statut-stowarzyszenia-gmin-tekst-jednolity/",
+    ),
+    "0000041508": SeatPay(  # STOWARZYSZENIE GMIN GÓRNICZYCH W POLSCE
+        paid=False,
+        says=(
+            "Statut nie przewiduje wynagrodzenia, diet ani ryczałtu za funkcje"
+            " w organach."
+        ),
+        source="https://sggp.org.pl/o-nas/",
+    ),
+    "0000164296": SeatPay(  # STOWARZYSZENIE GMIN RZECZYPOSPOLITEJ POLSKIEJ REGION KOZŁA
+        paid=False,
+        says=(
+            "Statut nie przewiduje wynagrodzenia, diet ani ryczałtu za funkcje"
+            " w organach."
+        ),
+        source="https://regionkozla.pl/wp-content/uploads/2021/02/statut_RG.pdf",
+    ),
+    "0000306210": SeatPay(  # MAZOWIECKIE STOWARZYSZENIE GMIN NA RZECZ ROZWOJU SPOŁECZEŃ
+        paid=False,
+        says=(
+            "Statut nie przewiduje wynagrodzenia, diet ani ryczałtu za funkcje"
+            " w organach."
+        ),
+        source="http://mssi.pl/wp-content/uploads/2023/03/STATUT-MSSI.pdf",
+    ),
+    "0001040259": SeatPay(  # POROZUMIENIE GMIN GÓRSKICH RZECZYPOSPOLITEJ POLSKIEJ
+        paid=False,
+        says=(
+            "Statut nie przewiduje wynagrodzenia, diet ani ryczałtu za funkcje"
+            " w organach."
+        ),
+        source="https://ustron.esesja.pl/rejestr_uchwal?q=G%C3%B3rskich",
+    ),
+    "0000485018": SeatPay(  # ZWIĄZEK GMIN I POWIATÓW SUBREGIONU CENTRALNEGO WOJEWÓDZTWA
+        paid=False,
+        says=(
+            "Statut nie przewiduje wynagrodzenia, diet ani ryczałtu za funkcje"
+            " w organach."
+        ),
+        source="https://subregioncentralny.pl/static/upload/store/ZD/TJ_Statutu_Zwiazku_25.06.2024_r._ODCZYT_(1).pdf",
+    ),
+    "0000689669": SeatPay(  # ZWIĄZEK SAMORZĄDÓW POLSKICH
+        paid=False,
+        says=(
+            "Statut nie przewiduje wynagrodzenia, diet ani ryczałtu za funkcje"
+            " w organach."
+        ),
+        source="https://siedlce.esesja.pl/posiedzenie/ee59bf85-f872-4/XVI-Sesja-Rady-Miasta-Siedlce.html",
+    ),
+    "0000117252": SeatPay(  # ZWIĄZEK WOJEWÓDZTW RZECZYPOSPOLITEJ POLSKIEJ
+        paid=False,
+        says=(
+            "Statut nie przewiduje wynagrodzenia, diet ani ryczałtu za funkcje"
+            " w organach."
+        ),
+        source="https://polskieregiony.pl/wp-content/uploads/2024/04/Statut_2020.pdf",
+    ),
+}
+
+#: The reason a `PUBLIC_MEMBERS` body counts as unpaid while nobody has found
+#: its statute.
+UNREAD_STATUTE = (
+    "Nie znaleźliśmy statutu, więc przyjmujemy, że funkcje są bez wynagrodzenia."
+)
+
+
+def seat_pay(krs: object) -> SeatPay | None:
+    """Whether a seat at this body is paid, and why, where the pipelines know.
+
+    What the statute says where somebody read it, unpaid for any other body of
+    public members (decision on 2026-11-19), and nothing for the rest: there
+    the site keeps its own rule, by the legal form.
+    """
+    key = str(krs).zfill(10)
+    if key in STATUTE_PAY:
+        return STATUTE_PAY[key]
+    if key in PUBLIC_MEMBERS:
+        return SeatPay(paid=False, says=UNREAD_STATUTE)
+    return None
+
+
 #: Closed-end investment funds (FIZ) whose certificates a public company holds,
 #: by the fund's REGON. A fund has no KRS number and no entry in REGON's public
 #: catalogue, so the companies the register names it as the owner of read as

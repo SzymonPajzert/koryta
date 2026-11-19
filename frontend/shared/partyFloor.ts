@@ -26,7 +26,11 @@ type Relation = Pick<Edge, "type" | "target" | "name"> & {
 };
 
 /** The company fields `isPublicEmployment` reads. */
-type Company = { isPublic?: boolean; supervisoryBody?: string };
+type Company = {
+  isPublic?: boolean;
+  supervisoryBody?: string;
+  paidSeats?: boolean;
+};
 
 /** Whether these relations show a candidacy and a paid public post, both of
  * them live. */
