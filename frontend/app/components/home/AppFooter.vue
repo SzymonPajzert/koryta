@@ -71,6 +71,7 @@ const sections = [
       { title: "Blog", link: "/blog" },
       { title: "Rady szpitali", link: "/eksploruj/szpitale" },
       { title: "Okrągły staż", link: "/eksploruj/staz" },
+      { title: "Statystyki", link: "/eksploruj/statystyki" },
       { title: "Źródła", link: "/zrodla" },
       // EventFeed bounds the home feed so a reader can reach "the footer,
       // which is where the contact address and the source links live", and

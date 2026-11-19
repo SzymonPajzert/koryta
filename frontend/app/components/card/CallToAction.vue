@@ -132,6 +132,11 @@
             <dd>{{ polishNumber(segment.value) }}</dd>
           </div>
         </dl>
+
+        <NuxtLink to="/eksploruj/statystyki" class="cta__stats">
+          Zobacz statystyki
+          <v-icon :icon="mdiChevronRight" size="18" />
+        </NuxtLink>
       </div>
 
       <div class="cta__band">
@@ -467,6 +472,29 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   margin: 0;
+}
+
+/* White and underlined: on the blue pane the pale labels are the quiet text,
+   so a link has to be the one thing in plain white that is not a number. */
+.cta__stats {
+  align-items: center;
+  color: inherit;
+  display: inline-flex;
+  font-size: 0.875rem;
+  font-weight: 500;
+  gap: 2px;
+  line-height: 1.25rem;
+  margin-top: 2px;
+  min-height: 44px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The browser's ring is blue on the blue pane. */
+.cta__stats:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 /* The shape of a bar segment, so the key reads as a piece of the bar rather

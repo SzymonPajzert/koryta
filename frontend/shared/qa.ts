@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "linki-do-statystyk",
+    title: "Linki do statystyk",
+    description:
+      "Na /eksploruj/statystyki prowadzą teraz stopka, liczby na stronie głównej, /pomoc i /o-nas.",
+    steps: [
+      "Na stronie głównej przy „Sprawdziliśmy już” kliknij „Zobacz statystyki”.",
+      "W stopce, pod „O projekcie”, kliknij „Statystyki”.",
+      "Na /pomoc i /o-nas (przy „Koryta.pl to przede wszystkim społeczność”) kliknij link do statystyk.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
     id: "zadania-merge-decyzje-akcje-u-gory",
     title: "Zadania: merge z gałęzią, decyzje z przyciskami odpowiedzi",
     description:
