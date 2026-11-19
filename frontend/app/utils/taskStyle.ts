@@ -29,7 +29,7 @@ import {
 export const taskKindConfig: Record<TaskKind, { title: string; icon: string }> =
   {
     action: { title: "Operacja", icon: mdiRocketLaunchOutline },
-    merge: { title: "Scalenie", icon: mdiSourceMerge },
+    merge: { title: "Merge", icon: mdiSourceMerge },
     task: { title: "Zadanie", icon: mdiWrenchOutline },
     decision: { title: "Decyzja", icon: mdiScaleBalance },
     idea: { title: "Pomysł", icon: mdiLightbulbOutline },

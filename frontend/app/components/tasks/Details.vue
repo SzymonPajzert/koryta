@@ -14,6 +14,43 @@
       >
         {{ action.title }}
       </v-btn>
+      <!-- Its own level, beside the status: the button says which it is,
+           the menu changes it. What it takes from others is said below. -->
+      <v-menu location="bottom start">
+        <template #activator="{ props: menu }">
+          <v-btn
+            v-bind="menu"
+            size="small"
+            :variant="task.priority ? 'tonal' : 'text'"
+            :color="ownColor"
+            :prepend-icon="PRIORITY_ICONS[task.priority ?? 'normal']"
+            :append-icon="mdiChevronDown"
+            :disabled="saving"
+            :title="setBy ? `Priorytet, ustawił ${setBy}` : 'Priorytet'"
+            data-task-priority-menu
+          >
+            {{ taskPriorityConfig[task.priority ?? "normal"].title }}
+          </v-btn>
+        </template>
+        <v-list density="compact" min-width="200" data-task-priority-list>
+          <v-list-subheader>Priorytet</v-list-subheader>
+          <v-list-item
+            v-for="choice in PRIORITY_MENU"
+            :key="choice"
+            :title="taskPriorityConfig[choice].title"
+            :prepend-icon="PRIORITY_ICONS[choice]"
+            :active="(task.priority ?? 'normal') === choice"
+            :data-task-priority-choice="choice"
+            @click="setPriority(choice)"
+          />
+          <v-list-item
+            v-if="setBy"
+            :subtitle="`ustawił ${setBy}`"
+            disabled
+            data-task-priority-set-by
+          />
+        </v-list>
+      </v-menu>
       <v-spacer />
       <!-- On a phone and beside the map the tools are their icons, so the
            status buttons keep a line of their own. Words through `text`: a
@@ -98,38 +135,13 @@
       </div>
     </div>
 
-    <!-- Its own level, set with a click; and, when what it holds up asks for
-         more, what that is. -->
-    <div class="task-details__priority mb-3" data-task-priority-field>
-      <span class="task-fact__label">Priorytet</span>
-      <v-btn-toggle
-        :model-value="task.priority ?? 'normal'"
-        mandatory
-        density="compact"
-        variant="outlined"
-        divided
-        :color="ownColor"
-        :disabled="saving"
-        data-task-priority-toggle
-        @update:model-value="setPriority"
-      >
-        <v-btn
-          v-for="choice in taskPriorityOrder"
-          :key="choice"
-          :value="choice"
-          size="small"
-        >
-          {{ taskPriorityConfig[choice].title }}
-        </v-btn>
-      </v-btn-toggle>
-      <span v-if="setBy" class="text-caption text-medium-emphasis">
-        ustawił {{ setBy }}
-      </span>
-      <div
-        v-if="state.priority && state.priorityFrom.length > 0"
-        class="task-details__taken text-body-2"
-        data-task-priority-from
-      >
+    <!-- When what it holds up asks for more than its own level, what. -->
+    <div
+      v-if="state.priority && state.priorityFrom.length > 0"
+      class="task-details__priority mb-3"
+      data-task-priority-field
+    >
+      <div class="task-details__taken text-body-2" data-task-priority-from>
         {{ taskPriorityConfig[state.priority].title }}, bo czeka na
         {{ isGoal ? "niego" : "nie" }}:
         <v-chip
@@ -331,9 +343,13 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
 import {
+  mdiArrowUpThick,
   mdiCheck,
+  mdiChevronDown,
   mdiContentCopy,
+  mdiExclamationThick,
   mdiFilterOutline,
+  mdiFlagOutline,
   mdiLinkVariant,
   mdiPencilOutline,
   mdiSitemapOutline,
@@ -464,9 +480,20 @@ const ownColor = computed(() =>
       : undefined,
 );
 
-/** The toggle's value is a button's, one of `taskPriorityOrder`. */
-const setPriority = (value: string) =>
-  emit("update", { priority: value as PriorityChoice });
+/** The levels as the menu lists them, the most pressing first, each with
+ * the sign the rows use for it. */
+const PRIORITY_MENU: PriorityChoice[] = [...taskPriorityOrder].reverse();
+const PRIORITY_ICONS: Record<PriorityChoice, string> = {
+  urgent: mdiExclamationThick,
+  high: mdiArrowUpThick,
+  normal: mdiFlagOutline,
+};
+
+const setPriority = (value: PriorityChoice) => {
+  if (value !== (props.task.priority ?? "normal")) {
+    emit("update", { priority: value });
+  }
+};
 
 /** An agent that raised the level, named: the owner knows his own. */
 const setBy = computed(() =>
