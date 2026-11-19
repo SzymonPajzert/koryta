@@ -42,7 +42,9 @@ Wrota Lubelszczyzny's document lists through the JSON their pages are drawn
 from (``wrota``), SISCO eDc's attachment tables through the call their pages'
 script makes (``sisco``), BUK Softres's file buttons as links (``softres``),
 TYPO3's declarations app through its search, a seeker at a time (``edge``),
-other pages a script draws are rendered (``render``).
+Sputnik BIPv2's category lists 100 articles a page (``sputnik``), other pages
+a script draws are rendered (``render``). A page's breadcrumb says where it
+stands when its title does not (``crumbs``).
 """
 
 from __future__ import annotations
@@ -75,6 +77,7 @@ from bs4 import BeautifulSoup
 from conductor import setup_context
 from jobs.bip_crawler import (
     accordion,
+    crumbs,
     doclist,
     edge,
     finn,
@@ -82,9 +85,9 @@ from jobs.bip_crawler import (
     person_page,
     sisco,
     softres,
+    sputnik,
     umbip,
     wrota,
-    zeto,
 )
 from jobs.bip_crawler import render as rendering
 from jobs.bip_crawler.bipinfo import BipInfo
@@ -1157,7 +1160,7 @@ class PeopleSearch:
         """A page's links as its platform means them: files offered as form
         buttons or drawn from JSON, search forms asked for each seeker, files
         under their person's or their card's label; and the page's breadcrumb,
-        which ``links``' files carry when only it says declarations (`zeto`)."""
+        which may alone say it stands under declarations (`crumbs`)."""
         # Files offered as form buttons, under the position's name (`softres`).
         links = links + softres.files(result.content, result.url)
         # Documents a Vue component draws from JSON, under the subject (`doclist`).
@@ -1190,16 +1193,7 @@ class PeopleSearch:
             links = [
                 replace(x, row=owners[x.url]) if x.url in owners else x for x in links
             ]
-        # A declarations page only its breadcrumb says is one: its files carry
-        # the breadcrumb, not its title, so it lends nobody a name (`zeto`).
-        if (where := zeto.trail(result.content)) and DECLARATION.search(fold(where)):
-            links = [
-                replace(x, heading=f"{x.heading} | {where}".lstrip(" |"))
-                if is_file_link(x.url)
-                else x
-                for x in links
-            ]
-        return links, where
+        return links, crumbs.trail(result.content)
 
     def _read_page(
         self,
@@ -1271,7 +1265,8 @@ class PeopleSearch:
         if who:
             title = f"{who} | {title}"
         folded_title = fold(title)
-        if DECLARATION.search(folded_title) or ASSETS.search(folded_title):
+        filed = bool(DECLARATION.search(fold(where)))
+        if DECLARATION.search(folded_title) or ASSETS.search(folded_title) or filed:
             out.declaration_pages += 1
         mine = len(out.found)
         out.found.extend(
@@ -1284,6 +1279,7 @@ class PeopleSearch:
                 lender=lender,
                 declared=led,
                 owner=who,
+                trail=where,
             )
         )
         out.found[mine:] = _named_only(result, out.found[mine:])
@@ -1294,8 +1290,9 @@ class PeopleSearch:
         # Gdańsk's pages are all titled alike: its councillors' list for a
         # year, reached from "Oświadczenia - 2024 rok", said nothing of
         # declarations, and its links ranked below every menu (11-01).
-        says = led or DECLARATION.search(folded_title + " " + fold(where))
+        says = bool(led or filed or DECLARATION.search(folded_title))
         bonus = DECLARATIONS_BONUS if says else 0.0
+        self._read_whole(frontier, result, where or title, says, seekers, depth, prefer)
         if depth < self.options.max_depth:
             frontier.follow(follow, seekers, depth + 1, prefer, bonus, result.url)
         self._tell_page(out, out.found[before:], result.url, depth, led, lender)
@@ -1319,6 +1316,30 @@ class PeopleSearch:
         self._tell(
             f"page {out.pages} depth {depth}{how}: +{len(new)} candidates "
             f"({named} named), {out.declaration_pages} declaration pages: {url}"
+        )
+
+    def _read_whole(
+        self,
+        frontier: _Frontier,
+        page: HttpResult,
+        where: str,
+        says: bool,
+        seekers: list[Seeker],
+        depth: int,
+        prefer: re.Pattern[str] | None,
+    ) -> None:
+        """A BIPv2 declarations list (``says``) links ten of its articles: the
+        rest wait on the same list asked for whole (`sputnik`), queued here as
+        the page it is, ``where`` its label."""
+        if not says:
+            return
+        whole = sputnik.whole_list(page.content, page.url)
+        frontier.follow(
+            [LinkContext(x, where) for x in whole],
+            seekers,
+            depth,
+            prefer,
+            DECLARATIONS_BONUS,
         )
 
     def _read_eurzad(
@@ -1434,9 +1455,8 @@ class PeopleSearch:
         links = sisco.attachments(page, title, self._post)
         if links is None:
             return
-        folded = fold(title)
-        if not (DECLARATION.search(folded) or ASSETS.search(folded)):
-            out.declaration_pages += 1  # its breadcrumb says so, not its title
+        # A declarations page `_read_page` counted: its title or its breadcrumb
+        # (`crumbs`) says so, as `sisco.attachments` asks.
         out.found.extend(
             candidates(page.url, title, links, seekers, first_names=self.first_names)
         )

@@ -1079,6 +1079,7 @@ def candidates(
     lender: tuple[str, str] | None = None,
     declared: bool = False,
     owner: str = "",
+    trail: str = "",
 ) -> list[Candidate]:
     """Document links on one page that name one of the seekers, or that name nobody.
 
@@ -1095,7 +1096,10 @@ def candidates(
     A file in the site's menus, header, footer or sidebars (``frame``) is
     nobody's by where it stands: only its own words make it somebody's.
     ``owner`` is the one filer the page's fields name (`person_page`): when
-    nobody sought, their files are nobody else's either.
+    nobody sought, their files are nobody else's either. ``trail`` is the
+    page's breadcrumb ("Organa > Oświadczenia majątkowe > Rok 2025"): when it
+    says declarations, the files in the page's own content are declarations
+    whatever they are labelled, and it names nobody.
     """
     title = fold(page_title)
     in_title, namesake_titled = _named(title, "", seekers, [page_title], first_names)
@@ -1113,6 +1117,14 @@ def candidates(
     # file that names nobody.
     address = url_words(page_url)
     filed_under = bool(DECLARATION.search(address) and ASSETS.search(address))
+    # So can a breadcrumb: Alfa TV, 2ClickPortal, SkyCMS and BIPv2 title a
+    # page with its person or the office alone and say only there that it
+    # stands under "Oświadczenia majątkowe" (11-13: none of powiat żniński's
+    # 18 candidacies found). It says where the page's files stand, not whose
+    # they are: in their heading, Alfa TV's "Pobrań" over a file and the crumbs
+    # "Organa > Oświadczenia majątkowe" read as a name, "Pobrań Organa", and
+    # Myślibórz's councillors lost their own files to it.
+    stands = fold(trail) if DECLARATION.search(fold(trail)) else ""
     # A page of blank forms names nobody, and its files are nobody's either
     # (11-01: Wielkopolska's "Formularze oświadczeń majątkowych", Grudziądz's
     # /artykul/wzor-oswiadczenia-majatkowego-dla-radnego, ~250 candidacies
@@ -1191,6 +1203,13 @@ def candidates(
         site_file = link.frame and not ASSETS.search(named_as)
         around = " ".join(fold(x) for x in (link.anchor, link.row, link.heading))
         around += " " + address
+        # What the link and the page's breadcrumb say of it; the breadcrumb
+        # for the files of the page's own content, not the frame's.
+        said = (
+            f"{around} {stands}"
+            if stands and is_file_link(link.url) and not link.frame
+            else around
+        )
         row = _before_record(link.row)
         tiers = (
             (label, (link.anchor, path), address),
@@ -1221,8 +1240,8 @@ def candidates(
         elif not named and not somebody_else and page_people and not site_file:
             named = [(s, s.named_in(title)[1] or lent) for s in page_people]
         declaration_like = bool(
-            DECLARATION.search(around)
-            or ASSETS.search(around)
+            DECLARATION.search(said)
+            or ASSETS.search(said)
             or titled
             # Reached through the section, not titled so: its files alone,
             # not each "?id=" menu link (Strzegom's "Wybory 2025 Prezydent").
@@ -1230,7 +1249,7 @@ def candidates(
             or filed_under
             or STATED_AS_OF.search(fold(link.anchor))
         )
-        base = _base_score(declaration_like, link.url, around)
+        base = _base_score(declaration_like, link.url, said)
         context = " | ".join(x for x in (link.row, link.heading) if x)[:400]
         for seeker, first in named:
             out.append(
@@ -1258,7 +1277,7 @@ def candidates(
             and not asks_information
             and not site_file
             and (declared or bool(DECLARATION.search(title)))
-            and bool(ASSETS.search(around) or ASSETS.search(title))
+            and bool(ASSETS.search(said) or ASSETS.search(title))
             and is_file_link(link.url)
         )
         if unnamed:
