@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "linia-postepu-pod-licznikiem",
+    title: "Linia postępu na dole licznika na /oswiadczenia",
+    description:
+      "Licznik na /oswiadczenia kończy się cienką linią: ile osób już odczytano, ile czeka, a na końcu odczytanych Twoje odczyty. Liczby pokazuje po najechaniu albo dotknięciu.",
+    steps: [
+      "Odczytaj wycinek na /oswiadczenia: licznik kończy się linią.",
+      "Najedź na nią albo dotknij jej na telefonie: pod nią są osoby gotowe i czekające oraz Twoje odczyty.",
+    ],
+    link: "/oswiadczenia",
+    area: "public",
+  },
+  {
     id: "odczyty-oswiadczen-w-statystykach",
     title: "Skany z /oswiadczenia w statystykach, osobno od zmian",
     description:
