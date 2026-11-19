@@ -125,6 +125,18 @@
         </div>
       </template>
     </ClientOnly>
+
+    <!-- What one reader found, then what everybody read: the same line as at
+         the foot of /oswiadczenia, outside ClientOnly so the server render
+         carries it. -->
+    <footer class="of-more">
+      <p data-testid="declaration-stats-link">
+        Ile wycinków odczytali wszyscy razem, zobaczysz w statystykach -
+        <NuxtLink to="/eksploruj/statystyki" class="text-ink-info"
+          >koryta.pl/eksploruj/statystyki</NuxtLink
+        >.
+      </p>
+    </footer>
   </div>
 </template>
 
@@ -343,6 +355,21 @@ onMounted(async () => {
 
 .of-action {
   letter-spacing: 0.01em;
+}
+
+/* The foot of the page, ruled off as on /oswiadczenia. */
+.of-more {
+  border-top: 1px solid rgba(var(--v-border-color), 0.12);
+  color: rgb(var(--v-theme-ink-neutral));
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  margin: 40px 0 0;
+  padding-top: 16px;
+  text-wrap: pretty;
+}
+
+.of-more p {
+  margin: 0;
 }
 
 .of-empty {

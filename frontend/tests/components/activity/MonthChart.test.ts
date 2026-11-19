@@ -16,7 +16,13 @@ function stats(overrides: Partial<ActivityStats> = {}): ActivityStats {
     const busy = index === 18 ? 253 : index === 3 ? 191 : 0;
     return {
       date: date.toISOString().slice(0, 10),
-      counts: { vote: 0, revision: busy, noteSource: 0, publication: 0 },
+      counts: {
+        vote: 0,
+        revision: busy,
+        noteSource: 0,
+        publication: 0,
+        reading: 0,
+      },
       total: busy,
       automatic: 0,
     };
@@ -24,7 +30,13 @@ function stats(overrides: Partial<ActivityStats> = {}): ActivityStats {
   return {
     window: { since: daily[0]!.date, until: daily[29]!.date, days: 30 },
     identified: false,
-    totals: { vote: 320, revision: 813, noteSource: 355, publication: 285 },
+    totals: {
+      vote: 320,
+      revision: 813,
+      noteSource: 355,
+      publication: 285,
+      reading: 0,
+    },
     total: 1773,
     daily,
     contributorCount: 9,

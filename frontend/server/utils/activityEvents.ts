@@ -56,17 +56,18 @@ function windowed(
 /** Read every human interaction recorded inside `window`, from each of the
  * collections that records one, and flatten them into a single event list.
  *
- * The four reads are independent, so they run together; each is a range scan
+ * The five reads are independent, so they run together; each is a range scan
  * on a single field, which Firestore indexes without a composite. */
 export async function collectActivityEvents(
   db: Firestore,
   window: EventWindow,
 ): Promise<CollectedEvents> {
-  const [votes, notes, revisions, publications] = await Promise.all([
+  const [votes, notes, revisions, publications, readings] = await Promise.all([
     collectVotes(db, window),
     collectNoteSources(db, window),
     collectRevisions(db, window),
     collectPublications(db, window),
+    collectReadings(db, window),
   ]);
 
   return {
@@ -75,14 +76,73 @@ export async function collectActivityEvents(
       ...notes.events,
       ...revisions.events,
       ...publications.events,
+      ...readings.events,
     ],
     truncated: [
       ...votes.truncated,
       ...notes.truncated,
       ...revisions.truncated,
       ...publications.truncated,
+      ...readings.truncated,
     ],
   };
+}
+
+/** Crops read on /oswiadczenia, one per answer that is a reading.
+ *
+ * A skip is not one: the reader moved on without saying anything about the
+ * line, and the page's own tally („Sprawdzono”) leaves skips out too. The
+ * verdict is read rather than `counted`, which says the same thing but was
+ * only written from 2026-10-31.
+ *
+ * Answers given without an account (`anon:<reader id>`) are left out, as the
+ * page promises: readings filed under a browser start to count once an account
+ * takes them over. A stranger's reading costs nothing to make, and a public
+ * number anybody can pump with fresh reader ids is not one worth printing.
+ *
+ * A reading an account took over is dated by the claim (`claimedAt`), not by
+ * when the browser gave it (`at`). Its day was counted, and maybe stored,
+ * while it still belonged to the browser, so dated by `at` it would never be
+ * counted at all; and the claim is the moment it started to count. That is
+ * why both fields are scanned, and folded by document, as the note scans are:
+ * a reading given last week and claimed today has only its `claimedAt` in
+ * today's window. Whether the claim moves the answer (the account's copy
+ * carries `claimedFrom`) or copies it (`claims`), the account's document has
+ * `claimedAt` and the browser's is an `anon:` one, so neither shape is
+ * counted twice. */
+async function collectReadings(
+  db: Firestore,
+  window: EventWindow,
+): Promise<CollectedEvents> {
+  const scan = (field: string) =>
+    windowed(db.collection("declarationAnswers"), field, window, true)
+      .select("uid", "verdict", "at", "claimedAt")
+      .limit(SCAN_CAP)
+      .get();
+
+  const snapshots = await Promise.all([scan("at"), scan("claimedAt")]);
+
+  const events: ActivityEvent[] = [];
+  const seen = new Set<string>();
+  for (const doc of snapshots.flatMap((snapshot) => snapshot.docs)) {
+    if (seen.has(doc.id)) continue;
+    seen.add(doc.id);
+
+    const uid = doc.get("uid");
+    if (typeof uid !== "string" || uid.startsWith("anon:")) continue;
+    if (doc.get("verdict") === "skip") continue;
+    const at = normalizeUpdateTime(doc.get("claimedAt") ?? doc.get("at"));
+    if (!at) continue;
+
+    events.push({ uid, at, kind: "reading" });
+  }
+
+  const truncated: ActivityKind[] = snapshots.some(
+    (snapshot) => snapshot.size >= SCAN_CAP,
+  )
+    ? ["reading"]
+    : [];
+  return { events, truncated };
 }
 
 /** Pages an administrator made public.

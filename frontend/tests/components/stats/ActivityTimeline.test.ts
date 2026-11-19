@@ -8,7 +8,7 @@ const daily = Array.from({ length: 30 }, (_, index) => {
   const date = new Date(Date.UTC(2026, 7, 26 + index));
   return {
     date: date.toISOString().slice(0, 10),
-    counts: { vote: 3, revision: 2, noteSource: 1, publication: 0 },
+    counts: { vote: 3, revision: 2, noteSource: 1, publication: 0, reading: 0 },
     total: 6,
   };
 });

@@ -59,6 +59,21 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "odczyty-oswiadczen-w-statystykach",
+    title: "Odczyty z /oswiadczenia liczą się w statystykach",
+    description:
+      "Statystyki liczą teraz piąty rodzaj pracy, „Odczyt oświadczenia”: każdy wycinek odczytany na /oswiadczenia przez zalogowaną osobę, bez pominiętych. Jest w kafelkach, na wykresie dni, w rankingu i w podsumowaniu miesiąca na /aktywnosc. Odczyty bez konta liczą się, gdy przejmie je konto, w dniu przejęcia. /oswiadczenia i /oswiadczenia/znalezione mają na dole link do statystyk.",
+    steps: [
+      "Zaloguj się i odczytaj kilka wycinków na /oswiadczenia, jeden pomiń.",
+      "Na dole /oswiadczenia kliknij koryta.pl/eksploruj/statystyki: kafelek „Odczyt oświadczenia” liczy Twoje odczyty bez pominiętego, a Ty jesteś w rankingu z tą liczbą w kolumnie „Odczyt oświadczenia”.",
+      "Kliknij kafelek „Odczyt oświadczenia”: wraca na /oswiadczenia.",
+      "Na /oswiadczenia/znalezione na dole jest ten sam link do statystyk.",
+      "Bez logowania odczytaj wycinek w innej przeglądarce: liczby w statystykach się nie zmieniają. Zaloguj się tam: odczyt dochodzi do dzisiejszego dnia.",
+    ],
+    link: "/eksploruj/statystyki",
+    area: "public",
+  },
+  {
     id: "strona-eksploruj",
     title: "Strona /eksploruj ze wszystkimi sposobami przeglądania",
     description:

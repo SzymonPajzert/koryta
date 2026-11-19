@@ -476,6 +476,7 @@ const KIND_FORMS: Record<ActivityKind, [string, string, string]> = {
     "opublikowane strony",
     "opublikowanych stron",
   ],
+  reading: ["odczyt oświadczenia", "odczyty oświadczeń", "odczytów oświadczeń"],
 };
 
 function counted(count: number, [one, few, many]: [string, string, string]) {

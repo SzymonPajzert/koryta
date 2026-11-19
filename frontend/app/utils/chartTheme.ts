@@ -11,19 +11,19 @@ import type { SearchEnding } from "~~/shared/searchLog";
  * the combinations in use were run through its validator against this app's
  * white card surface rather than picked by eye:
  *
- * - the four `activityColors` are categorical slots 1-4, checked as a stack
+ * - the five `activityColors` are categorical slots 1-5, checked as a stack
  *   (adjacent pairs) against this surface: worst CVD ΔE 9.1 (protan,
- *   yellow↔aqua), worst normal-vision ΔE 22.9 (the same pair). There were seven
- *   of them, through slot 7, until the kinds were merged down to four; the four
- *   that remain kept the first four slots rather than their old hues, so the
- *   stack is still a prefix of the fixed order and every adjacent pair in it is
- *   one the validator had already passed;
+ *   yellow↔aqua), worst normal-vision ΔE 19.6 (magenta↔yellow, the pair the
+ *   fifth added on 2026-11-02). There were seven of them, through slot 7, until
+ *   the kinds were merged down to four; the four that remained kept the first
+ *   four slots rather than their old hues, so the stack is still a prefix of
+ *   the fixed order;
  * - `diverging.negative` / `diverging.positive` are slots 8 and 1, checked
  *   all-pairs: CVD ΔE 21.6.
  *
  * Aqua, yellow and magenta sit below 3:1 against white, which the method allows
  * only with relief — so every chart using them ships a table view of the same
- * numbers. Do not add a fifth activity colour without re-running the
+ * numbers. Do not add a sixth activity colour without re-running the
  * validator; the slot *order* is the colourblind-safety mechanism, not
  * decoration, so a new kind takes the next slot rather than a hue picked to
  * suit it - and is appended to `activityKinds`, so the stack stays in slot
@@ -168,6 +168,7 @@ export const activityColors: Record<ActivityKind, string> = {
   revision: categorical[1],
   noteSource: categorical[2],
   publication: categorical[3],
+  reading: categorical[4],
 };
 
 /** How a search ended, on /admin/wyszukiwania. These are states, not

@@ -6,6 +6,7 @@ const counts = (publication: number) => ({
   revision: 3,
   noteSource: 1,
   publication,
+  reading: 0,
 });
 
 describe("foldAutomaticPublications", () => {

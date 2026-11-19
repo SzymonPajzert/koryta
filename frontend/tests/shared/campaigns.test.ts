@@ -313,6 +313,17 @@ describe("renderCampaign", () => {
     );
   });
 
+  it("counts a reader's readings of declarations", () => {
+    const counts = { ...emptyActivityCounts(), vote: 1, reading: 214 };
+    const mail = render({
+      content: { ...CONTENT, includeStats: true },
+      personal: { days: 30, counts, total: 215 },
+    });
+    expect(mail.text).toContain(
+      "Twój wkład w ostatnich 30 dniach: 1 ocena i 214 odczytów oświadczeń.",
+    );
+  });
+
   it("says nothing about the reader's own work when there was none", () => {
     const mail = render({
       content: { ...CONTENT, includeStats: true },
