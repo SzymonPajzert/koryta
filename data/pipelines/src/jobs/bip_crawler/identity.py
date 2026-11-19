@@ -38,6 +38,14 @@ SERVERS = {
     # browser 200, and robots.txt answers a browser with an HTML page, so there
     # is none. Somianka walked as a browser found 3 of 3.
     "195.117.178.13": "bip.org.pl",
+    # trol.pl's two servers (srv38, srv79; 11-13, again 11-18): a User-Agent
+    # with "crawler" in it gets 429 on about half its requests at any pace
+    # (one a host every 20 s too), and its 200s come 3-4 s late; the browser
+    # agent gets every page in under a second. 117 units' starts sit on .38
+    # (BIPs), 144 on .79 (websites mostly). As a browser Czarnia found 2 of 2,
+    # Olszanka 9 of 9, Piła 10 of 13.
+    "92.43.119.38": "trol.pl",
+    "92.43.119.79": "trol.pl",
 }
 
 #: Hosts, without www.
@@ -160,6 +168,14 @@ HOSTS = {
     # a browser 200 (11-13).
     "api.um.gdynia.pl": "Gdynia, 34 candidacies",
     "legacy.um.gdynia.pl": "Gdynia, 34 candidacies",
+    # The crawler's name gets its connection reset (curl 56), robots.txt too,
+    # a browser 200 (11-13, again 11-18). As a browser Dębica found 19 of 19,
+    # Pilzno 7 of 7.
+    "bip.ugdebica.pl": "Dębica, 19 candidacies",
+    "pilzno.un.pl": "Pilzno, 7 candidacies",
+    # The crawler's name gets 502 Proxy Error, robots.txt too, a browser 200
+    # (11-13, again 11-18); as a browser 8 of 8 found.
+    "bip.sokolow-mlp.pl": "Sokołów Małopolski, 8 candidacies",
 }
 
 
