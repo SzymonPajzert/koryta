@@ -11,6 +11,7 @@ from entities.company import Owner, display_name, on_the_treasury_list
 from entities.company_bodies import supervisory_body
 from entities.company_categories import categories_for
 from scrapers.koryta.download import KorytaCompanies
+from scrapers.krs.researched_owners import seat_pay
 from scrapers.map.jst import SKARB_PANSTWA
 from scrapers.stores import Context, Pipeline
 
@@ -73,6 +74,23 @@ def add_is_public(payload: dict, row: dict) -> None:
         payload["is_public"] = True
     elif read_an_odpis(row):
         payload["is_public"] = False
+
+
+def add_seat_pay(payload: dict, krs: object) -> None:
+    """Whether a seat at the company is paid, and why, as the ingest takes it.
+
+    "paid" or "unpaid" with the reason where the pipelines know
+    (`researched_owners.seat_pay`), and "" where they do not, which withdraws
+    an answer they gave before: the uploader drops a None. The ingest never
+    writes over an answer a person gave on the site.
+    """
+    pay = seat_pay(krs)
+    if pay is None:
+        payload["paid_seats"] = ""
+        payload["paid_seats_reason"] = ""
+    else:
+        payload["paid_seats"] = "paid" if pay.paid else "unpaid"
+        payload["paid_seats_reason"] = pay.reason
 
 
 def split_owners(entries: object) -> tuple[list[str], list[str], bool]:
@@ -159,6 +177,11 @@ class CompaniesPayloads(Pipeline):
     crawl, because a rada spoleczna is created by statute and often never
     filed, so it can say a board is unpaid but never that one is paid. The
     rule stays with `supervisory_body`, which reads the form and is total.
+
+    What one body's own statute says about pay goes as `paid_seats`, with the
+    reason beside it (`add_seat_pay`): a seat on an association of public
+    bodies is unpaid unless its statute pays it (decision on 2026-11-19). The
+    site counts no post there, and a person can change the answer on the page.
 
     The payloads carry `teryt_code`, which the uploader maps to the `teryt`
     field the ingest endpoint links a company to its region with. They also
@@ -278,6 +301,8 @@ class CompaniesPayloads(Pipeline):
                     "activity",
                     "categories",
                     "supervisory_body",
+                    "paid_seats",
+                    "paid_seats_reason",
                     "is_public",
                     "owners",
                     "owner_teryts",
@@ -368,6 +393,7 @@ class CompaniesPayloads(Pipeline):
                 "founder_skarb_panstwa": founder_skarb_panstwa,
             }
             add_is_public(payload, row)
+            add_seat_pay(payload, krs)
             add_register_fields(payload, form, row.get("supervisory_organ"))
             add_wikipedia(payload, row.get("wikipedia"))
 

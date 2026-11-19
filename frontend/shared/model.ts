@@ -606,8 +606,28 @@ export interface Company extends Omit<Node, "type"> {
    * from `formaPrawna`, which never reaches the node. Not editable from the
    * page and so with no `...Source` marker of its own: `categories` and
    * `isPublic` have one because a person can know what the register cannot
-   * show, and here the register is the answer. */
+   * show, and here the register is the answer. What one institution's own
+   * statute says is `paidSeats`, which wins over this where it is set. */
   supervisoryBody?: string;
+  /** Whether a seat here is paid, by this institution's own statute: `false`
+   * where it pays nobody for sitting on its organs, `true` where it pays them
+   * in any form, a salary, a lump sum or per-diems (decision on 2026-11-19).
+   *
+   * Wins over the legal form's rule (`supervisoryBody`) where it is set:
+   * `false` takes every post here off the employment counters, the board's
+   * included, and `true` keeps them all. Absent means nobody has said, and the
+   * form's rule stands. See `unpaidSeats` in `shared/companyBodies.ts`.
+   *
+   * The pipelines answer it for the associations of public bodies, whose board
+   * is paid only where the statute says so (art. 10 ust. 1 pkt 5a Prawa o
+   * stowarzyszeniach), and a person can answer it from the page. */
+  paidSeats?: boolean;
+  /** Why `paidSeats` says what it does: what the statute says and where, as
+   * whoever answered wrote it. */
+  paidSeatsReason?: string;
+  /** Where `paidSeats` came from, so an ingest does not overwrite a person, as
+   * `isPublicSource`. */
+  paidSeatsSource?: "manual";
 }
 
 /** Whether anything is actually known about a place's ownership.

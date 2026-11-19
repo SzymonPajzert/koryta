@@ -54,6 +54,14 @@ export const companyRequestSchema = z.object({
    * array does. Absent means the payload did not work it out and the stored
    * value is left alone. */
   supervisory_body: z.string().optional(),
+  /** Whether a seat at the company is paid, as the pipelines read its statute,
+   * see `Company.paidSeats`. The empty string withdraws an answer they gave
+   * before, as it clears `supervisory_body` (the uploader drops a `null`);
+   * absent leaves the stored one alone. A person's answer is never
+   * overwritten. */
+  paid_seats: z.enum(["paid", "unpaid", ""]).optional(),
+  /** Why, see `Company.paidSeatsReason`. */
+  paid_seats_reason: z.string().optional(),
   /** Whether the register names the Treasury among the company's shareholders.
    *
    * A flag rather than an entry in `owners` or `owner_teryts`, because the
@@ -121,6 +129,8 @@ export type CompanyRequest = {
   activity?: string[];
   categories?: string[];
   supervisory_body?: string;
+  paid_seats?: "paid" | "unpaid" | "";
+  paid_seats_reason?: string;
   is_public?: boolean;
   legal_form?: string;
   supervisory_organ?: SupervisoryOrgan;
@@ -478,6 +488,11 @@ function identifierField(
  * and a value off the list would file the company under a category no filter
  * can ever reach. An empty array is a legitimate answer meaning "none of
  * these", which is why the field is not `.min(1)`.
+ *
+ * `paidSeats` is here on the same terms and records `paidSeatsSource`, with
+ * `paidSeatsReason` beside it: a statute is something a reader can open and
+ * the pipelines mostly cannot. `/api/revisions/create` refuses a changed
+ * answer that comes without a new reason.
  */
 export const companyEditSchema = z.object({
   name: z.string().min(1, "Nazwa jest wymagana"),
@@ -494,6 +509,8 @@ export const companyEditSchema = z.object({
       }),
     )
     .optional(),
+  paidSeats: z.boolean().optional(),
+  paidSeatsReason: z.string().trim().max(1000, "Za długie").optional(),
 }) satisfies z.ZodType<
   Pick<
     Company,
@@ -505,6 +522,8 @@ export const companyEditSchema = z.object({
     | "wikipedia"
     | "isPublic"
     | "categories"
+    | "paidSeats"
+    | "paidSeatsReason"
   >
 >;
 

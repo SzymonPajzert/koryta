@@ -584,6 +584,85 @@ describe("api/ingest/company", () => {
     );
   });
 
+  describe("whether a seat is paid", () => {
+    const zwiazek = {
+      krs: "0000094303",
+      name: "Związek Powiatów Polskich",
+    };
+    const stored = (data: Record<string, unknown>) => {
+      const existingRef = { id: "existing-id" };
+      mockGet.mockResolvedValue({
+        empty: false,
+        docs: [
+          { ref: existingRef, data: () => ({ published: true, ...data }) },
+        ],
+      });
+    };
+    const written = () =>
+      vi.mocked(createRevisionTransaction).mock.calls[0]![4] as Record<
+        string,
+        unknown
+      >;
+
+    it("stores the pipelines' answer and its reason", async () => {
+      mockReadBody.mockResolvedValue({
+        ...zwiazek,
+        paid_seats: "unpaid",
+        paid_seats_reason: "Statut, § 12 ust. 2: funkcje pełnione honorowo",
+      });
+      stored({});
+
+      await handler({} as any);
+
+      expect(written()).toMatchObject({
+        paidSeats: false,
+        paidSeatsReason: "Statut, § 12 ust. 2: funkcje pełnione honorowo",
+      });
+    });
+
+    it("clears the pair when the pipelines withdraw their answer", async () => {
+      mockReadBody.mockResolvedValue({ ...zwiazek, paid_seats: "" });
+      stored({ paidSeats: false, paidSeatsReason: "Statut" });
+
+      await handler({} as any);
+
+      expect(written()).not.toHaveProperty("paidSeats");
+      expect(written()).not.toHaveProperty("paidSeatsReason");
+    });
+
+    it("leaves the stored answer alone when the payload states none", async () => {
+      mockReadBody.mockResolvedValue({ ...zwiazek });
+      stored({ paidSeats: false, paidSeatsReason: "Statut" });
+
+      await handler({} as any);
+
+      expect(written()).toMatchObject({
+        paidSeats: false,
+        paidSeatsReason: "Statut",
+      });
+    });
+
+    it("never overwrites a person's answer", async () => {
+      mockReadBody.mockResolvedValue({
+        ...zwiazek,
+        paid_seats: "unpaid",
+        paid_seats_reason: "Statut, § 12 ust. 2: funkcje pełnione honorowo",
+      });
+      stored({
+        paidSeats: true,
+        paidSeatsReason: "Uchwała zjazdu przyznaje diety",
+        paidSeatsSource: "manual",
+      });
+
+      await handler({} as any);
+
+      expect(written()).toMatchObject({
+        paidSeats: true,
+        paidSeatsReason: "Uchwała zjazdu przyznaje diety",
+      });
+    });
+  });
+
   it("leaves the stored categories alone when the payload states none", async () => {
     // A payload from a pipeline that does not compute categories at all - the
     // person uploader creating a missing employer, say - must not be read as

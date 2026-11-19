@@ -95,6 +95,32 @@ export default defineEventHandler(async (event) => {
       dataFields.categoriesSource = "manual";
     }
 
+    // Whether a seat is paid, on the same terms, and never without a reason:
+    // the answer rests on a statute, so a change that does not say where it
+    // comes from is refused. Pinned only when the proposal changes the answer
+    // or its reason, as the name is below: the form sends both on every edit,
+    // and editing something else must not pin what the pipelines wrote.
+    if (proposableType(baseFields) === "place") {
+      const reason =
+        typeof dataFields.paidSeatsReason === "string"
+          ? dataFields.paidSeatsReason
+          : undefined;
+      const answerChanged =
+        dataFields.paidSeats !== undefined &&
+        dataFields.paidSeats !== baseFields.paidSeats;
+      const reasonChanged =
+        reason !== undefined && reason !== (baseFields.paidSeatsReason ?? "");
+      if (answerChanged || reasonChanged) {
+        if (!reason || !reasonChanged) {
+          throw createError({
+            statusCode: 400,
+            message: "Podaj, skąd to wiadomo",
+          });
+        }
+        dataFields.paidSeatsSource = "manual";
+      }
+    }
+
     // A person's parties, on the same terms. `ingest/person` unions what it
     // was handed into what is stored, so without this a removal is undone by
     // the next run - SLD came back onto a published page 59 minutes after a

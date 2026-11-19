@@ -1,7 +1,11 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import type { Edge } from "../shared/model";
-import { bodyIsPaidPost, namesASupervisorySeat } from "../shared/companyBodies";
+import {
+  postIsPaid,
+  unpaidSeatsByPlace,
+  type SeatPay,
+} from "../shared/companyBodies";
 import { computeEdgeStats } from "../shared/stats";
 
 /**
@@ -114,14 +118,13 @@ async function main() {
   }).length;
   console.info(`  ${"(none)".padEnd(22)} ${uncategorised}`);
 
-  // Supervisory organs, and whether the counters honour them. See
-  // `shared/companyBodies.ts` - a rada społeczna seat is unpaid, so it is not
-  // employment, and the whole point is that nothing about the stored edge says
-  // so: every one of them is named "Rada Nadzorcza".
-  const unpaidSeatPlaceIds = new Set(
-    places
-      .filter((d) => !bodyIsPaidPost(d.data().supervisoryBody))
-      .map((d) => d.id),
+  // Supervisory organs and unpaid seats, and whether the counters honour them.
+  // See `shared/companyBodies.ts` - a rada społeczna seat is unpaid, so it is
+  // not employment, and the whole point is that nothing about the stored edge
+  // says so: every one of them is named "Rada Nadzorcza". A place whose
+  // statute pays nobody (`paidSeats: false`) has every post dropped.
+  const unpaidSeats = unpaidSeatsByPlace(
+    places.map((d) => [d.id, d.data() as SeatPay] as const),
   );
   const publicPlaceIds = new Set(
     places.filter((d) => d.data().isPublic === true).map((d) => d.id),
@@ -144,11 +147,15 @@ async function main() {
   const employment = edges.docs
     .map((d) => d.data() as Edge)
     .filter((e) => e.type === "employed");
-  const atUnpaid = employment.filter((e) => unpaidSeatPlaceIds.has(e.target));
-  const dropped = atUnpaid.filter((e) => namesASupervisorySeat(e.name));
-  const kept = atUnpaid.filter((e) => !namesASupervisorySeat(e.name));
+  const atUnpaid = employment.filter((e) => unpaidSeats.has(e.target));
+  const dropped = atUnpaid.filter(
+    (e) => !postIsPaid(e.name, unpaidSeats.get(e.target)),
+  );
+  const kept = atUnpaid.filter((e) =>
+    postIsPaid(e.name, unpaidSeats.get(e.target)),
+  );
   console.info(`  employment edges at those places: ${atUnpaid.length}`);
-  console.info(`    dropped (a seat on the organ) : ${dropped.length}`);
+  console.info(`    dropped (an unpaid seat)      : ${dropped.length}`);
   console.info(
     `    kept (a real post)            : ${kept.length}` +
       (kept.length
@@ -178,12 +185,7 @@ async function main() {
     const own = bySource.get(doc.id);
     if (!own?.some((e) => e.type === "employed")) continue;
     checked += 1;
-    const expected = computeEdgeStats(
-      own,
-      publicPlaceIds,
-      {},
-      unpaidSeatPlaceIds,
-    );
+    const expected = computeEdgeStats(own, publicPlaceIds, {}, unpaidSeats);
     const stored = node.stats?.edges?.all;
     if (
       (stored?.latestEmploymentStart ?? null) !==
