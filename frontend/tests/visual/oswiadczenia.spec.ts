@@ -55,6 +55,9 @@ async function serveReading(
     async (route) => {
       const request = route.request();
       const url = new URL(request.url());
+      // How far the readers got, in people, for the line along the tally's
+      // bottom: the seed's snapshot, public, from the server itself.
+      if (url.pathname === "/api/declarations/people") return route.continue();
       const headers = await request.allHeaders();
       asked.push({
         method: request.method(),
@@ -172,6 +175,40 @@ test("oswiadczenia", OSWIADCZENIA, async ({ page }, testInfo) => {
   await expect(page).toHaveScreenshot("oswiadczenia.png", { fullPage: true });
 
   await expectFitsThePhone(page, testInfo);
+});
+
+/** The line along the tally's bottom with its words open under it: how far
+ * the readers got, in people, and what this reader read, as round
+ * oswiadczenia-statystyki-r4 approved it on 2026-11-19. The seed's snapshot
+ * has 420 people read and 90 waiting. */
+test("oswiadczenia-pasek", OSWIADCZENIA, async ({ page }) => {
+  test.setTimeout(120_000);
+  await openSignedIn(page, readerAtWork());
+  await cropShown(page, 1);
+  const tally = page.getByTestId("declaration-tally");
+  const line = tally.getByTestId("declaration-progress");
+  await expect(line).toBeVisible({ timeout: 30_000 });
+
+  await readyForFullPage(page);
+  await line.click();
+  const words = page.getByTestId("declaration-progress-legend");
+  await expect(words).toBeVisible();
+  await expect(words).toHaveText(/gotowe\s*420\s*czekają\s*90/);
+  await expect(words).toContainText("Twoje odczyty: 12");
+  await page.waitForFunction(() =>
+    document.getAnimations().every((a) => a.playState !== "running"),
+  );
+
+  const from = (await tally.boundingBox())!;
+  const to = (await words.boundingBox())!;
+  await expect(page).toHaveScreenshot("oswiadczenia-pasek.png", {
+    clip: {
+      x: from.x,
+      y: from.y,
+      width: from.width,
+      height: to.y + to.height + 8 - from.y,
+    },
+  });
 });
 
 /** What the field understood, said back beside its label. The reader types

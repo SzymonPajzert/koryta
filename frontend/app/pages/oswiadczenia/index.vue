@@ -119,6 +119,11 @@
               </v-btn>
             </div>
           </div>
+          <OswiadczeniaReadingProgress
+            v-if="peopleData?.people"
+            :people="peopleData.people"
+            :yours="readSoFar"
+          />
         </section>
         <div
           v-if="readSoFar > 0 && tallyInfoOpen"
@@ -299,7 +304,7 @@ import {
 import { polishNumber } from "~/composables/polish";
 import { useSignInOnScreen } from "~/composables/signInOnScreen";
 import { lineParts } from "~/utils/declarationReading";
-import { READ_NAMES } from "~~/shared/declarations";
+import { READ_NAMES, type DeclarationPeople } from "~~/shared/declarations";
 
 /**
  * /oswiadczenia: readers type the birth date off a line cut out of a
@@ -351,6 +356,13 @@ const {
   reset,
   keepTyped,
 } = useDeclarationQueue();
+
+/** How far the readers got, in people, for the line along the tally's
+ * bottom: the snapshot the home page and /oswiadczenia/postep show. */
+const { data: peopleData } = useFetch<{ people: DeclarationPeople | null }>(
+  "/api/declarations/people",
+  { key: "declarations-people", server: false, lazy: true },
+);
 
 const current = computed(() => queue.value[0] ?? null);
 
