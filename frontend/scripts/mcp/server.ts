@@ -225,6 +225,21 @@ const WRITES = {
   openWorldHint: false,
 } as const;
 
+/** A decision's answers, as an agent files them. */
+const optionsArg = z
+  .array(
+    z.object({
+      key: z.string().describe("A, B, C... in order"),
+      title: z.string().max(300).describe("The answer, in a line"),
+    }),
+  )
+  .min(2)
+  .max(8)
+  .describe(
+    "For a decision: the answers the owner picks from with one click, " +
+      "keyed A, B, C... as the body names them",
+  );
+
 const dependsOnHelp =
   "Ids of tasks that have to be done first. A dependency that would close a " +
   "loop is refused.";
@@ -339,10 +354,28 @@ server.registerTool(
         .optional()
         .describe(
           "`action`: a step on production or infrastructure (deploy, upload, " +
-            "migration, IAM, merge); `task`: work in a checkout; `decision`: " +
-            "a question only the owner can answer; `idea`: nobody committed " +
-            "to it; `goal`: where a group of tasks leads, with those tasks " +
-            "in `dependsOn`. Default `task`",
+            "migration, IAM); `merge`: a branch to land on main, named in " +
+            "`branches` (required); `task`: work in a checkout; `decision`: " +
+            "a question only the owner can answer - give it `question` and " +
+            "`options`; `idea`: nobody committed to it; `goal`: where a " +
+            "group of tasks leads, with those tasks in `dependsOn`. " +
+            "Default `task`",
+        ),
+      question: z
+        .string()
+        .max(300)
+        .optional()
+        .describe(
+          "For a decision: what it asks, in one sentence, shown above the " +
+            "answer buttons. One question per decision.",
+        ),
+      options: optionsArg.optional(),
+      recommended: z
+        .string()
+        .optional()
+        .describe(
+          "For a decision: the key of the option you would pick; say why " +
+            "in `body`",
         ),
       who: z
         .enum(TASK_WHO)
@@ -435,6 +468,21 @@ server.registerTool(
       body: z.string().max(20_000).optional().describe("Replaces the body"),
       kind: z.enum(TASK_KINDS).optional(),
       who: z.enum(TASK_WHO).optional(),
+      question: z
+        .string()
+        .max(300)
+        .optional()
+        .describe("Replaces a decision's question"),
+      options: optionsArg
+        .optional()
+        .describe(
+          "Replaces a decision's options; the owner's pick goes if its " +
+            "key does",
+        ),
+      recommended: z
+        .string()
+        .optional()
+        .describe("The key of the option you would pick"),
       tags: z
         .array(z.string())
         .max(12)

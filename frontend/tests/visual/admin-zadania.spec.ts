@@ -7,8 +7,10 @@ import { pageTag } from "./pageTags";
 import { expectFitsThePhone } from "./phoneWidth";
 
 /** /admin/zadania, the owner's task list: the lists with one task open, the
- * map of what waits on what with one task picked, the map with every chain
- * folded, and the map focused on one task.
+ * kinds with fields of their own open (a merge, a decision waiting for its
+ * answer, one answered), the map of what waits on what with one task picked,
+ * the map opened from a row's „Na mapie”, the map with every chain folded,
+ * and the map focused on one task.
  *
  * The tasks live in their own database, which the seed leaves empty, so the
  * list is answered from ./fixtures/opsTasks.ts. The page is rendered in the
@@ -54,16 +56,94 @@ test("zadania", ZADANIA, async ({ page }, testInfo) => {
     "high-taken",
   );
 
-  // Waiting on the deploy: the open row shows its priority, what it waits on
-  // and its history.
+  // Waiting on the deploy: the open row shows its priority at the top, what
+  // it waits on and its history.
   await upload.locator("[data-row-toggle]").click();
   await expect(upload.locator("[data-task-depends-on]")).toBeVisible();
-  await expect(upload.locator("[data-task-priority-field]")).toContainText(
-    "ustawił agent",
-  );
+  const own = upload.locator("[data-task-actions] [data-task-priority-menu]");
+  await expect(own).toHaveText("Pilne");
+  await expect(own).toHaveAttribute("title", /ustawił agent/);
 
   await readyForFullPage(page);
   await expect(page).toHaveScreenshot("zadania.png", { fullPage: true });
+
+  await expectFitsThePhone(page, testInfo);
+});
+
+test("zadania-rodzaje", ZADANIA, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  await logIn(page, USERS.admin, "/admin/zadania");
+
+  const merge = page.locator("#t-merge-przykladowa-galaz");
+  await expect(merge).toBeVisible({ timeout: 30_000 });
+  // A merge leads with its branch, tagged with how much of it is on main.
+  await expect(merge.locator("[data-task-merge-state]")).toHaveText(
+    "1/3 na main",
+  );
+  await merge.locator("[data-row-toggle]").click();
+  await expect(merge.locator("[data-task-merge]")).toContainText(
+    "Na main 1 z 3 zmian.",
+  );
+
+  // The decision asks first, then offers its three answers.
+  const decision = page.locator("#t-decyzja-widocznosc");
+  await decision.locator("[data-row-toggle]").click();
+  await expect(decision.locator("[data-task-question]")).toHaveText(
+    "Które powiązania z umów publikować od razu?",
+  );
+  await expect(decision.locator("[data-task-option]")).toHaveCount(3);
+  await expect(
+    decision.locator('[data-task-option="B"] [data-task-recommended]'),
+  ).toBeVisible();
+
+  // The answered one is listed apart, with what follows from it.
+  const answered = page.locator(
+    '[data-section="decided"] ~ * #t-decyzja-zrodlo-umow',
+  );
+  await expect(answered.locator("[data-task-picked]")).toHaveText("Wybrano A");
+  await answered.locator("[data-row-toggle]").click();
+  await expect(answered.locator("[data-task-follows]")).toContainText(
+    "Wynikają z niej 2 zadania, zamknięte 1.",
+  );
+
+  await readyForFullPage(page);
+  await expect(page).toHaveScreenshot("zadania-rodzaje.png", {
+    fullPage: true,
+  });
+
+  await expectFitsThePhone(page, testInfo);
+});
+
+test("zadania-na-mapie", ZADANIA, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  await logIn(page, USERS.admin, "/admin/zadania");
+
+  const decision = page.locator("#t-decyzja-widocznosc");
+  await expect(decision).toBeVisible({ timeout: 30_000 });
+  await decision.locator("[data-row-toggle]").click();
+  await decision.locator("[data-task-show-on-map]").click();
+
+  // The map, with the task picked, its details beside it, and its card in
+  // the middle of the map.
+  await expect(page).toHaveURL(/widok=mapa.*#t-decyzja-widocznosc/);
+  const card = page.locator('[data-task-node="decyzja-widocznosc"]');
+  await expect(card).toBeVisible();
+  await expect(
+    page.locator('[data-task-panel] [data-task-details="decyzja-widocznosc"]'),
+  ).toBeVisible();
+  const map = await page.locator("[data-task-map]").boundingBox();
+  const box = await card.boundingBox();
+  expect(
+    Math.abs(box!.x + box!.width / 2 - (map!.x + map!.width / 2)),
+  ).toBeLessThan(2);
+  expect(
+    Math.abs(box!.y + box!.height / 2 - (map!.y + map!.height / 2)),
+  ).toBeLessThan(2);
+
+  await readyForFullPage(page);
+  await expect(page).toHaveScreenshot("zadania-na-mapie.png", {
+    fullPage: true,
+  });
 
   await expectFitsThePhone(page, testInfo);
 });
@@ -74,8 +154,10 @@ test("zadania-mapa", ZADANIA, async ({ page }, testInfo) => {
 
   const deploy = page.locator('[data-task-node="deploy-indeksow"]');
   await expect(deploy).toBeVisible({ timeout: 30_000 });
-  // Both chains are drawn: two arrows in each, the second ending in a goal.
-  await expect(page.locator(".task-edge")).toHaveCount(4);
+  // Both chains are drawn: two arrows in each, the second ending in a goal,
+  // and one more from the answered decision to the upload of links (the task
+  // after it that is done is off the map with the other closed ones).
+  await expect(page.locator(".task-edge")).toHaveCount(5);
   // Each card of both chains is marked: the urgent upload and the high goal
   // filled, what leads to them outlined.
   await expect(
@@ -147,7 +229,7 @@ test("zadania-mapa-skupienie", ZADANIA, async ({ page }, testInfo) => {
   // And the whole map back.
   await page.locator("[data-task-unfocus]").click();
   await expect(page).not.toHaveURL(/skupienie=/);
-  await expect(page.locator(".task-edge")).toHaveCount(4);
+  await expect(page.locator(".task-edge")).toHaveCount(5);
   await expect(
     page.locator('[data-task-node="decyzja-widocznosc"]'),
   ).toBeVisible();

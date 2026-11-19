@@ -142,7 +142,9 @@
               "
             >
               <v-icon
-                :icon="form.recommended === option.key ? mdiStar : mdiStarOutline"
+                :icon="
+                  form.recommended === option.key ? mdiStar : mdiStarOutline
+                "
               />
             </v-btn>
             <v-btn
@@ -206,9 +208,7 @@
           v-model="form.branches"
           :label="form.kind === 'merge' ? 'Gałąź do scalenia' : 'Gałęzie'"
           :hint="
-            form.kind === 'merge'
-              ? 'Nazwa gałęzi na GitHubie.'
-              : undefined
+            form.kind === 'merge' ? 'Nazwa gałęzi na GitHubie.' : undefined
           "
           :persistent-hint="form.kind === 'merge'"
           multiple

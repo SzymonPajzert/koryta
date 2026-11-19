@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
+import { nextTick } from "vue";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import PriorityBadge from "../../../app/components/tasks/PriorityBadge.vue";
 import Details from "../../../app/components/tasks/Details.vue";
@@ -90,18 +91,64 @@ describe("TasksPriorityBadge", () => {
   });
 });
 
-describe("TasksDetails priority", () => {
-  const details = (id: string) =>
-    mountSuspended(Details, {
-      props: { task: byId.get(id)!, state: states.get(id)!, tasks },
-    });
+// The menu's overlay observes its activator as it opens; happy-dom has no
+// ResizeObserver.
+global.ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
 
-  it("sends the level picked, as a patch", async () => {
+describe("TasksDetails priority", () => {
+  // The menu teleports into document.body: mounted there, and cleared after.
+  let mounted: { unmount: () => void } | undefined;
+  afterEach(() => {
+    mounted?.unmount();
+    mounted = undefined;
+    document.body.innerHTML = "";
+  });
+  const details = async (id: string) => {
+    const wrapper = await mountSuspended(Details, {
+      props: { task: byId.get(id)!, state: states.get(id)!, tasks },
+      attachTo: document.body,
+    });
+    mounted = wrapper;
+    return wrapper;
+  };
+
+  /** Opens the priority menu and returns its entries, by level. */
+  const openMenu = async (wrapper: Awaited<ReturnType<typeof details>>) => {
+    const button = wrapper.get("[data-task-priority-menu]");
+    await button.trigger("click");
+    await nextTick();
+    const menu = document.getElementById(button.attributes("aria-controls")!);
+    if (!menu) throw new Error("no priority menu opened");
+    return menu;
+  };
+
+  it("says the task's own level on a button at the top", async () => {
+    const top = (await details("merge")).get("[data-task-actions]");
+    expect(top.get("[data-task-priority-menu]").text()).toBe("Zwykłe");
+    const urgent = await details("leak");
+    expect(urgent.get("[data-task-priority-menu]").text()).toBe("Pilne");
+  });
+
+  it("sends the level picked in the menu, as a patch", async () => {
     const wrapper = await details("merge");
-    const buttons = wrapper.findAll("[data-task-priority-toggle] button");
-    expect(buttons.map((b) => b.text())).toEqual(["Zwykłe", "Ważne", "Pilne"]);
-    await buttons[1]!.trigger("click");
+    const menu = await openMenu(wrapper);
+    const entries = [
+      ...menu.querySelectorAll<HTMLElement>("[data-task-priority-choice]"),
+    ];
+    expect(entries.map((e) => e.dataset.taskPriorityChoice)).toEqual([
+      "urgent",
+      "high",
+      "normal",
+    ]);
+    entries[1]!.click();
     expect(wrapper.emitted("update")).toEqual([[{ priority: "high" }]]);
+    // The level it has already sends nothing.
+    entries[2]!.click();
+    expect(wrapper.emitted("update")).toHaveLength(1);
   });
 
   it("names what a taken level comes from, and opens it on a click", async () => {
@@ -113,13 +160,18 @@ describe("TasksDetails priority", () => {
     expect(wrapper.emitted("select")).toEqual([["live"]]);
   });
 
-  it("says which agent raised a level", async () => {
-    const wrapper = await details("leak");
-    expect(wrapper.get("[data-task-priority-field]").text()).toContain(
+  it("says which agent raised a level, in the menu", async () => {
+    const leak = await details("leak");
+    expect(leak.get("[data-task-priority-menu]").attributes("title")).toContain(
       "ustawił agent (bridge-cse_01)",
     );
+    const menu = await openMenu(leak);
     expect(
-      (await details("live")).get("[data-task-priority-field]").text(),
+      menu.querySelector("[data-task-priority-set-by]")?.textContent,
+    ).toContain("ustawił agent (bridge-cse_01)");
+    const live = await details("live");
+    expect(
+      live.get("[data-task-priority-menu]").attributes("title"),
     ).not.toContain("ustawił");
   });
 });

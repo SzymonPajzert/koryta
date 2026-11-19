@@ -335,7 +335,6 @@
     >
       Cała historia ({{ task.log.length }})
     </v-btn>
-
   </div>
 </template>
 
@@ -658,8 +657,7 @@ const actions = computed(() => {
   const answered = props.task.kind === "decision" && !!props.task.picked;
   const statuses = offered[props.task.status].filter(
     (status) =>
-      !(isGoal.value && status === "doing") &&
-      !(answered && status === "open"),
+      !(isGoal.value && status === "doing") && !(answered && status === "open"),
   );
   // A decision waiting for an answer is answered with its options, which
   // lead: „Zrobione” is then one more way out, not the main one.
