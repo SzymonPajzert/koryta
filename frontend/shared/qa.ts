@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "platne-funkcje-instytucji",
+    title: "Instytucja mówi, czy za funkcje w niej płacą",
+    description:
+      "Stowarzyszenia samorządów mają chip „Funkcje bez wynagrodzenia” albo „Funkcje płatne” z cytatem ze statutu. Gdzie statut nie płaci, zasiadanie w zarządzie czy komisji nie liczy się jako płatne stanowisko. Odpowiedź można poprawić, podając źródło.",
+    steps: [
+      "Wyszukaj „Związek Powiatów Polskich” i otwórz jego stronę: obok „Instytucja publiczna” jest chip „Funkcje bez wynagrodzenia”. Kliknij go: widać paragraf statutu i link.",
+      "Wyszukaj „Związek Miast Polskich”: chip mówi „Funkcje płatne” (diety za posiedzenia).",
+      "Na stronie związku kliknij „Zaproponuj zmianę”: „Wynagrodzenie za funkcje” i „Skąd to wiadomo” są wypełnione. Zmień odpowiedź: powód znika i okno prosi o nowy. Zamknij bez wysyłania.",
+    ],
+    area: "contributor",
+  },
+  {
     id: "kolejka-imie-prowadzi-do-strony-osoby",
     title: "Imię w kolejce prowadzi na stronę osoby",
     description:
