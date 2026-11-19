@@ -258,6 +258,12 @@ SITES: dict[str, str] = {
     "bip.powiatboleslawiecki.pl": (
         "powiat bolesławiecki: search engines only, 24 candidacies"
     ),
+    # 11-18, BIPs of offices whose websites sit on Beyond.pl: walks past these
+    # found Puchaczów 6 of 6, Kobyla Góra 2 of 2, Raniżów 2 of 2, Iwierzyce 2 of 2.
+    "ugpuchaczow.bip.e-zeto.eu": "Puchaczów: search engines only, 6 candidacies",
+    "ugkobylagora.bip.e-zeto.eu": "Kobyla Góra: search engines only, 2 candidacies",
+    "bip.ranizow.pl": "Raniżów: Disallow: / to all, 2 candidacies",
+    "bip.iwierzyce.pl": "Iwierzyce: Disallow: / to all, 2 candidacies",
 }
 
 
