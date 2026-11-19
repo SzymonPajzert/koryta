@@ -47,6 +47,9 @@ _DOC_PATTERNS = [
     re.compile(r"[?&]action=PobierzPlik(?:&|$)", re.IGNORECASE),
     # Poznań's: /public/bip/zalaczniki.html?co=show&lz_id=12017.
     re.compile(r"/zalaczniki\.html\?(?:[^#]*&)?lz_id=\d+", re.IGNORECASE),
+    # mojbip.pl's: a numbered page's ?file=, /1541.html?file=10170, served as
+    # application/octet-stream (powiat sztumski, Sztum, Czersk; 11-18).
+    re.compile(r"/\d+\.html\?file=\d+(?:$|[&#])", re.IGNORECASE),
     re.compile(r"/download/attachment/\d+/", re.IGNORECASE),
     re.compile(r"/api/files/\d+", re.IGNORECASE),
     re.compile(r"/fobjects/download/", re.IGNORECASE),

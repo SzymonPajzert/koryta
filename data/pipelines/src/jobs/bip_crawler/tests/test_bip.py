@@ -88,6 +88,9 @@ def test_document_url_patterns() -> None:
         "https://eurzad.finn.pl/pzzywiec/server/pobierz_rejestry_zalacznik/1235645"
     )
     assert not is_document_url("https://bip.x.pl/oswiadczenie-majatkowe/1/kowalski")
+    assert is_document_url("https://bip.powiatsztumski.pl/1541.html?file=10170")
+    assert not is_document_url("https://bip.powiatsztumski.pl/1541.html")
+    assert not is_document_url("https://bip.x.pl/strona.html?file=10170")
 
 
 def test_url_helpers() -> None:
