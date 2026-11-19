@@ -870,6 +870,15 @@ function applyOptions(
   );
 }
 
+/** Why a task as it would be written cannot be, in words, or null. A merge
+ * is of a branch: without one there is nothing for the check of main to look
+ * for. */
+export function taskProblem(task: Pick<Task, "kind" | "branches">) {
+  return task.kind === "merge" && task.branches.length === 0
+    ? "Merge potrzebuje gałęzi (branches)."
+    : null;
+}
+
 /** The decisions a change has finished: answered, and everything that waits
  * on them is closed now. Each comes back closed, with the line saying why. */
 export function finishedDecisions(

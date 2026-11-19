@@ -76,10 +76,7 @@
           </span>
           <span class="text-body-2">{{ stateText(branch.check) }}</span>
         </div>
-        <div
-          v-else
-          class="task-merge__state text-body-2 text-medium-emphasis"
-        >
+        <div v-else class="task-merge__state text-body-2 text-medium-emphasis">
           Jeszcze nie sprawdzone.
         </div>
       </li>
@@ -103,7 +100,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { mdiOpenInNew } from "@mdi/js";
-import { polishCounting } from "~/composables/polish";
+import { polishCounting, polishCountingGenitive } from "~/composables/polish";
 import { formatTaskDate } from "~/utils/taskStyle";
 import type { MergeCheck, Task } from "~~/shared/tasks";
 
@@ -133,8 +130,7 @@ const shown = computed(() =>
 );
 const hidden = computed(() => branches.value.length - shown.value.length);
 const hiddenText = computed(
-  () =>
-    `+${polishCounting(hidden.value, "gałąź", "gałęzie", "gałęzi")}`,
+  () => `+${polishCounting(hidden.value, "gałąź", "gałęzie", "gałęzi")}`,
 );
 
 const changes = (n: number) => polishCounting(n, "zmiana", "zmiany", "zmian");
@@ -143,7 +139,9 @@ function stateText(check: MergeCheck["branches"][number]): string {
   if (check.state === "gone") return "Gałęzi nie ma już na GitHubie.";
   if (check.state === "merged") return "Cała na main.";
   if (check.state === "partial") {
-    return `Na main ${check.landed} z ${changes(check.commits)}.`;
+    // After „z” the genitive: „1 z 3 zmian”, not „z 3 zmiany”.
+    const of = polishCountingGenitive(check.commits, "zmiany", "zmian");
+    return `Na main ${check.landed} z ${of}.`;
   }
   return `Poza main: ${changes(check.commits)}.`;
 }

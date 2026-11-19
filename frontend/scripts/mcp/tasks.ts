@@ -12,6 +12,7 @@ import {
   applyTaskPatch,
   compareTasks,
   dependencyProblem,
+  finishedDecisions,
   goalProgress,
   isClosed,
   newTask,
@@ -21,6 +22,7 @@ import {
   taskAncestors,
   taskCreateSchema,
   taskPatchSchema,
+  taskProblem,
   taskSection,
   taskSlug,
   taskStates,
@@ -117,6 +119,29 @@ function priorityMark(state: TaskState): string {
   return ` !${state.priority} (for ${from.slice(0, 3).join(", ")}${more})`;
 }
 
+/** What a decision's options and a merge's check of main say, in brackets:
+ * ` [options A, B; recommended A]`, ` [picked A]`, ` [3/10 on main]`. */
+function kindMark(task: Task): string {
+  if (task.kind === "decision" && task.picked) {
+    return ` [picked ${task.picked.key}]`;
+  }
+  if (task.kind === "decision" && task.options?.length) {
+    const keys = task.options.map((o) => o.key).join(", ");
+    const recommended = task.recommended
+      ? `; recommended ${task.recommended}`
+      : "";
+    return ` [options ${keys}${recommended}]`;
+  }
+  const check = task.kind === "merge" ? task.mergeCheck : undefined;
+  if (!check || check.state === "open") return "";
+  if (check.state === "partial") {
+    const sum = (key: "landed" | "commits") =>
+      check.branches.reduce((total, b) => total + b[key], 0);
+    return ` [${sum("landed")}/${sum("commits")} on main]`;
+  }
+  return check.state === "merged" ? " [on main]" : " [branch gone]";
+}
+
 function line(task: Task, state: TaskState, tasks: readonly Task[]): string {
   const tags = task.tags.length > 0 ? ` [${task.tags.join(", ")}]` : "";
   let waits =
@@ -132,7 +157,7 @@ function line(task: Task, state: TaskState, tasks: readonly Task[]): string {
       ? ` - then: ${state.dependents.map((d) => d.id).join(", ")}`
       : "";
   const status = task.status === "doing" ? " (in progress)" : "";
-  return `- ${task.id}${priorityMark(state)} · ${task.kind}/${task.who}${status} · ${task.title}${tags}${waits}${blocks}`;
+  return `- ${task.id}${priorityMark(state)} · ${task.kind}/${task.who}${status}${kindMark(task)} · ${task.title}${tags}${waits}${blocks}`;
 }
 
 const matches = (
@@ -374,6 +399,8 @@ export async function taskAdd(
       if (refusal) throw new Error(refusal);
     }
     const task = newTask(args, id, by, now());
+    const invalid = taskProblem(task);
+    if (invalid) throw new Error(invalid);
     if (!task.source && by.startsWith("agent:")) {
       task.source = `session ${by.slice(6)}`;
     }
@@ -458,10 +485,18 @@ export async function taskUpdate(
       if (refusal) throw new Error(refusal);
     }
 
-    const { task, logged } = applyTaskPatch(current, args.patch, by, now());
+    const at = now();
+    const { task, logged } = applyTaskPatch(current, args.patch, by, at);
+    const invalid = taskProblem(task);
+    if (invalid) throw new Error(invalid);
     writes.replace(task);
 
-    const after = tasks.map((t) => (t.id === id ? task : t));
+    // An answered decision closes once the last task that follows from it
+    // does, in the same write.
+    const changed = tasks.map((t) => (t.id === id ? task : t));
+    const finished = finishedDecisions(changed, by, at);
+    for (const decision of finished) writes.replace(decision);
+    const after = changed.map((t) => finished.find((d) => d.id === t.id) ?? t);
     const states = taskStates(after);
     const state = states.get(id)!;
     const unblocked =
@@ -478,6 +513,12 @@ export async function taskUpdate(
         ? [
             "Now ready, since this closed:",
             ...unblocked.map((t) => line(t, states.get(t.id)!, after)),
+          ]
+        : []),
+      ...(finished.length > 0
+        ? [
+            "Closed with it, since everything that followed from the answer is closed:",
+            ...finished.map((d) => line(d, states.get(d.id)!, after)),
           ]
         : []),
       ...priorityChanges(id, taskStates(tasks), states, after),

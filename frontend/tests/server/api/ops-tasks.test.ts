@@ -194,6 +194,51 @@ describe("/api/ops/tasks", () => {
     expect(docs.get("a")!.dependsOn).toEqual([]);
   });
 
+  it("picks an answer, and closes the decision with the last task after it", async () => {
+    const options = [
+      { key: "A", title: "Move them" },
+      { key: "B", title: "Take them over" },
+    ];
+    stored("decide", { kind: "decision", options, question: "How?" });
+    stored("merge-a", { dependsOn: ["decide"] });
+    const picked = await call(updateHandler, {
+      id: "decide",
+      patch: { pick: "A" },
+    });
+    expect(picked.task).toMatchObject({
+      status: "doing",
+      picked: { key: "A", by: "owner", at: expect.any(String) },
+    });
+    expect(picked.also).toEqual([]);
+    // Stored as a Timestamp, like the history's times, and read back.
+    const pick = docs.get("decide")!.picked as { at: unknown };
+    expect(pick.at).toBeInstanceOf(Timestamp);
+    const { tasks } = await call(listHandler);
+    const listed = (tasks as { id: string; picked?: { at: string } }[]).find(
+      (t) => t.id === "decide",
+    );
+    expect(listed!.picked!.at).toBe(
+      (picked.task as { picked: { at: string } }).picked.at,
+    );
+
+    const closed = await call(updateHandler, {
+      id: "merge-a",
+      patch: { status: "done" },
+    });
+    expect(closed.also).toMatchObject([{ id: "decide", status: "done" }]);
+    expect(docs.get("decide")!.status).toBe("done");
+  });
+
+  it("refuses a merge with no branch", async () => {
+    await expect(
+      call(createHandler, { title: "Merge it", kind: "merge" }),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message: expect.stringMatching(/gałęzi/),
+    });
+    expect(docs.size).toBe(0);
+  });
+
   it("answers 404 for a task that is not there", async () => {
     await expect(
       call(updateHandler, { id: "nope", patch: { note: "x" } }),

@@ -84,7 +84,9 @@
               class="task-options__dot"
               :class="`task-options__dot--${item.tone}`"
             />
-            <span class="task-options__follow-title">{{ item.task.title }}</span>
+            <span class="task-options__follow-title">{{
+              item.task.title
+            }}</span>
             <span class="text-caption text-medium-emphasis">
               {{ item.word }}
             </span>

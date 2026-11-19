@@ -8,8 +8,10 @@ import {
   dependencyChange,
   dependencyCycle,
   dependencyProblem,
+  finishedDecisions,
   foldWords,
   goalProgress,
+  isSettled,
   newTask,
   patchedDependsOn,
   similarTasks,
@@ -18,6 +20,7 @@ import {
   taskEditPatch,
   taskFromData,
   taskPatchSchema,
+  taskProblem,
   taskSection,
   taskSlug,
   taskStates,
@@ -671,5 +674,194 @@ describe("priority", () => {
       "old",
       "head",
     ]);
+  });
+});
+
+describe("decisions with options", () => {
+  const options = [
+    { key: "A", title: "Count it as needing a look" },
+    { key: "B", title: "A calm amber count" },
+  ];
+  const decision = (fields: Partial<Task> = {}) =>
+    task("decide", { kind: "decision", options, recommended: "A", ...fields });
+  const pick = (current: Task, key: string | null, by = "owner" as const) =>
+    applyTaskPatch(current, taskPatchSchema.parse({ pick: key }), by, T1);
+
+  it("reads the question, options, recommendation and pick from a document", () => {
+    const read = taskFromData("decide", {
+      title: "Decide",
+      kind: "decision",
+      question: "How?",
+      options,
+      recommended: "A",
+      picked: { key: "B", at: T1, by: "owner" },
+    });
+    expect(read.question).toBe("How?");
+    expect(read.options).toEqual(options);
+    expect(read.recommended).toBe("A");
+    expect(read.picked).toEqual({ key: "B", at: T1, by: "owner" });
+    // A pick or a recommendation naming no option is left out.
+    const odd = taskFromData("decide", {
+      kind: "decision",
+      options,
+      recommended: "Z",
+      picked: { key: "Z", at: T1, by: "owner" },
+    });
+    expect(odd.recommended).toBeUndefined();
+    expect(odd.picked).toBeUndefined();
+  });
+
+  it("puts an answered decision in progress, and logs the answer", () => {
+    const { task: picked, logged } = pick(decision(), "A");
+    expect(picked.status).toBe("doing");
+    expect(picked.picked).toEqual({ key: "A", at: T1, by: "owner" });
+    expect(logged.map((e) => e.text)).toEqual([
+      "Wybrano A: Count it as needing a look.",
+    ]);
+
+    const { task: changed, logged: changeLog } = pick(picked, "B");
+    expect(changed.picked?.key).toBe("B");
+    expect(changeLog[0]!.text).toBe(
+      "Zmieniono wybór: A → B: A calm amber count.",
+    );
+
+    const { task: back, logged: backLog } = pick(changed, null);
+    expect(back.picked).toBeUndefined();
+    expect(back.status).toBe("open");
+    expect(backLog[0]!.text).toBe("Cofnięto wybór B.");
+  });
+
+  it("ignores a pick of a key the decision does not offer", () => {
+    const { task: same, logged } = pick(decision(), "Z");
+    expect(same.picked).toBeUndefined();
+    expect(same.status).toBe("open");
+    expect(logged).toEqual([]);
+  });
+
+  it("drops the pick and the recommendation with the option they name", () => {
+    const answered = pick(decision(), "A").task;
+    const { task: next } = applyTaskPatch(
+      answered,
+      taskPatchSchema.parse({ options: [options[1]] }),
+      "agent",
+      T1,
+    );
+    expect(next.options).toEqual([options[1]]);
+    expect(next.picked).toBeUndefined();
+    expect(next.recommended).toBeUndefined();
+  });
+
+  it("lets what waits on an answered decision start, and lists it apart", () => {
+    const goal = task("goal", {
+      kind: "goal",
+      priority: "high",
+      prioritySetBy: "owner",
+      dependsOn: ["follow"],
+    });
+    const follow = task("follow", { dependsOn: ["decide"] });
+    const open = taskStates([decision(), follow, goal]);
+    expect(open.get("follow")!.readiness).toBe("blocked");
+    // Unanswered, it is in the way of the goal, and takes its level.
+    expect(open.get("decide")!.priority).toBe("high");
+
+    const answered = pick(decision(), "A").task;
+    expect(isSettled(answered)).toBe(true);
+    const states = taskStates([answered, follow, goal]);
+    expect(states.get("follow")!.readiness).toBe("ready");
+    expect(states.get("decide")!.priority).toBeNull();
+    expect(taskSection(answered, states.get("decide")!)).toBe("decided");
+  });
+
+  it("closes an answered decision once everything after it is closed", () => {
+    const answered = pick(decision(), "A").task;
+    const one = task("one", { dependsOn: ["decide"], status: "done" });
+    const two = task("two", { dependsOn: ["decide"] });
+    expect(finishedDecisions([answered, one, two], "owner", T1)).toEqual([]);
+
+    const done = { ...two, status: "dropped" as const };
+    const [closed] = finishedDecisions([answered, one, done], "owner", T1);
+    expect(closed!.id).toBe("decide");
+    expect(closed!.status).toBe("done");
+    expect(closed!.log.at(-1)!.text).toBe(
+      "Zamknięta: wszystko, co z niej wynikało, jest zamknięte.",
+    );
+    // Nothing after it: it waits for a hand close. Unanswered: never.
+    expect(finishedDecisions([answered], "owner", T1)).toEqual([]);
+    expect(finishedDecisions([decision(), { ...one }], "owner", T1)).toEqual(
+      [],
+    );
+  });
+
+  it("sends a changed question, options or recommendation from the form", () => {
+    const current = decision({ question: "How?" });
+    expect(
+      taskEditPatch(current, {
+        ...current,
+        question: "How exactly?",
+        options: [...options, { key: "C", title: "Neither" }],
+        recommended: "C",
+      }),
+    ).toEqual({
+      question: "How exactly?",
+      options: [...options, { key: "C", title: "Neither" }],
+      recommended: "C",
+    });
+    expect(taskEditPatch(current, { ...current })).toBeNull();
+    expect(taskEditPatch(current, { ...current, question: "" })).toEqual({
+      question: null,
+    });
+  });
+
+  it("gives a new decision its question and options, and a merge needs a branch", () => {
+    const made = newTask(
+      taskCreateSchema.parse({
+        title: "Decide",
+        kind: "decision",
+        question: "How?",
+        options,
+        recommended: "B",
+      }),
+      "decide",
+      "agent",
+      T0,
+    );
+    expect(made.question).toBe("How?");
+    expect(made.options).toEqual(options);
+    expect(made.recommended).toBe("B");
+    expect(() =>
+      taskCreateSchema.parse({
+        title: "Decide",
+        options: [options[0], { key: "A", title: "Twice" }],
+      }),
+    ).toThrow(/its own key/);
+    expect(taskProblem(task("m", { kind: "merge" }))).toMatch(/gałęzi/);
+    expect(
+      taskProblem(task("m", { kind: "merge", branches: ["x"] })),
+    ).toBeNull();
+  });
+});
+
+describe("merges", () => {
+  it("reads what the check of main found, and nothing it does not know", () => {
+    const read = taskFromData("m", {
+      kind: "merge",
+      branches: ["a"],
+      mergeCheck: {
+        state: "partial",
+        branches: [{ name: "a", state: "partial", commits: 3, landed: 2 }],
+        checkedAt: T1,
+        main: "8a5f46d5",
+      },
+    });
+    expect(read.kind).toBe("merge");
+    expect(read.mergeCheck).toEqual({
+      state: "partial",
+      branches: [{ name: "a", state: "partial", commits: 3, landed: 2 }],
+      checkedAt: T1,
+      main: "8a5f46d5",
+    });
+    expect(
+      taskFromData("m", { mergeCheck: { state: "sideways" } }).mergeCheck,
+    ).toBeUndefined();
   });
 });

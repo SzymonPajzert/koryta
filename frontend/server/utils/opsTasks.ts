@@ -11,6 +11,7 @@ import {
   dependencyProblem,
   finishedDecisions,
   newTask,
+  taskProblem,
   patchedDependsOn,
   taskFromData,
   taskSlug,
@@ -40,6 +41,11 @@ export function fromDoc(id: string, data: DocumentData): Task {
     createdAt: plainTime(data.createdAt),
     updatedAt: plainTime(data.updatedAt),
     closedAt: plainTime(data.closedAt),
+    // A pick's time is a Timestamp like the history's: the MCP store writes
+    // every `at` as one.
+    picked: data.picked
+      ? { ...data.picked, at: plainTime(data.picked.at) }
+      : data.picked,
     log: Array.isArray(data.log)
       ? data.log.map((entry: DocumentData | null) => ({
           ...entry,
@@ -53,13 +59,22 @@ const stamp = (value: string) => Timestamp.fromDate(new Date(value));
 
 /** A task as a document. `id` is the document's name, not a field. */
 export function toDoc(task: Task): DocumentData {
-  const { id: _id, createdAt, updatedAt, closedAt, log, ...rest } = task;
+  const {
+    id: _id,
+    createdAt,
+    updatedAt,
+    closedAt,
+    log,
+    picked,
+    ...rest
+  } = task;
   const doc: Record<string, unknown> = {
     ...rest,
     createdAt: stamp(createdAt),
     updatedAt: stamp(updatedAt),
     closedAt: closedAt ? stamp(closedAt) : undefined,
     log: log.map((entry) => ({ ...entry, at: stamp(entry.at) })),
+    picked: picked ? { ...picked, at: stamp(picked.at) } : undefined,
   };
   // Firestore refuses `undefined`; an unset field is left out instead.
   return Object.fromEntries(
@@ -95,6 +110,8 @@ export async function createTask(
     const problem = dependencyProblem(tasks, id, input.dependsOn);
     if (problem) throw refuse(problem);
     const task = newTask(input, id, by, new Date().toISOString());
+    const invalid = taskProblem(task);
+    if (invalid) throw refuse(invalid);
     tx.create(collection.doc(id), toDoc(task));
     return task;
   });
@@ -123,6 +140,8 @@ export async function updateTask(
     if (problem) throw refuse(problem);
     const now = new Date().toISOString();
     const { task } = applyTaskPatch(current, patch, by, now);
+    const invalid = taskProblem(task);
+    if (invalid) throw refuse(invalid);
     tx.set(collection.doc(id), toDoc(task));
     const after = tasks.map((t) => (t.id === id ? task : t));
     const also = finishedDecisions(after, by, now);
