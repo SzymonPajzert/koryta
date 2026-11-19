@@ -4,6 +4,12 @@ import type { ServiceMilestones } from "../../../../server/api/edges/serviceMile
 
 let nodes: Record<string, Record<string, unknown>> = {};
 let edges: Record<string, Record<string, unknown>> = {};
+/** `stats` documents, where the window is stored for a day. */
+let stats: Record<string, Record<string, unknown>> = {};
+/** Pages of `edges` read, which is what counting the window costs. */
+let scannedPages = 0;
+/** Set to make the next write to `stats` fail. */
+let failStatsWrite = false;
 
 /** A query over `edges`, built the way the endpoint builds it. The same fake
  * `recentEmployments.test.ts` uses, and for the same reason: both handlers
@@ -36,6 +42,7 @@ function edgeQuery() {
       return query;
     }),
     get: vi.fn(async () => {
+      scannedPages++;
       const matching = Object.entries(edges)
         .filter(([, data]) => filters.every(([f, v]) => data[f] === v))
         .filter(([, data]) => data.start_date !== undefined)
@@ -69,7 +76,19 @@ const fieldMasks: (string[] | undefined)[] = [];
 
 const mockDb = {
   collection: vi.fn((collection: string) => ({
-    doc: vi.fn((id: string) => ({ id, path: `${collection}/${id}` })),
+    doc: vi.fn((id: string) => ({
+      id,
+      path: `${collection}/${id}`,
+      get: vi.fn(async () => ({
+        exists: collection === "stats" && stats[id] !== undefined,
+        data: () => (collection === "stats" ? stats[id] : undefined),
+      })),
+      set: vi.fn(async (data: Record<string, unknown>) => {
+        if (collection !== "stats") throw new Error(`write to ${collection}`);
+        if (failStatsWrite) throw new Error("UNAVAILABLE");
+        stats[id] = data;
+      }),
+    })),
     where: vi.fn((field: string, op: string, value: unknown) =>
       edgeQuery().where(field, op, value),
     ),
@@ -174,11 +193,15 @@ describe("api/edges/serviceMilestones", () => {
       draftCompany: { name: "Firma Ukryta", type: "place", published: false },
     };
     edges = {};
+    stats = {};
+    scannedPages = 0;
+    failStatsWrite = false;
     request();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
   });
 
   it("marks the day an unbroken career reaches a whole number of years", async () => {
@@ -451,5 +474,109 @@ describe("api/edges/serviceMilestones", () => {
 
     request({ scope: "wszystkie" });
     await expect(call()).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  describe("stored once a day per backend", () => {
+    /** As Cloud Run names an App Hosting backend and its build. */
+    function onCloudRun(build = "prod-build-2026-09-09-001") {
+      vi.stubEnv("K_SERVICE", "prod");
+      vi.stubEnv("K_REVISION", build);
+    }
+
+    it("counts on every call off Cloud Run and stores nothing", async () => {
+      vi.stubEnv("K_SERVICE", "");
+      vi.stubEnv("K_REVISION", "");
+      edges.e1 = employment();
+
+      await call();
+      const pages = scannedPages;
+      await call();
+
+      expect(scannedPages).toBe(2 * pages);
+      expect(stats).toEqual({});
+    });
+
+    it("stores the day's window for this backend and build, then reads it back", async () => {
+      onCloudRun();
+      edges.e1 = employment();
+
+      const first = await call();
+      expect(stats.serviceMilestones_prod).toMatchObject({
+        type: "serviceMilestones",
+        key: "prod-build-2026-09-09-001|2026-09-09",
+      });
+
+      const pages = scannedPages;
+      const second = await call();
+
+      expect(scannedPages).toBe(pages);
+      expect(second).toEqual(first);
+    });
+
+    it("counts again on a new build or a new Warsaw day", async () => {
+      onCloudRun();
+      edges.e1 = employment();
+      await call();
+      const once = scannedPages;
+
+      onCloudRun("prod-build-2026-09-09-002");
+      await call();
+      expect(scannedPages).toBe(2 * once);
+
+      vi.setSystemTime(new Date("2026-09-10T10:00:00Z"));
+      request({ scope: "recent" });
+      const { today, milestones } = await call();
+      expect(scannedPages).toBe(3 * once);
+      expect(today).toBe("2026-09-10");
+      expect(milestones[0]!.daysFromToday).toBe(-1);
+      expect(stats.serviceMilestones_prod!.key).toBe(
+        "prod-build-2026-09-09-002|2026-09-10",
+      );
+    });
+
+    it("drops a person unpublished after the window was stored", async () => {
+      onCloudRun();
+      edges.e1 = employment();
+      edges.e2 = employment({ source: "jan", target: "pkp" });
+      expect((await call()).milestones).toHaveLength(2);
+
+      nodes.anna!.published = false;
+      const pages = scannedPages;
+      const { milestones, total } = await call();
+
+      expect(scannedPages).toBe(pages);
+      expect(milestones.map((m) => m.personId)).toEqual(["jan"]);
+      expect(total).toBe(1);
+    });
+
+    it("stores no undefined values, which Firestore refuses", async () => {
+      onCloudRun();
+      // No `isPublicSource`, so the row leaves `companyIsPublicSource` undefined.
+      edges.e1 = employment();
+
+      await call();
+
+      const [row] = stats.serviceMilestones_prod!.milestones as Record<
+        string,
+        unknown
+      >[];
+      expect(row).toBeDefined();
+      expect(Object.values(row!)).not.toContain(undefined);
+      expect("companyIsPublicSource" in row!).toBe(false);
+    });
+
+    it("still answers when the window cannot be stored", async () => {
+      onCloudRun();
+      failStatsWrite = true;
+      edges.e1 = employment();
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const { milestones } = await call();
+
+      expect(milestones).toHaveLength(1);
+      expect(stats).toEqual({});
+      expect(error).toHaveBeenCalled();
+      error.mockRestore();
+    });
   });
 });

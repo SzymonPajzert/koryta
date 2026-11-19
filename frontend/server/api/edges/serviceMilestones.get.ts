@@ -1,7 +1,16 @@
-import { getFirestore, FieldPath } from "firebase-admin/firestore";
+import {
+  getFirestore,
+  FieldPath,
+  type Firestore,
+} from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { editorFreshCachedEventHandler } from "~~/server/utils/handlers";
 import { fetchEdgeEndpointNodes } from "~~/server/utils/edgeNodes";
+import {
+  readStoredMilestones,
+  storedMilestonesKey,
+  writeStoredMilestones,
+} from "~~/server/utils/storedMilestones";
 import { asArray, pageIsPublic } from "~~/shared/model";
 import {
   bodyIsPaidPost,
@@ -255,72 +264,136 @@ function collect(
   return rows;
 }
 
-/** The whole window, computed once a day and paged out of memory.
+/** The whole window, counted from the database.
  *
- * Keyed on the Warsaw day rather than on the page being asked for. The scan
- * cannot be narrowed - a milestone is a property of somebody's whole career,
- * so there is no query that returns only the careers with one falling this
- * month - which means reading every published `employed` edge, 3,047 of them
- * on 2026-09-09, and then every node they touch. Paging that through the
- * handler's own cache would charge it again for every offset a reader scrolls
- * to.
+ * The scan cannot be narrowed - a milestone is a property of somebody's whole
+ * career, so there is no query that returns only the careers with one falling
+ * this month - which means reading every published `employed` edge, 12,934 of
+ * them on 2026-11-19, and then every node they touch.
+ */
+async function countMilestones(
+  db: Firestore,
+  todayDay: number,
+): Promise<ServiceMilestone[]> {
+  const edges: CountedEdge[] = [];
+  let scanned = 0;
+  let cursor: { startDate: string; id: string } | null = null;
+
+  for (;;) {
+    let q = db
+      .collection("edges")
+      .where("type", "==", "employed")
+      .where("published", "==", true)
+      // Not the order this view wants - it wants none - but it is the index
+      // `edges` already carries for these two filters, and it gives the scan
+      // a cursor to resume from. See recentEmployments for why `__name__` is
+      // spelled out.
+      .orderBy("start_date", "desc")
+      .orderBy(FieldPath.documentId(), "desc")
+      .limit(SCAN_PAGE);
+    if (cursor) q = q.startAfter(cursor.startDate, cursor.id);
+
+    const snap = await q.get();
+    scanned += snap.size;
+    if (snap.empty) break;
+
+    for (const doc of snap.docs) {
+      const edge = { id: doc.id, ...(doc.data() as Edge) };
+      // An explicit null start_date is a value the index sorts rather than
+      // one it drops, and it cannot be a cursor either.
+      if (typeof edge.start_date !== "string") continue;
+      cursor = { startDate: edge.start_date, id: edge.id };
+      if (edge.deleted === true || !edge.source || !edge.target) continue;
+      edges.push(edge);
+    }
+
+    if (snap.size < SCAN_PAGE || scanned >= MAX_SCAN) break;
+  }
+
+  const nodes = await fetchEdgeEndpointNodes(db, edges, NODE_FIELDS);
+
+  // Grouped after the nodes are in, because whether a post counts is a fact
+  // about the institution rather than about the edge.
+  const byPerson = new Map<string, CountedEdge[]>();
+  for (const edge of edges) {
+    const company = nodes.get(edge.target);
+    if (company?.type !== "place" || !pageIsPublic(company)) continue;
+    if (!countsAsPublicService(edge, company as Company)) continue;
+    const held = byPerson.get(edge.source);
+    if (held) held.push(edge);
+    else byPerson.set(edge.source, [edge]);
+  }
+
+  return collect(byPerson, nodes, todayDay);
+}
+
+/** The rows whose person still has a page.
+ *
+ * A stored window lasts the day, and somebody unpublished or removed in the
+ * meantime must not stay named on a card for that long. One read per person
+ * on the cards, where counting again reads every published employment, so it
+ * runs on every stored read and keeps the delay to the hour `cachedMilestones`
+ * holds.
+ */
+async function withoutUnpublishedPeople(
+  db: Firestore,
+  rows: ServiceMilestone[],
+): Promise<ServiceMilestone[]> {
+  const ids = Array.from(new Set(rows.map((row) => row.personId)));
+  const live = new Set<string>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const refs = ids
+      .slice(i, i + 100)
+      .map((id) => db.collection("nodes").doc(id));
+    const snaps = await db.getAll(...refs, {
+      fieldMask: ["published", "deleted"],
+    });
+    for (const snap of snaps) {
+      if (snap.exists && pageIsPublic(snap.data() ?? {})) live.add(snap.id);
+    }
+  }
+  return rows.filter((row) => live.has(row.personId));
+}
+
+/** The window as stored for this backend and build, counted when the Warsaw
+ * day or the build has changed. See `server/utils/storedMilestones.ts`. */
+async function storedMilestones(
+  db: Firestore,
+  today: string,
+  todayDay: number,
+): Promise<ServiceMilestone[]> {
+  const where = storedMilestonesKey(today);
+  if (!where) return countMilestones(db, todayDay);
+
+  const stored = await readStoredMilestones(db, where);
+  if (stored) return withoutUnpublishedPeople(db, stored);
+
+  const counted = await countMilestones(db, todayDay);
+  // A failed write costs the next instance a count, not this reader an answer.
+  await writeStoredMilestones(db, where, counted, new Date()).catch(
+    (error: unknown) => {
+      console.error("The service milestones could not be stored:", error);
+    },
+  );
+  return counted;
+}
+
+/** The whole window for the day, paged out of memory.
+ *
+ * Keyed on the Warsaw day rather than on the page being asked for: paging
+ * through the handler's own cache would charge the window again for every
+ * offset a reader scrolls to. An hour here, in each instance's memory, in front
+ * of the stored copy that lasts the day.
  */
 const cachedMilestones = defineCachedFunction(
   async (today: string): Promise<ServiceMilestone[]> => {
     const todayDay = dayNumber(today);
     if (todayDay === null) return [];
-
-    const db = getFirestore(getApp(), "koryta-pl");
-    const edges: CountedEdge[] = [];
-    let scanned = 0;
-    let cursor: { startDate: string; id: string } | null = null;
-
-    for (;;) {
-      let q = db
-        .collection("edges")
-        .where("type", "==", "employed")
-        .where("published", "==", true)
-        // Not the order this view wants - it wants none - but it is the index
-        // `edges` already carries for these two filters, and it gives the scan
-        // a cursor to resume from. See recentEmployments for why `__name__` is
-        // spelled out.
-        .orderBy("start_date", "desc")
-        .orderBy(FieldPath.documentId(), "desc")
-        .limit(SCAN_PAGE);
-      if (cursor) q = q.startAfter(cursor.startDate, cursor.id);
-
-      const snap = await q.get();
-      scanned += snap.size;
-      if (snap.empty) break;
-
-      for (const doc of snap.docs) {
-        const edge = { id: doc.id, ...(doc.data() as Edge) };
-        // An explicit null start_date is a value the index sorts rather than
-        // one it drops, and it cannot be a cursor either.
-        if (typeof edge.start_date !== "string") continue;
-        cursor = { startDate: edge.start_date, id: edge.id };
-        if (edge.deleted === true || !edge.source || !edge.target) continue;
-        edges.push(edge);
-      }
-
-      if (snap.size < SCAN_PAGE || scanned >= MAX_SCAN) break;
-    }
-
-    const nodes = await fetchEdgeEndpointNodes(db, edges, NODE_FIELDS);
-
-    // Grouped after the nodes are in, because whether a post counts is a fact
-    // about the institution rather than about the edge.
-    const byPerson = new Map<string, CountedEdge[]>();
-    for (const edge of edges) {
-      const company = nodes.get(edge.target);
-      if (company?.type !== "place" || !pageIsPublic(company)) continue;
-      if (!countsAsPublicService(edge, company as Company)) continue;
-      const held = byPerson.get(edge.source);
-      if (held) held.push(edge);
-      else byPerson.set(edge.source, [edge]);
-    }
-
-    return collect(byPerson, nodes, todayDay);
+    return storedMilestones(
+      getFirestore(getApp(), "koryta-pl"),
+      today,
+      todayDay,
+    );
   },
   {
     maxAge: 3600,
@@ -389,14 +462,14 @@ async function serviceMilestones(event: H3Event): Promise<ServiceMilestones> {
   };
 }
 
-/** An hour, matching the computation behind it.
+/** An hour, matching the memory cache behind it.
  *
  * `editorFreshCachedEventHandler` rather than the plain cached one so that a
  * signed in reader gets a fresh *slice* - `offset` indexes into a list whose
- * contents an editor can change. It does not recompute the window: that sits
- * behind `cachedMilestones` and stays an hour old for everybody, deliberately,
- * since bypassing it would charge the whole scan to every page an editor
- * scrolls to.
+ * contents an editor can change. It does not count the window again, for an
+ * editor or anyone: that is counted once a Warsaw day per backend, so a post
+ * published today reaches the cards tomorrow, while a person unpublished today
+ * leaves them within the hour (`withoutUnpublishedPeople`).
  */
 export default editorFreshCachedEventHandler(serviceMilestones, {
   maxAge: 3600,
