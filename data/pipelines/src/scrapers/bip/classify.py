@@ -8,9 +8,8 @@ documents, which are junk, and which sections to crawl first.
 from __future__ import annotations
 
 import re
-from urllib.parse import quote
 
-from entities.util import format_query, parse_query
+from entities.util import encode_whole, format_query, parse_query
 
 # URL shapes that serve a file rather than a page. Extensionless endpoints
 # (attachments/download, getFile, bip.net.pl's <office>-api host) are included
@@ -200,7 +199,7 @@ def _ezeto_url(base: str, pairs: list[tuple[str, str]]) -> str | None:
             and (key, value) not in _EZETO_BREADCRUMB
         }
     )
-    return f"{base}?{quote(format_query(kept), safe='')}"
+    return f"{base}?{encode_whole(format_query(kept))}"
 
 
 def normalize_url(url: str) -> str:
