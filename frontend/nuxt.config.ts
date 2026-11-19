@@ -419,6 +419,11 @@ export default defineNuxtConfig({
     "/eksploruj/tabela": { robots: false },
     "/profil": { robots: false },
 
+    // The page's counts come from /api/stats/database, a census of the whole
+    // database cached per instance in memory; edge caching the html keeps a
+    // crawler going through the footer's link to one computation an hour.
+    "/eksploruj": { swr: 3600 },
+
     // `/lista` was removed in "Remove /lista, and point what linked to it at
     // the table", and 404ed from then on - but it kept ranking. Search Console
     // still had it drawing 140 impressions at position 7.34 in the three months
