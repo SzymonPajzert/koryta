@@ -44,6 +44,7 @@ export function useOpsTasks() {
       mine: [],
       agents: [],
       blocked: [],
+      decided: [],
       ideas: [],
       parked: [],
       closed: [],
@@ -100,11 +101,13 @@ export function useOpsTasks() {
   async function update(id: string, patch: TaskPatch): Promise<boolean> {
     saving.value = { ...saving.value, [id]: true };
     try {
-      const { task } = await authRequest<{ task: Task }>(
+      const { task, also } = await authRequest<{ task: Task; also?: Task[] }>(
         "/api/ops/tasks/update",
         { method: "POST", body: { id, patch } },
       );
       put(task);
+      // The decisions this change finished, closed with it.
+      for (const decision of also ?? []) put(decision);
       return true;
     } catch (error) {
       fail(reason(error));

@@ -20,21 +20,56 @@ export const TASKS_COLLECTION = "tasks";
 
 /** What sort of thing is to be done.
  * - `action`: a step on production or infrastructure - deploy, upload, run a
- *   migration, grant a role, merge a branch.
+ *   migration, grant a role.
+ * - `merge`: a branch to land on main. The branch is in `branches`, and a
+ *   check of main (`mergeCheck`) says how much of it is there already.
  * - `task`: work in a checkout - code, a pipeline, research.
- * - `decision`: a question only the owner can answer.
+ * - `decision`: a question only the owner can answer, with the answers to
+ *   pick from in `options` where there are some.
  * - `idea`: worth doing some day, nobody committed to it.
  * - `goal`: where a group of tasks leads - "contracts on production". Nothing
  *   to do in itself: it depends on the tasks that lead to it, which is what
  *   groups them, and is reached once they are done. */
 export const TASK_KINDS = [
   "action",
+  "merge",
   "task",
   "decision",
   "idea",
   "goal",
 ] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
+
+/** One answer a decision offers. The key is the letter its body uses for it
+ * („A: …”, „B: …”), so the two read alike. */
+export type TaskOption = { key: string; title: string };
+
+/** The answer picked, when and by whom. */
+export type TaskPick = { key: string; at: string; by: TaskActor };
+
+/** How much of a merge's branches the last check found on main.
+ * - `merged`: every commit, or the same change under another id - branches
+ *   land as rewritten copies, so ancestry alone would say none of it is.
+ * - `partial`: some of them.
+ * - `open`: none.
+ * - `gone`: the branch is no longer on GitHub. */
+export const MERGE_STATES = ["merged", "partial", "open", "gone"] as const;
+export type MergeState = (typeof MERGE_STATES)[number];
+
+export type MergeCheck = {
+  state: MergeState;
+  branches: {
+    name: string;
+    state: MergeState;
+    /** Commits on the branch that main does not have by ancestry. */
+    commits: number;
+    /** How many of those have the same change on main. */
+    landed: number;
+  }[];
+  /** When, and against which commit of main. */
+  checkedAt: string;
+  main: string;
+};
 
 /** Who can do it: the owner (his credentials, access or judgement) or an agent
  * on the dev box, end to end. */
@@ -57,6 +92,12 @@ export const CLOSED_STATUSES: readonly TaskStatus[] = ["done", "dropped"];
 
 export const isClosed = (task: Pick<Task, "status">) =>
   CLOSED_STATUSES.includes(task.status);
+
+/** Whether a task no longer holds up what waits on it: closed, or a decision
+ * with an option picked - the work that follows from the pick can start, while
+ * the decision itself stays open until that work is done. */
+export const isSettled = (task: Pick<Task, "status" | "kind" | "picked">) =>
+  isClosed(task) || (task.kind === "decision" && !!task.picked);
 
 /** How soon a task wants doing, when sooner than the rest; unset is normal.
  * - `urgent` („Pilne”): harm that grows while it waits - personal data
@@ -114,6 +155,16 @@ export type Task = {
   /** Who set `priority`: an agent may raise a level, but not lower one the
    * owner set. */
   prioritySetBy?: TaskActor;
+  /** A decision's answers. */
+  options?: TaskOption[];
+  /** The key of the option the agent who filed it would pick. */
+  recommended?: string;
+  /** The option picked. A picked decision holds nothing up any more, but it
+   * stays in progress until what waits on it is closed, so it can still be
+   * changed while that work goes on. */
+  picked?: TaskPick;
+  /** For a merge: what the last check of main found. */
+  mergeCheck?: MergeCheck;
   /** Where the task came from: a session, a memory note, a report. */
   source?: string;
   createdAt: string;
@@ -221,7 +272,53 @@ export function taskFromData(id: string, data: Record<string, unknown>): Task {
   if (typeof data.source === "string") task.source = data.source;
   const closedAt = isoTime(data.closedAt);
   if (closedAt) task.closedAt = closedAt;
+  const options = optionList(data.options);
+  if (options.length > 0) task.options = options;
+  if (
+    typeof data.recommended === "string" &&
+    options.some((o) => o.key === data.recommended)
+  ) {
+    task.recommended = data.recommended;
+  }
+  const picked = (data.picked ?? null) as Record<string, unknown> | null;
+  if (picked && options.some((o) => o.key === picked.key)) {
+    task.picked = {
+      key: String(picked.key),
+      at: isoTime(picked.at) ?? epoch,
+      by: actor(picked.by),
+    };
+  }
+  const check = (data.mergeCheck ?? null) as Record<string, unknown> | null;
+  if (check && MERGE_STATES.includes(check.state as MergeState)) {
+    task.mergeCheck = {
+      state: check.state as MergeState,
+      branches: (Array.isArray(check.branches) ? check.branches : []).map(
+        (raw) => {
+          const b = (raw ?? {}) as Record<string, unknown>;
+          return {
+            name: String(b.name ?? ""),
+            state: oneOf(MERGE_STATES, b.state, "open"),
+            commits: Number(b.commits) || 0,
+            landed: Number(b.landed) || 0,
+          };
+        },
+      ),
+      checkedAt: isoTime(check.checkedAt) ?? epoch,
+      main: String(check.main ?? ""),
+    };
+  }
   return task;
+}
+
+/** A stored list of options, with anything that is not one left out. */
+function optionList(value: unknown): TaskOption[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((raw) => {
+    const option = (raw ?? {}) as Record<string, unknown>;
+    return typeof option.key === "string" && typeof option.title === "string"
+      ? [{ key: option.key, title: option.title }]
+      : [];
+  });
 }
 
 export const TASK_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -245,6 +342,15 @@ const priority = z
   .enum(PRIORITY_CHOICES)
   .nullable()
   .transform((value) => (value === "normal" ? null : value));
+const optionKey = z.string().trim().min(1).max(3);
+/** A decision's answers, each under its own key. */
+const options = z
+  .array(z.object({ key: optionKey, title: z.string().trim().min(1).max(300) }))
+  .max(8)
+  .refine(
+    (list) => new Set(list.map((o) => o.key)).size === list.length,
+    "every option needs its own key",
+  );
 
 export const taskCreateSchema = z.object({
   /** A slug to use instead of one made from the title. */
@@ -261,6 +367,9 @@ export const taskCreateSchema = z.object({
   rank: z.number().finite().optional(),
   priority: priority.optional(),
   source: z.string().max(500).optional(),
+  options: options.optional(),
+  /** The key of the option the one filing it would pick. */
+  recommended: optionKey.optional(),
 });
 export type TaskCreate = z.input<typeof taskCreateSchema>;
 
@@ -285,6 +394,12 @@ export const taskPatchSchema = z
     removeDependsOn: dependsOn.optional(),
     /** A line for the task's history. */
     note: z.string().trim().min(1).max(2000).optional(),
+    /** A decision's answers, all of them; an empty list takes them away. */
+    options: options.optional(),
+    /** `null` takes the recommendation away. */
+    recommended: optionKey.nullable().optional(),
+    /** The key of the option picked; `null` takes the pick back. */
+    pick: optionKey.nullable().optional(),
   })
   .refine(
     (patch) =>
@@ -380,12 +495,12 @@ function passedPriorities(
   const passed = new Map<string, { level: TaskPriority; from: Task[] }>();
   for (const source of tasks) {
     const level = source.priority;
-    if (!level || isClosed(source) || source.status === "parked") continue;
+    if (!level || isSettled(source) || source.status === "parked") continue;
     const seen = new Set([source.id]);
     const queue = [...source.dependsOn];
     while (queue.length > 0) {
       const task = byId.get(queue.pop()!);
-      if (!task || seen.has(task.id) || isClosed(task)) continue;
+      if (!task || seen.has(task.id) || isSettled(task)) continue;
       seen.add(task.id);
       const got = passed.get(task.id);
       if (!got || priorityLevel(level) > priorityLevel(got.level)) {
@@ -412,7 +527,7 @@ export function taskStates(tasks: readonly Task[]): Map<string, TaskState> {
   const states = new Map<string, TaskState>();
   for (const task of tasks) {
     const known = task.dependsOn.flatMap((dep) => byId.get(dep) ?? []);
-    const blockers = known.filter((dep) => !isClosed(dep));
+    const blockers = known.filter((dep) => !isSettled(dep));
     let readiness: Readiness;
     if (isClosed(task)) readiness = "closed";
     else if (task.status === "parked") readiness = "parked";
@@ -571,7 +686,16 @@ export type TaskEdit = Pick<
   | "links"
   | "branches"
   | "priority"
+  | "options"
+  | "recommended"
 >;
+
+const sameOptions = (
+  a: readonly TaskOption[] = [],
+  b: readonly TaskOption[] = [],
+) =>
+  a.length === b.length &&
+  a.every((o, i) => o.key === b[i]!.key && o.title === b[i]!.title);
 
 /** What an edit of `task` changed, and nothing else - so that saving a form
  * opened on an older copy leaves alone the fields somebody else changed
@@ -588,6 +712,12 @@ export function taskEditPatch(task: Task, edited: TaskEdit): TaskPatch | null {
   }
   if ((edited.priority ?? null) !== (task.priority ?? null)) {
     patch.priority = edited.priority ?? null;
+  }
+  if (!sameOptions(edited.options, task.options)) {
+    patch.options = [...(edited.options ?? [])];
+  }
+  if ((edited.recommended ?? null) !== (task.recommended ?? null)) {
+    patch.recommended = edited.recommended ?? null;
   }
   return Object.keys(patch).length > 0 ? patch : null;
 }
@@ -651,6 +781,7 @@ export function applyTaskPatch(
       `Priorytet: ${priorityWord(task.priority)} → ${priorityWord(patch.priority)}.`,
     );
   }
+  applyOptions(next, task, patch, by, now, log);
   const deps = patchedDependsOn(task.dependsOn, patch);
   const added = deps.filter((dep) => !task.dependsOn.includes(dep));
   const removed = task.dependsOn.filter((dep) => !deps.includes(dep));
@@ -662,6 +793,89 @@ export function applyTaskPatch(
   if (patch.note !== undefined) log(patch.note);
   next.log = [...task.log, ...logged].slice(-LOG_KEEP);
   return { task: next, logged };
+}
+
+/** What a patch does to a decision's options and its pick, on `next`.
+ *
+ * Picking an answer starts the decision: it is in progress until the work
+ * that follows from it is done. Taking the pick back returns it to the list,
+ * unless it was closed meanwhile. Options that no longer include the picked
+ * or recommended key take those away with them. */
+function applyOptions(
+  next: Task,
+  task: Task,
+  patch: z.output<typeof taskPatchSchema>,
+  by: TaskActor,
+  now: string,
+  log: (text: string) => void,
+) {
+  const title = (key: string) =>
+    next.options?.find((o) => o.key === key)?.title ?? key;
+  if (patch.options !== undefined) {
+    if (patch.options.length > 0) next.options = patch.options;
+    else delete next.options;
+    const keys = new Set(patch.options.map((o) => o.key));
+    if (next.recommended && !keys.has(next.recommended)) {
+      delete next.recommended;
+    }
+    if (next.picked && !keys.has(next.picked.key)) delete next.picked;
+    if (!sameOptions(patch.options, task.options)) {
+      log(
+        patch.options.length > 0
+          ? `Opcje: ${patch.options.map((o) => o.key).join(", ")}.`
+          : "Bez opcji.",
+      );
+    }
+  }
+  if (patch.recommended !== undefined) {
+    if (next.options?.some((o) => o.key === patch.recommended)) {
+      next.recommended = patch.recommended!;
+    } else {
+      delete next.recommended;
+    }
+  }
+  if (patch.pick === undefined) return;
+  const before = task.picked?.key ?? null;
+  if (patch.pick === before) return;
+  if (patch.pick === null) {
+    delete next.picked;
+    if (next.status === "doing") next.status = "open";
+    log(`Cofnięto wybór ${before}.`);
+    return;
+  }
+  if (!next.options?.some((o) => o.key === patch.pick)) return;
+  next.picked = { key: patch.pick, at: now, by };
+  if (next.status === "open") next.status = "doing";
+  log(
+    before
+      ? `Zmieniono wybór: ${before} → ${patch.pick}: ${title(patch.pick)}.`
+      : `Wybrano ${patch.pick}: ${title(patch.pick)}.`,
+  );
+}
+
+/** The decisions a change has finished: answered, and everything that waits
+ * on them is closed now. Each comes back closed, with the line saying why. */
+export function finishedDecisions(
+  tasks: readonly Task[],
+  by: TaskActor,
+  now: string,
+): Task[] {
+  const states = taskStates(tasks);
+  return tasks.flatMap((task) => {
+    if (task.kind !== "decision" || !task.picked || isClosed(task)) return [];
+    const dependents = states.get(task.id)!.dependents;
+    if (dependents.length === 0 || !dependents.every(isClosed)) return [];
+    const { task: done } = applyTaskPatch(
+      task,
+      {
+        status: "done",
+        note: "Zamknięta: wszystko, co z niej wynikało, jest zamknięte.",
+      },
+      by,
+      now,
+    );
+    return [done];
+  });
 }
 
 /** A new task from a validated request. */
@@ -696,6 +910,12 @@ export function newTask(
     ];
   }
   if (input.source !== undefined) task.source = input.source;
+  if (input.options && input.options.length > 0) {
+    task.options = input.options;
+    if (input.options.some((o) => o.key === input.recommended)) {
+      task.recommended = input.recommended;
+    }
+  }
   if (isClosed(task)) task.closedAt = now;
   return task;
 }
@@ -785,7 +1005,14 @@ export function compareNewest(a: Task, b: Task): number {
 }
 
 export type TaskSection =
-  "goals" | "mine" | "agents" | "blocked" | "ideas" | "parked" | "closed";
+  | "goals"
+  | "mine"
+  | "agents"
+  | "blocked"
+  | "decided"
+  | "ideas"
+  | "parked"
+  | "closed";
 
 /** Which list a task is shown in on /admin/zadania. Ideas get their own list
  * whatever they wait for: nobody committed to them, so they should not crowd
@@ -794,6 +1021,9 @@ export type TaskSection =
 export function taskSection(task: Task, state: TaskState): TaskSection {
   if (state.readiness === "closed") return "closed";
   if (state.readiness === "parked") return "parked";
+  // Answered: what follows from it is under way, and it is kept in sight
+  // until that is done, in case the answer needs changing.
+  if (task.kind === "decision" && task.picked) return "decided";
   if (task.kind === "idea") return "ideas";
   if (task.kind === "goal") return "goals";
   if (state.readiness === "blocked") return "blocked";

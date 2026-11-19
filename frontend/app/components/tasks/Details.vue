@@ -1,5 +1,70 @@
 <template>
   <div class="task-details" :data-task-details="task.id">
+    <!-- What can be done with it, first: a row is opened to act on it. -->
+    <div class="task-details__actions" data-task-actions>
+      <v-btn
+        v-for="action in actions"
+        :key="action.status"
+        size="small"
+        :variant="action.primary ? 'flat' : 'outlined'"
+        :color="action.primary ? 'ink-sage' : undefined"
+        :disabled="saving"
+        :data-task-action="action.status"
+        @click="emit('update', { status: action.status })"
+      >
+        {{ action.title }}
+      </v-btn>
+      <v-spacer />
+      <!-- On a phone and beside the map the tools are their icons, so the
+           status buttons keep a line of their own. Words through `text`: a
+           default slot, even an empty one, would take the icon's place. -->
+      <v-btn
+        v-for="tool in tools"
+        :key="tool.key"
+        size="small"
+        variant="text"
+        :icon="iconsOnly ? tool.icon : undefined"
+        :prepend-icon="iconsOnly ? undefined : tool.icon"
+        :text="iconsOnly ? undefined : tool.title"
+        :color="tool.color"
+        :disabled="tool.disabled"
+        :title="tool.hint ?? tool.title"
+        :aria-label="tool.title"
+        v-bind="{ [tool.data]: '' }"
+        @click="tool.run"
+      />
+    </div>
+    <!-- The browser would not hand the text to the clipboard: here it is to
+         copy by hand, already selected. -->
+    <v-textarea
+      v-if="manualCopy"
+      :model-value="manualCopy"
+      label="Skopiuj ręcznie (Ctrl+C)"
+      readonly
+      auto-grow
+      rows="4"
+      max-rows="12"
+      density="compact"
+      variant="outlined"
+      hide-details
+      class="mb-3"
+      data-task-copy-text
+      @focus="($event.target as HTMLTextAreaElement).select()"
+    />
+
+    <!-- A decision's answers right under them: picking one is what a
+         decision is opened for. -->
+    <TasksDecisionOptions
+      v-if="task.kind === 'decision' && (task.options?.length ?? 0) > 0"
+      :task="task"
+      :state="state"
+      :saving="saving"
+      @pick="(key) => emit('update', { pick: key })"
+      @select="(id) => emit('select', id)"
+    />
+    <!-- A merge's branch: where to read it, and how much is on main. -->
+    <TasksMergeBranch v-if="task.kind === 'merge'" :task="task" />
+
     <div class="task-facts">
       <div class="task-fact">
         <span class="task-fact__label">Rodzaj</span>
@@ -177,7 +242,7 @@
     <div
       v-if="
         task.links.length > 0 ||
-        task.branches.length > 0 ||
+        (task.branches.length > 0 && task.kind !== 'merge') ||
         task.tags.length > 0
       "
       class="d-flex align-center flex-wrap ga-1 mb-3"
@@ -192,7 +257,7 @@
         #{{ tag }}
       </v-chip>
       <v-chip
-        v-for="branch in task.branches"
+        v-for="branch in task.kind === 'merge' ? [] : task.branches"
         :key="`branch-${branch}`"
         size="x-small"
         label
@@ -259,79 +324,19 @@
       Cała historia ({{ task.log.length }})
     </v-btn>
 
-    <div class="task-details__footer">
-      <v-btn
-        v-for="action in actions"
-        :key="action.status"
-        size="small"
-        :variant="action.primary ? 'flat' : 'outlined'"
-        :color="action.primary ? 'ink-sage' : undefined"
-        :disabled="saving"
-        :data-task-action="action.status"
-        @click="emit('update', { status: action.status })"
-      >
-        {{ action.title }}
-      </v-btn>
-      <v-spacer />
-      <v-btn
-        v-if="isGoal && task.dependsOn.length > 0"
-        size="small"
-        variant="text"
-        :prepend-icon="mdiFilterOutline"
-        data-task-show-goal
-        @click="emit('show-goal')"
-      >
-        Pokaż jego zadania
-      </v-btn>
-      <v-btn
-        size="small"
-        variant="text"
-        :prepend-icon="mdiPencilOutline"
-        :disabled="saving"
-        @click="emit('edit')"
-      >
-        Edytuj
-      </v-btn>
-      <v-btn
-        size="small"
-        variant="text"
-        :prepend-icon="copied ? mdiCheck : mdiContentCopy"
-        :color="copied ? 'ink-success' : undefined"
-        title="Zadanie z tym, skąd się wzięło - notatką w pamięci, sesją, zgłoszeniami - z zależnościami i historią, do wklejenia w rozmowie z agentem"
-        data-task-copy
-        @click="copyContext"
-      >
-        {{ copied ? "Skopiowano" : "Kopiuj dla czatu" }}
-      </v-btn>
-    </div>
-    <!-- The browser would not hand the text to the clipboard: here it is to
-         copy by hand, already selected. -->
-    <v-textarea
-      v-if="manualCopy"
-      :model-value="manualCopy"
-      label="Skopiuj ręcznie (Ctrl+C)"
-      readonly
-      auto-grow
-      rows="4"
-      max-rows="12"
-      density="compact"
-      variant="outlined"
-      hide-details
-      class="mt-2"
-      data-task-copy-text
-      @focus="($event.target as HTMLTextAreaElement).select()"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
+import { useDisplay } from "vuetify";
 import {
   mdiCheck,
   mdiContentCopy,
   mdiFilterOutline,
   mdiLinkVariant,
   mdiPencilOutline,
+  mdiSitemapOutline,
   mdiSourceBranch,
 } from "@mdi/js";
 import {
@@ -370,6 +375,10 @@ const props = defineProps<{
   /** Every task, for picking what this one waits on. */
   tasks: readonly Task[];
   saving?: boolean;
+  /** Offer „Na mapie”: on the list, not beside the map. */
+  mapButton?: boolean;
+  /** In a narrow column (beside the map): the tools as icons. */
+  compact?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -379,6 +388,8 @@ const emit = defineEmits<{
   select: [id: string];
   /** Show only what leads to this goal. */
   "show-goal": [];
+  /** Open the map on this task. */
+  "show-on-map": [];
   /** `dependent` waits on `prerequisite` from now on - picked under
    * „Blokuje”, where the task being changed is the other one. */
   connect: [prerequisite: string, dependent: string];
@@ -386,6 +397,63 @@ const emit = defineEmits<{
 }>();
 
 const isGoal = computed(() => props.task.kind === "goal");
+
+const { xs } = useDisplay();
+const iconsOnly = computed(() => xs.value || props.compact);
+
+/** The buttons beside the status ones: where else to see the task, and what
+ * to do with its text. */
+const tools = computed(() => {
+  const all: {
+    key: string;
+    title: string;
+    icon: string;
+    data: string;
+    run: () => void;
+    hint?: string;
+    color?: string;
+    disabled?: boolean;
+  }[] = [];
+  if (props.mapButton) {
+    all.push({
+      key: "map",
+      title: "Na mapie",
+      hint: "Pokaż to zadanie na mapie, pośrodku",
+      icon: mdiSitemapOutline,
+      data: "data-task-show-on-map",
+      run: () => emit("show-on-map"),
+    });
+  }
+  if (isGoal.value && props.task.dependsOn.length > 0) {
+    all.push({
+      key: "goal",
+      title: "Pokaż jego zadania",
+      icon: mdiFilterOutline,
+      data: "data-task-show-goal",
+      run: () => emit("show-goal"),
+    });
+  }
+  all.push(
+    {
+      key: "edit",
+      title: "Edytuj",
+      icon: mdiPencilOutline,
+      data: "data-task-edit",
+      disabled: props.saving,
+      run: () => emit("edit"),
+    },
+    {
+      key: "copy",
+      title: copied.value ? "Skopiowano" : "Kopiuj dla czatu",
+      hint: "Zadanie z tym, skąd się wzięło - notatką w pamięci, sesją, zgłoszeniami - z zależnościami i historią, do wklejenia w rozmowie z agentem",
+      icon: copied.value ? mdiCheck : mdiContentCopy,
+      color: copied.value ? "ink-success" : undefined,
+      data: "data-task-copy",
+      run: () => void copyContext(),
+    },
+  );
+  return all;
+});
 
 /** The picked level in its own colour; normal has none. */
 const ownColor = computed(() =>
@@ -447,6 +515,10 @@ const goalIds = computed(
 );
 
 const blockingHint = computed(() => {
+  // Answered, it holds nothing up: what is listed here follows from it.
+  if (props.task.kind === "decision" && props.task.picked) {
+    return "Wybór zapadł: nic już na nią nie czeka.";
+  }
   // „zadanie” is neuter and „cel” masculine: na nie, na niego.
   const it = isGoal.value ? "niego" : "nie";
   const all = props.state.dependents.length;
@@ -553,13 +625,25 @@ const actions = computed(() => {
     done: ["open"],
     dropped: ["open"],
   };
-  // Nobody works on a goal itself, so it is never started.
+  // Nobody works on a goal itself, so it is never started. An answered
+  // decision is in progress because of its answer: „Cofnij wybór” is the
+  // way back, not a status of its own.
+  const answered = props.task.kind === "decision" && !!props.task.picked;
   const statuses = offered[props.task.status].filter(
-    (status) => !(isGoal.value && status === "doing"),
+    (status) =>
+      !(isGoal.value && status === "doing") &&
+      !(answered && status === "open"),
   );
+  // A decision waiting for an answer is answered with its options, which
+  // lead: „Zrobione” is then one more way out, not the main one.
+  const choosing =
+    props.task.kind === "decision" &&
+    !props.task.picked &&
+    (props.task.options?.length ?? 0) > 0;
   return statuses.map((status) => ({
     status,
     ...all[status],
+    primary: all[status].primary && !choosing,
     // Back from "w toku" to the list is a step back, not a reopening.
     title:
       props.task.status === "doing" && status === "open"
@@ -637,13 +721,21 @@ const actions = computed(() => {
   gap: 2px;
 }
 
-.task-details__footer {
+/* The status buttons and the tools, over everything else; ruled off from
+ * the task below. */
+.task-details__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+@media (max-width: 599.98px) {
+  .task-details__actions {
+    gap: 6px 4px;
+  }
 }
 </style>

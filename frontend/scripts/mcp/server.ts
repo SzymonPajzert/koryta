@@ -250,6 +250,7 @@ server.registerTool(
           "mine",
           "agents",
           "blocked",
+          "decided",
           "ideas",
           "parked",
           "closed",
