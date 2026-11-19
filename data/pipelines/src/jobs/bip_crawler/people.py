@@ -115,6 +115,7 @@ from scrapers.bip.people import (
     ASSETS,
     DECLARATION,
     FULL_NAME,
+    SOMEBODY_ELSE,
     Candidate,
     Seeker,
     candidates,
@@ -128,6 +129,7 @@ from scrapers.bip.people import (
     same_file,
     satisfied,
     says_declarations,
+    somebody_else,
     stem,
     url_words,
 )
@@ -353,12 +355,14 @@ class _Frontier:
         bonus: float = 0.0,
         page: str = "",
         full_name: float = FULL_NAME,
+        first_names: frozenset[str] = frozenset(),
     ) -> None:
         """Queue a page's links to other pages; files are for the download.
         ``bonus`` lifts those a declarations page leads to, after the cut, so a
         section of tenders it links stays out (`DECLARATIONS_BONUS`); ``page``
         is that page's address, whose pager leads to more of it (`_pager`);
-        ``full_name`` what a seeker's full name scores on its platform."""
+        ``full_name`` what a seeker's full name scores on its platform;
+        ``first_names`` tell a label naming somebody else (`somebody_else`)."""
         # ESC's VelaBIP links a page's older versions, <page>/<n>, each beside
         # a comparison with it, <page>/porownaj/<n>/<m> (`is_low_value_url`):
         # copies of the page. A list's pages, /lista/<slug>/<n>, have none.
@@ -401,6 +405,9 @@ class _Frontier:
                         self.declared.add(target)
                 if len(owners) == 1:
                     self.lenders[target] = owners.pop()
+                # Another person's page after the list's own (`SOMEBODY_ELSE`).
+                if somebody_else(link, seekers, first_names):
+                    score -= SOMEBODY_ELSE
                 self.add(target, score + bonus, depth, link.url)
 
 
@@ -1411,7 +1418,14 @@ class PeopleSearch:
         full_name = ezeto.FULL_NAME if ezeto.is_page(result.content) else FULL_NAME
         if depth < self.options.max_depth:
             frontier.follow(
-                follow, seekers, depth + 1, prefer, bonus, result.url, full_name
+                follow,
+                seekers,
+                depth + 1,
+                prefer,
+                bonus,
+                result.url,
+                full_name,
+                self.first_names,
             )
         self._tell_page(out, out.found[before:], result.url, depth, led, lender)
         return PageView(title, links, follow, bonus, full_name)

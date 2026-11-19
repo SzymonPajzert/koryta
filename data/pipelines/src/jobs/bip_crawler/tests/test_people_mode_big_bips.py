@@ -28,7 +28,15 @@ from jobs.bip_crawler.people_list import to_search
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from jobs.bip_crawler.tests.test_people_mode_review import PDF, Web, html, row
 from scrapers.bip.classify import normalize_url
-from scrapers.bip.people import Seeker, link_score, office_terms, says_declarations
+from scrapers.bip.people import (
+    SOMEBODY_ELSE,
+    Seeker,
+    link_score,
+    office_terms,
+    says_declarations,
+    somebody_else,
+    stem,
+)
 from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext, extract_link_contexts
@@ -47,6 +55,7 @@ def search(
     scopes=None,
     render=None,
     clock=time.monotonic,
+    first_names=frozenset(),
     **options,
 ):
     web = Web(sites)
@@ -72,6 +81,7 @@ def search(
         known=known,
         render=render,
         clock=clock,
+        first_names=first_names,
     )
     people.run(
         to_search(
@@ -891,3 +901,120 @@ def test_a_walk_past_its_own_time_ends_as_budget(tmp_path):
         "budget",
     )
     assert len(web.calls) <= 4  # the depth limit (6) would have allowed 7
+
+
+#: First names as `PeopleSearch.first_names` holds them: every candidacy's.
+NAMES = frozenset(
+    stem(n, min_a=4)
+    for n in "Ryszard Marcin Jarosław Daniel Ewa Anna Jan Piotr Adam".split()
+)
+
+
+def test_a_label_naming_somebody_nobody_seeks():
+    kabat = Seeker.of("k", "Ryszard", "Kabat")
+    page = "https://bip.powiat-ilawski.pl/oswiadczenia/10004"
+
+    def other(anchor: str, url: str = f"{page}/1/") -> bool:
+        return somebody_else(LinkContext(url, anchor), [kabat], NAMES)
+
+    assert other("Marcin Bednarczyk Członek Zarządu")
+    assert other("Daniel Zalewski, oświadczenie majątkowe, coroczne 2023")
+    assert other("BEDNARCZYK Marcin")
+    # The seeker's own, by surname alone too, as link_score lifts it.
+    assert not other("Ryszard Kabat Członek Zarządu")
+    assert not other("Kabat Ryszard")
+    assert not other("Marcin Bednarczyk", f"{page}/2/Ryszard_Kabat/")
+    # A list's own pages and the site's menu name nobody.
+    for label in (
+        "2",
+        "Następna strona",
+        "Kadencja 2024-2029",
+        "Oświadczenia majątkowe radnych",
+        "Rada Powiatu",
+        "Szkoła Podstawowa im. Jana Pawła II",
+    ):
+        assert not other(label), label
+    # Without the list's first names nobody is told apart.
+    assert not somebody_else(
+        LinkContext(f"{page}/1/", "Marcin Bednarczyk"), [kabat], frozenset()
+    )
+
+
+def test_a_list_reads_its_own_pages_before_people_nobody_seeks():
+    # Powiat iławski (SYSTEMDOBIP): ten declarations a page, each linked by its
+    # filer's name and post, 2 above the pager; the walk read 150 other people's
+    # pages and their change logs, and found two of six (11-18).
+    host = "https://bip.powiat-ilawski.pl/oswiadczenia/10004"
+    kabat = Seeker.of("k", "Ryszard", "Kabat")
+    own = f"{host}/939/Ryszard_Kabat/"
+    other = f"{host}/938/Marcin_Bednarczyk/"
+    pager = f"{host}/2/rok/"
+    links = [
+        LinkContext(own, "Ryszard Kabat Członek Zarządu"),
+        LinkContext(other, "Marcin Bednarczyk Członek Zarządu"),
+        LinkContext(pager, "2"),
+    ]
+
+    def queued(first_names: frozenset[str]) -> dict[str, float]:
+        frontier = people_mode._Frontier([("bip.powiat-ilawski.pl", "")])
+        frontier.follow(
+            links,
+            [kabat],
+            1,
+            None,
+            DECLARATIONS_BONUS,
+            f"{host}/rok/",
+            first_names=first_names,
+        )
+        return {url: -score for score, _, _, url in frontier.heap}
+
+    before, after = queued(frozenset()), queued(NAMES)
+    own, other, pager = (normalize_url(u) for u in (own, other, pager))
+    assert before[other] > before[pager]
+    assert after[own] > after[pager] > after[other]
+    # Read last, not left out: a small unit still reads everybody.
+    assert after[other] == before[other] - SOMEBODY_ELSE
+    # Below the pager five pages on (0.5 a level), the depth limit's last.
+    assert after[other] < after[pager] - 0.5 * 5
+    assert after[own] == before[own]
+
+
+def test_a_seeker_on_a_lists_second_page_is_found_within_the_budget(tmp_path):
+    others = "Marcin Bednarczyk|Jarosław Piechotka|Piotr Mazur|Adam Nowak|Jan Wilk"
+    rows = "".join(
+        f'<tr><td><a href="/om/{i}/p">{name} Członek Zarządu</a></td>'
+        f'<td><a href="/f/{i}.pdf">Pobierz załącznik</a></td></tr>'
+        for i, name in enumerate(others.split("|"))
+    )
+    sites = {
+        "https://u1.pl": html("BIP", '<a href="/om">Oświadczenia majątkowe</a>'),
+        "https://u1.pl/om": html(
+            "Oświadczenia majątkowe", f'<table>{rows}</table><a href="/om/2/rok">2</a>'
+        ),
+        "https://u1.pl/om/2/rok": html(
+            "Oświadczenia majątkowe",
+            '<table><tr><td><a href="/om/9/p">Ewa Lis Radna Powiatu</a></td>'
+            '<td><a href="/f/lis.pdf">Ewa Lis - oświadczenie majątkowe</a></td>'
+            "</tr></table>",
+        ),
+        **{
+            f"https://u1.pl/om/{i}/p": html(f"{name} - Oświadczenia majątkowe", "")
+            for i, name in enumerate(others.split("|"))
+        },
+        "https://u1.pl/f/lis.pdf": (200, "application/pdf", PDF + b"lis"),
+    }
+
+    def walk(first_names: frozenset[str]) -> str:
+        _, store, _ = search(
+            tmp_path / str(len(first_names)),
+            sites,
+            [row("lis", "u1", "Ewa", "Lis")],
+            unit_pages=4,
+            pages_per_candidacy=0,
+            sitemaps=False,
+            first_names=first_names,
+        )
+        return store.outcomes["lis"].status
+
+    assert walk(frozenset()) == "not_found"
+    assert walk(NAMES) == "found"
