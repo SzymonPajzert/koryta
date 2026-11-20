@@ -161,11 +161,15 @@ def test_every_model_is_reconciled_in_turn_and_the_run_succeeds(world):
     assert run.calls[1][1]["total"] == len(NAMES)
     assert run.calls[1][1]["phase"] == "wysyłanie"
     end = run.ending()
-    assert (end["state"], end["exit_code"], end["done"]) == ("succeeded", 0, 7)
+    assert (end["state"], end["exit_code"], end["done"]) == (
+        "succeeded",
+        0,
+        len(NAMES),
+    )
     assert end["stop_reason"] is None and end["errors"] == []
     assert end["counters"] == {
         # Two people a model; pagerank wrote one of its two and took back five.
-        "written": 2 * 6 + 1,
+        "written": 2 * (len(NAMES) - 1) + 1,
         "retracted": 5,
         "unchanged": 1,
         "failed": 0,
@@ -226,7 +230,7 @@ def test_a_model_that_rates_nobody_retracts_nothing_and_fails_the_run(world):
     assert job.main([]) == job.EXIT_FAILED
 
     assert "write pipeline-facts" not in world.events
-    assert len(world.written) == 6
+    assert len(world.written) == len(NAMES) - 1
     end = world.run().ending()
     assert end["state"] == "failed"
     assert end["stop_reason"] == f"PeopleScoresFacts: {job.NOBODY}"
@@ -240,7 +244,7 @@ def test_a_model_that_did_not_build_leaves_the_others_to_go_up(world):
     assert job.main([]) == job.EXIT_FAILED
 
     assert "write pipeline-pagerank" not in world.events
-    assert len(world.written) == 6
+    assert len(world.written) == len(NAMES) - 1
     [error] = world.run().ending()["errors"]
     assert error.startswith("PeopleScoresPageRank: nie zbudował się: FileNotFoundError")
 
@@ -256,7 +260,7 @@ def test_a_refused_write_is_that_models_failure(world):
     assert failed["error"] == "nie zapisano: PermissionError: Firestore refused"
     assert summary["state"] == "failed"
     # Everybody after it still went up.
-    assert world.events[-1] == "write pipeline-facts"
+    assert world.events[-1] == f"write {TAGS[NAMES[-1]]}"
 
 
 def test_a_sign_in_that_fails_builds_nothing_and_fails_the_run(world, monkeypatch):
