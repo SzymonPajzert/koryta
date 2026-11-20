@@ -163,7 +163,10 @@ export function machineSettles(
   return ocrInWindow && pageHasIt ? day : null;
 }
 
-const base64Png = z.string().max(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 8);
+/** A PNG as base64, no bigger than `MAX_IMAGE_BYTES` once decoded. */
+export const base64Png = z
+  .string()
+  .max(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 8);
 
 export const declarationExtractSchema = z
   .object({
@@ -463,7 +466,9 @@ function compatible(a: string, b: string): boolean {
 
 /** Whether an answer has a say in what a crop settles: a person's, and not
  * one stored without a vote. */
-export function answerVotes(answer: ReaderAnswer): boolean {
+export function answerVotes(
+  answer: Pick<ReaderAnswer, "uid" | "votes">,
+): boolean {
   return !isAutomatedUid(answer.uid) && answer.votes !== false;
 }
 
