@@ -33,6 +33,7 @@ from analysis.scores.base import (
     demote_staff_representatives,
     person_key,
     rejestr_io_id,
+    stood_on_site,
 )
 from analysis.scores.facts import (
     EXTRA_FACT_POINTS,
@@ -209,6 +210,7 @@ class TestPopulation:
         )
         scorer.companies_krs.read_or_process = lambda ctx: pd.DataFrame()
         scorer.labour_unions.read_or_process = lambda ctx: pd.DataFrame()
+        scorer.koryta_edges.read_or_process = lambda ctx: pd.DataFrame()
         return scorer.population(None)
 
     def test_a_published_person_is_a_seed_not_a_candidate(self):
@@ -393,6 +395,7 @@ class TestRadaSpolecznaCeiling:
             ]
         )
         scorer.labour_unions.read_or_process = lambda ctx: pd.DataFrame()
+        scorer.koryta_edges.read_or_process = lambda ctx: pd.DataFrame()
 
         result = scorer.population(None)
 
@@ -456,6 +459,39 @@ class TestStaffRepresentatives:
             candidacies={"Anna": [Candidacy("1998", "0216", "Inne", "AWS")]},
         )
         assert demote_staff_representatives({"Anna": 5}, people) == {"Anna": 5}
+
+    def test_who_stood_is_read_off_the_site_where_the_export_has_the_page(self):
+        # The publication chance reads the site's candidacies, so the cap does
+        # too (decision on 2026-11-20): Anna stood on the site though the
+        # payload has no run of hers, Ewa the other way round.
+        people = self.staff(
+            {
+                "Anna": [self.UNION, self.EMPLOYER],
+                "Ewa": [self.UNION, self.EMPLOYER],
+            },
+            candidacies={"Ewa": [Candidacy("1998", "0216", "Inne", "AWS")]},
+        )
+        people.stood_on_site = {"node-Anna": True, "node-Ewa": False}
+        assert demote_staff_representatives({"Anna": 5, "Ewa": 5}, people) == {
+            "Anna": 5,
+            "Ewa": STAFF_REPRESENTATIVE_CEILING,
+        }
+
+    def test_the_export_says_who_stood(self):
+        koryta = pd.DataFrame({"id": ["anna", "beata", "celina"]})
+        edges = pd.DataFrame(
+            [
+                {"type": "election", "source": "anna", "deleted": None},
+                {"type": "election", "source": "beata", "deleted": True},
+                {"type": "employed", "source": "celina", "deleted": None},
+            ]
+        )
+        assert stood_on_site(koryta, edges) == {
+            "anna": True,
+            "beata": False,
+            "celina": False,
+        }
+        assert stood_on_site(koryta, pd.DataFrame()) == {}
 
     def test_the_cap_reaches_every_model(self):
         people = self.staff({"Anna": [self.UNION, self.EMPLOYER]})
@@ -578,6 +614,7 @@ class TestPopulationJoin:
         scorer.people_votes.read_or_process = lambda ctx: pd.DataFrame()
         scorer.companies_krs.read_or_process = lambda ctx: pd.DataFrame()
         scorer.labour_unions.read_or_process = lambda ctx: pd.DataFrame()
+        scorer.koryta_edges.read_or_process = lambda ctx: pd.DataFrame()
         return scorer.population(None)
 
     def test_a_middle_name_no_longer_hides_a_person(self):
@@ -1285,8 +1322,9 @@ class TestArticlePoints:
     """What one article is worth, given the facts it carries."""
 
     def test_the_strongest_fact_decides_the_article(self):
-        assert article_points(["affair_involvement"]) == (
-            FACT_TYPE_POINTS["affair_involvement"]
+        assert (
+            article_points(["affair_involvement"])
+            == (FACT_TYPE_POINTS["affair_involvement"])
         )
         # The affair decides it; the party membership only adds the extra-fact
         # increment on top.

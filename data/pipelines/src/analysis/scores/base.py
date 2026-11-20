@@ -64,7 +64,8 @@ from analysis.payloads.person import PeoplePayloads
 from entities.company_bodies import RADA_SPOLECZNA, supervisory_body
 from entities.composite import PersonScore
 from scrapers.koryta.created import KorytaPeopleCreated
-from scrapers.koryta.download import KorytaPeople, KorytaVotes
+from scrapers.koryta.download import KorytaEdges, KorytaPeople, KorytaVotes
+from scrapers.krs.columns import flag
 from scrapers.krs.labour_unions import LabourUnions, union_groups
 from scrapers.krs.list import CompaniesKRS
 from scrapers.stores import Context, Pipeline
@@ -259,6 +260,10 @@ class Population:
     #: Trade union KRS -> every company of the public employer it is named
     #: after (`scrapers.krs.labour_unions.union_groups`).
     unions: dict[str, frozenset[str]] = dataclasses.field(default_factory=dict)
+    #: Node id -> whether the site's export holds a live candidacy of that
+    #: page, for every person page the export has: who stood as the site has
+    #: it, which the publication chance reads too.
+    stood_on_site: dict[str, bool] = dataclasses.field(default_factory=dict)
 
     def seeds(self, sign: int = 1) -> dict[str, float]:
         """Confirmed people whose judgement went the given way, weight positive."""
@@ -270,6 +275,15 @@ class Population:
 
     def has_candidacy(self, key: str) -> bool:
         return bool(self.candidacies.get(key))
+
+    def stood(self, key: str) -> bool:
+        """Whether this person stood in an election: by the site's candidacies
+        where the export has their page, as the publication chance reads them,
+        and by the payload's for a page created since."""
+        node = self.node_ids.get(key)
+        if node in self.stood_on_site:
+            return self.stood_on_site[node]
+        return self.has_candidacy(key)
 
     def is_rada_spoleczna_seat(self, post: Employment) -> bool:
         """Whether this post is a seat on a rada społeczna, which is unpaid.
@@ -380,12 +394,23 @@ def demote_rada_spoleczna_only(
     }
 
 
+def stood_on_site(koryta: pd.DataFrame, edges: pd.DataFrame) -> dict[str, bool]:
+    """Every person page in the export, and whether a live candidacy edge of
+    theirs is on the site."""
+    if "type" not in edges or "source" not in edges:
+        return {}
+    live = edges[~flag(edges["deleted"])] if "deleted" in edges else edges
+    candidates = set(live.loc[live["type"] == "election", "source"].astype(str))
+    return {str(node): str(node) in candidates for node in koryta.get("id", [])}
+
+
 def demote_staff_representatives(
     banded: typing.Mapping[str, int], population: Population
 ) -> dict[str, int]:
     """`banded`, with everybody who looks like staff and never stood in an
     election held at `STAFF_REPRESENTATIVE_CEILING`; unchanged while that is
-    None.
+    None. Who stood is read as the publication chance reads it
+    (`Population.stood`), so the two never disagree (decision on 2026-11-20).
 
     Measured on 2026-11-20 over the 73 site people with both a union seat and
     a public seat: 7 sit on public boards only where their union is, and 2 of
@@ -397,7 +422,7 @@ def demote_staff_representatives(
         return dict(banded)
     return {
         key: min(score, ceiling)
-        if not population.has_candidacy(key) and population.staff_representative(key)
+        if not population.stood(key) and population.staff_representative(key)
         else score
         for key, score in banded.items()
     }
@@ -430,6 +455,8 @@ class PeopleScoreModel(Pipeline):
     people_votes: KorytaVotes
     companies_krs: CompaniesKRS
     labour_unions: LabourUnions
+    #: The site's own edges, for who stood as the site has it.
+    koryta_edges: KorytaEdges
 
     def raw_scores(self, ctx: Context, population: Population) -> dict[str, float]:
         """This model's opinion, on whatever scale suits it, keyed by person key.
@@ -606,6 +633,7 @@ class PeopleScoreModel(Pipeline):
             shortlist=shortlist,
             names=names,
             unions=union_groups(self.labour_unions.read_or_process(ctx)),
+            stood_on_site=stood_on_site(koryta, self.koryta_edges.read_or_process(ctx)),
         )
 
     @staticmethod
