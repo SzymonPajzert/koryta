@@ -14,8 +14,10 @@ from entities.company_categories import (
     KOLEJE,
     OBRONNOSC,
     SPZOZ,
+    STATUSES,
     categories_for,
     matches_pkd,
+    wound_up,
 )
 
 
@@ -823,5 +825,73 @@ class TestSkarbPanstwa(unittest.TestCase):
             ["skarb-panstwa"],
         )
 
-    def test_the_treasury_comes_last_among_the_values_the_site_offers(self):
-        self.assertEqual(CATEGORY_VALUES[-1], "skarb-panstwa")
+    def test_the_treasury_comes_after_the_sectors_and_before_the_statuses(self):
+        self.assertEqual(CATEGORY_VALUES[-2:], ("skarb-panstwa", "w-likwidacji"))
+
+
+class TestStatuses(unittest.TestCase):
+    """Decision on 2026-11-20: a company being wound up, as the register's name
+    says, as a category to filter by beside its sector and owner."""
+
+    def test_a_company_in_liquidation_keeps_its_sector_and_owner_before_it(self):
+        # KRS 0000019193, PKP S.A., named as if it were being wound up
+        self.assertEqual(
+            categories_for(
+                "0000019193", [], treasury=True, name="POLSKIE KOLEJE W LIKWIDACJI"
+            ),
+            ["koleje", "skarb-panstwa", "w-likwidacji"],
+        )
+
+    def test_a_company_in_no_sector_is_filed_under_its_status_alone(self):
+        self.assertEqual(
+            categories_for(
+                "0000014800", ["70.10.Z"], name="HUTA OSTROWIEC S.A. W UPADŁOŚCI"
+            ),
+            ["w-likwidacji"],
+        )
+
+    def test_the_status_does_not_keep_the_article_from_placing_a_company(self):
+        self.assertEqual(
+            categories_for(
+                "0000059307",
+                ["70.10.Z"],
+                wiki_categories=["Przedsiębiorstwa energetyczne w Polsce"],
+                name="PGE W LIKWIDACJI",
+            ),
+            ["energetyka", "w-likwidacji"],
+        )
+
+    def test_bankruptcy_in_every_spelling_is_filed_with_liquidation(self):
+        for name in (
+            "HUTA SPÓŁKA AKCYJNA W UPADŁOŚCI",
+            "HUTA SPÓŁKA AKCYJNA W UPADŁOŚCI LIKWIDACYJNEJ",
+            "HUTA SPÓŁKA AKCYJNA W UPADŁOŚCI UKŁADOWEJ",
+            "HUTA SPÓŁKA AKCYJNA W UPADLOSCI",
+            "Huta spółka akcyjna w upadłości",
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(wound_up(name), ["w-likwidacji"])
+
+    def test_both_statuses_are_one_category(self):
+        self.assertEqual(
+            wound_up("X SPÓŁKA AKCYJNA W LIKWIDACJI W UPADŁOŚCI"), ["w-likwidacji"]
+        )
+
+    def test_restructuring_is_not_a_status_the_site_files(self):
+        self.assertEqual(wound_up("PKP CARGO SPÓŁKA AKCYJNA W RESTRUKTURYZACJI"), [])
+
+    def test_a_partner_being_wound_up_is_not_the_company(self):
+        self.assertEqual(
+            wound_up(
+                "TARASY OSIEDLE SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ W "
+                "LIKWIDACJI SPÓŁKA KOMANDYTOWA"
+            ),
+            [],
+        )
+
+    def test_without_a_name_there_is_no_status(self):
+        self.assertEqual(categories_for("0000019193", []), ["koleje"])
+
+    def test_the_statuses_are_values_the_site_offers(self):
+        for status in STATUSES:
+            self.assertIn(status.value, CATEGORY_VALUES)

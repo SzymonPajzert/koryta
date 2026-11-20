@@ -73,8 +73,13 @@ def category_companies(companies: pd.DataFrame, category: str) -> set[str]:
             form = None
         activity = empty_list_if_nan(getattr(company, "activity", None))
         treasury = on_the_treasury_list(getattr(company, "treasury_share", None))
+        name = getattr(company, "name", None)
         if category in categories_for(
-            str(company.krs), list(activity), form, treasury=treasury
+            str(company.krs),
+            list(activity),
+            form,
+            treasury=treasury,
+            name=name if isinstance(name, str) else None,
         ):
             found.add(str(company.krs))
     return found

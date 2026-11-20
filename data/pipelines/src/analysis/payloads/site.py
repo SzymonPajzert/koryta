@@ -27,6 +27,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from entities.company_categories import REGISTER_FACTS
 from scrapers.koryta.download import KorytaEdges, KorytaNodes
 from scrapers.pkw.elections import party_sort_key
 from scrapers.stores import Context
@@ -1151,8 +1152,8 @@ class SiteSnapshot:
         # An empty `categories`, by contrast, is a real answer: this company is
         # in no sector we track. Absent means the payload did not work them out.
         categories = payload.get("categories")
-        if categories is not None and data.get("categoriesSource") != "manual":
-            written["categories"] = _as_list(categories)
+        if categories is not None:
+            written["categories"] = _categories_written(data, _as_list(categories))
 
         is_public = payload.get("is_public")
         if is_public is not None and data.get("isPublicSource") != "manual":
@@ -1625,6 +1626,19 @@ class _EdgeMatcher:
                 return "enriches"
 
         return "new"
+
+
+def _categories_written(stored: dict, categories: list) -> list:
+    """The categories the ingest would leave on a node, given the payload's.
+
+    Where a person set them, it keeps their sectors and takes the owner and
+    status from the payload (`withRegisterFactsFrom`), so only those can change.
+    """
+    if stored.get("categoriesSource") != "manual":
+        return categories
+    return [
+        c for c in _as_list(stored.get("categories")) if c not in REGISTER_FACTS
+    ] + [c for c in categories if c in REGISTER_FACTS]
 
 
 def _as_list(value: typing.Any) -> list:

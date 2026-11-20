@@ -143,6 +143,25 @@ def short_name(name: str | None) -> str | None:
     """
     if not name:
         return name
+    base, statuses = _split_statuses(name)
+    return " ".join([base, *statuses])
+
+
+def register_statuses(name: str | None) -> list[str]:
+    """The statuses the register appends to a company's name, in its order.
+
+    ["W LIKWIDACJI"] for TELEWIZJA POLSKA SPÓŁKA AKCYJNA W LIKWIDACJI, and
+    none for a limited partnership whose partner is being wound up - see
+    `short_name`. Read off the register's name, not the site's: `display_name`
+    puts the town after the status.
+    """
+    if not isinstance(name, str) or not name:
+        return []
+    return _split_statuses(name)[1]
+
+
+def _split_statuses(name: str) -> tuple[str, list[str]]:
+    """`short_name` without the statuses, and the statuses."""
     base = " ".join(name.split())
     statuses: list[str] = []
     while True:
@@ -162,7 +181,7 @@ def short_name(name: str | None) -> str | None:
                 base = rest
         base = _unquoted(base)
         if base == before:
-            return " ".join([base, *statuses])
+            return base, statuses
 
 
 def display_name(name: str | None, city: str | None) -> str | None:

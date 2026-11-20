@@ -819,6 +819,7 @@ class CompanyUploader(Uploader):
                 if isinstance(wiki_categories, (list, np.ndarray))
                 else [],
                 treasury=on_the_treasury_list(payload.get("treasury_share")),
+                name=payload.get("name"),
             )
         if "supervisory_body" not in payload:
             payload["supervisory_body"] = supervisory_body(form)

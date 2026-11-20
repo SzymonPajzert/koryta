@@ -34,6 +34,8 @@ contract `isPublic`/`isPublicSource` already has. See
 
 from dataclasses import dataclass
 
+from entities.company import register_statuses
+
 
 @dataclass(frozen=True)
 class Override:
@@ -1119,7 +1121,20 @@ SECTORS: tuple[Category, ...] = (
 #: sectors.
 SKARB_PANSTWA = Category("skarb-panstwa", "Skarb Państwa")
 
-COMPANY_CATEGORIES: tuple[Category, ...] = (*SECTORS, SKARB_PANSTWA)
+#: Not a sector but the register's status: a company being wound up, as the
+#: register appends it to the name (KSH art. 274). Decision on 2026-11-20: a
+#: category to filter by, like `SKARB_PANSTWA`, one for liquidation and
+#: bankruptcy alike, and none for restructuring, after which a company carries
+#: on.
+W_LIKWIDACJI = Category("w-likwidacji", "W likwidacji lub upadłości")
+STATUSES: tuple[Category, ...] = (W_LIKWIDACJI,)
+
+COMPANY_CATEGORIES: tuple[Category, ...] = (*SECTORS, SKARB_PANSTWA, *STATUSES)
+
+#: The categories the register decides rather than a person: a page whose
+#: sectors somebody set still takes these from the payload, as
+#: `withRegisterFactsFrom` in `frontend/shared/companyCategories.ts` lays them.
+REGISTER_FACTS: tuple[str, ...] = (SKARB_PANSTWA.value, *(s.value for s in STATUSES))
 
 CATEGORY_VALUES: tuple[str, ...] = tuple(c.value for c in COMPANY_CATEGORIES)
 
@@ -1207,6 +1222,7 @@ def categories_for(
     form: str | None = None,
     wiki_categories: list[str] | None = None,
     treasury: bool = False,
+    name: str | None = None,
 ) -> list[str]:
     """Every category a company belongs to, in `COMPANY_CATEGORIES` order.
 
@@ -1235,10 +1251,14 @@ def categories_for(
     listed companies that declare no sector of their own, PGE Polska Grupa
     Energetyczna among them.
 
+    `name` is the register's name, whose status files the company under
+    `W_LIKWIDACJI` after that, on the same terms (`wound_up`).
+
     Returns a list rather than a set so the value is stable from one run to the
     next - it ends up in a Firestore document that a diff is taken against.
     """
-    owners = [SKARB_PANSTWA.value] if treasury else []
+    # Filed after the sectors, and never counted as one.
+    after = ([SKARB_PANSTWA.value] if treasury else []) + wound_up(name)
     normalized = str(krs).zfill(10) if krs is not None else None
     result = []
     for category in SECTORS:
@@ -1255,10 +1275,37 @@ def categories_for(
         ):
             result.append(category.value)
     if result:
-        return result + owners
+        return result + after
     return [
         category.value
         for category in SECTORS
         if not (normalized is not None and normalized in category.excluded_krs)
         and matches_wikipedia(wiki_categories, category.wikipedia)
-    ] + owners
+    ] + after
+
+
+#: The register's statuses that file a company under `W_LIKWIDACJI`, as
+#: `register_statuses` spells them upper-cased and without diacritics. "W
+#: UPADŁOŚCI LIKWIDACYJNEJ" and "W UPADŁOŚCI UKŁADOWEJ" are the bankruptcies of
+#: the law before 2016, under which the register still names some.
+_WOUND_UP = {
+    "W LIKWIDACJI",
+    "W UPADLOSCI",
+    "W UPADLOSCI LIKWIDACYJNEJ",
+    "W UPADLOSCI UKLADOWEJ",
+}
+
+
+def wound_up(name: str | None) -> list[str]:
+    """`[W_LIKWIDACJI]` where the register's name says the company is being
+    wound up, and nothing otherwise.
+
+    Nothing for one in restructuring, and nothing for a limited partnership
+    whose partner is being wound up rather than the company.
+    """
+    statuses = {_plain(status) for status in register_statuses(name)}
+    return [W_LIKWIDACJI.value] if statuses & _WOUND_UP else []
+
+
+def _plain(status: str) -> str:
+    return status.upper().translate(str.maketrans("ŁŚ", "LS"))
