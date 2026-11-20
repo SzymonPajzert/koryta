@@ -28,7 +28,7 @@ older, rebuild them first, as submit_scores.sh does (`koryta PeopleEnriched
 --refresh :ProcessWiki --refresh all`), or run the night's step on the VM:
 `night.sh --force --only scores`.
 
-The people they rate are the site's as the 04:00 export has them, and the pages
+The people they rate are the site's as the 02:00 export has them, and the pages
 the people import has created since (`scrapers.koryta.created`). The night
 creates its new hires' pages after the export, and a page left to the next
 export would wait a day for its score - which is what puts it in the queue.

@@ -10,7 +10,7 @@
 # compared with - and once it has run something, or found only runs waiting
 # for that export, and nothing more comes for ten minutes it leaves
 # poweroff-requested and exits; poweroff.sh then switches the VM off, and the
-# 04:15 boot for the night brings it back for the runs that waited. A VM
+# 02:15 boot for the night brings it back for the runs that waited. A VM
 # booted by hand, where it has run nothing and nothing waits, stays up.
 #
 # It runs the code and the outputs the last night left: no checkout, no sync.

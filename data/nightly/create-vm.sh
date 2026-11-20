@@ -29,6 +29,8 @@ pesel_secret=${PESEL_SECRET:-koryta-pesel-salt}
 web_key_secret=${WEB_KEY_SECRET:-firebase-web-api-key}
 rejestr_secret=${REJESTR_SECRET:-rejestr-io-key}
 schedule=${SCHEDULE:-koryta-nightly}
+start="15 2 * * *"
+stop="0 7 * * *"
 # The default network is in custom subnet mode, so a VM has to name its subnet;
 # koryta-compressor and claude-dev use this one too, and default-allow-ssh
 # lets gcloud compute ssh in.
@@ -129,20 +131,25 @@ if ! g compute instances describe "$vm" --zone="$zone" >/dev/null 2>&1; then
     --labels=purpose=koryta-nightly
 fi
 
-echo "== Schedule $schedule: start 04:15, stop 09:00 (Warsaw)"
+echo "== Schedule $schedule: start 02:15, stop 07:00 (Warsaw)"
 # Compute Engine's own agent starts and stops the VM, and attaching a schedule
 # is refused until it may - so the grant comes first.
 number=$(g projects describe "$project" --format='value(projectNumber)')
 g projects add-iam-policy-binding "$project" \
   --member="serviceAccount:service-$number@compute-system.iam.gserviceaccount.com" \
   --role=roles/compute.instanceAdmin.v1 --condition=None >/dev/null
-# The night follows the 04:00 Firestore export. A start may begin up to 15
-# minutes late (the docs), so 04:15 is running by 04:30. The VM powers itself
-# off when the night is over; the 09:00 stop only catches a night that hung.
-g compute resource-policies describe "$schedule" --region="$region" >/dev/null 2>&1 ||
+# The night follows the 02:00 Firestore export. A start may begin up to 15
+# minutes late (the docs), so 02:15 is running by 02:30. The VM powers itself
+# off when the night is over; the 07:00 stop only catches a night that hung.
+# A rerun moves an existing schedule to these times.
+if g compute resource-policies describe "$schedule" --region="$region" >/dev/null 2>&1; then
+  g compute resource-policies update instance-schedule "$schedule" --region="$region" \
+    --vm-start-schedule="$start" --vm-stop-schedule="$stop" --timezone=Europe/Warsaw
+else
   g compute resource-policies create instance-schedule "$schedule" --region="$region" \
-    --vm-start-schedule="15 4 * * *" --vm-stop-schedule="0 9 * * *" \
+    --vm-start-schedule="$start" --vm-stop-schedule="$stop" \
     --timezone=Europe/Warsaw --description="koryta nightly run"
+fi
 attached() {
   g compute instances describe "$vm" --zone="$zone" --format='value(resourcePolicies)' |
     tr ';' '\n' | grep "/resourcePolicies/$schedule$" >/dev/null
@@ -162,5 +169,5 @@ done
 attached && echo "$schedule is attached to $vm."
 
 # The VM is running now. After setup-vm.sh, stop it (or let it be): the
-# schedule boots it at 04:15 and the timer runs the night at 04:30 either way.
+# schedule boots it at 02:15 and the timer runs the night at 02:30 either way.
 echo "Created. Next: setup-vm.sh (see the top of this file), then the README's first night."

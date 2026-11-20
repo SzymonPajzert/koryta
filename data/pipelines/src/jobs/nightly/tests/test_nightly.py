@@ -23,10 +23,10 @@ pytest_plugins = ["pytester"]
 #: `budget_warnings` and `budget_slack` read.
 INVARIANTS_CONFTEST = Path(__file__).parents[3] / "tests/pipelines/conftest.py"
 
-# The 04:00 Warsaw export, in UTC as its folder is named; the night starts at
-# 04:30 Warsaw, half an hour later.
-FRESH = "2026-10-04T02:00:04.120Z"
-STALE = "2026-10-03T02:00:04.120Z"
+# The 02:00 Warsaw export, in UTC as its folder is named; the night starts at
+# 02:30 Warsaw, half an hour later.
+FRESH = "2026-10-04T00:00:04.120Z"
+STALE = "2026-10-03T00:00:04.120Z"
 #: What the processes would answer, by the entry point's name.
 GOOD = {
     "koryta_scrape_krs_free": 0,
@@ -356,14 +356,14 @@ def test_the_people_go_up_capped_in_priority_order_from_what_is_on_disk(world):
 
 
 def test_the_people_compare_with_the_export_the_export_step_took(world, monkeypatch):
-    """A night forced at three, the 04:00 export not taken yet: the export
+    """A night forced at one, the 02:00 export not taken yet: the export
     step takes one taken by hand at eleven, inside its six hours, and the
     people step is told to compare with that one, which its own rule -
-    today's, at four or later - would refuse."""
+    today's, at two or later - would refuse."""
     eleven = "2026-10-03T21:00:12.004Z"
     world.export = eleven
     monkeypatch.setattr(
-        night, "utc_now", lambda: datetime.fromisoformat("2026-10-04T01:00:00+00:00")
+        night, "utc_now", lambda: datetime.fromisoformat("2026-10-03T23:00:00+00:00")
     )
 
     assert night.main([]) == 0
@@ -1677,13 +1677,13 @@ def test_the_newest_finished_export_is_found_past_a_running_one():
 
     class Listing(list):
         prefixes = {
-            "hostname=koryta.pl/date=2026-10-03T02:00:04.120Z/",
-            "hostname=koryta.pl/date=2026-10-04T02:00:04.120Z/",
+            "hostname=koryta.pl/date=2026-10-03T00:00:04.120Z/",
+            "hostname=koryta.pl/date=2026-10-04T00:00:04.120Z/",
             "hostname=koryta.pl/date=2026-10-04T05:10:00.000Z/",  # still writing
             "hostname=koryta.pl/date=2026-10-04/",  # page captures
         }
 
-    finished = {"2026-10-03T02:00:04.120Z", "2026-10-04T02:00:04.120Z"}
+    finished = {"2026-10-03T00:00:04.120Z", "2026-10-04T00:00:04.120Z"}
 
     class Bucket:
         def list_blobs(self, prefix, delimiter):
@@ -1708,7 +1708,7 @@ def test_tidy_removes_old_export_shards_and_day_named_outputs(tmp_path, monkeypa
     downloaded, versioned = tmp_path / "downloaded", tmp_path / "versioned"
     downloaded.mkdir()
     versioned.mkdir()
-    shard = "hostname=koryta.pl.date={}T02:00:04.120Z.all_namespaces.kind_nodes" + (
+    shard = "hostname=koryta.pl.date={}T00:00:04.120Z.all_namespaces.kind_nodes" + (
         ".output-0"
     )
     old, new = shard.format("2026-09-20"), shard.format("2026-10-03")

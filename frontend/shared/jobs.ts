@@ -11,7 +11,7 @@
  * - `triggered`: one run per request - a page captured by the extension and
  *   read by the extractor, or a one-off import someone starts by hand. No
  *   clock is waiting for it, so it fails by breaking or by getting stuck.
- * - `scheduled`: a run at a set time - the night on the VM at 04:30. Fails by
+ * - `scheduled`: a run at a set time - the night on the VM at 02:30. Fails by
  *   breaking, or silently by never starting, which only a clock can notice.
  * - `ongoing`: a long run that drains a queue - the article crawl. Fails by
  *   going quiet while still claiming to run.
@@ -139,7 +139,7 @@ export interface JobRun {
 
 /** What a queued run waits for, as the worker writes it on the run
  * (`mark_waiting` in data/pipelines/src/stores/job_requests.py):
- * - `export`: the day's 04:00 export, which the job compares the page's
+ * - `export`: the day's 02:00 export, which the job compares the page's
  *   people with and refuses when it is older. The worker switches the VM off
  *   meanwhile, and the schedule's boot for the night brings it back.
  * - `night`: the night, which holds the machine's lock. */
@@ -440,7 +440,7 @@ export const JOBS: readonly JobDefinition[] = [
     tasks: ["grant-site-starts-nightly-vm", "install-koryta-requests-worker"],
     notes: [
       "Porównuje paczki z porannym eksportem bazy: wysyła tylko to, co zmieniłoby stronę, i nie zgaduje po samym nazwisku, gdy dwie osoby się nie odróżniają.",
-      "Zlecenie sprzed porannego eksportu (północ-04:00) czeka na niego w kolejce: maszyna się wyłącza, a robi je po 04:15, gdy włącza się na noc.",
+      "Zlecenie sprzed porannego eksportu (północ-02:00) czeka na niego w kolejce: maszyna się wyłącza, a robi je po 02:15, gdy włącza się na noc.",
       "Maszyna wyłącza się sama 10 minut po ostatniej wysyłce - chyba że ktoś jest zalogowany albo zaraz zacznie się noc.",
     ],
   },
@@ -450,11 +450,11 @@ export const JOBS: readonly JobDefinition[] = [
     partialIsHeld: true,
     title: "Noc na maszynie koryta-nightly",
     summary:
-      "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS, właścicieli nowo zarejestrowanych spółek i odpisy, dokupuje z rejestr.io to, czego nie dały (do 50 zapytań), przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, dodaje firmy, których brakuje osobom tej nocy, wysyła do 100 osób na stronę, potem zmiany firm, które strona już ma, oceny modeli i stan oświadczeń, z którego strona liczy postęp, a na koniec przelicza na autopush statystyki stron, w tym linijki w wyszukiwarce.",
+      "Po kolei, po kopii bazy z 02:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS, właścicieli nowo zarejestrowanych spółek i odpisy, dokupuje z rejestr.io to, czego nie dały (do 50 zapytań), przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, dodaje firmy, których brakuje osobom tej nocy, wysyła do 100 osób na stronę, potem zmiany firm, które strona już ma, oceny modeli i stan oświadczeń, z którego strona liczy postęp, a na koniec przelicza na autopush statystyki stron, w tym linijki w wyszukiwarce.",
     runsOn:
-      "VM koryta-nightly (europe-central2): harmonogram włącza ją o 04:15, a po pracy sama się wyłącza - data/nightly",
+      "VM koryta-nightly (europe-central2): harmonogram włącza ją o 02:15, a po pracy sama się wyłącza - data/nightly",
     command: "koryta_nightly",
-    schedule: { dailyAt: "04:30", timeZone: WARSAW },
+    schedule: { dailyAt: "02:30", timeZone: WARSAW },
     // Przeliczenie potoków to jeden krok do dwóch i pół godziny, w którym noc
     // nie daje znaku życia.
     heartbeatMinutes: 160,
@@ -472,9 +472,9 @@ export const JOBS: readonly JobDefinition[] = [
     summary:
       "Biuletyn KRS z ostatnich dni i odpisy aktualne z api-krs dla firm z kolejki ScrapeRejestrIO; odpowiedzi trafiają do archiwum crawla.",
     runsOn:
-      "Krok nocy na VM koryta-nightly (koryta_nightly), zaraz po kopii bazy z 04:00",
+      "Krok nocy na VM koryta-nightly (koryta_nightly), zaraz po kopii bazy z 02:00",
     command: "koryta_scrape_krs_free --max-minutes=60",
-    schedule: { dailyAt: "04:30", timeZone: WARSAW },
+    schedule: { dailyAt: "02:30", timeZone: WARSAW },
     heartbeatMinutes: 15,
     graceMinutes: 60,
     tasks: ["create-nightly-vm"],
@@ -491,7 +491,7 @@ export const JOBS: readonly JobDefinition[] = [
     runsOn:
       "Krok nocy na VM koryta-nightly (koryta_nightly), po odpisach, a przed przeliczeniem potoków; ręcznie cała kolejka, z pytaniem przed każdym zakupem",
     command: "koryta_scrape_krs_paid --scope fallback --max-calls 50",
-    schedule: { dailyAt: "04:30", timeZone: WARSAW },
+    schedule: { dailyAt: "02:30", timeZone: WARSAW },
     heartbeatMinutes: 15,
     // Rusza po bezpłatnym KRS i odpisach, zwykle kwadrans po starcie nocy.
     graceMinutes: 90,
@@ -514,7 +514,7 @@ export const JOBS: readonly JobDefinition[] = [
     runsOn:
       "Krok nocy na VM koryta-nightly (koryta_nightly), po przeglądzie rejestru; ręcznie jeden crawler na adres IP",
     command: "koryta_krs_odpis --graph --changed-since <dzień>",
-    schedule: { dailyAt: "04:30", timeZone: WARSAW },
+    schedule: { dailyAt: "02:30", timeZone: WARSAW },
     heartbeatMinutes: 15,
     // Rusza po bezpłatnym KRS i przeglądzie rejestru, zwykle kwadrans po
     // starcie nocy.
@@ -533,7 +533,7 @@ export const JOBS: readonly JobDefinition[] = [
       "Krok nocy na VM koryta-nightly (koryta_nightly), po bezpłatnym KRS; zaległości ręcznie, partiami",
     command:
       "koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25",
-    schedule: { dailyAt: "04:30", timeZone: WARSAW },
+    schedule: { dailyAt: "02:30", timeZone: WARSAW },
     heartbeatMinutes: 15,
     // Rusza po bezpłatnym KRS, który ma na siebie godzinę.
     graceMinutes: 90,
@@ -549,7 +549,7 @@ export const JOBS: readonly JobDefinition[] = [
     title: "Kompresja lustra KRS",
     summary:
       "Pakuje nowe odpowiedzi rejestr.io i api-krs z archiwum crawla do koryta-pl-compressed; potoki czytają te hosty tylko z lustra.",
-    runsOn: "Pierwszy krok nocy na VM koryta-nightly (koryta_nightly), o 04:30",
+    runsOn: "Pierwszy krok nocy na VM koryta-nightly (koryta_nightly), o 02:30",
     command:
       "go run ./cmd/compressor -incremental -hostname rejestr.io (i -hostname api-krs.ms.gov.pl)",
     scheduleNote:
@@ -575,12 +575,12 @@ export const JOBS: readonly JobDefinition[] = [
     summary:
       "Funkcja scheduledFirestoreExport zapisuje dziewięć kolekcji do koryta-pl-crawled; z tej kopii czytają potoki, nocne testy i agenci.",
     runsOn: "Cloud Functions (europe-west1)",
-    schedule: { dailyAt: "04:00", timeZone: WARSAW },
+    schedule: { dailyAt: "02:00", timeZone: WARSAW },
     heartbeatMinutes: 120,
     graceMinutes: 60,
     probe: "firestoreExport",
     notes: [
-      "Noc na VM rusza o 04:30 i porównuje osoby właśnie z tą kopią, więc czeka, aż eksport się skończy.",
+      "Noc na VM rusza o 02:30 i porównuje osoby właśnie z tą kopią, więc czeka, aż eksport się skończy.",
       "Stan bierze się z pliku .overall_export_metadata, który eksport zapisuje na końcu.",
     ],
   },
@@ -641,7 +641,7 @@ export const JOBS: readonly JobDefinition[] = [
     nightStep: true,
     heartbeatMinutes: 15,
     notes: [
-      "Modele oceniają też strony utworzone tej nocy przez import osób, choć kopii bazy z 04:00 jeszcze ich nie ma - nowa osoba trafia do kolejki tego samego ranka.",
+      "Modele oceniają też strony utworzone tej nocy przez import osób, choć kopii bazy z 02:00 jeszcze ich nie ma - nowa osoba trafia do kolejki tego samego ranka.",
       "Model, który nikogo nie ocenił, nie jest wysyłany: wycofałby wszystkie swoje głosy.",
     ],
   },
@@ -892,8 +892,9 @@ export function zoneOffsetMinutes(at: Date, timeZone: string): number {
 }
 
 /** The instant a wall-clock time on a calendar day is, in a zone. Correct
- * across the DST changes, which in Warsaw happen at 02:00/03:00 and so never
- * touch a schedule at 04:00 or 04:30. */
+ * across the DST changes; a time the spring change skips (Warsaw's 02:00-03:00
+ * on the last Sunday of March) comes out an hour later, as the VM's schedule
+ * and timer take it. */
 export function zonedTime(day: string, hhmm: string, timeZone: string): Date {
   const [year, month, date] = day.split("-").map(Number);
   const [hour, minute] = hhmm.split(":").map(Number);
@@ -965,8 +966,8 @@ export function missedSlot(
 
 /** When a queued run was last heard from, as far as its allowance goes. One
  * waiting for the day's export waits with the machine off - the worker does
- * not keep it up until four - so its silence counts from the night's start,
- * the schedule booting the machine for it at 04:15 with the export done;
+ * not keep it up until two - so its silence counts from the night's start,
+ * the schedule booting the machine for it at 02:15 with the export done;
  * from then on the worker writes its heartbeat every five minutes. */
 function heardFrom(
   run: Pick<JobRun, "state" | "heartbeatAt" | "waitingFor">,
@@ -1361,7 +1362,7 @@ export function jobHealth(
  * plan. A job that reports shows it by having run on it once; until then
  * every night of the plan would read as missed. A probe job never reports,
  * and is watched because it is already running - the export has been firing
- * at 04:00 for months - so its schedule counts from the start. */
+ * every day for months - so its schedule counts from the start. */
 export function scheduleIsLive(
   definition: Pick<JobDefinition, "schedule" | "probe">,
   record: JobRecord | null | undefined,

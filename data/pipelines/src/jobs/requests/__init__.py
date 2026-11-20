@@ -23,7 +23,7 @@ under it. And `--busy` while it has a run in hand, which tells the night's own
 `poweroff.sh` to leave the switching off to this.
 
 A run starts only once the export it will compare the page's people with is
-there: today's, taken at 04:00 or later and finished, by the job's own rule
+there: today's, taken at 02:00 or later and finished, by the job's own rule
 (`jobs.nightly.export_refusal`). Since 2026-10-11 the job refuses an older one,
 so a run asked for between midnight and the export - or on a day the export
 failed - would only fail. It is left queued instead, says on the page that it
@@ -31,9 +31,9 @@ waits for the export (`waitingFor`), and starts once the export's marker is
 there, told which export that was (`--export`), so the job takes the one the
 worker waited for even if midnight comes between. Nor is the VM kept up for
 it: with nothing it can run for `--idle-minutes`, the worker asks for the VM
-off as after a run, and the instance schedule's 04:15 boot for the night,
+off as after a run, and the instance schedule's 02:15 boot for the night,
 after the export, starts it again. A run that waited goes then, before the
-04:30 night, which waits for it: the runs asked for from 2026-10-06 to 10-11
+02:30 night, which waits for it: the runs asked for from 2026-10-06 to 10-11
 took 0.3 to 5.6 minutes each, and night.sh waits up to thirty.
 
 A run whose job ended without saying so - it crashed first, or could not reach
@@ -358,7 +358,7 @@ class Worker:
 
     def export_wait(self) -> str:
         """Why no run may start yet - the job would refuse to compare with
-        the newest export (`export_refusal`): before the day's 04:00 export
+        the newest export (`export_refusal`): before the day's 02:00 export
         is done, or on a day it failed - or "" when they may.
 
         The bucket is asked at most once every `EXPORT_LOOK_SECONDS`, and an
@@ -480,7 +480,7 @@ class Worker:
 
     def should_power_off(self, idle_seconds: float) -> bool:
         """Once it has done what it was started for, or found that what it
-        was started for waits for the export - which the night's 04:15 boot
+        was started for waits for the export - which the night's 02:15 boot
         comes back for. Never for a VM nobody's request started - somebody
         booted it to look at it - nor while a night runs, while one is about
         to, or while anybody is logged in."""
@@ -552,9 +552,9 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--keep-up",
         type=window,
-        default="03:45-04:45",
+        default="01:45-02:45",
         help="Warsaw HH:MM-HH:MM in which the VM is never switched off: the "
-        "schedule boots it at 04:15 for the 04:30 night. Default: %(default)s.",
+        "schedule boots it at 02:15 for the 02:30 night. Default: %(default)s.",
     )
     parser.add_argument("--refresh", default="none")
     parser.add_argument("--max-minutes", type=float, default=60)

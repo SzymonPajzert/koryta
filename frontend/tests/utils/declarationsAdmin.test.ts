@@ -677,7 +677,7 @@ describe("declarationRecheckText", () => {
     expect(
       declarationRecheckText({ outcome: "skipped", skipped: "night" }),
     ).toBe(
-      "Nie sprawdzono: od 3:00 do 9:00 trwa nocny import osób, który mógłby cofnąć publikację.",
+      "Nie sprawdzono: od 1:00 do 7:00 trwa nocny import osób, który mógłby cofnąć publikację.",
     );
     expect(
       declarationRecheckText({ outcome: "skipped", skipped: "import" }),
@@ -730,7 +730,7 @@ describe("declarationDrainText", () => {
 
   it("says why nobody did: the night window or a people import, never the limit", () => {
     expect(declarationDrainText(pass({ skipped: "night", waiting: 83 }))).toBe(
-      "Nikogo nie opublikowano: od 3:00 do 9:00 trwa nocny import osób, który mógłby cofnąć publikację. W kolejce czekają jeszcze 83 osoby.",
+      "Nikogo nie opublikowano: od 1:00 do 7:00 trwa nocny import osób, który mógłby cofnąć publikację. W kolejce czekają jeszcze 83 osoby.",
     );
     expect(declarationDrainText(pass({ skipped: "import", waiting: 9 }))).toBe(
       "Nikogo nie opublikowano: trwa import osób albo nie da się sprawdzić, czy trwa. W kolejce czeka jeszcze 9 osób.",

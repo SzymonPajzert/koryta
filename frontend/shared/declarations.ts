@@ -1133,7 +1133,7 @@ export function publishLimitOf(config: {
  * report (`peopleImportRunning`), which also covers the runs asked for during
  * the day and a night that runs late. Here rather than beside the queue, so
  * /admin/oswiadczenia can say the hours. */
-export const PEOPLE_IMPORT_WINDOW = { from: 3, to: 9 } as const;
+export const PEOPLE_IMPORT_WINDOW = { from: 1, to: 7 } as const;
 
 /** People one press of „Opublikuj z kolejki” takes up at most. The snackbar
  * says how many still wait, for the next press.

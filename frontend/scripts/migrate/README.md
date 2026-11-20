@@ -194,7 +194,7 @@ then runs each archived script's dry run in turn, the way a person would: no
 `--prod`, no `--commit`, a process each, with `FIRESTORE_EMULATOR_HOST` set so
 that no call can reach production. It fails unless every one of them reports
 zero. It took 17 seconds with the first two
-scripts in it, and it runs every morning after the 04:00 export as part of the
+scripts in it, and it runs every morning after the 02:00 export as part of the
 dev box's morning check.
 
 Zero is what the code fix that came with the migration is meant to hold it at,

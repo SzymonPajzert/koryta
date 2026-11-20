@@ -1,6 +1,6 @@
 """The whole night on the koryta-nightly VM, one step after another.
 
-    koryta_nightly                    # what data/nightly/night.sh runs at 04:30
+    koryta_nightly                    # what data/nightly/night.sh runs at 02:30
     koryta_nightly --dry-run          # every step's command; runs nothing
     koryta_nightly --only people      # one step; repeatable
     koryta_nightly --skip krs_odpis   # all but this one; repeatable
@@ -21,7 +21,7 @@
 The steps, in order (`STEPS`):
 
     compress    the compressed mirror of rejestr.io and api-krs.ms.gov.pl
-    export      wait for tonight's 04:00 Firestore export to finish; the people
+    export      wait for tonight's 02:00 Firestore export to finish; the people
                 are compared with it, so it has to be tonight's
     krs_free    koryta_scrape_krs_free: the bulletin, then api-krs
     krs_register
@@ -194,7 +194,7 @@ rebuild wrote. A rebuild that fails or runs out of time puts the copy back that
 was on disk before it, records nothing - so the next night tries again - and
 leaves the night's state alone: the step is partial, the people go up.
 
-The night starts at 04:30 Warsaw, after the export and after midnight UTC, so
+The night starts at 02:30 Warsaw, after the export and after midnight UTC, so
 the compressor - which archives up to yesterday in UTC - takes the whole
 previous day even as the first step (`data/compressor`).
 
@@ -397,8 +397,8 @@ CACHED_EXPORT = re.compile(r"^hostname=koryta\.pl\.date=(\d{4}-\d{2}-\d{2})T")
 #: The hour, Warsaw time, of the site's daily export (`scheduledFirestoreExport`
 #: in frontend/functions/src/index.ts). Each one from 2026-09-29 to 10-10 is
 #: stamped within the minute after it, and was done two to four minutes after
-#: its stamp: 10-09's, the slowest, at 04:04:10.
-EXPORT_HOUR = 4
+#: its stamp: 10-09's, the slowest, 4 min 10 s after the hour.
+EXPORT_HOUR = 2
 
 # Step states, as the summary and the log say them.
 SUCCEEDED = "succeeded"
@@ -936,7 +936,7 @@ def export_refusal(
     with an older one, `--only-changed` sends again what the last night's run
     put up - no-ops, but counted as changes - and `--scope not-on-koryta`
     creates again the pages it created. That is a hand run between midnight
-    and four, or any run on a day the export failed. The night checks the
+    and two, or any run on a day the export failed. The night checks the
     same at its level (`Night.step_export`); a run asked for on a page in the
     afternoon reads the morning's export, or one taken by hand since.
 
@@ -949,7 +949,7 @@ def export_refusal(
     (`--export-max-age`) - and stands in for both: the newest has to be that
     one or a newer, and of `day` or a day before, whose export the frames
     named `day` read when it has none of its own. Without it, a night forced
-    at three after an export taken by hand at eleven - or one whose 04:00
+    at one after an export taken by hand at eleven - or one whose 02:00
     export failed after such a hand export - would run its invariants
     against that export and then have its people step refuse the same one.
     """
@@ -1523,7 +1523,7 @@ class Night:
         ]
         if self.summary.export_fresh:
             # The export the export step took, which the job compares with in
-            # place of its own rule - today's, taken at 04:00 or later - so
+            # place of its own rule - today's, taken at 02:00 or later - so
             # that one the night's window lets in is never refused by the job.
             argv += ["--export", self.summary.export]
         if self.args.people_dry_run:
@@ -2012,7 +2012,7 @@ def parser() -> argparse.ArgumentParser:
         type=clock,
         help="Warsaw time (HH:MM) after which no step but compress and tidy "
         "starts, and a running one is stopped. night.sh gives the scheduled "
-        "night 08:30, as the instance schedule stops the VM at 09:00; a hand "
+        "night 06:30, as the instance schedule stops the VM at 07:00; a hand "
         "run has no deadline unless given one.",
     )
     parser.add_argument(
