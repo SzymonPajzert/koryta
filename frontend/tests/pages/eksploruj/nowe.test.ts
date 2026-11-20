@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
+import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { mockNuxtImport } from "@nuxt/test-utils/runtime";
-import { computed, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
@@ -10,19 +10,67 @@ import NowePage from "../../../app/pages/eksploruj/nowe.vue";
 
 const vuetify = createVuetify({ components, directives });
 
-// The route query is what the filters read and write, so it is a live object
-// the tests rewrite between mounts rather than a fixed one.
-const { routeQuery, lastQuery, items, authUser } = vi.hoisted(() => ({
-  routeQuery: { value: {} as Record<string, string> },
-  lastQuery: { value: null as { value: Query } | null },
-  // What the list composable hands back. Empty unless a test asks for a
-  // focused person, because most of them only look at the query it built.
-  items: { value: [] as Record<string, unknown>[] },
-  // Who is signed in, for the controls that only an admin is offered. A
-  // hoisted box rather than a fixed mock return, because `vi.mock` is lifted
-  // above anything this file defines and the tests need to change it.
-  authUser: { value: null as { getIdTokenResult: () => unknown } | null },
-}));
+// Every page reads the one route the router mock holds, so a page left
+// mounted would go on writing into the next test's url.
+enableAutoUnmount(afterEach);
+
+// The route is what the filters and the person on screen are read from, so it
+// is a live object: the router's push and replace write into it, and a test
+// rewrites it to stand for the back button.
+const { route, router, calls, items, queueAnswer, authUser } = vi.hoisted(
+  () => {
+    const route = {
+      current: null as null | {
+        query: Record<string, string>;
+        name: string;
+        path: string;
+        params: Record<string, string>;
+      },
+    };
+    const navigate = vi.fn(async (to: { query: Record<string, string> }) => {
+      route.current!.query = { ...to.query };
+    });
+    return {
+      route,
+      router: {
+        push: navigate,
+        replace: vi.fn(async (to: { query: Record<string, string> }) => {
+          route.current!.query = { ...to.query };
+        }),
+      },
+      // What each list the page sets up was asked, by its cache key: the
+      // queue is "nowe-data", the person the url names "nowe-shown".
+      calls: new Map<
+        string,
+        { query: { value: Query }; options: { enabled?: () => boolean } }
+      >(),
+      // What the queue answers with. Empty unless a test asks for a focused
+      // person, because most of them only look at the query it built.
+      items: { value: [] as Record<string, unknown>[] },
+      // Or, for the tests that page through it, a person per question.
+      queueAnswer: {
+        value: null as null | ((query: Query) => Record<string, unknown>[]),
+      },
+      // Who is signed in, for the controls that only an admin is offered. A
+      // hoisted box rather than a fixed mock return, because `vi.mock` is
+      // lifted above anything this file defines and the tests need to change
+      // it.
+      authUser: { value: null as { getIdTokenResult: () => unknown } | null },
+    };
+  },
+);
+
+/** The route every page reads, made reactive on first use: the mocks below
+ * are lifted above the imports, so they cannot call `reactive` themselves. */
+function currentRoute() {
+  route.current ??= reactive({
+    query: {},
+    name: "eksploruj-nowe",
+    path: "/eksploruj/nowe",
+    params: {},
+  });
+  return route.current;
+}
 
 /** What the page asked of the tab. */
 const head = vi.hoisted(() => vi.fn());
@@ -32,39 +80,60 @@ vi.mock("vue-router", async (importOriginal) => {
   const actual = await importOriginal<typeof import("vue-router")>();
   return {
     ...actual,
-    useRoute: () => ({
-      query: routeQuery.value,
-      name: "eksploruj-nowe",
-      path: "/eksploruj/nowe",
-      params: {},
+    useRoute: () => currentRoute(),
+    useRouter: () => ({
+      push: router.push,
+      replace: router.replace,
+      afterEach: vi.fn(),
     }),
-    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), afterEach: vi.fn() }),
   };
 });
 
-// Records the query the page built, and hands the page an empty result set.
-// Spelled out twice because `vi.mock` is hoisted above anything this file
-// defines, and Nuxt aliases the same composable under both prefixes.
-vi.mock("~/composables/entity/listWithStats", () => ({
-  useListWithStats: vi.fn((apiQuery: { value: Query }) => {
-    lastQuery.value = apiQuery;
-    return Promise.resolve({
-      tableItems: ref(items.value),
-      totalItems: ref(items.value.length),
-      pending: ref(false),
-    });
-  }),
-}));
-vi.mock("~~/app/composables/entity/listWithStats", () => ({
-  useListWithStats: vi.fn((apiQuery: { value: Query }) => {
-    lastQuery.value = apiQuery;
-    return Promise.resolve({
-      tableItems: ref(items.value),
-      totalItems: ref(items.value.length),
-      pending: ref(false),
-    });
-  }),
-}));
+/** The lists, answered on the spot: the queue from `queueAnswer` or `items`,
+ * the person the url names with a row of their own. Records what each was
+ * asked. Spelled out for both prefixes because Nuxt aliases the same
+ * composable under each. */
+async function fakeLists(
+  importOriginal: () => Promise<
+    typeof import("~/composables/entity/listWithStats")
+  >,
+) {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useListWithStats: vi.fn(
+      (
+        apiQuery: { value: Query },
+        key: string,
+        options: { enabled?: () => boolean } = {},
+      ) => {
+        calls.set(key, { query: apiQuery, options });
+        const enabled = () => options.enabled?.() ?? true;
+        const rows = computed(() => {
+          if (!enabled()) return [];
+          if (key === "nowe-shown") {
+            const id = apiQuery.value.id;
+            return id ? [{ id, name: `Osoba ${id}`, type: "person" }] : [];
+          }
+          return queueAnswer.value
+            ? queueAnswer.value(apiQuery.value)
+            : items.value;
+        });
+        return Promise.resolve({
+          tableItems: rows,
+          totalItems: computed(() => rows.value.length),
+          pending: ref(false),
+          status: ref("success"),
+          answeredQuery: computed(() =>
+            enabled() ? actual.queryKey(apiQuery.value) : undefined,
+          ),
+        });
+      },
+    ),
+  };
+}
+vi.mock("~/composables/entity/listWithStats", fakeLists);
+vi.mock("~~/app/composables/entity/listWithStats", fakeLists);
 
 // Auto-imported, so a `vi.stubGlobal` would not be consulted: the page reaches
 // them through the module Nuxt resolved at build time.
@@ -92,8 +161,8 @@ vi.mock("vuefire", () => ({
 }));
 
 async function mountPage(query: Record<string, string> = {}) {
-  routeQuery.value = query;
-  lastQuery.value = null;
+  currentRoute().query = { ...query };
+  calls.clear();
 
   vi.stubGlobal("definePageMeta", vi.fn());
   vi.stubGlobal("useHead", vi.fn());
@@ -120,15 +189,17 @@ async function mountPage(query: Record<string, string> = {}) {
   return wrapper;
 }
 
+/** What the queue was asked. */
 function currentQuery(): Query {
-  if (!lastQuery.value) throw new Error("useListWithStats was never called");
-  return lastQuery.value.value;
+  const queue = calls.get("nowe-data");
+  if (!queue) throw new Error("the queue was never set up");
+  return queue.query.value;
 }
 
 describe("/eksploruj/nowe", () => {
   beforeEach(() => {
-    lastQuery.value = null;
     items.value = [];
+    queueAnswer.value = null;
     authUser.value = null;
   });
   afterEach(() => {
@@ -412,5 +483,144 @@ describe("/eksploruj/nowe", () => {
       { title: "Eksploruj Nowe" },
       { tagPriority: "high" },
     );
+  });
+});
+
+/** The person on screen is in the url, so the back button returns to the one
+ * before and a reload or a link opens the same one. */
+describe("/eksploruj/nowe keeps the person in the url", () => {
+  beforeEach(() => {
+    items.value = [];
+    authUser.value = null;
+    // One person per place in the queue: p1 first, p2 second, and in the
+    // other order v1, v2.
+    queueAnswer.value = (query) => [
+      {
+        id: `${query.sortBy === "latestEmploymentStart" ? "p" : "v"}${query.page}`,
+        name: `Osoba ${query.page}`,
+        type: "person",
+      },
+    ];
+    // „Następna osoba” steps by a random one to five places; one here.
+    vi.spyOn(Math, "random").mockReturnValue(0);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+  });
+
+  const shown = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
+    wrapper.findComponent({ name: "EntityDetailView" }).props("node");
+
+  it("names whoever the queue opens on, in place of the address", async () => {
+    const wrapper = await mountPage({ minVotes: "1" });
+
+    expect(router.replace).toHaveBeenCalledTimes(1);
+    expect(router.replace).toHaveBeenCalledWith({
+      query: { minVotes: "1", osoba: "p1" },
+    });
+    expect(router.push).not.toHaveBeenCalled();
+    expect(shown(wrapper)).toBe("p1");
+    // The queue's own row, not a second read of the same person.
+    expect(calls.get("nowe-shown")!.options.enabled!()).toBe(false);
+  });
+
+  it("adds a history entry for „Następna osoba”", async () => {
+    const wrapper = await mountPage();
+
+    await wrapper.get('[data-testid="next-person"]').trigger("click");
+    await flushPromises();
+
+    expect(router.push).toHaveBeenCalledTimes(1);
+    expect(router.push).toHaveBeenCalledWith({ query: { osoba: "p2" } });
+    expect(route.current!.query).toEqual({ osoba: "p2" });
+    expect(shown(wrapper)).toBe("p2");
+  });
+
+  it("shows the person before after the back button, read on their own", async () => {
+    const wrapper = await mountPage();
+    await wrapper.get('[data-testid="next-person"]').trigger("click");
+    await flushPromises();
+
+    // What the router does on the back button.
+    route.current!.query = { osoba: "p1" };
+    await flushPromises();
+
+    expect(shown(wrapper)).toBe("p1");
+    expect(calls.get("nowe-shown")!.query.value).toEqual({
+      type: "person",
+      limit: 1,
+      id: "p1",
+    });
+    expect(calls.get("nowe-shown")!.options.enabled!()).toBe(true);
+    // The queue stays where the reader got to, and nothing was written.
+    expect(currentQuery().page).toBe(2);
+    expect(router.push).toHaveBeenCalledTimes(1);
+    expect(router.replace).toHaveBeenCalledTimes(1);
+
+    // „Następna osoba” from there goes on from the queue, not from p1.
+    await wrapper.get('[data-testid="next-person"]').trigger("click");
+    await flushPromises();
+    expect(route.current!.query).toEqual({ osoba: "p3" });
+    expect(shown(wrapper)).toBe("p3");
+  });
+
+  it("opens the person a link or a reload names", async () => {
+    const wrapper = await mountPage({ osoba: "p9" });
+
+    expect(shown(wrapper)).toBe("p9");
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("drops the person when a filter changes, and names the new head", async () => {
+    const wrapper = await mountPage();
+    expect(route.current!.query).toEqual({ osoba: "p1" });
+
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Najwyżej oceniane"))!
+      .trigger("click");
+    await flushPromises();
+
+    // The filter's own entry, without the person it named...
+    expect(router.push).toHaveBeenCalledWith({ query: { order: "votes" } });
+    // ...who is then the head of the new queue, in place.
+    expect(router.replace).toHaveBeenLastCalledWith({
+      query: { order: "votes", osoba: "v1" },
+    });
+    expect(shown(wrapper)).toBe("v1");
+  });
+
+  it("leaves the url naming nobody once the queue runs out", async () => {
+    queueAnswer.value = (query) =>
+      query.page === 1 ? [{ id: "p1", name: "Osoba 1", type: "person" }] : [];
+    const wrapper = await mountPage();
+
+    await wrapper.get('[data-testid="next-person"]').trigger("click");
+    await flushPromises();
+
+    expect(router.push).toHaveBeenCalledWith({ query: {} });
+    expect(wrapper.findComponent({ name: "EntityDetailView" }).exists()).toBe(
+      false,
+    );
+  });
+
+  it("starts the steps again for the next person", async () => {
+    const wrapper = await mountPage();
+    wrapper.findComponent({ name: "EntityDetailView" }).vm.$emit("voted");
+    await flushPromises();
+    const steps = () =>
+      wrapper
+        .get('[data-testid="explore-steps"]')
+        .findAll("li.step--done")
+        .map((step) => step.text());
+    expect(steps()).toEqual(["Głos"]);
+
+    await wrapper.get('[data-testid="next-person"]').trigger("click");
+    await flushPromises();
+
+    expect(steps()).toEqual([]);
   });
 });

@@ -252,7 +252,7 @@
           score-with-name
           hide-default-footer
           :matched-category="filterCategory"
-          no-data-text="Brak danych do wyświetlenia. Prawdopodobnie przejrzałeś wszystkie nowe powiązania."
+          :no-data-text="noDataText"
           @action:explored="actionExplored = true"
           @action:voted="actionVoted = true"
         />
@@ -306,8 +306,8 @@ import {
   mdiStarOutline,
   mdiTable,
 } from "@mdi/js";
-import { ref, computed, watch } from "vue";
-import { useListWithStats } from "~/composables/entity/listWithStats";
+import { ref, computed, shallowRef, watch, type Ref } from "vue";
+import { queryKey, useListWithStats } from "~/composables/entity/listWithStats";
 import { useQueryFilters } from "~/composables/queryFilters";
 import {
   queueTiers,
@@ -342,13 +342,28 @@ const availableCategories = companyCategories.map((c) => ({
   title: c.title,
   value: c.value,
 }));
-const { stringFilter, choiceFilter, numberFilter } = useQueryFilters();
+const { setQuery, stringFilter, choiceFilter, numberFilter } = useQueryFilters({
+  // A filter changes who heads the queue, so it drops the person the url
+  // named and the new head takes their place.
+  resetOnChange: ["osoba"],
+});
 const filterCategory = stringFilter("category");
 /** Read from the url and nowhere else - the page has no control for it. It is
  * how /eksploruj/szpitale asks for the people sitting on a hospital board now
  * rather than everybody who ever did, and it only means anything next to a
  * `category`, `place` or `companyTeryt` for `selected` to narrow. */
 const filterCurrentlyEmployed = stringFilter("currentlyEmployed");
+
+/** Who is on screen, so the back button returns to the person before and a
+ * reload or a link opens the same one. Only read through this: its setter
+ * would drop the value it sets, `osoba` being what a filter change resets.
+ * The writes are `setQuery`'s, below `apiQuery`. */
+const shownParam = stringFilter("osoba");
+const shownId = computed(() => shownParam.value || undefined);
+
+/** Where „Następna osoba” is: `waiting` for the queue to answer the click,
+ * then `navigating` while the answer goes into the url. */
+const advance = ref<"idle" | "waiting" | "navigating">("idle");
 
 /** Which end of the queue to work through.
  *
@@ -484,14 +499,9 @@ watch(allActionsDone, (done) => {
  * the reader on the person they had just finished with.
  */
 function nextPerson() {
+  advance.value = "waiting";
   page.value += 1 + Math.floor(Math.random() * 5);
 }
-
-watch(page, () => {
-  actionExplored.value = false;
-  actionNoted.value = false;
-  actionVoted.value = false;
-});
 
 /** The column the api sorts on. Both modes read top-down, so the direction is
  * always descending. In `votes` mode the key names a column this table no
@@ -605,14 +615,113 @@ const progressQuery = computed(() => ({
 // person in their local context.
 const { companyLocations } = useCompanyLocations();
 
-const { tableItems, totalItems, pending } = await useListWithStats(
-  apiQuery,
-  "nowe-data",
-  { server: false, companyLocations },
+/** The queue's rows, once the queue is set up below. A ref, so that the
+ * lookup, which is set up first, can read them when they arrive. */
+const queueRowsRef = shallowRef<Ref<PersonRich[]>>();
+const queueHeadId = computed(() => queueRowsRef.value?.value[0]?.id);
+
+/** Somebody the url names whom the queue is not on: reached with the back
+ * button, a reload or a link. Read on their own, and drawn instead of the
+ * queue. */
+const lookupId = computed(() => {
+  if (advance.value === "navigating") return undefined;
+  const id = shownId.value;
+  return id && id !== queueHeadId.value ? id : undefined;
+});
+
+// Both at once rather than one after the other. Arriving back from another
+// page, the url names somebody the queue is not on, and waiting for the queue
+// before asking for them would double the wait.
+const [queue, lookup] = await Promise.all([
+  useListWithStats(apiQuery, "nowe-data", {
+    server: false,
+    companyLocations,
+  }),
+  useListWithStats(
+    computed(() => ({ type: "person", limit: 1, id: lookupId.value }) as Query),
+    "nowe-shown",
+    { server: false, companyLocations, enabled: () => !!lookupId.value },
+  ),
+]);
+const {
+  tableItems: queueRows,
+  totalItems,
+  pending: queuePending,
+  status: queueStatus,
+  answeredQuery,
+} = queue;
+const { tableItems: lookupRows, pending: lookupPending } = lookup;
+queueRowsRef.value = queueRows;
+
+/** The rows on hand answer the queue as it is asked now, not as it was asked
+ * before the last click or filter change. */
+const queueAnswered = computed(
+  () => answeredQuery.value === queryKey(apiQuery.value),
+);
+
+const tableItems = computed<PersonRich[]>(() => {
+  if (!lookupId.value) return queueRows.value;
+  // Not the rows of whoever was looked up before, while this one loads.
+  return lookupRows.value.filter((row) => row.id === lookupId.value);
+});
+const pending = computed(
+  () =>
+    advance.value === "waiting" ||
+    (lookupId.value ? lookupPending.value : queuePending.value),
+);
+const noDataText = computed(() =>
+  lookupId.value
+    ? "Tej osoby nie ma już w bazie."
+    : "Brak danych do wyświetlenia. Prawdopodobnie przejrzałeś wszystkie nowe powiązania.",
 );
 
 const focusedPerson = computed<PersonRich | undefined>(
-  () => tableItems.value?.[0],
+  () => tableItems.value[0],
+);
+
+// Whoever the queue answers with goes into the url: as a new history entry
+// after „Następna osoba”, and in place of the address while it names nobody -
+// on arrival, and after a filter dropped the person it named.
+watch(
+  [queueAnswered, queueHeadId, shownId],
+  () => {
+    if (!queueAnswered.value) return;
+    const head = queueHeadId.value;
+    if (advance.value === "waiting") {
+      advance.value = "navigating";
+      void Promise.resolve(setQuery({ osoba: head })).finally(() => {
+        advance.value = "idle";
+      });
+    } else if (advance.value === "idle" && !shownId.value && head) {
+      void setQuery({ osoba: head }, { replace: true });
+    }
+  },
+  { immediate: true },
+);
+
+// A back or forward press, or a filter change, while the queue was still
+// answering: the reader went somewhere else, so the answer must not move
+// them on.
+watch(shownId, () => {
+  if (advance.value === "waiting") advance.value = "idle";
+});
+
+// A failed fetch answers nothing. The reader stays where they were and can
+// click again.
+watch(queueStatus, (status) => {
+  if (status === "error" && advance.value === "waiting") {
+    advance.value = "idle";
+  }
+});
+
+// The steps tick off per person, so a new one starts them again.
+watch(
+  () => focusedPerson.value?.id,
+  () => {
+    actionExplored.value = false;
+    actionNoted.value = false;
+    actionVoted.value = false;
+  },
 );
 </script>
 

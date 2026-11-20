@@ -18,8 +18,9 @@ test.describe("Eksploruj Nowe", () => {
     // 3. Submit login
     await page.locator('button[type="submit"]').click({ force: true });
 
-    // Wait for the client-side redirect to /eksploruj/nowe
-    await page.waitForURL("**/eksploruj/nowe", { timeout: 15000 });
+    // Wait for the client-side redirect to /eksploruj/nowe. Not the whole
+    // url: once the queue answers, it names the person on screen.
+    await page.waitForURL(/\/eksploruj\/nowe(\?|$)/, { timeout: 15000 });
 
     // Wait for hydration
     await expect(page.locator(".v-main")).toBeVisible();
@@ -42,9 +43,12 @@ test.describe("Eksploruj Nowe", () => {
     expect(nameText.length).toBeGreaterThan(0);
 
     // The queue opens on the most recent hires above the default threshold,
-    // which is the state nothing writes into the url.
+    // which is the state no filter writes into the url. What the url holds is
+    // the person on screen.
     await expect(page.getByLabel("Min. suma głosów")).toHaveValue("3");
-    expect(new URL(page.url()).search).toBe("");
+    await expect
+      .poll(() => [...new URL(page.url()).searchParams.keys()])
+      .toEqual(["osoba"]);
 
     // The other order is still reachable, and says so in the url so the choice
     // survives a reload.
