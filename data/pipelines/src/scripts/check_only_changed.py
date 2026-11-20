@@ -161,6 +161,8 @@ class Implied:
             # "" is what the payload says for a company with no supervisory
             # body, and the ingest reads it as a deletion rather than a value.
             "supervisory_body": node.get("supervisoryBody") or "",
+            # The same for whether a seat is paid: "" clears the pair.
+            **_paid_seats(node),
             "owners": owners,
             "owner_teryts": owner_teryts,
             "owner_skarb_panstwa": skarb,
@@ -174,6 +176,16 @@ class Implied:
         if seat:
             payload["teryt_code"] = seat
         return payload
+
+
+def _paid_seats(node: dict) -> dict:
+    paid = node.get("paidSeats")
+    if paid is None:
+        return {"paid_seats": "", "paid_seats_reason": ""}
+    return {
+        "paid_seats": "paid" if paid else "unpaid",
+        "paid_seats_reason": node.get("paidSeatsReason") or "",
+    }
 
 
 def round_trip(label, subjects, build, ask) -> int:

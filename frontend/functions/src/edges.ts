@@ -9,7 +9,10 @@ import {
 } from "firebase-admin/firestore";
 import { initializeApp, getApps } from "firebase-admin/app";
 import { computeEdgeStats } from "./stats";
-import { bodyIsPaidPost } from "./companyBodies";
+import {
+  unpaidSeats as unpaidSeatsAt,
+  type UnpaidSeats,
+} from "./companyBodies";
 import {
   CONTENT_CHANGED_AT,
   pagesChangedByEdgeWrite,
@@ -253,17 +256,17 @@ export async function recomputeEdgeStats(
   ] as string[];
   const transitiveTargets: Record<string, string[]> = {};
   const publicPlaceIds = new Set<string>();
-  const unpaidSeatPlaceIds = new Set<string>();
+  const unpaidSeats = new Map<string, UnpaidSeats>();
 
   if (targetIds.length > 0) {
     // Determine which of the targets are public places, so that experience
     // in non-public places is excluded from the stats.
     const targetNodes = await db.getAll(
       ...targetIds.map((id) => db.collection("nodes").doc(id)),
-      // The three fields the loop below reads. Billed the same either way, but
-      // a region with 584 targets is a lot of document to ship in to look at
-      // three fields of it.
-      { fieldMask: ["type", "isPublic", "supervisoryBody"] },
+      // The fields the loop below reads. Billed the same either way, but a
+      // region with 584 targets is a lot of document to ship in to look at
+      // four fields of it.
+      { fieldMask: ["type", "isPublic", "supervisoryBody", "paidSeats"] },
     );
     for (const doc of targetNodes) {
       const node = doc.data();
@@ -273,12 +276,12 @@ export async function recomputeEdgeStats(
       if (node.isPublic === true) {
         publicPlaceIds.add(doc.id);
       }
-      // ...and of those, the ones whose supervisory organ nobody is paid to
-      // sit on, so a rada społeczna seat at an SPZOZ is left out too. Read
-      // from the same documents this loop already has, so it costs no reads.
-      if (!bodyIsPaidPost(node.supervisoryBody)) {
-        unpaidSeatPlaceIds.add(doc.id);
-      }
+      // ...and of those, the ones where some posts are not jobs: a rada
+      // społeczna seat at an SPZOZ, any post where the statute pays nobody.
+      // Read from the same documents this loop already has, so it costs no
+      // reads.
+      const unpaid = unpaidSeatsAt(node);
+      if (unpaid) unpaidSeats.set(doc.id, unpaid);
     }
 
     for (let i = 0; i < targetIds.length; i += TARGETS_PER_QUERY) {
@@ -308,7 +311,7 @@ export async function recomputeEdgeStats(
     allEdges,
     publicPlaceIds,
     transitiveTargets,
-    unpaidSeatPlaceIds,
+    unpaidSeats,
     sourceId,
   );
 

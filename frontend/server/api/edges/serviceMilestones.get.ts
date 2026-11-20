@@ -12,11 +12,7 @@ import {
   writeStoredMilestones,
 } from "~~/server/utils/storedMilestones";
 import { asArray, pageIsPublic } from "~~/shared/model";
-import {
-  bodyIsPaidPost,
-  displayRole,
-  namesASupervisorySeat,
-} from "~~/shared/companyBodies";
+import { displayRole, postIsPaid, unpaidSeats } from "~~/shared/companyBodies";
 import { warsawDate } from "~~/shared/dates";
 import {
   dayIso,
@@ -146,6 +142,7 @@ const NODE_FIELDS = [
   "isPublic",
   "isPublicSource",
   "supervisoryBody",
+  "paidSeats",
   // What the card calls a seat where the form says nothing about the organ -
   // see `displayRole`. One short string, on the nodes that have it.
   "supervisoryOrgan",
@@ -162,18 +159,12 @@ const NODE_FIELDS = [
  * have to be the same two: the card puts „10 lat pracy” against a career the
  * rest of the site totals with those rules, so a seat counted in one and not
  * the other would move the date this page is built on. Known-public places
- * only, and no rada spoleczna seat at an SPZOZ, because nobody is paid to sit
- * on one.
+ * only, and no seat nobody is paid for: a rada spoleczna seat at an SPZOZ, any
+ * post where the statute pays nobody (`Company.paidSeats`).
  */
 function countsAsPublicService(edge: Edge, company: Company): boolean {
   if (company.isPublic !== true) return false;
-  if (
-    !bodyIsPaidPost(company.supervisoryBody) &&
-    namesASupervisorySeat(edge.name)
-  ) {
-    return false;
-  }
-  return true;
+  return postIsPaid(edge.name, unpaidSeats(company));
 }
 
 type CountedEdge = Edge & { id: string };

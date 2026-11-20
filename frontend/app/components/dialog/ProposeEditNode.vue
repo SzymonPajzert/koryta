@@ -167,6 +167,27 @@
                 class="mb-2"
               />
               <v-select
+                v-model="editData.paidSeats"
+                :items="paidSeatsOptions"
+                label="Wynagrodzenie za funkcje"
+                hint="W zarządzie i komisji rewizyjnej. Diety i ryczałt to też wynagrodzenie."
+                persistent-hint
+                class="mb-2"
+                data-testid="paid-seats"
+              />
+              <v-textarea
+                v-if="editData.paidSeats !== null"
+                v-model="editData.paidSeatsReason"
+                label="Skąd to wiadomo"
+                hint="Paragraf statutu i link do niego"
+                persistent-hint
+                :rules="[paidSeatsReasonRule]"
+                auto-grow
+                rows="2"
+                class="mb-2"
+                data-testid="paid-seats-reason"
+              />
+              <v-select
                 v-model="editData.categories"
                 :items="categoryOptions"
                 label="Branże"
@@ -314,6 +335,28 @@ const ownershipOptions = [
   { title: "Podmiot prywatny", value: false },
 ];
 
+/** `null` is nobody having said, which leaves the site's rule by the legal
+ * form: a hospital's rada społeczna unpaid, every other seat paid. */
+const paidSeatsOptions = [
+  { title: "Nie wiem", value: null },
+  { title: "Płatne", value: true },
+  { title: "Bez wynagrodzenia", value: false },
+];
+
+/** A changed answer needs a new reason: the server's rule, said before the
+ * request is made. */
+function paidSeatsReasonRule(value: string): true | string {
+  const stored = props.entity ?? {};
+  const changed =
+    editData.paidSeats !== null && editData.paidSeats !== stored.paidSeats;
+  if (!changed) return true;
+  const reason = value.trim();
+  return (
+    (reason !== "" && reason !== (stored.paidSeatsReason ?? "")) ||
+    "Podaj, skąd to wiadomo"
+  );
+}
+
 /** The sectors the filter on /eksploruj offers, which is the whole of what may
  * be proposed: a value off this list would file the company under a category
  * nothing can ever filter on. Its owner, „Skarb Państwa”, is left out: it
@@ -335,6 +378,8 @@ const editData = reactive({
   regonNumber: "",
   nipNumber: "",
   isPublic: null as boolean | null,
+  paidSeats: null as boolean | null,
+  paidSeatsReason: "",
   categories: [] as string[],
   ktomaco: "",
   sourceURL: "",
@@ -375,6 +420,9 @@ watch(dialog, (val) => {
   // A scraped `false` prefills as "nie wiem": it means KRS had nothing to say,
   // so offering it back as an answer would launder a gap into a fact.
   editData.isPublic = publicSectorKnown(entity) ? !!entity.isPublic : null;
+  editData.paidSeats =
+    typeof entity.paidSeats === "boolean" ? entity.paidSeats : null;
+  editData.paidSeatsReason = entity.paidSeatsReason || "";
   // Read through `asArray` because a node written before 2026-07-28 stores its
   // arrays as `{"0": "koleje"}` maps. A stored value the site no longer offers
   // is dropped rather than shown, since the select cannot render an option it
@@ -388,10 +436,33 @@ watch(dialog, (val) => {
   editData.description = entity.description || "";
 });
 
+/** A changed answer starts with an empty reason rather than the old one, which
+ * argued the other way; going back to the stored answer brings its reason
+ * back. */
+watch(
+  () => editData.paidSeats,
+  (answer) => {
+    const stored = props.entity ?? {};
+    const storedReason = stored.paidSeatsReason ?? "";
+    if (answer !== stored.paidSeats) {
+      if (editData.paidSeatsReason === storedReason) {
+        editData.paidSeatsReason = "";
+      }
+    } else if (!editData.paidSeatsReason) {
+      editData.paidSeatsReason = storedReason;
+    }
+  },
+);
+
 async function submit() {
   if (!editData.name.trim()) {
     error.value =
       type.value === "article" ? "Tytuł jest wymagany" : "Nazwa jest wymagana";
+    return;
+  }
+  const paidSeatsCheck = paidSeatsReasonRule(editData.paidSeatsReason);
+  if (type.value === "place" && paidSeatsCheck !== true) {
+    error.value = paidSeatsCheck;
     return;
   }
 
@@ -434,6 +505,12 @@ async function submit() {
       // somebody having decided the place is private.
       if (editData.isPublic !== null) {
         body.isPublic = editData.isPublic;
+      }
+      // On the same terms, and with its reason: `/api/revisions/create` turns
+      // down a changed answer that does not say where it comes from.
+      if (editData.paidSeats !== null) {
+        body.paidSeats = editData.paidSeats;
+        body.paidSeatsReason = editData.paidSeatsReason;
       }
       // Always sent, unlike the ownership answer: an empty selection is a real
       // claim - "this company is in none of these sectors" - and it is the only

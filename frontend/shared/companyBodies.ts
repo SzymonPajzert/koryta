@@ -31,6 +31,10 @@
  * komisja rewizyjna held 979 stored seats, and every one of them read "Rada
  * Nadzorcza" - Związek Miast Polskich's among them. See
  * `supervisoryOrganTitle`.
+ *
+ * The form is a statute's rule for a whole kind of institution. What one
+ * institution's own statute says about pay is `Company.paidSeats`, which wins
+ * where it is set; `unpaidSeats` puts the two together.
  */
 
 import type { SupervisoryOrgan } from "./companyOrgans";
@@ -151,6 +155,53 @@ export function namesASupervisorySeat(
 ): boolean {
   if (!role) return false;
   return /\brad\w*\s+(nadzorcz|spolecz)\w*/.test(fold(role));
+}
+
+/** What an institution says about pay: its own answer and its legal form's. */
+export type SeatPay = { paidSeats?: boolean; supervisoryBody?: string };
+
+/** Which posts at an institution are not jobs: the seats on its supervisory
+ * organ, or all of them. */
+export type UnpaidSeats = "supervisory" | "all";
+
+/** Which posts at this institution are not jobs; undefined where every one is.
+ *
+ * `paidSeats` first. It is what this one institution's statute says, recorded
+ * with its reason by a person or by the pipelines (`Company.paidSeats`):
+ * `false` takes out every post there, the board's included, and `true` keeps
+ * them all, a rada społeczna's included. Where nobody has said, the legal
+ * form's rule stands (`supervisoryBody`): a hospital's rada społeczna is out
+ * and its director is not.
+ */
+export function unpaidSeats(
+  company: SeatPay | undefined | null,
+): UnpaidSeats | undefined {
+  if (company?.paidSeats === false) return "all";
+  if (company?.paidSeats === true) return undefined;
+  return bodyIsPaidPost(company?.supervisoryBody) ? undefined : "supervisory";
+}
+
+/** Whether this role is a paid post, given which posts at its institution are
+ * not (`unpaidSeats`). */
+export function postIsPaid(
+  role: string | undefined | null,
+  unpaid: UnpaidSeats | undefined,
+): boolean {
+  if (unpaid === "all") return false;
+  return !(unpaid === "supervisory" && namesASupervisorySeat(role));
+}
+
+/** `unpaidSeats` of each place that has any, for a caller counting a whole
+ * graph at once (`computeEdgeStats`). */
+export function unpaidSeatsByPlace(
+  places: Iterable<readonly [string, SeatPay | undefined | null]>,
+): Map<string, UnpaidSeats> {
+  const found = new Map<string, UnpaidSeats>();
+  for (const [id, place] of places) {
+    const unpaid = unpaidSeats(place);
+    if (unpaid) found.set(id, unpaid);
+  }
+  return found;
 }
 
 /** Every bare organ name the site gives, from either source, folded - what a

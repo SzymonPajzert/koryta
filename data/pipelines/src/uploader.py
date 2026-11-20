@@ -11,7 +11,7 @@ import requests
 from tqdm import tqdm
 
 from analysis.interesting import Companies
-from analysis.payloads.company import split_owners
+from analysis.payloads.company import add_seat_pay, split_owners
 from conductor import setup_context
 from entities.company import display_name, on_the_treasury_list
 from entities.company_bodies import supervisory_body
@@ -822,6 +822,8 @@ class CompanyUploader(Uploader):
             )
         if "supervisory_body" not in payload:
             payload["supervisory_body"] = supervisory_body(form)
+        if "paid_seats" not in payload:
+            add_seat_pay(payload, payload.get("krs"))
         # The register's own `formaPrawna`, for display beside a hospital's
         # board. Not filled in when absent, unlike the two above: those follow
         # from the form by a rule this side can apply, and this is the form.

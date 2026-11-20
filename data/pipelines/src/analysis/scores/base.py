@@ -66,6 +66,7 @@ from entities.composite import PersonScore
 from scrapers.koryta.created import KorytaPeopleCreated
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
 from scrapers.krs.list import CompaniesKRS
+from scrapers.krs.researched_owners import seat_pay
 from scrapers.stores import Context, Pipeline
 
 #: How strongly a published page counts as "we already decided this one is
@@ -90,12 +91,13 @@ SCORE_BANDS: tuple[tuple[float, int], ...] = (
 #: a model out of the queue, a floor on it puts everybody it names in.
 QUEUE_THRESHOLD = 3
 
-#: The most any model gives a person whose only public posts are seats on a
-#: rada społeczna (`Population.holds_only_rada_spoleczna_seats`): under
-#: `QUEUE_THRESHOLD`, so the queue does not put them in front of a reviewer.
-#: Decision on 2026-11-11: such people are not published for now. They keep a
+#: The most any model gives a person whose only public posts are seats nobody
+#: is paid for (`Population.holds_only_unpaid_seats`): under `QUEUE_THRESHOLD`,
+#: so the queue does not put them in front of a reviewer. Decision on
+#: 2026-11-11 for a rada społeczna: such people are not published for now; on
+#: 2026-11-19 the same for a body whose statute pays nobody. They keep a
 #: score, so None turns the rule off and the next run restores them.
-RADA_SPOLECZNA_ONLY_CEILING: int | None = QUEUE_THRESHOLD - 1
+UNPAID_SEATS_ONLY_CEILING: int | None = QUEUE_THRESHOLD - 1
 
 
 @dataclasses.dataclass(frozen=True)
@@ -171,6 +173,9 @@ class CompanyFacts:
     #: What supervises the company, by its legal form: `RADA_SPOLECZNA` for an
     #: SPZOZ, empty for the rest (`entities.company_bodies.supervisory_body`).
     supervisory_body: str = ""
+    #: Whether a seat here is paid, by the body's own statute, where the
+    #: pipelines know (`researched_owners.seat_pay`); None elsewhere.
+    paid_seats: bool | None = None
 
 
 def rejestr_io_id(value: typing.Any) -> str | None:
@@ -278,12 +283,22 @@ class Population:
             and post.role == SUPERVISORY_ROLE
         )
 
-    def holds_only_rada_spoleczna_seats(self, key: str) -> bool:
-        """Whether this person holds a rada społeczna seat and no other post at
-        a company known to be public, ended posts included."""
+    def is_unpaid_seat(self, post: Employment) -> bool:
+        """Whether nobody is paid for this post: any post at a body whose
+        statute pays nobody (`CompanyFacts.paid_seats`), else a seat on a rada
+        społeczna. A statute that pays outranks the legal form, as on the site
+        (`unpaidSeats` in frontend/shared/companyBodies.ts)."""
+        company = self.companies.get(post.krs)
+        if company is not None and company.paid_seats is not None:
+            return not company.paid_seats
+        return self.is_rada_spoleczna_seat(post)
+
+    def holds_only_unpaid_seats(self, key: str) -> bool:
+        """Whether this person holds a seat nobody is paid for and no other
+        post at a company known to be public, ended posts included."""
         holds_seat = False
         for post in self.employments.get(key, []):
-            if self.is_rada_spoleczna_seat(post):
+            if self.is_unpaid_seat(post):
                 holds_seat = True
                 continue
             company = self.companies.get(post.krs)
@@ -298,6 +313,11 @@ class Population:
         fallback is for a caller assembling a `Population` by hand.
         """
         return self.names.get(key) or key
+
+
+def _paid_seats(krs: object) -> bool | None:
+    pay = seat_pay(krs)
+    return None if pay is None else pay.paid
 
 
 def banded_scores(
@@ -332,18 +352,17 @@ def banded_scores(
     return {str(name): span.rescale(band(value)) for name, value in percentile.items()}
 
 
-def demote_rada_spoleczna_only(
+def demote_unpaid_seats_only(
     banded: typing.Mapping[str, int], population: Population
 ) -> dict[str, int]:
-    """`banded`, with everybody whose only public posts are rada społeczna seats
-    held at `RADA_SPOLECZNA_ONLY_CEILING`; unchanged while that is None."""
-    ceiling = RADA_SPOLECZNA_ONLY_CEILING
+    """`banded`, with everybody whose only public posts are seats nobody is
+    paid for held at `UNPAID_SEATS_ONLY_CEILING`; unchanged while that is
+    None."""
+    ceiling = UNPAID_SEATS_ONLY_CEILING
     if ceiling is None:
         return dict(banded)
     return {
-        key: min(score, ceiling)
-        if population.holds_only_rada_spoleczna_seats(key)
-        else score
+        key: min(score, ceiling) if population.holds_only_unpaid_seats(key) else score
         for key, score in banded.items()
     }
 
@@ -398,12 +417,12 @@ class PeopleScoreModel(Pipeline):
             {key: score for key, score in raw.items() if key in eligible},
             self.score_range,
         )
-        demoted = demote_rada_spoleczna_only(banded, population)
+        demoted = demote_unpaid_seats_only(banded, population)
         held = sum(1 for key, score in demoted.items() if score != banded[key])
         if held:
             print(
                 f"{type(self).__name__}: {held} people whose only public posts "
-                f"are rada społeczna seats held at {RADA_SPOLECZNA_ONLY_CEILING}"
+                f"are unpaid seats held at {UNPAID_SEATS_ONLY_CEILING}"
             )
         banded = demoted
 
@@ -593,7 +612,8 @@ class PeopleScoreModel(Pipeline):
         if "form" not in companies:
             print(
                 "CompaniesKRS has no form column: no rada społeczna seat can be "
-                "told apart, so nobody is held under RADA_SPOLECZNA_ONLY_CEILING"
+                "told apart, so only bodies whose statute pays nobody hold anyone "
+                "under UNPAID_SEATS_ONLY_CEILING"
             )
         facts = {}
         for _, row in companies.iterrows():
@@ -611,5 +631,6 @@ class PeopleScoreModel(Pipeline):
                 supervisory_body=supervisory_body(
                     form if isinstance(form, str) else None
                 ),
+                paid_seats=_paid_seats(krs),
             )
         return facts

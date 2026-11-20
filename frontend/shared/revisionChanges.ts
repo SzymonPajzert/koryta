@@ -33,9 +33,9 @@ export interface RevisionChange {
  *
  * Three groups. The structural ones say what the document *is* rather than what
  * it claims - an edge restates its own endpoints in every revision - and
- * `isPublicSource`, `categoriesSource` and `partiesSource` are
- * bookkeeping `/api/revisions/create` writes alongside `isPublic`,
- * `categories` and `parties`.
+ * `isPublicSource`, `categoriesSource`, `partiesSource` and
+ * `paidSeatsSource` are bookkeeping `/api/revisions/create` writes alongside
+ * `isPublic`, `categories`, `parties` and `paidSeats`.
  * Removal is rendered as its own thing, not as `deleted: — → tak`, so both of
  * its fields are dropped too.
  *
@@ -58,6 +58,7 @@ export const skippedChangeFields = new Set([
   "isPublicSource",
   "categoriesSource",
   "partiesSource",
+  "paidSeatsSource",
   "deleted",
   "delete_reason",
   "stats",
@@ -102,6 +103,8 @@ export const revisionFieldLabels: Record<string, string> = {
   legalForm: "forma prawna",
   supervisoryBody: "organ nadzoru",
   supervisoryOrgan: "organ nadzoru w KRS",
+  paidSeats: "płatne funkcje",
+  paidSeatsReason: "skąd wiadomo o płatnych funkcjach",
   // article
   sourceURL: "adres źródła",
   shortName: "nazwa skrócona",

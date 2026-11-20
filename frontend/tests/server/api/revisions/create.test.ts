@@ -497,6 +497,83 @@ describe("api/revisions/create, place edits", () => {
     expect(writtenRevision().data).not.toHaveProperty("nameSource");
   });
 
+  describe("whether a seat is paid", () => {
+    // An association of gminy the pipelines marked unpaid from its statute,
+    // which a reader finds pays its board per-diems.
+    const zwiazek = {
+      type: "place",
+      name: "Związek Gmin Pomorskich",
+      paidSeats: false,
+      paidSeatsReason: "Statut nie przewiduje wynagrodzenia",
+    };
+
+    it("records a changed answer as a person's, with its reason", async () => {
+      vi.mocked(baseNodeFields).mockResolvedValueOnce({ ...zwiazek });
+      mockReadBody.mockResolvedValue({
+        node_id: "zgp",
+        name: zwiazek.name,
+        paidSeats: true,
+        paidSeatsReason: "Statut, par. 21: diety i ryczałt dla zarządu",
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await handler({} as any);
+
+      expect(writtenRevision().data).toMatchObject({
+        paidSeats: true,
+        paidSeatsReason: "Statut, par. 21: diety i ryczałt dla zarządu",
+        paidSeatsSource: "manual",
+      });
+    });
+
+    it("turns down a changed answer that keeps the old reason", async () => {
+      vi.mocked(baseNodeFields).mockResolvedValueOnce({ ...zwiazek });
+      mockReadBody.mockResolvedValue({
+        node_id: "zgp",
+        name: zwiazek.name,
+        paidSeats: true,
+        paidSeatsReason: zwiazek.paidSeatsReason,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 400,
+      });
+    });
+
+    it("turns down a changed answer with no reason", async () => {
+      vi.mocked(baseNodeFields).mockResolvedValueOnce({ ...zwiazek });
+      mockReadBody.mockResolvedValue({
+        node_id: "zgp",
+        name: zwiazek.name,
+        paidSeats: true,
+        paidSeatsReason: "  ",
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await expect(handler({} as any)).rejects.toMatchObject({
+        statusCode: 400,
+      });
+    });
+
+    it("does not pin the pipelines' answer on an edit of something else", async () => {
+      vi.mocked(baseNodeFields).mockResolvedValueOnce({ ...zwiazek });
+      mockReadBody.mockResolvedValue({
+        node_id: "zgp",
+        name: zwiazek.name,
+        content: "Stowarzyszenie gmin województwa pomorskiego.",
+        paidSeats: zwiazek.paidSeats,
+        paidSeatsReason: zwiazek.paidSeatsReason,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await handler({} as any);
+
+      expect(writtenRevision().data).toMatchObject({ paidSeats: false });
+      expect(writtenRevision().data).not.toHaveProperty("paidSeatsSource");
+    });
+  });
+
   it("does not mark a person's name, which no ingest overwrites", async () => {
     vi.mocked(baseNodeFields).mockResolvedValueOnce({
       type: "person",

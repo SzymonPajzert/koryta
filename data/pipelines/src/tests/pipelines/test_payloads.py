@@ -9,6 +9,7 @@ from analysis.payloads import CompaniesPayloads, PeoplePayloads, RegionPayloads
 from analysis.payloads.company import split_owners
 from analysis.payloads.person import _extract_elections
 from entities.company import Owner
+from scrapers.krs.researched_owners import seat_pay
 from scrapers.map.jst import SKARB_PANSTWA
 from scrapers.stores import Context, Pipeline, ProcessPolicy
 
@@ -622,6 +623,59 @@ def test_upload_payloads_carry_the_supervisory_body(mock_ctx, monkeypatch):
     assert by_krs["0000079907"]["categories"] == ["szpitale"]
     # The empty string, not a missing key: it is what clears a stored value.
     assert by_krs["0000076705"]["supervisory_body"] == ""
+
+
+def test_upload_payloads_say_whether_a_seat_is_paid(mock_ctx, monkeypatch):
+    """A union of local governments says whether its statute pays for a seat,
+    and why; any other company says "", which withdraws an answer the
+    pipelines gave before."""
+    pipeline = Pipeline.create(CompaniesPayloads)
+    pipeline.companies = MockPipeline(
+        [
+            {
+                "krs": "0000094303",
+                "name": "Związek Powiatów Polskich",
+                "city": "Warszawa",
+                "activity": [],
+                "form": "STOWARZYSZENIE",
+                "is_public": True,
+            },
+            {
+                "krs": "0000069153",
+                "name": "Związek Miast Polskich",
+                "city": "Poznań",
+                "activity": [],
+                "form": "STOWARZYSZENIE",
+                "is_public": True,
+            },
+            {
+                "krs": "0000076705",
+                "name": "PKP Szybka Kolej Miejska w Trojmiescie",
+                "city": "Gdynia",
+                "activity": ["49.12.Z"],
+                "form": "SPÓŁKA AKCYJNA",
+                "is_public": True,
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        "analysis.payloads.company.KorytaCompanies",
+        lambda *args, **kwargs: MockPipeline(
+            [{"krs": krs} for krs in ("0000094303", "0000069153", "0000076705")]
+        ),
+    )
+
+    by_krs = {
+        row["krs"]: row for row in pipeline.process(mock_ctx).to_dict(orient="records")
+    }
+
+    # Honorowo, by § 12 ust. 2 of its statute.
+    assert by_krs["0000094303"]["paid_seats"] == "unpaid"
+    assert by_krs["0000094303"]["paid_seats_reason"] == seat_pay("0000094303").reason
+    # Per-diems for each meeting, which count as pay (decision on 2026-11-19).
+    assert by_krs["0000069153"]["paid_seats"] == "paid"
+    assert by_krs["0000076705"]["paid_seats"] == ""
+    assert by_krs["0000076705"]["paid_seats_reason"] == ""
 
 
 def test_upload_payloads_carry_the_organ_the_register_names(mock_ctx, monkeypatch):
