@@ -197,6 +197,18 @@ describe("HomeExplorer", () => {
     expect(contrastRatio(hex!, "#ffffff")).toBeGreaterThanOrEqual(4.5);
   });
 
+  it("puts the chart last, and opens no session on it", async () => {
+    const wrapper = await mount(PEOPLE);
+    const strip = wrapper
+      .findAll(".v-tabs")
+      .map((tabs) => tabs.findAll(".v-tab").map((tab) => tab.text()));
+    expect(strip).toEqual([
+      ["Mapa", "Oświadczenia", "Stanowiska"],
+      ["Mapa", "Oświadczenia", "Stanowiska"],
+    ]);
+    expect(() => seatIn("graph")).toThrow();
+  });
+
   it("has no Partie tab", async () => {
     // The treemap panel was removed; the tab strip is the only thing that could
     // still offer it.
@@ -345,12 +357,12 @@ describe("HomeExplorer", () => {
     });
 
     it("keeps the session out of the split when it comes back without one", async () => {
-      seatIn("graph");
-      (await mount(PEOPLE, "/?widok=oswiadczenia")).unmount();
+      seatIn("oswiadczenia");
+      (await mount(PEOPLE, "/?widok=stanowiska")).unmount();
 
       const wrapper = await mount(PEOPLE);
 
-      // The control panel, not the chart its arm would have opened.
+      // The control panel, not the declarations its arm would have opened.
       expect(underlined(wrapper)).toEqual(["Mapa", "Mapa"]);
       expect(assignedGoals()).toHaveLength(0);
     });
@@ -372,20 +384,20 @@ describe("HomeExplorer", () => {
     });
 
     it("leaves an unknown ?widok= to the arm", async () => {
-      seatIn("graph");
-      const wrapper = await mount(null, "/?widok=wykres");
+      seatIn("oswiadczenia");
+      const wrapper = await mount(PEOPLE, "/?widok=wykres");
 
-      expect(underlined(wrapper)).toEqual(["Stanowiska", "Stanowiska"]);
+      expect(underlined(wrapper)).toEqual(["Oświadczenia", "Oświadczenia"]);
       expect(assignedGoals()).toHaveLength(1);
     });
 
     it("leaves the url alone when the arm opens a panel", async () => {
       // A copied home page address would otherwise take everybody it reaches
       // out of the split.
-      seatIn("graph");
-      const wrapper = await mount();
+      seatIn("oswiadczenia");
+      const wrapper = await mount(PEOPLE);
 
-      expect(underlined(wrapper)).toEqual(["Stanowiska", "Stanowiska"]);
+      expect(underlined(wrapper)).toEqual(["Oświadczenia", "Oświadczenia"]);
       expect(widok()).toBeUndefined();
     });
 

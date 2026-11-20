@@ -11,8 +11,9 @@
  * So the registry shipped **dormant**, every reader on the map, and turning an
  * experiment on is changing its weights - with the goals already registered so
  * no data is lost to a forgotten dashboard step. `home-default` went live on
- * 2026-11-15 as a three-way split; at ~415 home visitors a month that is ~140
- * readers an arm, so read it in months, not days.
+ * 2026-11-15 as a three-way split and became a two-way one on 2026-11-20; at
+ * ~415 home visitors a month that is ~200 readers an arm, so read it in months,
+ * not days.
  *
  * Before spending traffic on the split, read `home-explorer:tab` broken down by
  * `tab`, and `home-explorer:pick` broken down by `panel` (`shared/analytics.ts`).
@@ -84,10 +85,13 @@ export type Experiment<Id extends string = string> = {
 
 /** Which panel the home page opens on.
  *
- * Live since round oswiadczenia-osoby-r2 (2026-11-15): a third each for the
- * map, the chart and the declarations, `gry` still off. `HomeExplorer` hides
- * its panels until the arm is set, for every arm alike, so no arm paints
- * another's panel first (the flash the note at the top describes).
+ * Live since round oswiadczenia-osoby-r2 (2026-11-15), a third each for the
+ * map, the chart and the declarations. Half the map and half the declarations
+ * since the decision on 2026-11-20: the chart is the third tab and no arm opens
+ * on it, so read the split from that rollout on. `gry` still off.
+ * `HomeExplorer` hides its panels until the arm is set, for every arm alike,
+ * so no arm paints another's panel first (the flash the note at the top
+ * describes).
  *
  * `parties` was the second arm and went with its panel: the treemap was removed
  * from the tab strip, and an arm naming a panel that no longer exists is a trap
@@ -110,7 +114,7 @@ export const HOME_DEFAULT_EXPERIMENT = {
     },
     {
       id: "graph",
-      weight: 1,
+      weight: 0,
       description:
         "Stanowiska w czasie, the timeline of how many people each party, województwo or sector had in post.",
     },

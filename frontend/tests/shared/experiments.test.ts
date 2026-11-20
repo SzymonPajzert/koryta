@@ -103,12 +103,12 @@ describe("the registry", () => {
     // The guard on accidentally deploying a live split. Activating an
     // experiment means changing this test in the same commit, which is where
     // the decision gets reviewed. `home-default` went live on 2026-11-15
-    // (board round oswiadczenia-osoby-r2): a third each for the map, the chart
-    // and the declarations; `osoba-skany` on 2026-11-17, half the signed-out
-    // readers of a person page with the ask and half without; every other
+    // (board round oswiadczenia-osoby-r2), and since 2026-11-20 is half the
+    // map and half the declarations; `osoba-skany` on 2026-11-17, half the
+    // signed-out readers of a person page with the ask and half without; every other
     // experiment hands out its control.
     const decided: Record<string, string[]> = {
-      "home-default": ["map", "graph", "oswiadczenia"],
+      "home-default": ["map", "oswiadczenia"],
       "osoba-skany": ["bez", "prosba"],
     };
     for (const experiment of Object.values(EXPERIMENTS)) {
