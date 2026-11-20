@@ -82,7 +82,7 @@ export default defineEventHandler(async (event) => {
   // Prokuratoria's list, which is no less right on a page somebody has edited,
   // so the payload's owner replaces the stored one even there - PGE was pinned
   // to „Energetyka” by hand before the category existed, and no upload could
-  // have filed it under the Treasury. The same goes for „W likwidacji lub
+  // have filed it under the Treasury. The same goes for „W likwidacji” and „W
   // upadłości”, which the register's name says.
   if (body.categories !== undefined) {
     revisionData.categories =

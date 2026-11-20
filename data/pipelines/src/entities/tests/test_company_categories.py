@@ -826,12 +826,15 @@ class TestSkarbPanstwa(unittest.TestCase):
         )
 
     def test_the_treasury_comes_after_the_sectors_and_before_the_statuses(self):
-        self.assertEqual(CATEGORY_VALUES[-2:], ("skarb-panstwa", "w-likwidacji"))
+        self.assertEqual(
+            CATEGORY_VALUES[-3:], ("skarb-panstwa", "w-likwidacji", "w-upadlosci")
+        )
 
 
 class TestStatuses(unittest.TestCase):
     """Decision on 2026-11-20: a company being wound up, as the register's name
-    says, as a category to filter by beside its sector and owner."""
+    says, as a category to filter by beside its sector and owner - liquidation
+    and bankruptcy apart."""
 
     def test_a_company_in_liquidation_keeps_its_sector_and_owner_before_it(self):
         # KRS 0000019193, PKP S.A., named as if it were being wound up
@@ -847,7 +850,7 @@ class TestStatuses(unittest.TestCase):
             categories_for(
                 "0000014800", ["70.10.Z"], name="HUTA OSTROWIEC S.A. W UPADŁOŚCI"
             ),
-            ["w-likwidacji"],
+            ["w-upadlosci"],
         )
 
     def test_the_status_does_not_keep_the_article_from_placing_a_company(self):
@@ -861,7 +864,9 @@ class TestStatuses(unittest.TestCase):
             ["energetyka", "w-likwidacji"],
         )
 
-    def test_bankruptcy_in_every_spelling_is_filed_with_liquidation(self):
+    def test_bankruptcy_in_every_spelling_is_a_bankruptcy(self):
+        # Upadłość likwidacyjna included: the court's proceeding, not the
+        # owners' liquidation.
         for name in (
             "HUTA SPÓŁKA AKCYJNA W UPADŁOŚCI",
             "HUTA SPÓŁKA AKCYJNA W UPADŁOŚCI LIKWIDACYJNEJ",
@@ -870,12 +875,15 @@ class TestStatuses(unittest.TestCase):
             "Huta spółka akcyjna w upadłości",
         ):
             with self.subTest(name=name):
-                self.assertEqual(wound_up(name), ["w-likwidacji"])
+                self.assertEqual(wound_up(name), ["w-upadlosci"])
 
-    def test_both_statuses_are_one_category(self):
-        self.assertEqual(
-            wound_up("X SPÓŁKA AKCYJNA W LIKWIDACJI W UPADŁOŚCI"), ["w-likwidacji"]
-        )
+    def test_both_statuses_in_their_order(self):
+        for name in (
+            "X SPÓŁKA AKCYJNA W LIKWIDACJI W UPADŁOŚCI",
+            "X SPÓŁKA AKCYJNA W UPADŁOŚCI W LIKWIDACJI",
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(wound_up(name), ["w-likwidacji", "w-upadlosci"])
 
     def test_restructuring_is_not_a_status_the_site_files(self):
         self.assertEqual(wound_up("PKP CARGO SPÓŁKA AKCYJNA W RESTRUKTURYZACJI"), [])

@@ -147,10 +147,10 @@ test("instytucja-zmiana-branze-lista", COMPANY, async ({ page }) => {
   await expect(menu.getByRole("option", { name: "Skarb Państwa" })).toHaveCount(
     0,
   );
-  // Nor the register's status, which follows the name.
-  await expect(
-    menu.getByRole("option", { name: "W likwidacji lub upadłości" }),
-  ).toHaveCount(0);
+  // Nor the register's statuses, which follow the name.
+  for (const status of ["W likwidacji", "W upadłości"]) {
+    await expect(menu.getByRole("option", { name: status })).toHaveCount(0);
+  }
   // Opened, the list scrolls to its first ticked row. Its end is the point
   // here: it stops at the last sector.
   await menu.evaluate((list) => {

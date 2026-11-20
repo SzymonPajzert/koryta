@@ -1121,13 +1121,14 @@ SECTORS: tuple[Category, ...] = (
 #: sectors.
 SKARB_PANSTWA = Category("skarb-panstwa", "Skarb Państwa")
 
-#: Not a sector but the register's status: a company being wound up, as the
-#: register appends it to the name (KSH art. 274). Decision on 2026-11-20: a
-#: category to filter by, like `SKARB_PANSTWA`, one for liquidation and
-#: bankruptcy alike, and none for restructuring, after which a company carries
-#: on.
-W_LIKWIDACJI = Category("w-likwidacji", "W likwidacji lub upadłości")
-STATUSES: tuple[Category, ...] = (W_LIKWIDACJI,)
+#: Not sectors but the register's status: a company being wound up, as the
+#: register appends it to the name (KSH art. 274). Decision on 2026-11-20:
+#: categories to filter by, like `SKARB_PANSTWA`, one for liquidation and one
+#: for bankruptcy, kept apart - the one is the owners' decision, the other a
+#: court's - and none for restructuring, after which a company carries on.
+W_LIKWIDACJI = Category("w-likwidacji", "W likwidacji")
+W_UPADLOSCI = Category("w-upadlosci", "W upadłości")
+STATUSES: tuple[Category, ...] = (W_LIKWIDACJI, W_UPADLOSCI)
 
 COMPANY_CATEGORIES: tuple[Category, ...] = (*SECTORS, SKARB_PANSTWA, *STATUSES)
 
@@ -1252,7 +1253,7 @@ def categories_for(
     Energetyczna among them.
 
     `name` is the register's name, whose status files the company under
-    `W_LIKWIDACJI` after that, on the same terms (`wound_up`).
+    `STATUSES` after that, on the same terms (`wound_up`).
 
     Returns a list rather than a set so the value is stable from one run to the
     next - it ends up in a Firestore document that a diff is taken against.
@@ -1284,27 +1285,30 @@ def categories_for(
     ] + after
 
 
-#: The register's statuses that file a company under `W_LIKWIDACJI`, as
-#: `register_statuses` spells them upper-cased and without diacritics. "W
-#: UPADŁOŚCI LIKWIDACYJNEJ" and "W UPADŁOŚCI UKŁADOWEJ" are the bankruptcies of
-#: the law before 2016, under which the register still names some.
-_WOUND_UP = {
-    "W LIKWIDACJI",
-    "W UPADLOSCI",
-    "W UPADLOSCI LIKWIDACYJNEJ",
-    "W UPADLOSCI UKLADOWEJ",
+#: The register's statuses, as `register_statuses` spells them upper-cased and
+#: without diacritics, and the category each files a company under. "W UPADŁOŚCI
+#: LIKWIDACYJNEJ" and "W UPADŁOŚCI UKŁADOWEJ" are the bankruptcies of the law
+#: before 2016, under which the register still names some: bankruptcies, not
+#: liquidations.
+_STATUS_CATEGORIES = {
+    "W LIKWIDACJI": W_LIKWIDACJI,
+    "W UPADLOSCI": W_UPADLOSCI,
+    "W UPADLOSCI LIKWIDACYJNEJ": W_UPADLOSCI,
+    "W UPADLOSCI UKLADOWEJ": W_UPADLOSCI,
 }
 
 
 def wound_up(name: str | None) -> list[str]:
-    """`[W_LIKWIDACJI]` where the register's name says the company is being
-    wound up, and nothing otherwise.
+    """The `STATUSES` a company's register name files it under, in that order.
 
-    Nothing for one in restructuring, and nothing for a limited partnership
-    whose partner is being wound up rather than the company.
+    Both where the register appends both: a company being liquidated that then
+    went bankrupt. None for one in restructuring, and none for a limited
+    partnership whose partner is being wound up rather than the company.
     """
-    statuses = {_plain(status) for status in register_statuses(name)}
-    return [W_LIKWIDACJI.value] if statuses & _WOUND_UP else []
+    found = {
+        _STATUS_CATEGORIES.get(_plain(status)) for status in register_statuses(name)
+    }
+    return [category.value for category in STATUSES if category in found]
 
 
 def _plain(status: str) -> str:

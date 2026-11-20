@@ -39,6 +39,7 @@ describe("companyCategories", () => {
       "obronnosc",
       "skarb-panstwa",
       "w-likwidacji",
+      "w-upadlosci",
     ]);
   });
 
@@ -166,12 +167,13 @@ describe("companyEditSchema.categories", () => {
 });
 
 describe("isSector", () => {
-  it("is every category but the owner and the status", () => {
+  it("is every category but the owner and the statuses", () => {
     // Filed beside a company's sector: counted as one, a post at PGE would
     // be on the home page's „Branże” twice.
     expect(companyCategoryValues.filter((value) => !isSector(value))).toEqual([
       "skarb-panstwa",
       "w-likwidacji",
+      "w-upadlosci",
     ]);
     expect(isSector("energetyka")).toBe(true);
     expect(isSector("hutnictwo")).toBe(false);
@@ -188,17 +190,21 @@ describe("isOwner", () => {
 });
 
 describe("isStatus", () => {
-  it("is liquidation, which bankruptcy is filed under too", () => {
-    expect(companyCategoryValues.filter(isStatus)).toEqual(["w-likwidacji"]);
+  it("is liquidation and bankruptcy, apart", () => {
+    expect(companyCategoryValues.filter(isStatus)).toEqual([
+      "w-likwidacji",
+      "w-upadlosci",
+    ]);
     expect(isStatus("w-restrukturyzacji")).toBe(false);
   });
 });
 
 describe("isRegisterFact", () => {
-  it("is the owner and the status, and nothing this build does not know", () => {
+  it("is the owner and the statuses, and nothing this build does not know", () => {
     expect(companyCategoryValues.filter(isRegisterFact)).toEqual([
       "skarb-panstwa",
       "w-likwidacji",
+      "w-upadlosci",
     ]);
     expect(isRegisterFact("hutnictwo")).toBe(false);
   });

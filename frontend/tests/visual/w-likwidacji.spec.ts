@@ -4,11 +4,10 @@ import { logIn, USERS } from "../e2e/helpers/auth";
 import { answerForTheSector } from "./fixtures/obronnosc";
 import { pageTag } from "./pageTags";
 
-/** „W likwidacji lub upadłości”, a company being wound up as the register's
- * name says, filed as a category after its sectors and owner (decision on
- * 2026-11-20): the
- * company's card with it last among the chips, and the table's filter bar with
- * it picked.
+/** „W likwidacji”, a company being wound up as the register's name says, filed
+ * as a category after its sectors and owner, as „W upadłości” is for a
+ * bankruptcy (decision on 2026-11-20): the company's card with it last among
+ * the chips, and the table's filter bar with it picked.
  *
  * Nothing in the seed is filed under a category, so the company's node is
  * answered with the register's status in its name, and the table's requests
@@ -37,9 +36,9 @@ test("tabela-w-likwidacji", TABELA, async ({ page }) => {
   await logIn(page, USERS.normal, TABLE);
 
   const bar = page.getByTestId("tabela-query-bar");
-  await expect(
-    bar.locator(".v-chip", { hasText: "W likwidacji lub upadłości" }),
-  ).toBeVisible({ timeout: 30_000 });
+  await expect(bar.locator(".v-chip", { hasText: "W likwidacji" })).toBeVisible(
+    { timeout: 30_000 },
+  );
   await expect(bar.getByText("4 osoby")).toBeVisible({ timeout: 30_000 });
 
   await settle(page);
@@ -80,7 +79,7 @@ test("instytucja-w-likwidacji", COMPANY, async ({ page }) => {
 
   const card = page.getByTestId("company-summary");
   await expect(
-    card.locator(".v-chip", { hasText: "W likwidacji lub upadłości" }),
+    card.locator(".v-chip", { hasText: "W likwidacji" }),
   ).toBeVisible({ timeout: 30_000 });
 
   await settle(page);
