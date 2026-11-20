@@ -68,6 +68,7 @@ export const QA_ITEMS: QaItem[] = [
       "Przy wycinku kliknij „Pokaż wszystkie”: są pozostałe oświadczenia tej osoby, także te, z których nie wycięto daty.",
       "Przy osobie bez wycinka wklej link do jej oświadczenia i kliknij „Dodaj”: link pojawia się w ramce jako dodany dziś przez Ciebie.",
       "Jako admin na stronie wstrzymanej osoby pod stanem jest też podpowiedź, co zrobić.",
+      "Kliknij pierwszą linię ramki: ramka się zwija. Wróć na tę stronę: dalej jest zwinięta, a na innych stronach rozwinięta.",
       "Opublikowana osoba nie ma tej ramki.",
     ],
     area: "contributor",

@@ -332,4 +332,64 @@ describe("PersonDraftDeclarations", () => {
       block.find('[data-testid="draft-declaration-link"]').text(),
     ).toContain("18 listopada 2026");
   });
+
+  it("folds under its line, and stays folded on that page and no other", async () => {
+    localStorage.removeItem("koryta:osoba:oswiadczenia-zwiniete");
+    const three: PersonDeclarationCrops = {
+      publication: null,
+      crops: [crop({ id: "fold-p0" }), crop({ id: "fold2-p0", answers: 0 })],
+      searches: [],
+      links: [],
+    };
+    answer({ folded: three, other: structuredClone(three) });
+
+    const block = await mount("folded");
+    const toggle = block.get("[data-fold-toggle]");
+    expect(toggle.attributes("aria-expanded")).toBe("true");
+    expect(block.find("[data-fold-body]").exists()).toBe(true);
+
+    await toggle.trigger("click");
+    await flushPromises();
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    // The line stays; the crop and the fold go.
+    expect(block.find("#ddecl-line").text()).toBe(
+      "2 oświadczenia majątkowe czekają na czytelników.",
+    );
+    expect(block.find("[data-fold-body]").exists()).toBe(false);
+    expect(
+      JSON.parse(localStorage.getItem("koryta:osoba:oswiadczenia-zwiniete")!),
+    ).toEqual(["folded"]);
+
+    // The same page comes back folded, and asks for no picture.
+    mockAuthRequest.mockClear();
+    const again = await mount("folded");
+    expect(again.get("[data-fold-toggle]").attributes("aria-expanded")).toBe(
+      "false",
+    );
+    expect(imageCalls()).toEqual([]);
+
+    // Another page is open.
+    const other = await mount("other");
+    expect(other.get("[data-fold-toggle]").attributes("aria-expanded")).toBe(
+      "true",
+    );
+
+    // Unfolded, the page is open the next time too.
+    await again.get("[data-fold-toggle]").trigger("click");
+    expect(
+      JSON.parse(localStorage.getItem("koryta:osoba:oswiadczenia-zwiniete")!),
+    ).toEqual([]);
+  });
+
+  it("opens as the page loads where the browser keeps nothing usable", async () => {
+    localStorage.setItem("koryta:osoba:oswiadczenia-zwiniete", "{not json");
+    answer({
+      broken: { publication: null, crops: [crop()], searches: [], links: [] },
+    });
+    const block = await mount("broken");
+    expect(block.get("[data-fold-toggle]").attributes("aria-expanded")).toBe(
+      "true",
+    );
+    localStorage.removeItem("koryta:osoba:oswiadczenia-zwiniete");
+  });
 });
