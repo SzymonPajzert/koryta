@@ -44,10 +44,11 @@ export const companyCategories = [
   // Treasury's stakes (Szymon, 2026-10-28). Last, as the pipelines file it
   // after a company's sectors - see `isSector`.
   { value: "skarb-panstwa", title: "Skarb Państwa" },
-  // Not a sector either but the register's status: a company being wound up,
-  // as its name says, liquidation and bankruptcy alike (decision on
-  // 2026-11-20). After the owner, where the pipelines file it.
-  { value: "w-likwidacji", title: "W likwidacji lub upadłości" },
+  // Not sectors either but the register's status: a company being wound up,
+  // as its name says, liquidation and bankruptcy apart (decision on
+  // 2026-11-20). After the owner, where the pipelines file them.
+  { value: "w-likwidacji", title: "W likwidacji" },
+  { value: "w-upadlosci", title: "W upadłości" },
 ] as const satisfies readonly { value: string; title: string }[];
 
 export type CompanyCategory = (typeof companyCategories)[number]["value"];
@@ -101,7 +102,7 @@ const OWNERS: readonly string[] = ["skarb-panstwa"];
 /** The categories that say a company is being wound up, as the register
  * appends it to the name. Not sectors either, for the same reason: a post at a
  * hospital in liquidation is one post at a hospital. */
-const STATUSES: readonly string[] = ["w-likwidacji"];
+const STATUSES: readonly string[] = ["w-likwidacji", "w-upadlosci"];
 
 /** Whether `value` is a sector the site offers, not an owner or a status. */
 export function isSector(value: string): value is CompanyCategory {
