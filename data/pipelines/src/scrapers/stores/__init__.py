@@ -1588,6 +1588,78 @@ class DeclarationLink:
 
 
 @dataclass(frozen=True)
+class DeclarationStrip:
+    """One picture of a band: rows `top` to `bottom` of a page, at the band's
+    dpi. A band's strips, in order, cover it without a gap."""
+
+    page: int
+    top: int
+    bottom: int
+    png: bytes = b""
+    png_hash: str = ""
+
+
+@dataclass(frozen=True)
+class DeclarationBandRow:
+    """One band of a declaration (`jobs.bip_declarations.employment`): its
+    header, its employer's line, section VII or VIII, from one printed
+    caption to the next, across a page break when it runs on.
+
+    The pictures are loaded only with `with_images`, as the crops'."""
+
+    sha256: str
+    #: The declaration's date page: its part A, where the bands start.
+    page: int
+    #: header, employer, vii or viii.
+    band: str
+    version: int
+    #: cut, or why there is no band: no_stop, no_title, no_birth_line,
+    #: no_caption, no_heading, empty, unreadable.
+    status: str = "cut"
+    #: How many captions past its own a recut runs the band.
+    widen: int = 0
+    #: 200 for a typed band, 300 for handwriting (200 when the file is a
+    #: picture, which has nothing finer).
+    dpi: int = 0
+    #: The page's width in px at `dpi`, which every strip has.
+    width: int = 0
+    strips: tuple[DeclarationStrip, ...] = ()
+    #: The written lines: (strip, top, bottom), rows of that strip at `dpi`.
+    lines: tuple[tuple[int, int, int], ...] = ()
+    #: What OCR or the text layer read in the band, line by line, without
+    #: stamps, footers and its own print. Only a typed band's is worth a
+    #: suggestion: on handwriting it is noise.
+    ocr_text: str = ""
+    #: The lowest score of a line read; 1.0 from a text layer.
+    score: float = 0.0
+    #: Every line read scores 0.9 or more: the text may be suggested.
+    typed: bool = False
+    #: ocr, text_layer, or ocr+text_layer where a scan's layer agreed.
+    source: str = ""
+    #: The header's "dnia" and "według stanu na dzień" dates, YYYY-MM-DD,
+    #: each with the score of the line it was read off.
+    dnia: str = ""
+    dnia_score: float = 0.0
+    stan_na: str = ""
+    stan_na_score: float = 0.0
+    notes: str = ""
+
+    @property
+    def item(self) -> str:
+        """The site's id of the declaration's date page."""
+        return f"{self.sha256}-p{self.page}"
+
+
+@dataclass(frozen=True)
+class DeclarationPages:
+    """A file and those of its date pages whose bands are due."""
+
+    file: DeclarationFile
+    #: (page, rotation) of each date page, as the date cut found it.
+    pages: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True)
 class SentRow:
     """What the site was last sent for a record, and what it said."""
 
@@ -1659,4 +1731,33 @@ class BipDeclarationStore(metaclass=ABCMeta):
 
     @abstractmethod
     def record_sent(self, rows: list[SentRow], run_id: str) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def pages_to_band(
+        self,
+        version: int,
+        limit: int | None,
+        items: typing.Collection[str] | None = None,
+        again: typing.Collection[str] = (),
+    ) -> list[DeclarationPages]:
+        """Files with date pages (the date cut's crops) that have no bands of
+        this version, those of people on the site first, at most `limit`
+        files. Only the pages `items` names (`<sha256>-p<page>`) when given;
+        the ones `again` names even when they have bands."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def record_bands(
+        self, sha256: str, page: int, version: int, bands: list[DeclarationBandRow]
+    ) -> None:
+        """Keep a date page's bands of this version, in place of any earlier
+        cut of them; other versions' rows stay."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def bands(
+        self, version: int, with_images: bool = False
+    ) -> list[DeclarationBandRow]:
+        """Every band of this version, by file, page and band."""
         raise NotImplementedError()
