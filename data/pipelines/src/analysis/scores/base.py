@@ -65,6 +65,7 @@ from entities.company_bodies import RADA_SPOLECZNA, supervisory_body
 from entities.composite import PersonScore
 from scrapers.koryta.created import KorytaPeopleCreated
 from scrapers.koryta.download import KorytaPeople, KorytaVotes
+from scrapers.krs.labour_unions import LabourUnions, union_groups
 from scrapers.krs.list import CompaniesKRS
 from scrapers.stores import Context, Pipeline
 
@@ -96,6 +97,11 @@ QUEUE_THRESHOLD = 3
 #: Decision on 2026-11-11: such people are not published for now. They keep a
 #: score, so None turns the rule off and the next run restores them.
 RADA_SPOLECZNA_ONLY_CEILING: int | None = QUEUE_THRESHOLD - 1
+
+#: The same for somebody who looks like an employee of the company they sit
+#: on the board of (`Population.staff_representative`), unless they stood in
+#: an election (decision on 2026-11-20).
+STAFF_REPRESENTATIVE_CEILING: int | None = QUEUE_THRESHOLD - 1
 
 
 @dataclasses.dataclass(frozen=True)
@@ -250,6 +256,9 @@ class Population:
     #: The site's spelling rather than the payload's, because that is what a
     #: reader comparing the two will have in front of them.
     names: dict[str, str] = dataclasses.field(default_factory=dict)
+    #: Trade union KRS -> every company of the public employer it is named
+    #: after (`scrapers.krs.labour_unions.union_groups`).
+    unions: dict[str, frozenset[str]] = dataclasses.field(default_factory=dict)
 
     def seeds(self, sign: int = 1) -> dict[str, float]:
         """Confirmed people whose judgement went the given way, weight positive."""
@@ -290,6 +299,29 @@ class Population:
             if company is not None and company.is_public:
                 return False
         return holds_seat
+
+    def staff_representative(self, key: str) -> bool:
+        """Sat on a union's board, and on public boards only where it works.
+
+        A union at the company is how its staff elect members of its
+        supervisory board, so somebody whose every public seat is at the
+        union's employer reads as an employee. A union seat anywhere else -
+        KADRA's leaders on hospital boards - says nothing of the kind.
+        """
+        posts = self.employments.get(key, [])
+        employers: set[str] = set()
+        for post in posts:
+            employers |= self.unions.get(post.krs, frozenset())
+        if not employers:
+            return False
+        public = {
+            post.krs
+            for post in posts
+            if post.krs not in self.unions
+            and (facts := self.companies.get(post.krs)) is not None
+            and facts.is_public
+        }
+        return bool(public) and public <= employers
 
     def display_name(self, key: str) -> str:
         """What to call this person in the output.
@@ -348,6 +380,29 @@ def demote_rada_spoleczna_only(
     }
 
 
+def demote_staff_representatives(
+    banded: typing.Mapping[str, int], population: Population
+) -> dict[str, int]:
+    """`banded`, with everybody who looks like staff and never stood in an
+    election held at `STAFF_REPRESENTATIVE_CEILING`; unchanged while that is
+    None.
+
+    Measured on 2026-11-20 over the 73 site people with both a union seat and
+    a public seat: 7 sit on public boards only where their union is, and 2 of
+    them are published, both of whom stood in an election; none of the 4 who
+    never stood is. 31 of the other 66 are published.
+    """
+    ceiling = STAFF_REPRESENTATIVE_CEILING
+    if ceiling is None:
+        return dict(banded)
+    return {
+        key: min(score, ceiling)
+        if not population.has_candidacy(key) and population.staff_representative(key)
+        else score
+        for key, score in banded.items()
+    }
+
+
 class PeopleScoreModel(Pipeline):
     """A model that nominates people to look at next.
 
@@ -374,6 +429,7 @@ class PeopleScoreModel(Pipeline):
     people_created: KorytaPeopleCreated
     people_votes: KorytaVotes
     companies_krs: CompaniesKRS
+    labour_unions: LabourUnions
 
     def raw_scores(self, ctx: Context, population: Population) -> dict[str, float]:
         """This model's opinion, on whatever scale suits it, keyed by person key.
@@ -404,6 +460,14 @@ class PeopleScoreModel(Pipeline):
             print(
                 f"{type(self).__name__}: {held} people whose only public posts "
                 f"are rada społeczna seats held at {RADA_SPOLECZNA_ONLY_CEILING}"
+            )
+        banded = demoted
+        demoted = demote_staff_representatives(banded, population)
+        held = sum(1 for key, score in demoted.items() if score != banded[key])
+        if held:
+            print(
+                f"{type(self).__name__}: {held} staff representatives held at "
+                f"{STAFF_REPRESENTATIVE_CEILING}"
             )
         banded = demoted
 
@@ -541,6 +605,7 @@ class PeopleScoreModel(Pipeline):
             seed_weights=seed_weights,
             shortlist=shortlist,
             names=names,
+            unions=union_groups(self.labour_unions.read_or_process(ctx)),
         )
 
     @staticmethod

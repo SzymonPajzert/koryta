@@ -21,6 +21,7 @@ from analysis.scores.base import (
     FULL_RANGE,
     QUEUE_THRESHOLD,
     RADA_SPOLECZNA_ONLY_CEILING,
+    STAFF_REPRESENTATIVE_CEILING,
     Candidacy,
     CompanyFacts,
     Employment,
@@ -29,6 +30,7 @@ from analysis.scores.base import (
     ScoreRange,
     banded_scores,
     demote_rada_spoleczna_only,
+    demote_staff_representatives,
     person_key,
     rejestr_io_id,
 )
@@ -206,6 +208,7 @@ class TestPopulation:
             list(vote_rows)
         )
         scorer.companies_krs.read_or_process = lambda ctx: pd.DataFrame()
+        scorer.labour_unions.read_or_process = lambda ctx: pd.DataFrame()
         return scorer.population(None)
 
     def test_a_published_person_is_a_seed_not_a_candidate(self):
@@ -389,12 +392,78 @@ class TestRadaSpolecznaCeiling:
                 {"krs": "0000000002", "name": "Klub", "is_public": None, "form": None},
             ]
         )
+        scorer.labour_unions.read_or_process = lambda ctx: pd.DataFrame()
 
         result = scorer.population(None)
 
         assert result.companies["0000000001"].supervisory_body == RADA_SPOLECZNA
         assert result.companies["0000000002"].supervisory_body == ""
         assert result.holds_only_rada_spoleczna_seats("Anna")
+
+
+class TestStaffRepresentatives:
+    """Somebody on a union's board and on public boards only where it works."""
+
+    UNION = "0000049978"
+    EMPLOYER, SISTER, ELSEWHERE = "0000012900", "0000879452", "0000083600"
+
+    def staff(self, posts: dict[str, list[str]], candidacies=None) -> Population:
+        people = population(
+            {
+                name: [(krs, "2020-01-01") for krs in krs_list]
+                for name, krs_list in posts.items()
+            },
+            candidacies=candidacies,
+            companies={
+                krs: CompanyFacts(name=krs, teryt=None, is_public=True)
+                for krs in (self.EMPLOYER, self.SISTER, self.ELSEWHERE)
+            },
+        )
+        people.unions = {self.UNION: frozenset({self.EMPLOYER, self.SISTER})}
+        return people
+
+    def test_the_unions_employer_and_its_group_are_one_workplace(self):
+        people = self.staff({"Anna": [self.UNION, self.EMPLOYER, self.SISTER]})
+        assert people.staff_representative("Anna")
+
+    def test_a_seat_anywhere_else_is_not_an_employees(self):
+        people = self.staff({"Anna": [self.UNION, self.EMPLOYER, self.ELSEWHERE]})
+        assert not people.staff_representative("Anna")
+
+    def test_a_union_with_no_public_seat_says_nothing(self):
+        assert not self.staff({"Anna": [self.UNION]}).staff_representative("Anna")
+
+    def test_a_public_seat_without_a_union_is_not_staff(self):
+        assert not self.staff({"Anna": [self.EMPLOYER]}).staff_representative("Anna")
+
+    def test_staff_are_held_below_the_queue(self):
+        people = self.staff(
+            {"Anna": [self.UNION, self.EMPLOYER], "Ewa": [self.ELSEWHERE]}
+        )
+        assert demote_staff_representatives({"Anna": 5, "Ewa": 5}, people) == {
+            "Anna": STAFF_REPRESENTATIVE_CEILING,
+            "Ewa": 5,
+        }
+        assert STAFF_REPRESENTATIVE_CEILING < QUEUE_THRESHOLD
+
+    def test_a_low_score_is_left_as_it_is(self):
+        people = self.staff({"Anna": [self.UNION, self.EMPLOYER]})
+        assert demote_staff_representatives({"Anna": 1}, people) == {"Anna": 1}
+
+    def test_somebody_who_stood_in_an_election_is_not_held(self):
+        people = self.staff(
+            {"Anna": [self.UNION, self.EMPLOYER]},
+            candidacies={"Anna": [Candidacy("1998", "0216", "Inne", "AWS")]},
+        )
+        assert demote_staff_representatives({"Anna": 5}, people) == {"Anna": 5}
+
+    def test_the_cap_reaches_every_model(self):
+        people = self.staff({"Anna": [self.UNION, self.EMPLOYER]})
+        scorer = model(PeopleScoresCapture)
+        scorer.population = lambda ctx: people
+        scorer.raw_scores = lambda ctx, population: {"Anna": 1.0}
+        df = scorer.process(None)
+        assert df["score"].tolist() == [STAFF_REPRESENTATIVE_CEILING]
 
 
 class TestPagesCreatedSinceTheExport:
@@ -508,6 +577,7 @@ class TestPopulationJoin:
         )
         scorer.people_votes.read_or_process = lambda ctx: pd.DataFrame()
         scorer.companies_krs.read_or_process = lambda ctx: pd.DataFrame()
+        scorer.labour_unions.read_or_process = lambda ctx: pd.DataFrame()
         return scorer.population(None)
 
     def test_a_middle_name_no_longer_hides_a_person(self):
