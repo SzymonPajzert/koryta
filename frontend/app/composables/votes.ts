@@ -158,6 +158,7 @@ const scoreModelLabels: Record<string, string> = {
   "pipeline-succession": "Następca na stanowisku",
   "pipeline-capture": "Przejęta instytucja",
   "pipeline-facts": "Artykuły w bazie",
+  "pipeline-locality": "Posada w miejscu kandydowania",
 };
 
 /** A readable name for the model behind one pipeline vote. */
