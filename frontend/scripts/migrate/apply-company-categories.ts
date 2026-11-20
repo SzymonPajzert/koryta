@@ -4,7 +4,7 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { asArray } from "../../shared/model";
 import {
   companyCategories,
-  withOwnersFrom,
+  withRegisterFactsFrom,
 } from "../../shared/companyCategories";
 
 /**
@@ -42,7 +42,7 @@ import {
  *     them; this is the same contract `/api/ingest/company` follows, and like
  *     it, this still brings the owner in line there: „Skarb Państwa” comes
  *     from Prokuratoria's list, not from anybody's reading of the company
- *     (see `withOwnersFrom`).
+ *     (see `withRegisterFactsFrom`).
  *   - write a company whose stored set already matches. Re-running when nothing
  *     changed writes nothing.
  *   - invent a category. A value the site does not offer is reported and
@@ -198,7 +198,7 @@ async function main() {
       // Only the owner is taken from the file, and an owner is a value the
       // site knows, so there is nothing unknown to check for here.
       stats.manual++;
-      target = withOwnersFrom(stored, derived);
+      target = withRegisterFactsFrom(stored, derived);
     } else {
       const unknown = derived.filter((value) => !KNOWN_CATEGORIES.has(value));
       if (unknown.length > 0) {

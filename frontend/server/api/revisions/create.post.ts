@@ -9,7 +9,7 @@ import {
   withSeededNodeStats,
 } from "~~/server/utils/revisions";
 import { asArray, revisionIsPending } from "~~/shared/model";
-import { withOwnersFrom } from "~~/shared/companyCategories";
+import { withRegisterFactsFrom } from "~~/shared/companyCategories";
 import {
   editSchemas,
   proposableNodeTypes,
@@ -83,12 +83,13 @@ export default defineEventHandler(async (event) => {
     // has to pin the field just as firmly as a non-empty one.
     //
     // What it pins is the sectors. The owner, „Skarb Państwa”, is
-    // Prokuratoria's list's to say, so a proposal keeps whatever the entry
-    // carries now, and what it says on the subject is dropped. The form no
+    // Prokuratoria's list's to say, and the status, „W likwidacji lub
+    // upadłości”, the register's, so a proposal keeps whatever the entry carries now, and what
+    // it says on the subject is dropped. The form no
     // longer offers the value; this is what holds for a tab opened before it
     // stopped, or a request made by hand.
     if (dataFields.categories !== undefined) {
-      dataFields.categories = withOwnersFrom(
+      dataFields.categories = withRegisterFactsFrom(
         dataFields.categories as string[],
         asArray<string>(baseFields.categories as string[] | undefined),
       );

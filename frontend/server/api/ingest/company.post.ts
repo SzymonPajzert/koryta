@@ -11,7 +11,7 @@ import {
   type CompanyRequest as Request,
 } from "#shared/api";
 import { asArray, pageIsPublic, type EdgeType } from "#shared/model";
-import { withOwnersFrom } from "#shared/companyCategories";
+import { withRegisterFactsFrom } from "#shared/companyCategories";
 import { edgeDocumentId, findEdge } from "~~/server/utils/edges";
 
 /** The site's „Skarb Państwa" node.
@@ -82,11 +82,12 @@ export default defineEventHandler(async (event) => {
   // Prokuratoria's list, which is no less right on a page somebody has edited,
   // so the payload's owner replaces the stored one even there - PGE was pinned
   // to „Energetyka” by hand before the category existed, and no upload could
-  // have filed it under the Treasury.
+  // have filed it under the Treasury. The same goes for „W likwidacji lub
+  // upadłości”, which the register's name says.
   if (body.categories !== undefined) {
     revisionData.categories =
       revisionData.categoriesSource === "manual"
-        ? withOwnersFrom(
+        ? withRegisterFactsFrom(
             asArray<string>(revisionData.categories as string[] | undefined),
             body.categories,
           )
