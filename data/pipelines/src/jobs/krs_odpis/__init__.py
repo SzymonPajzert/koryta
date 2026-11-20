@@ -2,6 +2,8 @@
 
     koryta_krs_odpis                       # the companies ScrapeRejestrIO lists
     koryta_krs_odpis --krs-file todo.tsv   # KRS numbers, one a line, TAB P|S optional
+    koryta_krs_odpis --labour-unions       # the trade unions LabourUnions ties
+                                           # to a public company
     koryta_krs_odpis --graph --changed-since 2026-09-25
                                            # every company the pipelines know that
                                            # the bulletin names since that day
@@ -92,6 +94,7 @@ from jobs.krs_odpis.plan import (
     Plan,
     changed_since,
     from_graph,
+    from_labour_unions,
     from_queries,
     joined,
     owed_by_the_queue,
@@ -103,6 +106,7 @@ from jobs.krs_odpis.plan import (
 )
 from scrapers.krs import odpis_files
 from scrapers.krs.columns import padded_krs
+from scrapers.krs.labour_unions import LabourUnions, attached_unions
 from scrapers.krs.list import CompaniesKRS
 from scrapers.krs.odpis_attempts import (
     RUN_BUCKET,
@@ -175,6 +179,12 @@ def parser() -> argparse.ArgumentParser:
         "--graph",
         action="store_true",
         help="Ask about the companies CompaniesKRS knows, the public ones first.",
+    )
+    source.add_argument(
+        "--labour-unions",
+        action="store_true",
+        help="Ask about the trade unions LabourUnions ties to a public company: "
+        "their boards are what says a person works there.",
     )
     parser.add_argument(
         "--changed-since",
@@ -344,8 +354,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     # rest of REFRESH_PIPELINES, as the other KRS jobs have it. The policy
     # builds its tree for the first pipeline a run reads and for no other, so
     # on the other routes the bulletin is read before anything else.
-    queue = not (args.krs_file or args.graph)
+    queue = not (args.krs_file or args.graph or args.labour_unions)
     refresh = set(REFRESH_PIPELINES) if queue else {"KRSUpdates"}
+    if args.labour_unions:
+        # Folded from the search log, which grows with every search run.
+        refresh.add("LabourUnions")
     if args.missing or args.queue:
         # The fold of this job's own record, which grows with every run.
         refresh.add("KrsOdpisAttempts")
@@ -367,6 +380,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.graph:
         companies = graph_companies(ctx)
         candidates, source = from_graph(companies), "CompaniesKRS"
+    elif args.labour_unions:
+        unions = attached_unions(LabourUnions().read_or_process(ctx))
+        candidates, source = from_labour_unions(unions), "LabourUnions"
     if args.changed_since:
         candidates = changed_since(candidates, changes, args.changed_since)
         source += f" the bulletin names since {args.changed_since}"

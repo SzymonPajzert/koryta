@@ -116,6 +116,19 @@ def test_the_graph_puts_its_public_companies_first():
     ]
 
 
+def test_the_unions_are_asked_in_register_s():
+    assert [(c.krs, c.reason, c.hint) for c in plan.from_labour_unions([A, B, A])] == [
+        (A, plan.REASON_LABOUR_UNION, "S"),
+        (B, plan.REASON_LABOUR_UNION, "S"),
+    ]
+
+
+def test_the_unions_are_a_source_of_their_own():
+    assert job.parser().parse_args(["--labour-unions"]).labour_unions
+    with pytest.raises(SystemExit):
+        job.parser().parse_args(["--labour-unions", "--graph"])
+
+
 E, F = "0000000047", "0000000053"
 
 

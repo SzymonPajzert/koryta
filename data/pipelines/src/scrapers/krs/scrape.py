@@ -23,6 +23,7 @@ from scrapers.krs.coverage import (
     parse_person_connections_url,
 )
 from scrapers.krs.data import CompaniesHardcoded, PeopleRejestrIOHardcoded
+from scrapers.krs.labour_unions import LabourUnions, attached_unions
 from scrapers.krs.list import WITHOUT_PESEL, CompaniesKRS, PeopleKRS
 from scrapers.krs.odpis_people import PeopleKRSCombined, odpis_days
 from scrapers.krs.people_parsing import is_not_found
@@ -69,6 +70,9 @@ REASON_OWNED = "owned"
 REASON_REFRESH = "refresh"
 REASON_MISSING_NAME = "missing_name"
 REASON_MISSING_REGISTER_ENTRY = "missing_register_entry"
+#: A trade union named after a public company (`LabourUnions`): free, its
+#: register entry is what lets `CompaniesKRS`, and so its people, take it in.
+REASON_LABOUR_UNION = "labour_union"
 REASON_INTERESTING_PERSON = "interesting_person"
 #: The page was published since `PUBLISHED_SINCE`. Its own row rather than
 #: `interesting_person`'s, so the bill says what moving the day back costs.
@@ -88,6 +92,7 @@ REASON_PRECEDENCE = (
     REASON_OWNED,
     REASON_MISSING_NAME,
     REASON_MISSING_REGISTER_ENTRY,
+    REASON_LABOUR_UNION,
     # A vote first: what publishing adds is the people nobody voted for.
     REASON_INTERESTING_PERSON,
     REASON_PUBLISHED_PERSON,
@@ -1148,6 +1153,7 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
     person_coverage: PersonFeedCoverage
     updates: KRSUpdates
     people_combined: PeopleKRSCombined
+    labour_unions: LabourUnions
 
     #: Why each company is in the queue, keyed by KRS id, and why each person
     #: is. Filled by `companies_to_scrape` and `people_to_scrape`, read by
@@ -1396,6 +1402,24 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         )
         return KRSSet(KRS(id=str(krs).zfill(10)) for krs in missing)
 
+    def unions_without_register_entry(self, ctx: Context) -> KRSSet:
+        """The unions `LabourUnions` ties to a public company, never read.
+
+        Asked for free, as `companies_without_register_entry` asks: what a
+        union's entry gives is its name and form, which `CompaniesKRS` needs
+        before `PeopleKRSCombined` takes the board its odpis pełny names. No
+        rejestr.io call is bought for one.
+        """
+        unions = attached_unions(self.labour_unions.read_or_process(ctx))
+        scraped = self.already_scraped.latest_scrapes(ctx)
+        read = set()
+        if not scraped.empty:
+            api_krs = scraped["method"].astype(str).str.startswith("api_krs")
+            read = set(scraped.loc[api_krs, "krs"].astype(str).str.zfill(10))
+        missing = sorted(set(unions) - read)
+        print(f"Labour unions with no register entry: {len(missing)} of {len(unions)}")
+        return KRSSet(KRS(id=krs) for krs in missing)
+
     def companies_without_names(self, ctx: Context) -> KRSSet:
         encountered_companies = self.series_to_set(
             self.people.read_or_process(ctx)["employed_krs"]
@@ -1579,6 +1603,9 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
         missing_entries = self.companies_without_register_entry(ctx)
         for krs in missing_entries:
             self._record_reason(krs.id, REASON_MISSING_REGISTER_ENTRY)
+        unions = self.unions_without_register_entry(ctx)
+        for krs in unions:
+            self._record_reason(krs.id, REASON_LABOUR_UNION)
         people = self.people_to_scrape(ctx)
 
         owed = list(
@@ -1589,7 +1616,7 @@ class ScrapeRejestrIO(Pipeline[RejestrIOQuery]):
                     ctx, self.person_coverage.people_to_refetch(ctx)
                 ),
                 connections=connections,
-                names=missing_names | missing_entries,
+                names=missing_names | missing_entries | unions,
                 people=people,
                 company_reasons=self.company_reasons,
                 person_reasons=self.person_reasons,

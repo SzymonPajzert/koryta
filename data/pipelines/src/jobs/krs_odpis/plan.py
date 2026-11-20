@@ -34,6 +34,8 @@ PLN_PER_CALL = 0.05
 
 REASON_FILE = "krs_file"
 REASON_GRAPH = "graph"
+#: A union `LabourUnions` ties to a public company.
+REASON_LABOUR_UNION = "labour_union"
 #: A company of the graph with no odpis pełny on file (`without_odpis`).
 REASON_NO_ODPIS = "no_odpis"
 
@@ -164,6 +166,14 @@ def from_graph(companies: pd.DataFrame) -> list[Candidate]:
     public = companies.get("is_public", pd.Series(False, index=companies.index))
     ordered = pd.concat([krs[public.eq(True)], krs[~public.eq(True)]])
     return [Candidate(krs=k, reason=REASON_GRAPH) for k in dict.fromkeys(ordered)]
+
+
+def from_labour_unions(unions: Iterable[str]) -> list[Candidate]:
+    """The unions tied to a public company, in register S where unions are."""
+    return [
+        Candidate(krs=krs, reason=REASON_LABOUR_UNION, hint="S")
+        for krs in dict.fromkeys(unions)
+    ]
 
 
 def changed_since(

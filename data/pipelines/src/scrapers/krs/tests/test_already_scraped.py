@@ -277,3 +277,46 @@ def test_a_named_company_with_an_entry_is_not_asked_again():
         missing_register_entries({odpis("P", "2026-07-18"): 4096}, named=(KRS,))
         == set()
     )
+
+
+# ─── trade unions of public companies ──────────────────────
+
+UNION = "0000049978"
+#: Some other company's crawl: a bucket is never empty.
+OTHER = {rejestrio("0000000999", "2026-07-19"): 4096}
+
+
+def unions_owed_an_entry(blobs, unions: dict[str, str | None]) -> set[str]:
+    """What `unions_without_register_entry` asks for: `unions` is each union
+    `LabourUnions` knows, with the public company it is tied to or None."""
+    ctx = Context(
+        io=ListingIO(blobs),
+        rejestr_io=MockRejestrIO(),
+        con=None,  # type: ignore[arg-type]
+        utils=MockUtils(),
+        web=MockWeb(),
+        nlp=MockNLP(),
+        refresh_policy=ProcessPolicy.with_default(),
+    )
+    on_file = KRSAlreadyScraped().process(ctx)
+    pipeline = ScrapeRejestrIO()
+    pipeline.already_scraped.read_or_process = lambda _ctx: on_file  # type: ignore[method-assign]
+    pipeline.labour_unions.read_or_process = lambda _ctx: pd.DataFrame(  # type: ignore[method-assign]
+        {"krs": list(unions), "employer_krs": list(unions.values())}
+    )
+    return {krs.id for krs in pipeline.unions_without_register_entry(ctx)}
+
+
+def test_a_union_of_a_public_company_is_asked_for_its_entry():
+    assert unions_owed_an_entry(OTHER, {UNION: "0000012900"}) == {UNION}
+
+
+def test_a_union_whose_entry_is_on_file_is_not_asked_again():
+    assert (
+        unions_owed_an_entry({odpis("S", "2026-11-20"): 2048}, {KRS: "0000012900"})
+        == set()
+    )
+
+
+def test_a_union_of_no_public_company_is_not_asked():
+    assert unions_owed_an_entry(OTHER, {UNION: None}) == set()
