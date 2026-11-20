@@ -62,7 +62,7 @@ export const QA_ITEMS: QaItem[] = [
     id: "wynik-modeli-to-szansa-publikacji",
     title: "Wynik modeli to szansa publikacji",
     description:
-      "Część wyniku od modeli to teraz szansa, że osobę opublikujemy: 5 od 30%, 4 od 10%, 3 od 3%, 2 od 1%. Pozostałe modele zostają w „Skąd ten wynik” jako powody. Działa po nocnym przeliczeniu.",
+      "Część wyniku od modeli to teraz szansa, że sprawdzenie osoby skończy się publikacją: 5 od 90%, 4 od 75%, 3 od 50%, 2 od 15%. Pozostałe modele zostają w „Skąd ten wynik” jako powody. Działa po nocnym przeliczeniu.",
     steps: [
       "Otwórz link i kliknij wynik osoby: pierwsza na liście jest „Szansa publikacji” z przedziałem, a pod listą „Do wyniku liczy się szansa publikacji”.",
     ],

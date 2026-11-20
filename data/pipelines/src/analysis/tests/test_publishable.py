@@ -213,18 +213,8 @@ class TestChance:
         )
 
     def test_bands_start_at_fixed_chances(self):
-        assert [
-            chance_band(v) for v in (0.5, 0.3, 0.29, 0.1, 0.05, 0.01, 0.009, 0.0)
-        ] == [
-            5,
-            5,
-            4,
-            4,
-            3,
-            2,
-            1,
-            1,
-        ]
+        chances = (0.95, 0.9, 0.89, 0.75, 0.6, 0.5, 0.2, 0.15, 0.14, 0.0)
+        assert [chance_band(v) for v in chances] == [5, 5, 4, 4, 3, 3, 2, 2, 1, 1]
 
 
 class TestModel:
@@ -262,7 +252,7 @@ class TestModel:
 
     def test_bands_by_the_chance_not_by_rank(self):
         # Rank banding would give the only person scored the top band.
-        assert self.scorer().bands({"Beata": 0.02}) == {"Beata": 2}
+        assert self.scorer().bands({"Beata": 0.2}) == {"Beata": 2}
 
     def test_it_is_one_of_the_nights_models(self):
         assert PeopleScoresPublishable in PEOPLE_SCORE_MODELS
