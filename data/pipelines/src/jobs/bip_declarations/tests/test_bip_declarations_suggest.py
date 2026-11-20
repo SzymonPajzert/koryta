@@ -1,0 +1,487 @@
+"""Suggestions for printed employer bands: made-up bodies in made-up towns, and
+bands written as OCR reads them. No real declaration, name or public body."""
+
+from __future__ import annotations
+
+import re
+
+import pandas as pd
+import pytest
+
+from jobs.bip_declarations import suggest as module
+from jobs.bip_declarations.suggest import (
+    EMPLOYEE_ROLE,
+    MAX_SUGGESTIONS,
+    OTHER_ROLE,
+    ROLES_FILE,
+    BodyIndex,
+    Suggestion,
+    read_bodies,
+    read_roles,
+    suggest,
+    valid_regon,
+)
+from scrapers.map.offices import (
+    GMINA_OFFICE,
+    MARSHAL_OFFICE,
+    POWIAT_OFFICE,
+    VOIVODE_OFFICE,
+)
+
+SHARED = ROLES_FILE.parent / "declarationEmployment.ts"
+
+
+def regon(n: int) -> str:
+    """A nine-digit REGON with its check digit."""
+    stem = f"{n:08d}"
+    remainder = sum(int(d) * w for d, w in zip(stem, (8, 9, 2, 3, 4, 5, 6, 7))) % 11
+    return stem + str(0 if remainder == 10 else remainder)
+
+
+# Województwo 01 and its units do not exist: powiat 0101 with the gminy Testowo
+# (0101012), Przykładowo (0101023) and Testowice (0101032); Innowo (0202013)
+# and Lipowo (0303013) far from it.
+ROWS = {
+    "ug_testowo": ("Urząd Gminy Testowo", GMINA_OFFICE, "0101012"),
+    "um_przykladowo": ("Urząd Miejski w Przykładowie", GMINA_OFFICE, "0101023"),
+    "ug_testowice": ("Urząd Gminy Testowice", GMINA_OFFICE, "0101032"),
+    "starostwo": ("Starostwo Powiatowe w Przykładowie", POWIAT_OFFICE, "0101"),
+    "marshal": ("Urząd Marszałkowski Województwa Testowego", MARSHAL_OFFICE, "01"),
+    "voivode": ("Testowy Urząd Wojewódzki w Przykładowie", VOIVODE_OFFICE, "01"),
+    "sp5": (
+        "Szkoła Podstawowa nr 5 im. Jana Testowego w Przykładowie",
+        "szkoły podstawowe",
+        "0101023",
+    ),
+    "sp5_innowo": ("Szkoła Podstawowa nr 5 w Innowie", "szkoły podstawowe", "0202013"),
+    "gops": (
+        "Gminny Ośrodek Pomocy Społecznej w Testowie",
+        "ośrodki pomocy społecznej",
+        "0101012",
+    ),
+    "zgk_testowo": (
+        "Zakład Gospodarki Komunalnej (Testowo)",
+        "zakłady usług komunalnych",
+        "0101012",
+    ),
+    "zgk_innowo": (
+        "Zakład Gospodarki Komunalnej (Innowo)",
+        "zakłady usług komunalnych",
+        "0202013",
+    ),
+    "zgk_lipowo": (
+        "Zakład Gospodarki Komunalnej spółka z ograniczoną odpowiedzialnością (Lipowo)",
+        "zakłady usług komunalnych",
+        "0303013",
+    ),
+    "odr": (
+        "Ośrodek Doradztwa Rolniczego w Testowie",
+        "ośrodki doradztwa rolniczego",
+        "01",
+    ),
+    "culture": ("Dom Kultury (Testowo)", "instytucje kultury", "0101012"),
+    "ministry": ("Ministerstwo Testowych Spraw (Warszawa)", "ministerstwa", "1465108"),
+    "forests": (
+        "Testowa Dyrekcja Generalna Lasów (Warszawa)",
+        "instytucje centralne",
+        "1465108",
+    ),
+    "pup": ("Powiatowy Urząd Pracy w Przykładowie", "urzędy pracy", "0101"),
+}
+REGONS = {key: regon(10_000_000 + i) for i, key in enumerate(ROWS)}
+
+
+def table() -> list[dict[str, str | None]]:
+    rows: list[dict[str, str | None]] = [
+        {
+            "regon": REGONS[key],
+            "name": name,
+            "kind": kind,
+            "teryt": teryt,
+            "seat": teryt if len(teryt) == 7 else "0101023",
+            "ownership": "113",
+        }
+        for key, (name, kind, teryt) in ROWS.items()
+    ]
+    rows += [
+        # In private hands, whatever the catalogue files it under.
+        {
+            "regon": regon(20_000_001),
+            "name": "Szpital Testowy w Testowie",
+            "kind": "podmioty lecznicze",
+            "teryt": "0101012",
+            "seat": "0101012",
+            "ownership": "215",
+        },
+        # A REGON without its check digit names nobody.
+        {
+            "regon": "123456789",
+            "name": "Biblioteka Publiczna w Testowie",
+            "kind": "biblioteki",
+            "teryt": "0101012",
+            "seat": "0101012",
+            "ownership": "113",
+        },
+    ]
+    return rows
+
+
+@pytest.fixture(scope="module")
+def bodies() -> BodyIndex:
+    return BodyIndex(table())
+
+
+def rows(bodies: BodyIndex, lines: list[str], unit: str) -> list[tuple[str, str]]:
+    """What is suggested, as (key in ROWS, role)."""
+    names = {number: key for key, number in REGONS.items()}
+    return [
+        (names.get(s.regon, s.regon), s.role)
+        for s in suggest(lines, unit, bodies, typed=True)
+    ]
+
+
+# -- parity with the site ------------------------------------------------------------
+
+
+def test_the_site_reads_the_same_chips_file():
+    source = SHARED.read_text(encoding="utf-8")
+    assert f'import rolesFile from "./{ROLES_FILE.name}";' in source
+    assert re.search(rf"export const MAX_SUGGESTIONS = {MAX_SUGGESTIONS};", source)
+    assert f'export const OTHER_ROLE = "{OTHER_ROLE}";' in source
+
+
+def test_the_chips_are_the_files():
+    roles = read_roles()
+    ids = [chip.id for chip in roles.chips]
+    assert len(ids) == len(set(ids))
+    assert roles.chip(OTHER_ROLE) is not None
+    assert roles.chip(OTHER_ROLE).family is None
+    employee = roles.chip(EMPLOYEE_ROLE)
+    assert employee is not None and employee.kind == "staff"
+    assert {chip.kind for chip in roles.chips} == {
+        "elected",
+        "executive",
+        "managerial",
+        "staff",
+        None,
+    }
+
+
+# The same table as `roleFamilyOf` in frontend/tests/shared/
+# declarationEmployment.test.ts: both read the families' patterns from the one
+# file, and Python's regular expressions have to read them as JavaScript's do.
+@pytest.mark.parametrize(
+    ("name", "family"),
+    [
+        ("prezes", "management_board"),
+        ("Prezes Zarządu", "management_board"),
+        ("zastępca prezesa", "management_board"),
+        ("Zarząd", "management_board"),
+        ("członek zarządu, CFO", "management_board"),
+        ("dyrektor", "director"),
+        ("p.o. dyrektora", "director"),
+        ("pełniący obowiązki dyrektora", "director"),
+        ("dyrektor Wydziału Kontroli i Skarg", "director"),
+        ("Dyrektor Szkoły im. Prezydenta Miasta", "director"),
+        ("z/ca dyrektora", "deputy_director"),
+        ("wicedyrektor", "deputy_director"),
+        ("Zastępca Wójta", "deputy_mayor"),
+        ("Z-ca Burmistrza", "deputy_mayor"),
+        ("wiceprezydent", "deputy_mayor"),
+        ("wójt gminy", "mayor"),
+        ("Rada Nadzorcza", "supervisory_board"),
+        ("członek rady nadzorczej", "supervisory_board"),
+        ("prezes rady nadzorczej", "supervisory_board"),
+        ("Rada Społeczna", "supervisory_board"),
+        ("Prokurent", "commercial_proxy"),
+        ("Pełnomocnik", "attorney"),
+        ("wicestarosta", "office_deputy"),
+        ("sekretarz stanu", "office_deputy"),
+        ("starosta powiatu", "office_head"),
+        ("sekretarz powiatu", "secretary"),
+        ("naczelnik wydziału", "manager"),
+        ("zastępca naczelnika wydziału", "manager"),
+        ("główny specjalista", "staff"),
+        ("", None),
+        ("radny", None),
+        ("przewodniczący rady", None),
+        ("sekretarz rady", None),
+        ("członek", None),
+        ("ministerstwo", None),
+        ("zlecenie dla", None),
+        (None, None),
+    ],
+)
+def test_titles_fold_into_the_sites_families(name, family):
+    assert read_roles().family(name) == family
+
+
+def test_every_chip_is_named_by_its_own_label():
+    """What the machine reads a chip's label as is that chip, so every chip a
+    reader can pick is one the machine can suggest."""
+    for chip in read_roles().chips:
+        if chip.family is not None:
+            assert read_roles().read(chip.label) == (chip.family, chip), chip.id
+
+
+@pytest.mark.parametrize(
+    ("title", "chip"),
+    [
+        ("Z-ca Naczelnika Wydziału Inwestycji", "naczelnik"),
+        ("p.o. Zastępcy Dyrektora Wydziału", "zastepca_dyrektora"),
+        ("zastępca prezesa", "wiceprezes"),
+        ("wicewójt", "zastepca_wojta"),
+        ("Starszy Inspektor", EMPLOYEE_ROLE),
+        ("nauczycielka", "nauczyciel"),
+        ("Przewodnicząca Rady Nadzorczej", "rada_nadzorcza"),
+        ("komendant powiatowy", "dyrektor"),
+        ("podsekretarz stanu", None),
+    ],
+)
+def test_a_title_reads_as_the_chip_a_reader_would_pick(title, chip):
+    _, found = read_roles().read(title)
+    assert (found.id if found else None) == chip
+
+
+def test_a_regon_checks_as_the_site_checks_it():
+    # The fixtures of frontend/tests/shared/declarationEmployment.test.ts.
+    assert valid_regon("123456785")
+    assert valid_regon("987654326")
+    assert valid_regon("12345678500002")
+    assert not valid_regon("123456789")
+    assert not valid_regon("12345678500003")
+    assert not valid_regon("1234567")
+
+
+def test_the_pipelines_table_reads_without_its_gaps(monkeypatch):
+    """A row the table has no seat or teryt for is placed nowhere, not in a
+    unit called "nan"."""
+    frame = pd.DataFrame(table()).astype(object)
+    frame.loc[0, ["seat", "teryt", "ownership"]] = float("nan")
+    monkeypatch.setattr(module.PublicBodies, "read_or_process", lambda self, ctx: frame)
+    index = read_bodies(ctx=None)  # type: ignore[arg-type]
+    assert index.bodies[0].regon == REGONS["ug_testowo"]
+    assert (index.bodies[0].teryt, index.bodies[0].seat) == ("", "")
+    assert len(index.bodies) == len(ROWS)
+
+
+def test_a_suggestion_is_what_the_site_takes():
+    row = Suggestion(REGONS["starostwo"], "wicestarosta")
+    assert row.payload() == {
+        "employer": {"regon": REGONS["starostwo"]},
+        "role": "wicestarosta",
+    }
+
+
+# -- reading the band ------------------------------------------------------------------
+
+
+def test_a_body_and_the_title_after_it(bodies):
+    band = ["Urząd Miejski w Przykładowie - Naczelnik Wydziału Testów"]
+    assert rows(bodies, band, "010102") == [("um_przykladowo", "naczelnik")]
+
+
+def test_ocr_squashed_and_misread_lines_still_name_the_body(bodies):
+    # ł read as t, spaces gone, the head in the locative.
+    band = ["ZatrudnionawUrzedzieMiejskimwPrzyktadowie-NaczelnikWydziatu"]
+    assert rows(bodies, band, "010102") == [("um_przykladowo", "naczelnik")]
+
+
+def test_a_title_before_the_body_it_runs_into(bodies):
+    band = ["Pracownik Urzędu Gminy Testowo"]
+    assert rows(bodies, band, "010101") == [("ug_testowo", EMPLOYEE_ROLE)]
+    band = [
+        "P.O. DYREKTORA SZKOŁY PODSTAWOWEJ NR 5 IM. JANA TESTOWEGO",
+        "W PRZYKŁADOWIE",
+    ]
+    assert rows(bodies, band, "010102") == [("sp5", "dyrektor")]
+
+
+def test_titles_glued_together_are_read_apart(bodies):
+    band = ["URZADGMINYTESTOWO", "ZASTEPCAWOJTAGMINYTESTOWO"]
+    assert rows(bodies, band, "010101") == [("ug_testowo", "zastepca_wojta")]
+    band = ["Powiatowy Urząd Pracy w Przykładowie - Zastępca", "Dyrektora Urzędu"]
+    assert rows(bodies, band, "010102") == [("pup", "zastepca_dyrektora")]
+    band = ["Powiatowy Urząd Pracy w Przykładowie, na stanowisku Z-cy Dyrektora"]
+    assert rows(bodies, band, "010102") == [("pup", "zastepca_dyrektora")]
+
+
+def test_a_gmina_ending_in_wice_is_no_wicewojt(bodies):
+    """A gmina ending in „-wice” run into „Wójt”: the pilot taught it."""
+    assert rows(bodies, ["Urzad GminyTestowice;Wojt"], "010103") == [
+        ("ug_testowice", "wojt")
+    ]
+    assert rows(bodies, ["UrzadGminyTestowice", "TestowiceWójt"], "010103") == [
+        ("ug_testowice", "wojt")
+    ]
+
+
+def test_a_title_alone_names_its_own_office(bodies):
+    assert rows(bodies, ["W6jt Gminy Testowo"], "010101") == [("ug_testowo", "wojt")]
+    band = ["Wicestarosta Przykładowski, Radny Powiatu Przykładowskiego"]
+    assert rows(bodies, band, "010100") == [("starostwo", "wicestarosta")]
+    assert rows(bodies, ["Sekretarz Powiatu"], "010101") == [("starostwo", "sekretarz")]
+    assert rows(bodies, ["Marszałek Województwa Testowego"], "010000") == [
+        ("marshal", "marszalek")
+    ]
+    assert rows(bodies, ["Doradca Wojewody Testowego"], "010000") == [
+        ("voivode", "doradca")
+    ]
+
+
+def test_a_title_alone_names_no_office_it_cannot_tell(bodies):
+    # Another gmina's wójt; a sekretarz of no named office; a prezydent inside
+    # an institution's name; a manager's title.
+    assert rows(bodies, ["Wójt Gminy Innowo"], "010101") == []
+    assert rows(bodies, ["Sekretarz"], "010101") == []
+    assert (
+        rows(bodies, ["Kancelaria Prezydenta Testowej - specjalista"], "010102") == []
+    )
+    assert rows(bodies, ["Kierownik Biura Powiatowego w Testowie"], "010101") == []
+
+
+def test_an_office_title_is_not_held_at_another_body(bodies):
+    band = [
+        "Testowa Dyrekcja Generalna Lasów, Członek Zarządu",
+        "Powiatu Przykładowskiego",
+    ]
+    assert rows(bodies, band, "010100") == [("starostwo", "czlonek_zarzadu")]
+
+
+def test_the_mandate_is_no_post(bodies):
+    assert rows(bodies, ["Radny Rady Gminy Testowo"], "010101") == []
+    # The council meets at the starostwo: its address, not a workplace.
+    band = ["StarostwoPowiatowewPrzykladowiePlacTestowy 1RadnyRadyPowiatu,"]
+    assert rows(bodies, band, "010100") == []
+    band = ["umowa zlecenia - Urząd Gminy Testowo"]
+    assert rows(bodies, band, "010101") == []
+
+
+def test_an_unknown_title_after_na_stanowisku_takes_its_bodys_place(bodies):
+    band = [
+        "Zatrudniony w Urzędzie Miejskim w Przykładowie na stanowisku leśniczego,",
+        "od 2025 r. w Testowej Fundacji na stanowisku głównego specjalisty",
+    ]
+    assert rows(bodies, band, "010102") == []
+
+
+def test_a_name_without_its_town_needs_the_town_or_the_unit(bodies):
+    band = ["ZAKLADGOSPODARKIKOMUNALNEJWTESTOWIE-KIEROWNIK"]
+    assert rows(bodies, band, "090901") == [("zgk_testowo", "kierownik")]
+    band = ["Zakład Gospodarki Komunalnej - kierownik"]
+    assert rows(bodies, band, "010101") == [("zgk_testowo", "kierownik")]
+    # Nothing places it: the three are as likely.
+    assert rows(bodies, band, "090901") == []
+
+
+def test_a_street_is_no_town(bodies):
+    band = ["Zakład Gospodarki Komunalnej w Testowie, ul. Lipowa 7 - kierownik"]
+    assert rows(bodies, band, "090901") == [("zgk_testowo", "kierownik")]
+    band = ["Zakład Gospodarki Komunalnej, ul.Lipowo7 - kierownik"]
+    assert rows(bodies, band, "090901") == []
+
+
+def test_a_name_without_its_town_has_twelve_letters_or_more(bodies):
+    """„Dom Kultury” is in every town."""
+    assert rows(bodies, ["Dom Kultury w Testowie - dyrektor"], "010101") == []
+
+
+def test_a_national_body_is_named_alone_but_not_by_its_branch(bodies):
+    band = ["Ministerstwo Testowych Spraw - starszy specjalista"]
+    assert rows(bodies, band, "090901") == [("ministry", EMPLOYEE_ROLE)]
+    band = ["Ministerstwo Testowych Spraw, Kierownik Biura Powiatowego"]
+    assert rows(bodies, band, "090901") == []
+
+
+def test_a_shared_name_is_the_one_at_the_declarants_unit(bodies):
+    band = ["SZKOLA PODSTAWOWA NR 5-STARSZY INSPEKTOR"]
+    assert rows(bodies, band, "010102") == [("sp5", EMPLOYEE_ROLE)]
+    assert rows(bodies, band, "020201") == [("sp5_innowo", EMPLOYEE_ROLE)]
+    # „nr 5” is not in „nr 51”.
+    assert rows(bodies, ["Szkoła Podstawowa nr 51 - nauczyciel"], "010102") == []
+
+
+def test_a_short_key_only_as_a_word(bodies):
+    """„odr” is in „odrębny”, „pec” in „specjalista”."""
+    band = ["ODR w Testowie - dyrektor"]
+    assert rows(bodies, band, "010101") == [("odr", "dyrektor")]
+    assert rows(bodies, ["Kodr w Testowie - dyrektor"], "010101") == []
+    band = ["GOPS w Testowie - starszy pracownik socjalny"]
+    assert rows(bodies, band, "010101") == [("gops", EMPLOYEE_ROLE)]
+
+
+def test_stamps_and_footers_are_never_suggested(bodies):
+    assert rows(bodies, ["www.signform.pl Sp. z o.o."], "010101") == []
+    band = [
+        "Urząd Miejski w Przykładowie - Inspektor",
+        "Z up. STAROSTY",
+        "mgr inż. Jan Testowy",
+        "SEKRETARZ POWIATU",
+    ]
+    assert rows(bodies, band, "010102") == [("um_przykladowo", EMPLOYEE_ROLE)]
+    band = ["Wpłynęło dnia 30.04.2025", "Urząd Gminy Testowo - Wójt"]
+    assert rows(bodies, band, "010101") == [("ug_testowo", "wojt")]
+
+
+def test_private_employers_are_never_suggested(bodies):
+    band = ["Niepubliczna Szkoła Podstawowa nr 5 im. Jana Testowego w Przykładowie"]
+    assert rows(bodies, [*band, "nauczyciel"], "010102") == []
+    assert rows(bodies, ["Szpital Testowy w Testowie - lekarz"], "010101") == []
+    assert rows(bodies, ["Testowa Sp. z o.o. - prezes zarządu"], "010101") == []
+    # A REGON without its check digit is never sent.
+    assert rows(bodies, ["Biblioteka Publiczna w Testowie - kierownik"], "010101") == []
+
+
+def test_a_school_secretary_is_no_sekretarz(bodies):
+    """The chips' families leave out „sekretarz szkoły”, also as OCR reads it."""
+    band = [
+        "Sekretarz Szkoty w Szkole Podstawowej nr 5 im. Jana Testowego w Przykładowie"
+    ]
+    assert rows(bodies, band, "010102") == []
+
+
+def test_an_executive_title_of_offices_only_is_held_at_one(bodies):
+    """A „doradca zawodowy” at a PUP is no wojewoda's adviser, a school's
+    sekretarz no gmina's."""
+    band = ["Powiatowy Urząd Pracy w Przykładowie - doradca zawodowy"]
+    assert rows(bodies, band, "010102") == []
+    band = ["Szkoła Podstawowa nr 5 im. Jana Testowego w Przykładowie - sekretarz"]
+    assert rows(bodies, band, "010102") == []
+    band = ["Urząd Gminy Testowice - Sekretarz Gminy"]
+    assert rows(bodies, band, "010103") == [("ug_testowice", "sekretarz")]
+
+
+def test_the_declarants_unit_first_and_four_at_most(bodies):
+    band = [
+        "Powiatowy Urząd Pracy w Przykładowie - specjalista",
+        "Ośrodek Doradztwa Rolniczego w Testowie - specjalista",
+        "Szkoła Podstawowa nr 5 w Innowie - nauczyciel",
+        "Urząd Gminy Testowice - Sekretarz Gminy",
+        "GOPS w Testowie - kierownik",
+        "Urząd Gminy Testowo - inspektor",
+    ]
+    found = rows(bodies, band, "010101")
+    assert len(found) == MAX_SUGGESTIONS
+    assert found == [
+        ("pup", EMPLOYEE_ROLE),
+        ("odr", EMPLOYEE_ROLE),
+        ("gops", "kierownik"),
+        ("ug_testowo", EMPLOYEE_ROLE),
+    ]
+
+
+def test_a_handwritten_band_gets_none(bodies):
+    band = ["Urząd Miejski w Przykładowie - Naczelnik Wydziału Testów"]
+    assert suggest(band, "010102", bodies, typed=False) == []
+
+
+def test_suggestions_are_chips_of_the_file(bodies):
+    chips = {chip.id for chip in read_roles().chips} - {OTHER_ROLE}
+    band = [
+        "Urząd Miejski w Przykładowie - Naczelnik Wydziału Testów",
+        "Wicestarosta Przykładowski",
+        "GOPS w Testowie - starszy pracownik socjalny",
+    ]
+    found = suggest(band, "010102", bodies, typed=True)
+    assert found and all(row.role in chips for row in found)
+    assert all(valid_regon(row.regon) for row in found)
