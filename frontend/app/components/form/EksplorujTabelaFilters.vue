@@ -147,9 +147,7 @@
            reach it with a plain mouse wheel. Wrapping costs 19px in that state
            and keeps every filter readable, which is the whole job of a chip
            that stands in for a control the reader can no longer see. -->
-      <div
-        class="d-flex flex-wrap align-center ga-1 flex-1-1-0 tabela-query-bar__rail"
-      >
+      <div class="d-flex flex-wrap align-center ga-1 tabela-query-bar__rail">
         <!-- `close-label` because VChip names its x „Close”, in English,
              whatever the page is written in: the default is a Vuetify locale
              key and this app ships no Polish translation for it. Spelled out
@@ -257,12 +255,13 @@
         </v-list>
       </v-menu>
 
-      <ExploreShareQuery
-        v-if="showShare"
-        :query="query"
-        :lookup="lookup"
-        @copied="emit('share')"
-      />
+      <div v-if="showShare" class="tabela-query-bar__share">
+        <ExploreShareQuery
+          :query="query"
+          :lookup="lookup"
+          @copied="emit('share')"
+        />
+      </div>
     </div>
 
     <!-- Band 2: the work row, for a reader who is signed in and can act on it.
@@ -861,6 +860,7 @@ function clearAll() {
    content, which would make a long chip push the count and the sort button off
    the bar instead of moving itself to the next line. */
 .tabela-query-bar__rail {
+  flex: 1 1 0;
   min-width: 0;
 }
 
@@ -879,8 +879,25 @@ function clearAll() {
   .tabela-query-bar__title {
     flex: 1 1 100%;
   }
+  /* Bar the share button, which goes up beside it: on the controls' line it
+     made the line too long for a phone, and wrapped onto one of its own. */
+  .tabela-query-bar__title:has(~ .tabela-query-bar__share) {
+    flex-basis: calc(100% - 48px);
+    order: -2;
+  }
+  .tabela-query-bar__title ~ .tabela-query-bar__share {
+    order: -1;
+  }
+  /* And the chips a line of their own under the controls. Beside them they
+     had what „Filtry”, the count and the sort button left, and were squeezed
+     to their icons. */
+  .tabela-query-bar__rail {
+    flex-basis: 100%;
+    order: 1;
+  }
   .tabela-query-bar__count {
     min-width: 0;
+    margin-left: auto;
   }
 }
 
