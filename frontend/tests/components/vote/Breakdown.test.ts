@@ -67,6 +67,28 @@ describe("VoteBreakdown", () => {
     expect(overlayText()).toContain("tylko najwyższa ocena modelu (4)");
   });
 
+  it("counts the publication chance, listed first as a chance", async () => {
+    // Decision on 2026-11-20: the chance a person gets published is the
+    // models' part of the total, and a 5 from another model is a reason.
+    const cell = await mount({
+      interesting: 3,
+      humanVoted: true,
+      humanCount: 1,
+      models: { "pipeline-pagerank": 5, "pipeline-publishable": 2 },
+    });
+
+    await cell.find("button").trigger("click");
+
+    const text = overlayText();
+    expect(text).toContain("Do wyniku liczy się szansa publikacji (2)");
+    expect(text.indexOf("Szansa publikacji")).toBeLessThan(
+      text.indexOf("Sieć powiązań"),
+    );
+    expect(text).toContain("szansa 1-3%");
+    // 3 total less the chance's 2, not less pagerank's 5.
+    expect(text).toContain("+1");
+  });
+
   it("counts the people who voted", async () => {
     const cell = await mount({
       interesting: 7,

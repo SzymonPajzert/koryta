@@ -60,7 +60,7 @@
          prints the title and nothing that says what the number counts. -->
     <template #[`header.stats.votes.interesting`]="{ column }">
       <ExploreTableColumnHeader
-        tooltip="Suma głosów społeczności i najwyższej oceny modelu. Kliknij liczbę, żeby zobaczyć, ile modeli oceniło tę osobę i ile osób na nią zagłosowało. W menu kolumny można sortować także po liczbie notatek i po liczbie faktów wydobytych z artykułów."
+        tooltip="Suma głosów społeczności i szansy publikacji według modeli. Kliknij liczbę, żeby zobaczyć, które modele oceniły tę osobę i ile osób na nią zagłosowało. W menu kolumny można sortować także po liczbie notatek i po liczbie faktów wydobytych z artykułów."
         :column="column"
         :sort-by="sortBy"
         :sort-options="VOTES_SORT_OPTIONS"
