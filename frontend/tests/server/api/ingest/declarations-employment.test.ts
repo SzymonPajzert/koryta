@@ -380,6 +380,13 @@ const STATS = "stats/declaration_employment";
 const HASH = "c".repeat(64);
 const NEW_HASH = "e".repeat(64);
 const REGON = "123456785";
+/** What the job's `upload --employment` sends, as its own test writes it:
+ * her printed declaration and an older handwritten one. */
+const UPLOAD_FILE =
+  "data/pipelines/src/jobs/bip_declarations/tests/employment_upload.json";
+const PIPELINE_UPLOAD = existsSync(UPLOAD_FILE)
+  ? resolve(UPLOAD_FILE)
+  : resolve("..", UPLOAD_FILE);
 
 /** A PNG header with a size, which is all the endpoint looks at. */
 function png(width: number, height: number, padding = 0): string {
@@ -587,6 +594,27 @@ describe("api/ingest/declarations/employment", () => {
     expect(read(STATS)).toMatchObject({
       employer: { open: 1 },
       vii: { open: 1 },
+    });
+  });
+
+  it("stores what the job sends: the newest declaration open, an older one later", async () => {
+    const sent = JSON.parse(readFileSync(PIPELINE_UPLOAD, "utf8")) as Data & {
+      items: { id: string }[];
+    };
+    const [newest, older] = sent.items.map((each) => each.id);
+    expect(newest).toBe(ITEM);
+    // Her older declaration, its date read and matched to her page too.
+    const OLDER = `declarationExtracts/${older}`;
+    put(OLDER, { ...read(CROP)!, id: older, sha256: older!.slice(0, 64) });
+
+    const result = await send(sent);
+
+    expect(result).toMatchObject({ bands: { created: 2 }, skipped: [] });
+    expect(band()).toMatchObject({ status: "open", typed: true });
+    expect(read(OLDER)!.employment).toMatchObject({
+      status: "later",
+      typed: false,
+      machine: null,
     });
   });
 
