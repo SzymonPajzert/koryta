@@ -121,7 +121,7 @@
 
         <!-- What happened to the proposals comes before the switches that
              control the mail about them. -->
-        <ProfileMyRevisions />
+        <ProfileMyInteractions />
 
         <v-card class="mb-4" rounded="lg">
           <v-card-title>Powiadomienia o Twoich zmianach</v-card-title>
