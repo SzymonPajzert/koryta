@@ -202,3 +202,32 @@ test("osoba-szkic-oswiadczenia-brak", SLUG, async ({ page }, testInfo) => {
 
   await expectFitsThePhone(page, testInfo);
 });
+
+/** Folded under its line, and still folded when the page is opened again. */
+test("osoba-szkic-oswiadczenia-zwiniete", SLUG, async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const panel = await openDraft(page, waiting, USERS.normal);
+  await picturesIn(panel, 1);
+
+  const toggle = panel.locator("[data-fold-toggle]");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(panel.locator("[data-fold-body]")).toHaveCount(0);
+
+  await readyForElementShot(page);
+  await expect(cardOf(panel)).toHaveScreenshot(
+    "osoba-szkic-oswiadczenia-zwiniete.png",
+  );
+
+  // Kept for this page: opened again, it is folded from the start.
+  await openInApp(page, draftPerson.path);
+  const again = page.getByTestId("person-draft-declarations");
+  await expect(again).toBeVisible({ timeout: 30_000 });
+  await expect(again.locator("[data-fold-toggle]")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+
+  await expectFitsThePhone(page, testInfo);
+});

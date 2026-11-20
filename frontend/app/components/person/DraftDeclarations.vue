@@ -12,133 +12,153 @@
     data-testid="person-draft-declarations"
     :data-kind="line.kind"
   >
-    <div class="ddecl__line">
+    <!-- The line folds the rest away (decision on 2026-11-20): open as the
+         page loads, and kept folded on a page a reader folded it on. -->
+    <button
+      type="button"
+      class="ddecl__line"
+      :aria-expanded="!folded"
+      aria-controls="ddecl-body"
+      data-fold-toggle
+      @click="toggleFold"
+    >
       <v-icon :icon="icon" size="18" :color="ink" class="ddecl__icon" />
-      <div class="ddecl__words">
-        <p id="ddecl-line" class="ddecl__text">{{ line.text }}</p>
+      <span id="ddecl-line" class="ddecl__text">{{ line.text }}</span>
+      <v-icon
+        :icon="folded ? mdiChevronDown : mdiChevronUp"
+        size="20"
+        class="ddecl__chevron"
+      />
+    </button>
+
+    <v-expand-transition>
+      <!-- Rendered only while open: a folded page asks for no crop. -->
+      <div v-if="!folded" id="ddecl-body" data-fold-body>
         <p v-if="isAdmin && line.note" class="ddecl__note" data-admin-note>
           {{ line.note }}
         </p>
-      </div>
-    </div>
 
-    <div v-if="line.lead" class="ddecl__clips">
-      <PersonDeclarationClip :crop="line.lead" :birth-date="birthDate" />
-      <template v-if="showAll">
-        <PersonDeclarationClip
-          v-for="crop in line.rest"
-          :key="crop.id"
-          :crop="crop"
-          :birth-date="birthDate"
+        <div v-if="line.lead" class="ddecl__clips">
+          <PersonDeclarationClip :crop="line.lead" :birth-date="birthDate" />
+          <template v-if="showAll">
+            <PersonDeclarationClip
+              v-for="crop in line.rest"
+              :key="crop.id"
+              :crop="crop"
+              :birth-date="birthDate"
+            />
+          </template>
+        </div>
+        <AdminDeclarationsShowAll
+          v-if="line.lead"
+          v-model="showAll"
+          class="ddecl__all text-none"
+          :total="line.rest.length + 1"
+          :limit="1"
         />
-      </template>
-    </div>
-    <AdminDeclarationsShowAll
-      v-if="line.lead"
-      v-model="showAll"
-      class="ddecl__all text-none"
-      :total="line.rest.length + 1"
-      :limit="1"
-    />
 
-    <!-- No crop: each local election won since 2014 on a line of its own
+        <!-- No crop: each local election won since 2014 on a line of its own
          (round osoba-szkic-oswiadczenia-r3), its year first, and what the
          crawler found on its unit's BIP, which is where to look by hand. The
          columns line up from row to row on a computer; a phone keeps the
          year at the left and wraps the rest beside it. -->
-    <ul v-if="line.searches.length > 0" class="ddecl__searches">
-      <li
-        v-for="search in line.searches"
-        :key="`${search.year}-${search.office}-${search.unit}`"
-        class="ddecl__search"
-        data-testid="draft-declaration-search"
-      >
-        <!-- The spaces are for whoever reads the text rather than the
+        <ul v-if="line.searches.length > 0" class="ddecl__searches">
+          <li
+            v-for="search in line.searches"
+            :key="`${search.year}-${search.office}-${search.unit}`"
+            class="ddecl__search"
+            data-testid="draft-declaration-search"
+          >
+            <!-- The spaces are for whoever reads the text rather than the
              layout (a screen reader, a copy). -->
-        <span class="ddecl__year"
-          ><span class="d-sr-only">wybory </span>{{ search.year }}</span
-        >{{ " " }}
-        <span class="ddecl__what">
-          <span class="ddecl__part">{{ search.office }}</span
-          >{{ " " }}
-          <span class="ddecl__part" :title="search.unit">{{ search.unit }}</span
-          >{{ " " }}
-          <span class="ddecl__part" :title="searchState(search)">{{
-            searchState(search)
-          }}</span
-          >{{ " " }}
-          <a
-            v-if="search.bipUrl"
-            class="ddecl__part ddecl__bip"
-            :href="search.bipUrl"
-            :title="search.bipUrl"
-            target="_blank"
-            rel="noopener"
-            data-bip-link
-            ><span class="ddecl__bip-host">{{ hostOf(search.bipUrl) }}</span
-            ><v-icon :icon="mdiOpenInNew" size="14" class="ddecl__bip-icon"
-          /></a>
-        </span>
-      </li>
-    </ul>
+            <span class="ddecl__year"
+              ><span class="d-sr-only">wybory </span>{{ search.year }}</span
+            >{{ " " }}
+            <span class="ddecl__what">
+              <span class="ddecl__part">{{ search.office }}</span
+              >{{ " " }}
+              <span class="ddecl__part" :title="search.unit">{{
+                search.unit
+              }}</span
+              >{{ " " }}
+              <span class="ddecl__part" :title="searchState(search)">{{
+                searchState(search)
+              }}</span
+              >{{ " " }}
+              <a
+                v-if="search.bipUrl"
+                class="ddecl__part ddecl__bip"
+                :href="search.bipUrl"
+                :title="search.bipUrl"
+                target="_blank"
+                rel="noopener"
+                data-bip-link
+                ><span class="ddecl__bip-host">{{ hostOf(search.bipUrl) }}</span
+                ><v-icon :icon="mdiOpenInNew" size="14" class="ddecl__bip-icon"
+              /></a>
+            </span>
+          </li>
+        </ul>
 
-    <!-- With no crop, the links readers found by hand, and the field to give
+        <!-- With no crop, the links readers found by hand, and the field to give
          one: the crawl fetches them (decision on 2026-11-20). -->
-    <template v-if="line.kind === 'missing'">
-      <ul v-if="line.links.length > 0" class="ddecl__links">
-        <li
-          v-for="link in line.links"
-          :key="link.url"
-          class="ddecl__given"
-          data-testid="draft-declaration-link"
-        >
-          <a
-            class="ddecl__given-link"
-            :href="link.url"
-            target="_blank"
-            rel="noopener nofollow ugc"
-            >{{ shortLink(link.url)
-            }}<v-icon
-              :icon="mdiOpenInNew"
-              size="14"
-              class="ddecl__bip-icon" /></a
-          >{{ " " }}
-          <span class="ddecl__given-when">{{ givenText(link) }}</span>
-        </li>
-      </ul>
-      <form
-        class="ddecl__add"
-        data-testid="draft-declaration-add"
-        @submit.prevent="addLink"
-      >
-        <v-text-field
-          v-model="newLink"
-          class="ddecl__field"
-          label="Link do oświadczenia"
-          placeholder="https://bip…"
-          hint="Plik albo strona BIP z oświadczeniami tej osoby"
-          persistent-hint
-          density="compact"
-          variant="outlined"
-          hide-details="auto"
-          inputmode="url"
-          autocomplete="off"
-          :error-messages="linkError ?? undefined"
-          data-link-field
-        />
-        <v-btn
-          type="submit"
-          variant="tonal"
-          class="ddecl__add-go text-none"
-          height="40"
-          :disabled="!linkValid || sending"
-          :loading="sending"
-          data-link-add
-        >
-          Dodaj
-        </v-btn>
-      </form>
-    </template>
+        <template v-if="line.kind === 'missing'">
+          <ul v-if="line.links.length > 0" class="ddecl__links">
+            <li
+              v-for="link in line.links"
+              :key="link.url"
+              class="ddecl__given"
+              data-testid="draft-declaration-link"
+            >
+              <a
+                class="ddecl__given-link"
+                :href="link.url"
+                target="_blank"
+                rel="noopener nofollow ugc"
+                >{{ shortLink(link.url)
+                }}<v-icon
+                  :icon="mdiOpenInNew"
+                  size="14"
+                  class="ddecl__bip-icon" /></a
+              >{{ " " }}
+              <span class="ddecl__given-when">{{ givenText(link) }}</span>
+            </li>
+          </ul>
+          <form
+            class="ddecl__add"
+            data-testid="draft-declaration-add"
+            @submit.prevent="addLink"
+          >
+            <v-text-field
+              v-model="newLink"
+              class="ddecl__field"
+              label="Link do oświadczenia"
+              placeholder="https://bip…"
+              hint="Plik albo strona BIP z oświadczeniami tej osoby"
+              persistent-hint
+              density="compact"
+              variant="outlined"
+              hide-details="auto"
+              inputmode="url"
+              autocomplete="off"
+              :error-messages="linkError ?? undefined"
+              data-link-field
+            />
+            <v-btn
+              type="submit"
+              variant="tonal"
+              class="ddecl__add-go text-none"
+              height="40"
+              :disabled="!linkValid || sending"
+              :loading="sending"
+              data-link-add
+            >
+              Dodaj
+            </v-btn>
+          </form>
+        </template>
+      </div>
+    </v-expand-transition>
   </section>
 </template>
 
@@ -154,9 +174,14 @@
  * decides both, decision on 2026-11-20): a crop is a named person's
  * handwriting, and a public page says no more than the outcome. What an
  * admin can do about a held page is for admins. A page with nothing to say
- * says nothing. */
+ * says nothing.
+ *
+ * Its line folds the rest away: open as the page loads, and kept folded,
+ * in this browser, on a page a reader folded it on (`FOLDED_KEY`). */
 import { computed, ref } from "vue";
 import {
+  mdiChevronDown,
+  mdiChevronUp,
   mdiFileAlertOutline,
   mdiFileClockOutline,
   mdiFileDocumentCheckOutline,
@@ -200,6 +225,51 @@ const { data } = useAsyncData<PersonDeclarationCrops | null>(
 const line = computed(() => (data.value ? cropsLine(data.value) : null));
 
 const showAll = ref(false);
+
+// ---- folding ----
+
+/** The draft pages a reader folded the block on, in this browser: a fold
+ * is kept for its page and no other (decision on 2026-11-20). A per-viewer
+ * convenience, so a browser that keeps nothing simply shows it open. */
+const FOLDED_KEY = "koryta:osoba:oswiadczenia-zwiniete";
+
+/** Pages a fold is kept for at most, the latest last: a reader working
+ * through drafts by hand folds a few a day. */
+const FOLDED_KEEP = 200;
+
+function readFolded(): string[] {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? "[]");
+    return Array.isArray(saved)
+      ? saved.filter((id): id is string => typeof id === "string")
+      : [];
+  } catch {
+    // Nothing kept, a broken entry or no storage at all: nothing folded.
+    return [];
+  }
+}
+
+function writeFolded(ids: readonly string[]) {
+  try {
+    localStorage.setItem(FOLDED_KEY, JSON.stringify(ids.slice(-FOLDED_KEEP)));
+  } catch {
+    // No storage: the fold lasts as long as the page.
+  }
+}
+
+/** Read before the first render: a page met again in the same visit has its
+ * crops at once, and would draw them, and ask for their pictures, before a
+ * fold read on mounting closed them. The server never renders the block
+ * (its data is asked for in the browser only), so nothing has to match. */
+const folded = ref(
+  import.meta.client ? readFolded().includes(props.nodeId) : false,
+);
+
+function toggleFold() {
+  folded.value = !folded.value;
+  const others = readFolded().filter((id) => id !== props.nodeId);
+  writeFolded(folded.value ? [...others, props.nodeId] : others);
+}
 
 /** A waiting declaration in the neutral ink, a match in the sage of the
  * public line, and what asks somebody for something in amber. */
@@ -297,10 +367,36 @@ function hostOf(url: string): string {
   max-width: none;
 }
 
+/* The line is the fold's button: it keeps the line's look, with the
+   chevron at its end saying which way it goes. */
 .ddecl__line {
   align-items: flex-start;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
   display: flex;
+  font: inherit;
   gap: 8px;
+  padding: 2px 0;
+  text-align: left;
+  width: 100%;
+}
+
+.ddecl__line:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-ink-info));
+  outline-offset: 4px;
+}
+
+.ddecl__chevron {
+  color: rgb(var(--v-theme-ink-neutral));
+  flex: none;
+  transition: color 0.15s ease;
+}
+
+.ddecl__line:hover .ddecl__chevron {
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .ddecl__icon {
@@ -310,18 +406,20 @@ function hostOf(url: string): string {
 }
 
 .ddecl__text {
+  flex: 1 1 auto;
   font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.25rem;
-  margin: 0;
+  min-width: 0;
   text-wrap: pretty;
 }
 
+/* Under the line's words, folded with the rest. */
 .ddecl__note {
   color: rgb(var(--v-theme-ink-neutral));
   font-size: 0.8125rem;
   line-height: 1.25rem;
-  margin: 2px 0 0;
+  margin: 0 0 0 26px;
   text-wrap: pretty;
 }
 
@@ -486,6 +584,7 @@ function hostOf(url: string): string {
 /* A phone has no width to spare beside the crops: they start under the
    icon, and a long line pans (`OswiadczeniaCrop`). */
 @media (max-width: 599.98px) {
+  .ddecl__note,
   .ddecl__clips,
   .ddecl__searches,
   .ddecl__links,
