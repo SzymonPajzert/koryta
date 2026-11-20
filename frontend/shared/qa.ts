@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "pasek-tabeli-na-telefonie",
+    title: "Wybrane filtry tabeli czytelne na telefonie",
+    description:
+      "Na telefonie wybrane filtry mają własny wiersz pod „Filtry”, zamiast ściskać się do samych ikon. „Udostępnij” jest obok tytułu.",
+    steps: [
+      "Na telefonie otwórz tabelę i wybierz dwa filtry: oba są czytelne w wierszu pod „Filtry”, a liczba osób i sortowanie stoją obok „Filtry”.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "public",
+  },
+  {
     id: "oswiadczenia-na-stronie-szkicu",
     title: "Oświadczenia majątkowe na stronie nieopublikowanej osoby",
     description:
