@@ -6,11 +6,20 @@ page, the printed labels with dotted lines, and the filled-in name, date and
 place over the dots. `typed` writes the same form as a PDF drawn from text, as
 an office's word processor exports it. Pillow's own font draws both, so they do
 not depend on the fonts a machine has.
+
+`employment_declaration` draws a whole declaration for the employment cut: part
+A under a title with its list of functions and the "dnia" line, then sections
+VII and VIII on the next page, VIII running onto a third page or stopped by
+"CZĘŚĆ B". `Drawn` says where each thing went, for a test to hold a band
+against.
 """
 
 from __future__ import annotations
 
 import io
+import math
+import random
+from dataclasses import dataclass, field
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -92,8 +101,11 @@ def _escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
-def typed_pdf(name: str, born: str, place: str = "Testowie") -> bytes:
-    """Part A as a PDF drawn from text, in Helvetica: one page, no pictures."""
+def typed_pdf(
+    name: str, born: str, place: str = "Testowie", employer: str = ""
+) -> bytes:
+    """Part A as a PDF drawn from text, in Helvetica: one page, no pictures,
+    with the employer typed over the dots when one is given."""
     lines = [
         (200, 780, 14, "OSWIADCZENIE MAJATKOWE"),
         (250, 760, 11, "radnego gminy"),
@@ -107,6 +119,8 @@ def typed_pdf(name: str, born: str, place: str = "Testowie") -> bytes:
         (215, 435, 8, "(miejsce zatrudnienia, stanowisko lub funkcja)"),
         (50, 410, 8, "po zapoznaniu sie z przepisami ustawy z dnia 8 marca 1990 r."),
     ]
+    if employer:
+        lines.append((120, 455, 11, employer))
     stream = "".join(
         f"BT /F1 {size} Tf {x} {y} Td ({_escape(text)}) Tj ET\n"
         for x, y, size, text in lines
@@ -134,3 +148,194 @@ def typed_pdf(name: str, born: str, place: str = "Testowie") -> bytes:
         % (len(objects) + 1, xref)
     )
     return out.getvalue()
+
+
+# -- a whole declaration, for the employment cut --------------------------------
+
+FUNCTIONS = (
+    "wojta, zastepcy wojta, sekretarza gminy, skarbnika gminy, kierownika jednostki",
+    "organizacyjnej gminy, osoby zarzadzajacej i czlonka organu zarzadzajacego",
+    "gminna osoba prawna oraz osoby wydajacej decyzje administracyjne w imieniu wojta",
+)
+#: Section III names "spolkach handlowych" too, but no company's name and seat.
+SECTION_III = (
+    "1. Posiadam udzialy w spolkach handlowych - nalezy podac liczbe i emitenta",
+    "udzialow: nie dotyczy",
+)
+SECTION_VII = (
+    "W spolkach handlowych (nazwa, siedziba spolki): nie dotyczy",
+    "- jestem czlonkiem zarzadu (od kiedy): nie dotyczy",
+    "- jestem czlonkiem rady nadzorczej (od kiedy): nie dotyczy",
+    "- jestem czlonkiem komisji rewizyjnej (od kiedy): nie dotyczy",
+    "Z tego tytulu osiagnalem(elam) w roku ubieglym dochod: nie dotyczy",
+)
+VIII_HEADING = (
+    "Inne dochody osiagane z tytulu zatrudnienia lub innej dzialalnosci",
+    "zarobkowej lub zajec, z podaniem kwot uzyskiwanych z kazdego tytulu:",
+)
+INCOME = (
+    "Urzad Gminy Testowo - wynagrodzenie 85 000,00 zl",
+    "Spoldzielnia Testowa - umowa zlecenie 4 000,00 zl",
+    "Dieta radnego Rady Gminy Testowo 12 000,00 zl",
+    "Emerytura 30 000,00 zl brutto",
+)
+PART_B = (
+    "Adres zamieszkania osoby skladajacej oswiadczenie: ul. Testowa 1, Testowo",
+    "Miejsce polozenia nieruchomosci wymienionych w punkcie II czesci A: Testowo",
+)
+
+
+@dataclass
+class Drawn:
+    """A drawn declaration's pages, and where each thing a test looks for is:
+    its page and its rows."""
+
+    pages: list[Image.Image] = field(default_factory=list)
+    at: dict[str, tuple[int, int, int]] = field(default_factory=dict)
+
+    def pdf(self) -> bytes:
+        return scanned_pdf(*self.pages)
+
+
+class _Page:
+    """Lines written down a page, each remembered by a name when given one."""
+
+    def __init__(self, drawn: Drawn) -> None:
+        self.drawn = drawn
+        self.index = len(drawn.pages)
+        self.image = Image.new("L", (WIDTH, HEIGHT), 250)
+        self.draw = ImageDraw.Draw(self.image)
+        drawn.pages.append(self.image)
+
+    def _write(self, y: int, text: str, size: int, x: int) -> tuple[int, int]:
+        """Write a line at row `y`: the rows its ink takes."""
+        font = _font(size)
+        self.draw.text((x, y), text, font=font, fill=25)
+        _, top, _, bottom = self.draw.textbbox((x, y), text, font=font)
+        return int(top), int(bottom)
+
+    def text(
+        self, y: int, text: str, *, size: int = 28, x: int = 140, name: str = ""
+    ) -> int:
+        """Write a line at row `y`, remembering its ink's rows under `name`."""
+        top, bottom = self._write(y, text, size, x)
+        if name:
+            self.drawn.at[name] = (self.index, top, bottom)
+        return y + int(size * 1.7)
+
+    def lines(
+        self, y: int, texts: tuple[str, ...], *, size: int = 28, name: str = ""
+    ) -> int:
+        rows = []
+        for text in texts:
+            rows.append(self._write(y, text, size, 140))
+            y += int(size * 1.7)
+        if name:
+            self.drawn.at[name] = (self.index, rows[0][0], rows[-1][1])
+        return y
+
+    def scribble(self, x: int, y: int, width: int, seed: int) -> None:
+        """Pen strokes no OCR reads as print: words of loops along a line."""
+        rng = random.Random(seed)
+        start = x
+        while start < x + width:
+            word = rng.randrange(90, 220)
+            points = [
+                (
+                    start + i,
+                    y
+                    + 16 * math.sin(i / 7.0) * (0.5 + 0.5 * math.sin(i / 23.0))
+                    + rng.uniform(-2, 2),
+                )
+                for i in range(0, word, 2)
+            ]
+            self.draw.line(points, fill=40, width=4)
+            start += word + rng.randrange(30, 60)
+
+
+def _part_a(drawn: Drawn, name: str, born: str, employer: str, scribbled: bool) -> None:
+    page = _Page(drawn)
+    page.text(110, "OSWIADCZENIE MAJATKOWE", size=40, x=540, name="title")
+    page.lines(180, FUNCTIONS, size=26, name="functions")
+    page.text(330, "Testowo, dnia 24.04.2025 r.", x=1000, name="dnia")
+    page.text(375, "(miejscowosc)", size=20, x=1080)
+    page.text(450, "Uwaga:", size=26, name="uwaga")
+    page.lines(495, NOTES, size=22)
+    page.text(930, "CZESC A", size=30, x=760, name="czesc_a")
+    page.text(1010, "Ja, nizej podpisany(a), " + "." * 70, size=30)
+    page.text(980, name, size=44, x=620, name="name")
+    page.text(1060, "(imiona i nazwisko oraz nazwisko rodowe)", size=22, x=560)
+    page.text(
+        1150, "urodzony(a) " + "." * 32 + " w " + "." * 40, size=30, name="born_line"
+    )
+    page.text(1115, born, size=44, x=420, name="born")
+    page.text(1115, "Testowie", size=44, x=1020)
+    page.text(1250, "." * 95, size=30)
+    if scribbled:
+        page.scribble(300, 1235, 1000, seed=7)
+        drawn.at["employer"] = (page.index, 1215, 1255)
+    else:
+        page.text(1215, employer, size=40, x=300, name="employer")
+    page.text(
+        1300,
+        "(miejsce zatrudnienia, stanowisko lub funkcja)",
+        size=22,
+        x=600,
+        name="caption",
+    )
+    page.lines(
+        1400,
+        (
+            "po zapoznaniu sie z przepisami ustawy z dnia 8 marca 1990 r. o",
+            "samorzadzie gminnym, zgodnie z art. 24h tej ustawy oswiadczam, ze",
+            "posiadam wchodzace",
+            "w sklad malzenskiej wspolnosci majatkowej lub stanowiace moj majatek:",
+        ),
+        size=22,
+    )
+    page.text(1560, "I.", size=28)
+    page.text(1610, "Zasoby pieniezne:", size=28)
+    page.text(1660, "- srodki pieniezne w walucie polskiej: nie dotyczy", size=28)
+
+
+def _part_b(page: _Page, y: int) -> int:
+    page.text(y, "CZESC B", size=30, x=760, name="czesc_b")
+    return page.lines(y + 70, PART_B, size=24, name="part_b")
+
+
+def employment_declaration(
+    name: str,
+    born: str,
+    employer: str = "Urzad Gminy Testowo - Sekretarz Gminy",
+    *,
+    viii_runs_on: bool = False,
+    scribbled: bool = False,
+) -> Drawn:
+    """Part A, then VII and VIII on the next page: VIII running onto a third
+    page over IX and X when `viii_runs_on`, else stopped by "CZĘŚĆ B" right
+    under it. `scribbled` writes the employer by hand, which no OCR reads."""
+    drawn = Drawn()
+    _part_a(drawn, name, born, employer, scribbled)
+    page = _Page(drawn)
+    y = page.text(150, "III.", size=28)
+    page.lines(y, SECTION_III, name="section_iii")
+    top = 1300 if viii_runs_on else 400
+    page.text(top, "VII.", size=28, name="vii")
+    y = page.lines(top + 50, SECTION_VII)
+    y = page.text(y + 40, "VIII.", size=28, name="viii")
+    y = page.lines(y, VIII_HEADING)
+    if not viii_runs_on:
+        y = page.lines(y + 20, INCOME, name="income")
+        _part_b(page, y + 60)
+        return drawn
+    page.lines(y + 20, INCOME[:2], name="income")
+    page = _Page(drawn)
+    y = page.lines(150, INCOME[2:], name="income_more")
+    y = page.text(y + 60, "IX.", size=28, name="ix")
+    y = page.text(y, "Skladniki mienia ruchomego o wartosci powyzej 10 000 zlotych:")
+    y = page.text(y, "samochod osobowy Testowa marka 2010 r.", name="ix_text")
+    y = page.text(y + 40, "X.", size=28)
+    y = page.text(y, "Zobowiazania pieniezne o wartosci powyzej 10 000 zlotych:")
+    y = page.text(y, "nie dotyczy")
+    _part_b(page, y + 60)
+    return drawn
