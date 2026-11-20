@@ -51,13 +51,31 @@ class PeopleKorytaMerged(Pipeline):
                     '^([0-9]{4}(-[0-9]{2}-[0-9]{2})?)$',
                     1
                 ), '') as birth_date
-            FROM koryta_data
-            -- A page merged into another (a tombstone) is left out: the merge
-            -- carries its register link onto the survivor, and `koryta_match`
-            -- refuses an entry two pages link. Its name would make name
-            -- matches ambiguous too. On a person page `deleted` comes only
-            -- with `merged_into`.
-            WHERE full_name IS NOT NULL AND merged_into IS NULL
+            FROM koryta_data page
+            -- A page merged into another (a tombstone) is left out where its
+            -- survivor links the same entry, since `koryta_match` refuses an
+            -- entry two pages link, and where it links none, so its name
+            -- cannot make name matches ambiguous. Otherwise (two entries
+            -- merged, or a link edited away) it is its entry's only page and
+            -- stays: without it the name tier could give that entry to a
+            -- namesake. On a person page `deleted` comes only with
+            -- `merged_into`.
+            WHERE full_name IS NOT NULL
+                AND (
+                    merged_into IS NULL
+                    OR (
+                        regexp_extract(page.rejestrIo, 'osoby/([0-9]+)', 1) != ''
+                        AND NOT EXISTS (
+                            SELECT 1 FROM koryta_data survivor
+                            WHERE survivor.id = page.merged_into
+                                AND regexp_extract(
+                                    survivor.rejestrIo, 'osoby/([0-9]+)', 1
+                                ) = regexp_extract(
+                                    page.rejestrIo, 'osoby/([0-9]+)', 1
+                                )
+                        )
+                    )
+                )
             """
         )
 

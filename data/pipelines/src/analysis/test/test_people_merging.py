@@ -1023,6 +1023,35 @@ def test_a_page_merged_away_lends_its_name_to_no_namesake(ctx):
 
 
 @pytest.mark.parametrize(
+    "survivor",
+    [("Anna Kowalska", "https://rejestr.io/osoby/200"), ("Anna Nowak", None)],
+    ids=["links-another-entry", "links-none-under-another-name"],
+)
+def test_a_page_merged_away_keeps_the_entry_its_survivor_does_not_link(ctx, survivor):
+    """Unless the survivor links the tombstone's entry, the tombstone is the
+    one page that does, and it stays. The merge carries a link onto a survivor
+    that has none but never over one it has, an admin may merge two pages
+    linking two entries, and a survivor's own link can be edited away after
+    the merge. Left out, entry 100 looked as if no page had it, and the name
+    tier gave it the unlinked namesake's page. Kept, it reaches the tombstone,
+    which the ingest follows to the survivor as it follows the entry's own
+    link, and where the survivor links another entry it holds the payload."""
+    name, survivor_link = survivor
+    link = "https://rejestr.io/osoby/100"
+    result = match_site(
+        ctx,
+        [registered(krs_person("anna", "kowalska", "1970-01-01"), "100")],
+        [
+            site_page("tombstone", "Anna Kowalska", link, "survivor"),
+            site_page("survivor", name, survivor_link),
+            site_page("namesake", "Anna Kowalska"),
+        ],
+    )
+
+    assert list(result["koryta_id"]) == ["tombstone"]
+
+
+@pytest.mark.parametrize(
     "merged_into",
     [{}, {"merged_into": float("nan")}],
     ids=["built-before-merges", "restored-with-no-merge"],
