@@ -7,6 +7,7 @@ import type {
 import {
   applyNodeMerge,
   edgesTouching,
+  edgesToRead,
   mergeRefusal,
   planNodeMerge,
   type MergeDisposition,
@@ -574,18 +575,7 @@ async function readStoredEdges(
   const stored = new Map<string, Record<string, unknown>>();
   if (plan.edges.length === 0) return stored;
 
-  // Both ends of every verdict: the relation being moved, and - for an
-  // `enriched` one - the survivor's relation that is about to learn from it,
-  // which `applyNodeMerge` has to read before it can write the fuller version.
-  const edgeIds = [
-    ...new Set(
-      plan.edges.flatMap((edge) =>
-        edge.disposition === "enriched" && edge.duplicate_of
-          ? [edge.edge_id, edge.duplicate_of]
-          : [edge.edge_id],
-      ),
-    ),
-  ];
+  const edgeIds = edgesToRead(plan);
   const docs = await db.getAll(
     ...edgeIds.map((id) => db.collection("edges").doc(id)),
   );

@@ -763,6 +763,167 @@ describe("applyNodeMerge", () => {
 
     expect(updates.map((call) => call[0])).toEqual(["nodes/dup"]);
   });
+
+  describe("what declarations said about a retired relation", () => {
+    /** One entry, as the declarations automation writes it. */
+    const entry = (asOf: string) => ({
+      url: "https://bip.example.pl/oswiadczenie.pdf",
+      as_of: asOf,
+      kind: "annual",
+      band: "employer",
+      role: "wicestarosta",
+      roleId: "wicestarosta",
+      by: "readers",
+      readers: 2,
+      at: "2026-11-20T12:00:00.000Z",
+    });
+
+    function merge(
+      edges: MergeEdgePlan[],
+      stored: Record<string, Record<string, unknown>>,
+    ) {
+      return applyNodeMerge(
+        db,
+        batch,
+        { uid: "admin-uid" },
+        { ...plan, edges },
+        "Jedna osoba, dwie strony",
+        new Map(Object.entries(stored)),
+      );
+    }
+
+    const collapse = (
+      edge_id: string,
+      duplicate_of: string,
+    ): MergeEdgePlan => ({
+      edge_id,
+      type: "employed",
+      role: "source",
+      disposition: "collapsed",
+      duplicate_of,
+    });
+
+    it("goes onto the register's copy that stays, which gains no as_of", async () => {
+      const moves = merge([collapse("declared", "register")], {
+        declared: {
+          ...employed("dup", "firma"),
+          as_of: "2025",
+          declared: { "f00d-p1:employer:0": entry("2025") },
+        },
+        register: { ...employed("surv", "firma"), published: true },
+      });
+
+      expect(wrote("edges/register")).toEqual({
+        declared: { "f00d-p1:employer:0": entry("2025") },
+      });
+      // The removed copy keeps its own, as it keeps everything it owns.
+      expect(wrote("edges/declared")).toMatchObject({
+        deleted: true,
+        as_of: "2025",
+        declared: { "f00d-p1:employer:0": entry("2025") },
+      });
+      expect(moves).toEqual([
+        { from: "declared", to: "register", keys: ["f00d-p1:employer:0"] },
+      ]);
+    });
+
+    it("moves the as_of of a copy a declaration created to the latest entry", async () => {
+      merge([collapse("newer", "older")], {
+        newer: {
+          ...employed("dup", "firma"),
+          as_of: "2025",
+          declared: { "beef-p1:employer:0": entry("2025") },
+        },
+        older: {
+          ...employed("surv", "firma"),
+          as_of: "2023",
+          declared: { "f00d-p1:employer:0": entry("2023") },
+        },
+      });
+
+      expect(wrote("edges/older")).toEqual({
+        as_of: "2025",
+        declared: {
+          "f00d-p1:employer:0": entry("2023"),
+          "beef-p1:employer:0": entry("2025"),
+        },
+      });
+    });
+
+    it("writes a copy two retired ones fold onto once, with both", async () => {
+      merge([collapse("one", "kept"), collapse("two", "kept")], {
+        one: {
+          ...employed("dup", "firma"),
+          declared: { "a-p1:employer:0": entry("2024") },
+        },
+        two: {
+          ...employed("dup", "firma"),
+          declared: { "b-p1:employer:0": entry("2025") },
+        },
+        kept: employed("surv", "firma"),
+      });
+
+      expect(updates.filter((call) => call[0] === "edges/kept")).toEqual([
+        [
+          "edges/kept",
+          {
+            declared: {
+              "a-p1:employer:0": entry("2024"),
+              "b-p1:employer:0": entry("2025"),
+            },
+          },
+        ],
+      ]);
+    });
+
+    it("rides on the revision that enriches the survivor's copy", async () => {
+      // A won candidacy carries diety in its entries once they are read.
+      const candidacy = election("dup", "powiat");
+      merge(
+        [
+          {
+            edge_id: "poorer",
+            type: "election",
+            role: "source",
+            disposition: "enriched",
+            duplicate_of: "fuller",
+            enriches_into: { ...candidacy, source: "surv", elected: true },
+          },
+        ],
+        {
+          poorer: {
+            ...candidacy,
+            elected: true,
+            declared: { "a-p1:viii:0": entry("2024") },
+          },
+          fuller: { ...candidacy, source: "surv", published: true },
+        },
+      );
+
+      expect(
+        sets.find((call) => call[0] === "edges/fuller")?.[1],
+      ).toMatchObject({
+        elected: true,
+        published: true,
+        declared: { "a-p1:viii:0": entry("2024") },
+      });
+      expect(
+        updates.find((call) => call[0] === "edges/fuller"),
+      ).toBeUndefined();
+      // And the revision says what the candidacy says, not what was read.
+      expect(writtenTo("revisions/")).not.toHaveProperty("data.declared");
+    });
+
+    it("writes nothing more where the copies said nothing", async () => {
+      const moves = merge([collapse("same", "s1")], {
+        same: employed("dup", "firma"),
+        s1: employed("surv", "firma"),
+      });
+
+      expect(wrote("edges/s1")).toBeUndefined();
+      expect(moves).toEqual([]);
+    });
+  });
 });
 
 describe("carriedFields", () => {
