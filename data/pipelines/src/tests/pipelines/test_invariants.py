@@ -141,6 +141,53 @@ PIPELINE_USER = "pipeline"
 # node's `interesting`: `PUBLISH_CHANCE_MODEL` in frontend/shared/stats.ts.
 PUBLISH_CHANCE_MODEL = "pipeline-publishable"
 
+#: The uid the declarations automation writes under, `DECLARATION_ACTOR` in
+#: `frontend/shared/declarations.ts`. A post it creates is what readers agreed
+#: an asset declaration says, and it is the only writer of `Edge.as_of`.
+DECLARATION_ACTOR = "pipeline-declarations"
+
+#: Role families an employment's name folds into: two posts of one person at
+#: one place in one family are one post, as the declarations automation
+#: matches what a declaration names to a stored edge. Read in order, so a
+#: deputy is told from the head whose title it holds, and by whole words of
+#: the name lowercased without diacritics. A name none of them names is a
+#: family of its own.
+ROLE_FAMILIES = (
+    (
+        "deputy mayor",
+        (
+            "zastepca wojta",
+            "zastepca burmistrza",
+            "zastepca prezydenta",
+            "zastepczyni wojta",
+            "zastepczyni burmistrza",
+            "zastepczyni prezydenta",
+            "wicewojt",
+            "wiceburmistrz",
+            "wiceprezydent",
+        ),
+    ),
+    ("mayor", ("wojt", "burmistrz", "prezydent")),
+    (
+        "deputy head",
+        (
+            "wicestarosta",
+            "wicemarszalek",
+            "wicewojewoda",
+            "wicedyrektor",
+            "wicedyrektorka",
+            "zastepca dyrektora",
+            "zastepczyni dyrektora",
+        ),
+    ),
+    ("head", ("starosta", "marszalek", "wojewoda", "dyrektor", "dyrektorka")),
+    ("sekretarz", ("sekretarz",)),
+    ("skarbnik", ("skarbnik",)),
+    ("zarzad", ("zarzad", "zarzadu", "prezes", "prezeska", "wiceprezes")),
+    ("rada nadzorcza", ("nadzorcza", "nadzorczej")),
+    ("prokura", ("prokura", "prokurent", "prokurentka")),
+)
+
 
 def sample(items, limit: int = 10) -> list:
     """A short, stable excerpt for an assertion message."""
@@ -388,16 +435,9 @@ def notes(snapshot):
 
 
 @pytest.fixture(scope="session")
-def entered_by_hand(revisions) -> set[str]:
-    """The documents a person created through the site rather than an ingest.
-
-    Told by the document's first revision, since `update_automatic` is on every
-    one (`test_every_revision_says_whether_a_person_made_it`). The December 2025
-    backfill that minted a revision for every document without one marked them
-    as a person's, which they were: every employment stored then had been
-    typed in. A document with no revision at all is not counted as a person's,
-    so nothing goes unchecked for want of a history.
-    """
+def first_revisions(revisions) -> dict[str, dict]:
+    """Each document's first revision, the one that created it, by the
+    document's id."""
     first: dict[str, dict] = {}
     for revision in revisions:
         document_id = reference_id(revision.get("node_id"))
@@ -408,10 +448,36 @@ def entered_by_hand(revisions) -> set[str]:
             held.get("update_time")
         ):
             first[document_id] = revision
+    return first
+
+
+@pytest.fixture(scope="session")
+def entered_by_hand(first_revisions) -> set[str]:
+    """The documents a person created through the site rather than an ingest.
+
+    Told by the document's first revision, since `update_automatic` is on every
+    one (`test_every_revision_says_whether_a_person_made_it`). The December 2025
+    backfill that minted a revision for every document without one marked them
+    as a person's, which they were: every employment stored then had been
+    typed in. A document with no revision at all is not counted as a person's,
+    so nothing goes unchecked for want of a history.
+    """
     return {
         document_id
-        for document_id, revision in first.items()
+        for document_id, revision in first_revisions.items()
         if revision.get("update_automatic") is False
+    }
+
+
+@pytest.fixture(scope="session")
+def created_by_declarations(first_revisions) -> set[str]:
+    """The documents the declarations automation created, told by who wrote
+    the first revision, as `writtenByImportOrReviewed` in
+    `frontend/server/utils/provenance.ts` tells them."""
+    return {
+        document_id
+        for document_id, revision in first_revisions.items()
+        if revision.get("update_user") == DECLARATION_ACTOR
     }
 
 
@@ -2450,6 +2516,12 @@ def test_a_dated_edge_says_when_it_began(
     is the form working, not a defect to hold the night's upload over. The
     count used to include them and could only grow: every fact promoted from an
     article review added one.
+
+    Nor is a post a declaration speaks for (`declared`). An asset declaration
+    says a post is held as of the day it was made out, and the form asks for no
+    start: such a post is dated by its declarations, the latest of them as
+    `as_of` on a post the automation created, which
+    `test_a_post_a_declaration_created_says_how_old_it_is` holds it to.
     """
     # 195 employment edges on the 2026-08-03 export. Nearly all of them are old:
     # 183 in December 2025, when 183 was *every* employment stored, and still 184
@@ -2476,6 +2548,7 @@ def test_a_dated_edge_says_when_it_began(
         and not is_removed(edge)
         and edge["id"] not in entered_by_hand
         and not has_date(edge, "start_date")
+        and not edge.get("declared")
     ]
     budget = UNDATED[edge_type]
 
@@ -2483,6 +2556,146 @@ def test_a_dated_edge_says_when_it_began(
         f"{len(undated)} {edge_type} edges do not say when they began, so they "
         f"count for no experience and cannot be told from another spell - up "
         f"from the {budget} known ones. Sample IDs: {sample(undated)}"
+    )
+
+
+def declared_posts(edges, created_by_declarations) -> list[dict]:
+    """The live employments the declarations automation created."""
+    return [
+        edge
+        for edge in edges
+        if edge.get("type") == "employed"
+        and edge["id"] in created_by_declarations
+        and not is_removed(edge)
+    ]
+
+
+def test_a_post_a_declaration_created_says_how_old_it_is(
+    edges, created_by_declarations
+):
+    """A post the declarations automation created carries `as_of`.
+
+    A declaration names a post as held on the day it was made out, and gives
+    no end; read off it, a post is as old as the latest declaration behind it,
+    which is what `as_of` keeps and what a page dates the post by.
+    `test_a_dated_edge_says_when_it_began` leaves an edge with `declared` out
+    for that reason, so this is where an undated one has to have it.
+
+    Stated of the posts the automation created, dated or not, and not of every
+    undated edge with `declared`: an edge another writer created keeps its own
+    dates when a declaration names it, and never gets an `as_of`
+    (`test_only_a_post_a_declaration_created_has_an_as_of`). None exists
+    before the automation writes, and it writes the two together, so this is
+    strict.
+    """
+    ageless = [
+        edge["id"]
+        for edge in declared_posts(edges, created_by_declarations)
+        if edge.get("declared") and not edge.get("as_of")
+    ]
+
+    assert not ageless, (
+        f"{len(ageless)} posts the declarations automation created say nothing "
+        f"of how old they are (`as_of`): {sample(ageless)}"
+    )
+
+
+def test_only_a_post_a_declaration_created_has_an_as_of(edges, created_by_declarations):
+    """`as_of` is the declarations automation's, on the edges it created.
+
+    It says how old the declarations behind a post are. On a register or a
+    hand-typed edge it would be read as the age of a reading the edge never
+    came from, so a merge that folds a declared copy into one carries the
+    entries and not the `as_of` (`unionDeclared` in
+    `frontend/shared/declaredPosts.ts`), and nothing else writes it. A removed
+    copy keeps what it had.
+    """
+    stray = [
+        (edge["id"], edge.get("as_of"))
+        for edge in edges
+        if edge.get("as_of")
+        and not is_removed(edge)
+        and edge["id"] not in created_by_declarations
+    ]
+
+    assert not stray, (
+        f"{len(stray)} edges carry an `as_of` the declarations automation did "
+        f"not write, as (edge, as_of): {sample(stray)}"
+    )
+
+
+def role_family(name) -> tuple[str, str]:
+    """The family of `ROLE_FAMILIES` an employment's name falls in, or the
+    folded name for one it does not."""
+    folded = unicodedata.normalize("NFKD", str(name or "").lower())
+    words = "".join(c for c in folded if not unicodedata.combining(c))
+    words = " ".join(re.sub(r"[^a-z0-9]+", " ", words.replace("ł", "l")).split())
+    for family, names in ROLE_FAMILIES:
+        if any(f" {named} " in f" {words} " for named in names):
+            return ("family", family)
+    return ("name", words)
+
+
+def spell_day(value, *, end: bool) -> str | None:
+    """A stored relation date as the first day it can mean, or for an end the
+    last; None for none."""
+    if isinstance(value, datetime.datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=datetime.UTC)
+        return value.astimezone(WARSAW).date().isoformat()
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()[:10]
+    if re.fullmatch(r"\d{4}", text):
+        return f"{text}-12-31" if end else f"{text}-01-01"
+    if re.fullmatch(r"\d{4}-\d{2}", text):
+        return f"{text}-31" if end else f"{text}-01"
+    return text if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text) else None
+
+
+def test_a_declared_post_is_not_a_second_copy_of_one_stored(
+    edges, created_by_declarations
+):
+    """A post the declarations automation created is the person's only post
+    of its kind at that place when the declaration was made out.
+
+    The automation writes what a declaration says onto the person's stored
+    post at the place when one is there, of the same family of roles
+    (`ROLE_FAMILIES`) and held on the declaration's day, and creates a post
+    only when none is. One beside such a post is that post twice: a page that
+    lists the job twice, and two of everything counted from it. The people
+    import storing the register's seat beside a declared one would do the
+    same. Nothing writes these yet, so it starts strict.
+    """
+    by_place: dict[tuple, list[dict]] = collections.defaultdict(list)
+    for edge in edges:
+        if edge.get("type") == "employed" and not is_removed(edge):
+            by_place[(edge.get("source"), edge.get("target"))].append(edge)
+
+    # By the pair, since two created posts can each find the other.
+    twins: dict[tuple, str | None] = {}
+    for post in declared_posts(edges, created_by_declarations):
+        days = {
+            spell_day(entry.get("as_of"), end=True)
+            for entry in (post.get("declared") or {}).values()
+            if isinstance(entry, dict)
+        } | {spell_day(post.get("as_of"), end=True)}
+        days.discard(None)
+        family = role_family(post.get("name"))
+        for other in by_place[(post.get("source"), post.get("target"))]:
+            if other["id"] == post["id"] or role_family(other.get("name")) != family:
+                continue
+            start = spell_day(other.get("start_date"), end=False) or "0000"
+            stop = spell_day(other.get("end_date"), end=True) or "9999"
+            if any(start <= day <= stop for day in days):
+                pair = (post["id"], other["id"])
+                twins.setdefault(tuple(sorted(pair)), post.get("name"))
+
+    found = [(*pair, role) for pair, role in sorted(twins.items())]
+    assert not found, (
+        f"{len(found)} posts the declarations automation created sit beside "
+        f"the same person's post of the same kind at the same place, held on "
+        f"the declaration's day, as (post, post, role): {sample(found)}"
     )
 
 
