@@ -8,6 +8,7 @@ import type {
   Region,
 } from "../model";
 import { personNode, companyNode, regionNode } from "./nodes";
+import { publicDeclared } from "../declaredPosts";
 
 export interface GraphLayout {
   edges: Edge[];
@@ -220,6 +221,7 @@ const edgeTraverse: Record<EdgeType, TraversePolicy> = {
 
 export function getEdges(edgesFromDB: DBEdge[]) {
   return edgesFromDB.map((edge: DBEdge) => {
+    const declared = publicDeclared(edge.declared);
     const result: Edge = {
       id: edge.id,
       source: edge.source,
@@ -252,6 +254,10 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       ...(edge.backing_parties?.length
         ? { backing_parties: edge.backing_parties }
         : {}),
+      // What declarations say about a post, only the part a page reads: who
+      // read an entry and what it pays stay on the edge.
+      ...(edge.as_of ? { as_of: edge.as_of } : {}),
+      ...(declared ? { declared } : {}),
     };
     return result;
   });
