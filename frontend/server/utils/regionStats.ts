@@ -1,4 +1,5 @@
-import type { Region } from "~~/shared/model";
+import type { Person, Region } from "~~/shared/model";
+import { canonicalParty, paintedParty } from "~~/shared/misc";
 
 /**
  * The map on the home page needs one number per powiat. Reading it off the
@@ -18,6 +19,11 @@ export interface RegionStat {
   teryt?: string;
   name?: string;
   people: number;
+  /** A powiat's people by the party each is drawn in (`paintedParty`, SLD
+   * under Nowa Lewica). Those with no party are `people` minus the sum.
+   * Powiaty only: the map draws nothing else, and the rows travel to every
+   * home page visit. */
+  parties?: Record<string, number>;
 }
 
 interface RegionStatsDoc {
@@ -26,7 +32,11 @@ interface RegionStatsDoc {
   computedAt: string;
 }
 
-export function regionStat(id: string, region: Partial<Region>): RegionStat {
+export function regionStat(
+  id: string,
+  region: Partial<Region>,
+  parties?: Record<string, number>,
+): RegionStat {
   // Built field by field rather than as a literal: not every region node
   // carries a teryt or a name, and Firestore rejects a document with an
   // undefined value in it rather than dropping the field. Serving the row
@@ -34,7 +44,28 @@ export function regionStat(id: string, region: Partial<Region>): RegionStat {
   const stat: RegionStat = { id, people: region.stats?.people || 0 };
   if (region.teryt) stat.teryt = region.teryt;
   if (region.name) stat.name = region.name;
+  if (parties) stat.parties = parties;
   return stat;
+}
+
+/** A powiat, as the home map draws it: four digits of teryt. */
+export function isPowiat(region: Partial<Region>): boolean {
+  return region.teryt?.length === 4;
+}
+
+/** How many of these people are drawn in each party. */
+export function partyCounts(
+  personIds: Iterable<string>,
+  people: Record<string, Pick<Person, "parties"> | undefined>,
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const id of personIds) {
+    const party = paintedParty(people[id]?.parties);
+    if (!party) continue;
+    const key = canonicalParty(party);
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
 }
 
 /** The rows, or null when nothing has computed them yet. */

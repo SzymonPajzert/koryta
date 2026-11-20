@@ -24,8 +24,9 @@
  * in the edit form, and once a person has set it, marked
  * `categoriesSource: "manual"` so the next ingest leaves it alone - the same
  * contract `isPublic` and `isPublicSource` already have. Its sectors, that is:
- * the owner follows Prokuratoria's list whatever a person set, and the edit
- * form does not offer it (see `withOwnersFrom`).
+ * the owner follows Prokuratoria's list and the status the register's name
+ * whatever a person set, and the edit form offers neither (see
+ * `withRegisterFactsFrom`).
  */
 
 export const companyCategories = [
@@ -43,6 +44,11 @@ export const companyCategories = [
   // Treasury's stakes (Szymon, 2026-10-28). Last, as the pipelines file it
   // after a company's sectors - see `isSector`.
   { value: "skarb-panstwa", title: "Skarb Państwa" },
+  // Not sectors either but the register's status: a company being wound up,
+  // as its name says, liquidation and bankruptcy apart (decision on
+  // 2026-11-20). After the owner, where the pipelines file them.
+  { value: "w-likwidacji", title: "W likwidacji" },
+  { value: "w-upadlosci", title: "W upadłości" },
 ] as const satisfies readonly { value: string; title: string }[];
 
 export type CompanyCategory = (typeof companyCategories)[number]["value"];
@@ -93,9 +99,14 @@ export function isKnownCategory(value: string): value is CompanyCategory {
  * „Skarb Państwa” as a sector, and count a post at PGE under both. */
 const OWNERS: readonly string[] = ["skarb-panstwa"];
 
-/** Whether `value` is a sector the site offers, not an owner. */
+/** The categories that say a company is being wound up, as the register
+ * appends it to the name. Not sectors either, for the same reason: a post at a
+ * hospital in liquidation is one post at a hospital. */
+const STATUSES: readonly string[] = ["w-likwidacji", "w-upadlosci"];
+
+/** Whether `value` is a sector the site offers, not an owner or a status. */
 export function isSector(value: string): value is CompanyCategory {
-  return isKnownCategory(value) && !isOwner(value);
+  return isKnownCategory(value) && !isRegisterFact(value);
 }
 
 /** Whether `value` says who owns a company. Not the same as `!isSector`: a
@@ -104,7 +115,18 @@ export function isOwner(value: string): boolean {
   return OWNERS.includes(value);
 }
 
-/** `categories` with its owners swapped for the ones in `ownersFrom`.
+/** Whether `value` says a company is being wound up. */
+export function isStatus(value: string): boolean {
+  return STATUSES.includes(value);
+}
+
+/** Whether the register decides `value` rather than a person: an owner or a
+ * status. A value this list does not know is not one. */
+export function isRegisterFact(value: string): boolean {
+  return isOwner(value) || isStatus(value);
+}
+
+/** `categories` with its owners and statuses swapped for those in `factsFrom`.
  *
  * The field holds two kinds of fact that answer to different authorities. A
  * sector is a judgement, and a person who corrects it on the page outranks the
@@ -113,17 +135,17 @@ export function isOwner(value: string): boolean {
  * Prokuratoria's list of the Treasury's stakes says, and a pin set for the
  * sectors must not freeze it (Szymon, 2026-10-28). So `/api/ingest/company`
  * lays the payload's owners over a person's sectors, and
- * `/api/revisions/create` lays the stored owners over a person's proposal.
+ * `/api/revisions/create` lays the stored owners over a person's proposal. A
+ * status is not a judgement either: it is what the register's name says.
  *
- * Owners go last, where the pipelines file them. Everything that is not an
- * owner stays on the `categories` side, a value this build does not know
- * included. */
-export function withOwnersFrom(
+ * Owners and statuses go last, where the pipelines file them. Everything else
+ * stays on the `categories` side, a value this build does not know included. */
+export function withRegisterFactsFrom(
   categories: readonly string[],
-  ownersFrom: readonly string[],
+  factsFrom: readonly string[],
 ): string[] {
   return [
-    ...categories.filter((value) => !isOwner(value)),
-    ...ownersFrom.filter(isOwner),
+    ...categories.filter((value) => !isRegisterFact(value)),
+    ...factsFrom.filter(isRegisterFact),
   ];
 }

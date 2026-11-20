@@ -10,6 +10,7 @@ import pandas as pd
 
 from entities.person import PKW as Person
 from scrapers.map.teryt import Teryt
+from scrapers.pkw.affiliations import membership_and_backing
 from scrapers.pkw.elections import ElectionType
 from scrapers.pkw.headers import CSV_HEADERS, ElectionContext, SetField
 from scrapers.pkw.offices import local_office, teryt_code
@@ -52,6 +53,7 @@ def extract_data(
     middle_name: str | None = None,
     last_name: str | None = None,
     party_member: str | None = None,
+    supported_by: str | None = None,
 ):
     if pkw_name is not None:
         first_name, middle_name, last_name = parse_name(pkw_name, name_format)
@@ -82,6 +84,13 @@ def extract_data(
     except AttributeError as e:
         raise ValueError(f"field has incorrect type: {e}")
 
+    party_member = statement(party_member)
+    supported_by = statement(supported_by)
+    if supported_by is None:
+        # A backing the file wrote into the membership column is a backing.
+        # No candidacy has one in both columns, so none is overwritten.
+        party_member, supported_by = membership_and_backing(party_member)
+
     return Person(
         election_year=election_year,
         election_type=election_type,
@@ -98,7 +107,21 @@ def extract_data(
         middle_name=middle_name,
         last_name=last_name,
         party_member=party_member,
+        supported_by=supported_by,
     )
+
+
+def statement(value: typing.Any) -> str | None:
+    """A membership or backing column as text, its spacing settled, or None.
+
+    Not `strip_if_not_none`, which would raise on the 1997 Sejm file: it writes
+    a party's number in the column, and pandas reads it as a number.
+    """
+    if value is None or value != value:  # None or NaN
+        return None
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    return " ".join(str(value).split()) or None
 
 
 def strip_if_not_none(s: str | None):

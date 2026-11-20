@@ -1,40 +1,51 @@
 # The night on one VM
 
 Every night one small VM in `koryta-pl` boots, runs everything that keeps the
-data current, and switches itself off. It runs after the site's 04:00 export,
+data current, and switches itself off. It runs after the site's 02:00 export,
 when nobody is still editing, and compares tonight's people with that copy:
 
 | Warsaw time | What                                                                                                   |
 | ----------- | ------------------------------------------------------------------------------------------------------ |
-| 04:00       | `scheduledFirestoreExport` copies the site to `gs://koryta-pl-crawled/hostname=koryta.pl/date=<UTC>/` |
-| 04:15       | the instance schedule boots `koryta-nightly` (up to 15 minutes late, the docs say)                     |
-| 04:30       | `koryta-nightly.timer` starts `koryta-nightly.service`: `night.sh`, then `koryta_nightly`              |
-| ~06:30      | the night is over; `poweroff.sh` switches the VM off                                                   |
-| 08:30       | `--stop-by`: no step but `compress` and `tidy` starts after this                                       |
-| 09:00       | the instance schedule stops the VM, if a night hung                                                    |
+| 02:00       | `scheduledFirestoreExport` copies the site to `gs://koryta-pl-crawled/hostname=koryta.pl/date=<UTC>/` |
+| 02:15       | the instance schedule boots `koryta-nightly` (up to 15 minutes late, the docs say)                     |
+| 02:30       | `koryta-nightly.timer` starts `koryta-nightly.service`: `night.sh`, then `koryta_nightly`              |
+| ~04:30      | `declarations`: the site counts the declarations in people from predator's newest facts                |
+| ~04:30      | `compute_nodes`: autopush recounts every page's stats, the search lines among them                     |
+| ~04:30      | the night is over; `poweroff.sh` switches the VM off                                                   |
+| 06:30       | `--stop-by`: no step but `compress` and `tidy` starts after this                                       |
+| 07:00       | the instance schedule stops the VM, if a night hung                                                    |
+
+The night is over before the working morning (decision on 2026-11-20). On
+the last Sunday of March the clocks skip
+02:00-03:00: the VM boots at 03:15 and the night starts at 03:30, after an
+export Cloud Scheduler may run at 03:00 or skip (a skipped one holds that
+night's people). In October the hour repeats and the export may run twice.
 
 `night.sh` brings the checkout up to `KORYTA_REF` (`origin/main` by default),
 syncs the venv, builds the compressor, reads the secrets, and hands over to
 `koryta_nightly` (`data/pipelines/src/jobs/nightly`), which runs the steps in
 order, each with a time limit and its output in the night's log:
 
-| Step           | What                                                                                                                                               |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `compress`     | the compressor, `-incremental -hostname` for rejestr.io, then api-krs.ms.gov.pl: the whole previous day in UTC                                     |
-| `export`       | waits for tonight's export: the newest one with its `.overall_export_metadata`, taken at most 6 h before the night                                 |
-| `krs_free`     | `koryta_scrape_krs_free --max-minutes 60`: the bulletin, then api-krs                                                                              |
-| `krs_register` | `koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25`: who owns each newly registered company                                |
-| `krs_odpis`    | `koryta_krs_odpis --graph --changed-since <yesterday> --queue --missing public --max 300`: odpisy pełne, see below                                 |
-| `krs_paid`     | `koryta_scrape_krs_paid --scope fallback --max-calls 50`: rejestr.io for what the free sources could not give                                      |
-| `rebuild_held` | `koryta <Name> --refresh <Name>` for each held pipeline whose code changed since this VM last built it (below)                                     |
-| `reprocess`    | `koryta --all-pipelines --refresh all`, as the CI nightly, less the article branch, the BIP documents and the slow static sources (`HELD`)         |
-| `tests`        | `pytest src/tests/pipelines` over the night's outputs                                                                                              |
-| `outputs`      | `pytest -m e2e src/tests/e2e`: the outputs against `baseline.json`                                                                                 |
-| `invariants`   | `pytest -m e2e src/tests/pipelines`: the database invariants, over tonight's export                                                                |
-| `companies`    | the `people` command and `--companies-only`: the companies its people name that tonight's export has no page for                                   |
-| `people`       | `koryta_people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --max-rejestrio-current 50 --max-published 10 --refresh none` |
-| `scores`       | `koryta_score_import`: the scoring models rebuilt, tonight's new pages included, and their votes reconciled                                        |
-| `tidy`         | export shards and day-named outputs older than a week off the disk                                                                                 |
+| Step              | What                                                                                                                                               |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `compress`        | the compressor, `-incremental -hostname` for rejestr.io, then api-krs.ms.gov.pl: the whole previous day in UTC                                     |
+| `export`          | waits for tonight's export: the newest one with its `.overall_export_metadata`, taken at most 6 h before the night                                 |
+| `krs_free`        | `koryta_scrape_krs_free --max-minutes 60`: the bulletin, then api-krs                                                                              |
+| `krs_register`    | `koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25`: who owns each newly registered company                                |
+| `krs_odpis`       | `koryta_krs_odpis --graph --changed-since <yesterday> --queue --missing site --max 300`: odpisy pełne, see below                                   |
+| `krs_paid`        | `koryta_scrape_krs_paid --scope fallback --max-calls 50`: rejestr.io for what the free sources could not give                                      |
+| `rebuild_held`    | `koryta <Name> --refresh <Name>` for each held pipeline whose code changed since this VM last built it (below)                                     |
+| `reprocess`       | `koryta --all-pipelines --refresh all`, as the CI nightly, less the article branch, the BIP documents and the slow static sources (`HELD`)         |
+| `tests`           | `pytest src/tests/pipelines` over the night's outputs                                                                                              |
+| `outputs`         | `pytest -m e2e src/tests/e2e`: the outputs against `baseline.json`                                                                                 |
+| `invariants`      | `pytest -m e2e src/tests/pipelines`: the database invariants, over tonight's export                                                                |
+| `companies`       | the `people` command and `--companies-only`: the companies its people name that tonight's export has no page for                                   |
+| `people`          | `koryta_people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --max-rejestrio-current 50 --max-published 10 --refresh none` |
+| `company_updates` | `koryta_company_import --max-uploads 200 --max-renames 0`: what tonight's data changes on the companies the export has (below)                     |
+| `scores`          | `koryta_score_import`: the scoring models rebuilt, tonight's new pages included, and their votes reconciled                                        |
+| `declarations`    | `koryta_bip_declarations send-facts`: predator's newest facts, with tonight's list, to the site, which counts the declarations in people (below)   |
+| `compute_nodes`   | `koryta_uploader --type computeNodes --endpoint https://autopush.koryta.pl --submit`: the site recounts every page's stats (below)                 |
+| `tidy`            | export shards and day-named outputs older than a week off the disk                                                                                 |
 
 The VM keeps its disk, so `versioned/`, the download cache, the listing ranges
 and the odpis parse memo carry over from one night to the next: the jobs run
@@ -126,8 +137,17 @@ whatever enters the graph. Within each, companies never asked come first, then
 those whose last attempt got no answer; one the service said is in neither
 register is not asked again.
 
-The private companies with none on file - 9,095 more on 2026-10-09, about 39
-nights after the public ones - wait for `--odpis-missing all`. The service slows
+Then the companies the site has a page for and the pipeline calls private
+(`--missing site`), in `CompaniesLikelyPublic`'s order, most likely public
+first. Nothing else asks for them: a struck-off one is never named by the
+bulletin again, so a public owner only its odpis names stays hidden. On
+2026-11-19, 529 of them had no odpis of any kind and about 2,300 no odpis
+pełny parsed: two weeks or so of the room the step had left in November, when
+it asked for 3 to 250 of its 300 a night. The step reads last night's list and
+never rebuilds it.
+
+The other private companies with none on file - 9,095 on 2026-10-09 - wait
+for `--odpis-missing all`. The service slows
 down after about 1,000 documents a run, which `--odpis-max` keeps the step well
 under, queue, gap and all: while the queue's companies take the nights, the
 gap waits for them. An odpis that does not come is what `krs_paid` buys
@@ -298,14 +318,42 @@ creates on the way what is missing; the summary of each run, with every company
 and the people who name it, is in `jobs/company_import/runs/`, and the run on
 /admin/procesy is „Import firm”.
 
+And after the people, what tonight's data changes on the pages of the companies
+the export has (`koryta_company_import`, step `company_updates`): a public
+owner or founder found, sectors, the register's legal form and supervisory
+organ, owner links and seats - what `CompaniesPayloads --only-changed` and a
+hand upload used to send, and the night did not. 663 of the site's 10,674
+companies were waiting on 2026-11-11. At most 200 a night
+(`--max-company-uploads`), those turning public first. It holds back, and
+names in its run's warnings for a hand upload, what each hand upload's reader
+held back: a public company the payload would make private, the companies in
+`HAND_ONLY` (`data/pipelines/src/jobs/company_import`), and one the site has
+no page for under its KRS number. It keeps the name a page shows unless
+`--max-company-renames` lets the register's in: 2 of the 3 renames waiting on
+2026-11-11 were the pipelines' slips. Its runs report as „Import firm” too,
+with what it sent in `jobs/company_import/payloads/`. `--company-dry-run`
+builds and counts them and sends none.
+
 Scores: after the people, every scoring model (`analysis/scores`) is rebuilt
 and its shortlist reconciled with the votes it holds on the site - a changed
 score written, one it no longer gives taken back (`koryta_score_import`). The
-models rate the site's people as the 04:00 export has them and the pages the
+models rate the site's people as the 02:00 export has them and the pages the
 people step has just created (`scrapers/koryta/created.py`, read from what the
 import says it sent), so a new hire is in the queue on /eksploruj/nowe the same
 morning rather than after the next export. A model that rates nobody is not
 uploaded: reconciled, it would take back every vote it has.
+
+Declarations: the people a declaration can publish, each in the stage they are
+in, for the home page's tab, /oswiadczenia/postep and /admin/oswiadczenia. The
+site counts them itself, from its own pages and readings and from what predator
+did for each candidacy: the crawl, the cut and the upload run there by hand, and
+after each it writes a facts part to
+`gs://koryta-pl-sharedcache/jobs/bip_declarations/facts/`
+(`koryta_bip_declarations facts-part`), with no names, dates or URLs in it. The
+night's `declarations` step sends the newest part, with tonight's list and how
+many Poles carry each surname (`koryta_bip_declarations send-facts`); the site
+counts everybody then, and moves them between stages during the day as pages
+are published or readings settle (decision on 2026-11-17).
 
 A failed step does not end the night; the steps that depend on it are held:
 
@@ -325,7 +373,28 @@ A failed step does not end the night; the steps that depend on it are held:
   go up, with whatever pages the people step did create.
 - `companies` runs only when `people` may - skipped, not held, when it may
   not, so that a held night still names the people as what it held - and holds
-  nothing back: the people go up however it went.
+  nothing back: the people go up however it went. `company_updates` the same,
+  after the people: it neither waits for them nor holds the scores.
+- `declarations` waits for nothing and holds nothing: a held night still moves
+  the count. No part from predator yet, or no answer from the site - a 404
+  included, before the site has the endpoint - is partial, and the next night
+  sends again; a refusal, or the site's own error (500) again after a wait,
+  fails the step. The site counts on every try, so there are two at most,
+  which end inside the step's 15 minutes.
+- `compute_nodes` waits for nothing and holds nothing: a held night still
+  brings the counts and the search lines up to the day's edits. It is one
+  request, which the site cuts off at 300 s; a refusal or no answer fails the
+  step, and the counts stay as the last recount left them.
+
+Recount: the stats every page carries - what the lists filter and sort by, the
+queue tiers, the line the search box draws under a person - are worked out by
+`/api/stats/computeNodes` over the whole database, last in the night so that
+they cover everything it sent. It asks autopush, never koryta.pl (decision on
+2026-11-18): the two share the database, and autopush runs main's code on
+4000 MiB, while koryta.pl runs older code on 1 GiB, whose recount writes
+`stats` without the search line and so takes it off every person. The robot
+signs in as it does for its uploads: the site lets the datascience group
+recount, as well as an admin.
 
 ## Runs asked for on the site
 
@@ -346,7 +415,7 @@ At every boot `koryta-requests.service` (`requests.sh`) runs
   people with it and refuses an older one. A run asked for between midnight
   and the export stays queued, its card on /admin/procesy saying it waits for
   the export, and goes once the export's `.overall_export_metadata` is there,
-  with that export's stamp (`--export`) - at the 04:15 boot at the latest,
+  with that export's stamp (`--export`) - at the 02:15 boot at the latest,
   before the night, which waits for it (the runs asked for from 2026-10-06 to
   10-11 took 0.3-5.6 minutes);
 - takes `/var/lib/koryta-nightly/lock` for each run, as `night.sh` does for a
@@ -358,7 +427,7 @@ At every boot `koryta-requests.service` (`requests.sh`) runs
 - once it has run something - or found every queued run waiting for the
   export - and nothing more comes for 10 minutes, writes
   `poweroff-requested` and exits, and `poweroff.sh requests` switches the VM
-  off - never between 03:45 and 04:45 (the night is about to start), never
+  off - never between 01:45 and 02:45 (the night is about to start), never
   while somebody is logged in or a night holds the lock, never with
   `/etc/koryta/stay-up`. A VM booted by hand, where it has run nothing and
   nothing waits, stays up as before;
@@ -366,7 +435,7 @@ At every boot `koryta-requests.service` (`requests.sh`) runs
   the job's exit code, and at start a run this host was doing when it went down.
 
 Until the site may start the VM (task `grant-site-starts-nightly-vm`), a
-request waits for the next night: the 04:15 boot starts the worker too, which
+request waits for the next night: the 02:15 boot starts the worker too, which
 runs the queue once the export is done, or once the night lets go of the
 lock if it has taken it first.
 
@@ -412,9 +481,9 @@ and Secret Manager.
 
 3. Run the first night by hand, sending nobody. It is a cold one - empty
    `versioned/`, empty download cache - so it takes longer than the rest.
-   `--export-max-age 24` lets a daytime run take this morning's 04:00 export
+   `--export-max-age 24` lets a daytime run take this morning's 02:00 export
    as tonight's. Only one taken within 6 h of the start counts otherwise, so
-   a run started after 10:00 would wait 90 minutes for an export that comes
+   a run started after 08:00 would wait 90 minutes for an export that comes
    tomorrow and then hold the people step:
 
    ```bash
@@ -443,7 +512,7 @@ and Secret Manager.
    nights that build and count them and send none, put
    `KORYTA_NIGHTLY_ARGS=--people-dry-run` in `/etc/koryta/nightly.env`.
 
-Stop the VM afterwards, or leave it: the schedule boots it at 04:15 either
+Stop the VM afterwards, or leave it: the schedule boots it at 02:15 either
 way, and the timer runs the night on a VM that is already up too.
 
 ## Day to day
@@ -463,14 +532,24 @@ way, and the timer runs the night on a VM that is already up too.
   was measured on. Nothing is held or warned for it. A lag allowance
   (`within_budget(count, RECOMPUTE_LAG, allowance=True)`, the few nodes a
   sweep can be behind) is not a budget and is never listed.
-- **Log in during a night.** `sudo touch /etc/koryta/stay-up` before 04:30 and
+- **Log in during a night.** `sudo touch /etc/koryta/stay-up` before 02:30 and
   the VM stays up afterwards; remove it, or the VM runs - and bills - until
-  the schedule's 09:00 stop. A boot outside the night window runs no night -
+  the schedule's 07:00 stop. A boot outside the night window runs no night -
   only the requests worker, which does what is queued (above).
 - **One step by hand.** `night.sh --force --only people --people-dry-run`
   (the `systemd-run` line above). Steps left out by `--only` or `--skip` hold
   nothing back. A real people run by hand creates pages no model has rated:
   add `--only scores`, or they wait for the next night.
+- **Moving the night.** Four places move together, on the same day, or a
+  night is lost: the export's `schedule` in `frontend/functions/src/index.ts`
+  (deployed by hand: `firebase deploy --only functions:scheduledFirestoreExport`),
+  the instance schedule (`gcloud compute resource-policies update
+  instance-schedule koryta-nightly --region=europe-central2
+  --vm-start-schedule=... --vm-stop-schedule=...`, or `create-vm.sh` again),
+  the timer and the units (`setup-vm.sh` again: systemd reads its own copy, and
+  night.sh runs the night before's copy of itself), and the hours in the code
+  (`EXPORT_HOUR`, the window and `--stop-by` above, the worker's `--keep-up`,
+  `jobs.ts` and `PEOPLE_IMPORT_WINDOW` on the site).
 - **Other code.** `KORYTA_REF` in `/etc/koryta/nightly.env` - a tag holds the
   VM still while `main` moves. Every merge to `main` is otherwise live the
   next night.
@@ -487,8 +566,9 @@ way, and the timer runs the night on a VM that is already up too.
   a night of 100 had room for 34 of them and for none of the unpublished
   pages behind them, a night of 150 for all 50 and 29 of those.
 - **The private companies' odpisy too.** `KORYTA_NIGHTLY_ARGS=--odpis-missing all`;
-  `none` leaves the gap out, as before 2026-10-09, and `--no-odpis-queue` the
-  queue's companies, as before 2026-10-15.
+  `public` leaves out the site's private ones, as before 2026-11-19, `none`
+  the whole gap, as before 2026-10-09, and `--no-odpis-queue` the queue's
+  companies, as before 2026-10-15.
 - **More of the register.** `KORYTA_NIGHTLY_ARGS=--register-backlog 2000`.
   What it would read, without reading:
   `koryta_krs_register_owners --new-registrations --dry-run`.
@@ -516,9 +596,10 @@ shared cache grows by the night's backups as `main`; how long it keeps them is
 
 - rejestr.io for a company the free odpis has not been asked about: the
   night's `krs_odpis` asks for the bulletin's, then the queue's, then the
-  public ones with no odpis on file, 300 in all, so a company waits its turn
-  there; a private company with none that the queue does not owe waits for
-  `--odpis-missing all` or a hand run of `koryta_krs_odpis`.
+  public ones with no odpis on file, then the site's private ones, 300 in
+  all, so a company waits its turn there; a private company with none that
+  neither the queue nor the site names waits for `--odpis-missing all` or a
+  hand run of `koryta_krs_odpis`.
 - Companies: `CompaniesPayloads --only-changed` is not sent; a person's missing
   company is created on the way, as the uploader always did.
 - `test_rejestrio_coverage.py`: it walks the whole rejestr.io prefix twice, an
@@ -526,6 +607,8 @@ shared cache grows by the night's backups as `main`; how long it keeps them is
 - The article crawl.
 - The BIP crawl (`koryta_scrape_bip`, by hand), nor the two pipelines that
   classify and parse what it fetched: they read its Postgres queue.
+- The declarations' crawl, cut and upload: by hand on predator, which writes a
+  facts part after each. The night only hands the newest to the site.
 
 ## Files
 
@@ -533,7 +616,7 @@ shared cache grows by the night's backups as `main`; how long it keeps them is
 | ------------------------- | ------------------------------------------------------------------------------- |
 | `create-vm.sh`            | the GCP side, once: service account, grants, secrets, VM, schedule              |
 | `setup-vm.sh`             | the VM side, idempotent: packages, user, uv, Go, checkout, `/etc/koryta`, units |
-| `koryta-nightly.timer`    | 04:30 Warsaw; catches up a missed start after boot                              |
+| `koryta-nightly.timer`    | 02:30 Warsaw; catches up a missed start after boot                              |
 | `koryta-nightly.service`  | runs `night.sh` as `koryta`, then `poweroff.sh` as root                         |
 | `night.sh`                | night window, lock, checkout, venv, compressor, secrets, then `koryta_nightly`  |
 | `koryta-requests.service` | at every boot: `requests.sh`, the worker for runs asked for on the site         |

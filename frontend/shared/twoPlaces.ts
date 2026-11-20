@@ -12,16 +12,25 @@
  * The rule is `test_nobody_stands_in_two_places_at_once` in
  * data/pipelines/src/tests/pipelines/test_invariants.py, the night's check that
  * holds the people upload when the count of published clashes grows. A person's
- * candidacies are grouped by election year and office; two places in a group
- * clash unless one TERYT code is the other or starts with it, because a sejmik's
- * województwo contains the powiat council its candidate also ran for. Two kinds
- * of election in one year are two contests - 2024 held both the local and the
- * european ones - which is why the office is part of the group.
+ * candidacies are grouped by the election they were stood in, whatever the
+ * office: a gmina council run and a sejmik run of 2024 are one local election,
+ * while 2024's european one is another contest. Two places in a group clash
+ * unless one TERYT code is the other or starts with it, because a sejmik's
+ * województwo contains the powiat council its candidate also ran for.
  *
- * One difference: an undated candidacy is left out here, where the check files
- * it under the year "None". Two of those are not known to be one election, and
- * a warning has to be true of the rows it names (one such edge on 2026-10-15).
+ * The election is `candidacyElection`'s, worked out here rather than by each
+ * reader, so the publication's hold (`clashingCandidacies` in
+ * server/utils/declarationPublish.ts), the publish dialog and the person page
+ * cannot group a page's runs apart. Where the night's check differs: an
+ * undated run, a by-election and a run in a year with no election of its kind
+ * are left out here, and a run with no office in a year of two elections goes
+ * to the one `candidacyElection` reads it as, where the check gives such runs
+ * a group of their own. Two undated runs are not known to be one election,
+ * and a warning has to be true of the rows it names (one such edge on
+ * 2026-10-15).
  */
+
+import { candidacyElection, type ElectionKey } from "./electionDays";
 
 /** One candidacy, as much of it as the rule reads. */
 export type Candidacy = {
@@ -34,17 +43,21 @@ export type Candidacy = {
   /** `start_date` as stored. Only the year is read: nearly every candidacy is
    * dated to the first of January of its election, a few to the day itself. */
   startDate?: string | null;
-  /** The office, as stored. Absent and empty are two different groups, as
-   * they are in the check: absent is a candidacy from before the field. */
+  /** The office, as stored, which says which election of the year it was. */
   position?: string | null;
+  /** `by_election`: a contest of its own, which clashes with nothing. Not
+   * optional, so that no reader leaves it out and files a by-election under
+   * the general election of its year. */
+  byElection: boolean | null | undefined;
 };
 
 /** One election in which a person's candidacies stand in places that cannot
  * all be theirs. */
 export type PlaceClash<T> = {
   personId: string;
+  /** As `candidacyElection` names it: „local-2024”. */
+  election: ElectionKey;
   year: string;
-  position: string | null;
   /** The election's rows whose place disagrees with another row's place, in
    * the order they came in. A row that agrees with every other row of the
    * election is not here - a sejmik run beside the powiat run it contains -
@@ -75,12 +88,12 @@ export function placeClashes<T>(
   rows: readonly T[],
   candidacyOf: (row: T) => Candidacy | undefined,
 ): PlaceClash<T>[] {
-  const elections = new Map<
+  const groups = new Map<
     string,
     {
       personId: string;
+      election: ElectionKey;
       year: string;
-      position: string | null;
       members: { row: T; teryt: string }[];
     }
   >();
@@ -89,27 +102,31 @@ export function placeClashes<T>(
     if (!candidacy) continue;
     const teryt = regionTeryt(candidacy.regionId);
     const year = candidacy.startDate?.slice(0, 4);
-    if (!teryt || !year) continue;
-    const position = candidacy.position ?? null;
-    const key = JSON.stringify([candidacy.personId, year, position]);
-    let election = elections.get(key);
-    if (!election) {
-      election = { personId: candidacy.personId, year, position, members: [] };
-      elections.set(key, election);
+    const election = candidacyElection(
+      candidacy.startDate,
+      candidacy.position,
+      candidacy.byElection,
+    );
+    if (!teryt || !year || !election) continue;
+    const key = JSON.stringify([candidacy.personId, election]);
+    let group = groups.get(key);
+    if (!group) {
+      group = { personId: candidacy.personId, election, year, members: [] };
+      groups.set(key, group);
     }
-    election.members.push({ row, teryt });
+    group.members.push({ row, teryt });
   }
 
   const clashes: PlaceClash<T>[] = [];
-  for (const { personId, year, position, members } of elections.values()) {
+  for (const { personId, election, year, members } of groups.values()) {
     const clashing = members.filter((member) =>
       members.some((other) => !placesAgree(member.teryt, other.teryt)),
     );
     if (clashing.length === 0) continue;
     clashes.push({
       personId,
+      election,
       year,
-      position,
       rows: clashing.map((member) => member.row),
     });
   }
@@ -140,4 +157,28 @@ export function yearsInPlace<T>(
     if (other && year && placesAgree(teryt, other)) years.add(year);
   }
   return Array.from(years).sort();
+}
+
+/** The page's parties that only doubtful candidacies give it, in the page's
+ * order: those every candidacy naming the party is doubtful about.
+ *
+ * The import adds the parties of a page's candidacies to the page's, and a
+ * namesake's get in where the pipeline does not see the clash - two offices
+ * of one election, his runs of other years - or were stored before it
+ * looked. Publishing the page shows them all, whatever relations go with it.
+ * A party no candidacy names came from elsewhere (a press list, a reviewer,
+ * a coalition's committee) and is left alone, as is one a run not in doubt
+ * names too. `partiesOf` answers undefined for a row that is not a
+ * candidacy; `doubtful` is the caller's: the publish dialog's are the runs of
+ * a clash left unticked, and his other runs in a place left out of one. */
+export function partiesOnlyFrom<T>(
+  pageParties: readonly string[],
+  rows: readonly T[],
+  partiesOf: (row: T) => readonly string[] | undefined,
+  doubtful: (row: T) => boolean,
+): string[] {
+  return [...new Set(pageParties)].filter((party) => {
+    const givers = rows.filter((row) => partiesOf(row)?.includes(party));
+    return givers.length > 0 && givers.every(doubtful);
+  });
 }

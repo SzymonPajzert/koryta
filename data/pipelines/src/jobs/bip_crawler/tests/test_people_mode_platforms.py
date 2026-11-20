@@ -541,3 +541,168 @@ def test_a_pokaz_whose_row_says_a_seekers_declaration_is_read_first(tmp_path):
     assert [d.url for d in store.person_docs("p")] == [
         "https://u1.pl/Download.ashx?id=102"
     ]
+
+
+def test_a_framesets_frame_is_followed_onto_its_host(tmp_path):
+    # Świdnica (11-05): www.bip.um.swidnica.pl is a frameset whose one frame is
+    # the BIP on bip.swidnica.nv.pl; the walk read the frameset and stopped.
+    frameset = (
+        '<html><head><title></title></head><frameset rows="*">'
+        '<frame name=997 noresize src="https://bip.other.pl/swidnica">'
+        "</frameset></html>"
+    )
+    sites = {
+        "https://u1.pl": (200, "text/html", frameset.encode()),
+        "https://bip.other.pl/swidnica": html(
+            "BIP", '<a href="/om">Oświadczenia majątkowe radnych</a>'
+        ),
+        "https://bip.other.pl/om": html(
+            "Oświadczenia majątkowe radnych",
+            '<a href="/f/1.pdf">Oświadczenie majątkowe - Luiza Nowaczyńska</a>',
+        ),
+        "https://bip.other.pl/f/1.pdf": (200, "application/pdf", PDF + b"1"),
+    }
+    _, store, _, _ = search(tmp_path, sites, [row("n", "u1", "Luiza", "Nowaczyńska")])
+    assert store.outcomes["n"].status == "found"
+
+
+def test_a_name_on_a_declarations_list_lends_its_page_the_files(tmp_path):
+    # Kłodzko (11-05): "Oświadczenia majątkowe Radni - IX kadencja" links each
+    # councillor by name to a page titled "Informacja publiczna - szczegóły"
+    # whose files say only "Oświadczenie majątkowe za rok 2025".
+    listing = "/index.php?n=i&menu=690"
+    page = "/index.php?n=i&id=15375&akcja=info&menu=690"
+    sites = {
+        "https://u1.pl": html("BIP", f'<a href="{listing}">Oświadczenia majątkowe</a>'),
+        f"https://u1.pl{listing}": html(
+            "Oświadczenia majątkowe Radni - IX kadencja",
+            f'<a href="{listing}&amp;tryb_widoku=kontrast">Kontrast</a>'
+            f'<a href="{page.replace("&", "&amp;")}">BRYŁA PIOTR</a>'
+            '<a href="/index.php?n=i&amp;id=15376&amp;akcja=info&amp;menu=690">'
+            "NOWAK ANNA</a>",
+        ),
+        f"https://u1.pl{page}": html(
+            "Informacja publiczna - szczegóły",
+            '<a href="/pi/um/36460.pdf">Oświadczenie majątkowe za rok 2025</a>',
+        ),
+        "https://u1.pl/pi/um/36460.pdf": (200, "application/pdf", PDF + b"1"),
+    }
+    _, store, web, _ = search(tmp_path, sites, [row("b", "u1", "Piotr", "Bryła")])
+    assert store.outcomes["b"].status == "found"
+    assert not any("kontrast" in c for c in web.calls)
+
+
+def test_a_page_is_asked_for_with_its_query_in_the_order_linked(tmp_path):
+    # um.bip.klodzko.pl reads its query in order: ?menu=690&n=i, as
+    # normalize_url sorts it, is the front page; ?n=i&menu=690 the list.
+    class OrderedWeb(Web):
+        def fetch(self, url, timeout, user_agent):
+            self.calls.append(url)
+            body = {
+                "https://u1.pl/index.php?n=i&menu=690": html(
+                    "Oświadczenia majątkowe Radni",
+                    '<a href="/f/1.pdf">Oświadczenie majątkowe - Piotr Bryła</a>',
+                ),
+                "https://u1.pl/f/1.pdf": (200, "application/pdf", PDF + b"1"),
+                "https://u1.pl": html(
+                    "BIP",
+                    '<a href="/index.php?n=i&amp;menu=690">Oświadczenia majątkowe</a>',
+                ),
+            }.get(url.rstrip("/"), html("Urząd Miasta", "<p>nic</p>"))
+            status, ctype, content = body
+            return HttpResult(
+                url=url, status=status, content_type=ctype, content=content
+            )
+
+    web = OrderedWeb({})
+    _, store, _, _ = search(
+        tmp_path, {}, [row("b", "u1", "Piotr", "Bryła")], web=web, sitemaps=False
+    )
+    assert "https://u1.pl/index.php?n=i&menu=690" in web.calls
+    assert store.outcomes["b"].status == "found"
+
+
+def test_a_declarations_section_carries_down_its_terms_and_names(tmp_path):
+    # Strzegom (11-05): "Oświadczenia majątkowe" > "Kadencja 2024-2029" >
+    # "Michał CZAPLA", whose page is titled with his name and the term alone
+    # and labels his files "2024", "2025".
+    sites = {
+        "https://u1.pl": html("BIP", '<a href="/om">Oświadczenia majątkowe</a>'),
+        "https://u1.pl/om": html(
+            "Oświadczenia majątkowe",
+            '<a href="/k">Kadencja 2024-2029</a><a href="/rada">Rada Miejska</a>',
+        ),
+        "https://u1.pl/k": html(
+            "Kadencja 2024-2029",
+            '<a href="/czapla">Michał CZAPLA</a><a href="/kowal">Jan KOWAL</a>',
+        ),
+        "https://u1.pl/czapla": html(
+            "Michał CZAPLA - Urząd Miejski",
+            '<a href="/get_file.php?id=1">2024</a><a href="/get_file.php?id=2">2025</a>'
+            '<a href="/index.php?id=99">Wybory 2025 Prezydent</a>',
+        ),
+        "https://u1.pl/rada": html(
+            "Rada Miejska", '<a href="/f/statut.pdf">Statut - Michał Czapla</a>'
+        ),
+        "https://u1.pl/get_file.php?id=1": (200, "application/pdf", PDF + b"1"),
+        "https://u1.pl/get_file.php?id=2": (200, "application/pdf", PDF + b"2"),
+        "https://u1.pl/f/statut.pdf": (200, "application/pdf", PDF + b"3"),
+    }
+    _, store, web, _ = search(tmp_path, sites, [row("c", "u1", "Michał", "Czapla")])
+    assert store.outcomes["c"].status == "found"
+    assert not any("id=99" in c for c in web.calls)
+    assert {d.url for d in store.person_docs("c") if d.status == "ok"} == {
+        "https://u1.pl/get_file.php?id=1",
+        "https://u1.pl/get_file.php?id=2",
+    }
+
+
+def test_a_file_link_that_opens_a_page_is_followed_to_its_file(tmp_path):
+    # Polanów (11-05): "Pobierz oświadczenie" opens /oswiadczenia/pobierz/898/,
+    # a page offering the file itself, pobierz.php?d=osw&id=898.
+    sites = {
+        "https://u1.pl": html(
+            "Oświadczenia majątkowe",
+            "<table><tr><td>Parszczyński Janusz Krzysztof</td><td>roczne 2025</td>"
+            '<td><a href="/oswiadczenia/pobierz/898/">Pobierz oświadczenie</a></td>'
+            "</tr></table>",
+        ),
+        "https://u1.pl/oswiadczenia/pobierz/898": html(
+            "Pobierz",
+            '<a href="/pobierz.php?d=osw&amp;id=898">Parszczynski.pdf</a>'
+            '<a href="/pliki/statut.pdf">Statut</a><a href="/pliki/rodo.pdf">RODO</a>',
+        ),
+        "https://u1.pl/pobierz.php?d=osw&id=898": (200, "application/pdf", PDF + b"1"),
+    }
+    _, store, _, _ = search(
+        tmp_path, sites, [row("p", "u1", "Janusz", "Parszczyński")], sitemaps=False
+    )
+    assert store.outcomes["p"].status == "found"
+    [doc] = [d for d in store.person_docs("p") if d.status == "ok"]
+    assert doc.sha256
+
+
+def test_a_bold_span_names_the_file_below_it(tmp_path):
+    # Powiat chełmiński (11-05): "<span style=font-weight:bold>Mirosław
+    # Kurdynowski</span><br><a href=bip_download.php?id=12052>pobierz
+    # oświadczenie</a>", one after another in a single block.
+    body = "".join(
+        f'<span style="font-weight:bold;">{name}</span><br>'
+        f'<a href="/bip_download.php?id={n}"> pobierz oświadczenie (798kB) </a><br><br>'
+        for n, name in ((12051, "Mariusz Krzemiński"), (12052, "Mirosław Kurdynowski"))
+    )
+    sites = {
+        "https://u1.pl": html(
+            "Oświadczenia majątkowe składane na początek VII kadencji",
+            f"<div>{body}</div>",
+        ),
+        "https://u1.pl/bip_download.php?id=12051": (200, "application/pdf", PDF + b"1"),
+        "https://u1.pl/bip_download.php?id=12052": (200, "application/pdf", PDF + b"2"),
+    }
+    _, store, _, _ = search(
+        tmp_path, sites, [row("k", "u1", "Mirosław", "Kurdynowski")], sitemaps=False
+    )
+    assert store.outcomes["k"].status == "found"
+    assert {d.url for d in store.person_docs("k") if d.status == "ok"} == {
+        "https://u1.pl/bip_download.php?id=12052"
+    }

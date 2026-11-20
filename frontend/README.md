@@ -330,6 +330,13 @@ every PR). After an intentional UI change, regenerate them on Linux with
 `npm run test:visual:update` and commit the updated PNGs; on failure CI uploads
 a `playwright-visual-report` artifact with the image diffs.
 
+Visual tests run without the layout's chrome: the footer, the signed-in strip
+and the „Zgłoś” button are gone, and the app bar is an empty band
+(`tests/visual/chrome.ts`). The chrome is photographed by
+`tests/visual/chrome.spec.ts`, and two full pages keep it (`chrome: true` in
+`pages.spec.ts`), so a change to a menu or to the footer retakes those few
+baselines rather than every one.
+
 ## Email notifications
 
 The site writes to a contributor when a reviewer acts on something they
@@ -514,6 +521,14 @@ To load a list of tasks - the harvest of open items from the agents' notes,
 say - `scripts/ops/import-tasks.ts <file.json>` writes each task that is not
 there yet, as `ops-writer`, or into the emulator when `FIRESTORE_EMULATOR_HOST`
 is set. It never changes a task that exists.
+
+The check of main (`.github/workflows/merge-check.yml`, on every push to main)
+writes to each open task of kind `merge` how much of its branches is on main,
+and closes the ones whose every branch is. The CI account
+(`GCP_PIPELINES_SERVICE_ACCOUNT`) holds the same Token Creator binding on
+`ops-writer` as `dev-workflow` above. To see what it would do, from a mirror
+of the repository (`git clone --mirror ~/koryta/.git /tmp/repo.git`):
+`npx tsx scripts/ops/merge-check.ts --repo /tmp/repo.git --dry-run`.
 
 ### How the jobs are doing
 

@@ -1,5 +1,5 @@
 import type { DocumentData, Firestore } from "firebase-admin/firestore";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { readingKind, type ExtractStatus } from "~~/shared/declarations";
 import {
   dataUrl,
@@ -7,6 +7,8 @@ import {
   EXTRACTS,
   PUBLICATIONS,
 } from "./declarations";
+import type { StoredPublication } from "./declarationPublish";
+import { restageDeclarationPeople } from "./declarationPeopleCount";
 
 /**
  * The decisions /admin/oswiadczenia offers on a crop the readers left to an
@@ -22,8 +24,8 @@ import {
  * laid over theirs.
  *
  * A date settles the crop as the admin's (`agreed.by` "admin") and is
- * compared with its pages afresh, but it publishes and confirms nobody: a
- * draft born that day is held for somebody to publish by hand
+ * compared with its pages afresh, but the automation publishes nobody on it:
+ * a draft born that day is held for somebody to publish by hand
  * (`admin_decision` in declarationPublish.ts), and a public page born that
  * day is left as it is, since the admin chose the date with the pages' dates
  * a click away. A page born on another day is flagged as for any reading. The
@@ -33,17 +35,24 @@ import {
  * comparison filed on a page stays: it is that page's to resolve. Who decided
  * what, and what it replaced, stays on the crop.
  *
- * None of the three leaves a crop confirming a page. A public page whose
- * record lists the crop stops showing its declaration
- * (`confirmedDeclarations` reads the crop, and takes neither an admin's date
- * nor a crop that is not agreed), which `linkedOnAPage` tells the endpoints,
- * so they drop the pages' cached answers.
+ * A public page whose record lists the crop shows its declaration only while
+ * the crop is agreed on the page's date (`confirmedDeclarations`, an admin's
+ * date included since the decision on 2026-11-18), so any of the three can
+ * change what the page shows, which `linkedOnAPage` tells the endpoints, so
+ * they drop the pages' cached answers.
+ *
+ * The decisions on a held page are here too: saying it will not be published,
+ * taking that back, and what a publication by hand does to a hold. Asking a
+ * hold again is a publication, and lives with them in declarationPublish.ts
+ * (`recheckPublication`).
  */
 
-/** The name overview.get.ts caches the overview under. A decision, and a
- * press of "Opublikuj z kolejki", clears it, so the reload after one shows
- * what it did rather than an answer up to two minutes old. Nitro keeps a
- * cached function under `nitro:functions:<name>` in the `cache` storage. */
+/** The name overview.get.ts caches the overview's counts under, for two
+ * minutes on each instance; the lists an admin decides on are read on every
+ * request. Nitro keeps a cached function under `nitro:functions:<name>` in
+ * the `cache` storage. The endpoints' `clear` of it removes nothing (unstorage
+ * clears only mounts below the base, and the entry sits on the root mount):
+ * after a decision only the counts can be up to two minutes old. */
 export const OVERVIEW_CACHE = "declarationOverview";
 export const OVERVIEW_CACHE_BASE = `nitro:functions:${OVERVIEW_CACHE}`;
 
@@ -78,10 +87,10 @@ const LINKED_RECORDS = 50;
 
 /**
  * Whether a public page may be showing the crop's declaration: a published
- * or confirmed record lists it. A decision on such a crop takes the
- * declaration off the page (`confirmedDeclarations`), whose answer is cached
- * for hours, so the endpoints drop the cached answers after it - and only
- * then, since most crops an admin decides were never linked anywhere.
+ * or confirmed record lists it. A decision on such a crop can change what the
+ * page shows (`confirmedDeclarations`), whose answer is cached for hours, so
+ * the endpoints drop the cached answers after it - and only then, since most
+ * crops an admin decides were never linked anywhere.
  *
  * A question that cannot be answered counts as yes: dropping the cache costs
  * reads, keeping it would leave the page vouching for a crop just taken back.
@@ -188,6 +197,187 @@ export async function decideExtract(
     });
     return { id: args.extractId, status, compare: kind === "date" };
   });
+}
+
+/** Reads a page's held record in a transaction, refusing a page with none
+ * and one not in the state a decision on it starts from (`accepts`): two
+ * admins, or two tabs, deciding one page at once cannot both have their way. */
+async function decideRecord(
+  db: Firestore,
+  pageId: string,
+  accepts: (record: StoredPublication) => boolean,
+  refusal: string | ((record: StoredPublication) => string),
+  write: () => Record<string, unknown>,
+): Promise<void> {
+  const ref = db.collection(PUBLICATIONS).doc(pageId);
+  await db.runTransaction(async (tx) => {
+    const record = (await tx.get(ref)).data() as StoredPublication | undefined;
+    if (!record) {
+      throw createError({
+        statusCode: 404,
+        message: "Nie ma takiej publikacji.",
+      });
+    }
+    if (!accepts(record)) {
+      throw createError({
+        statusCode: 409,
+        message: typeof refusal === "string" ? refusal : refusal(record),
+      });
+    }
+    tx.update(ref, write());
+  });
+}
+
+/** Whether a record is a hold an admin said will not be published. */
+export function isDeclined(record: StoredPublication | undefined): boolean {
+  return record?.status === "held" && !!record.declinedAt;
+}
+
+/**
+ * An admin's „Nie publikuj” on a held page. The page leaves what waits for an
+ * admin and goes with the people who will not be published. The record stays
+ * `held`, with the reason it was held for, and gains `declinedAt`: no later
+ * reading takes it up again (`nextPublication`), a recheck refuses it, and a
+ * release that knows nothing of declining keeps it held as well - except an
+ * admin's-date hold, which such a release hands to the next readers' crop,
+ * and which `claimPublication` then puts back on hold. Nothing on the page
+ * changes: it is still a draft, and whoever publishes it by hand may.
+ */
+export async function declinePublication(
+  db: Firestore,
+  pageId: string,
+  uid: string,
+  now: Date = new Date(),
+): Promise<void> {
+  const at = Timestamp.fromDate(now);
+  await decideRecord(
+    db,
+    pageId,
+    (record) => record.status === "held" && !record.declinedAt,
+    (record) =>
+      isDeclined(record)
+        ? "Ta osoba jest już odłożona."
+        : "Ta publikacja nie jest już wstrzymana.",
+    () => ({ declinedBy: uid, declinedAt: at, updatedAt: at }),
+  );
+}
+
+/** Takes a „Nie publikuj” back: the page waits for an admin again, for what it
+ * was held for. */
+export async function restorePublication(
+  db: Firestore,
+  pageId: string,
+  now: Date = new Date(),
+): Promise<void> {
+  await decideRecord(
+    db,
+    pageId,
+    isDeclined,
+    "Tej publikacji nikt już nie odkłada.",
+    () => ({
+      declinedBy: FieldValue.delete(),
+      declinedAt: FieldValue.delete(),
+      updatedAt: Timestamp.fromDate(now),
+    }),
+  );
+}
+
+/**
+ * Closes the hold of a page somebody has just published by hand, whichever
+ * screen they pressed on (`afterHandPublication`). The page is public, so
+ * there is nothing left to hold or to decline: the record becomes
+ * `published`, not by the site on its own (`autoPublished` false), with
+ * `handPublished` saying who, when and what it was held for. So the person
+ * counts as published wherever a publication from the queue does: the people
+ * count, the chain, the recent list.
+ *
+ * Whether a declaration then shows on the page is still read off the crops
+ * (`confirmedDeclarations`), an admin's date included.
+ *
+ * Returns whether a hold was closed.
+ */
+export async function closeHoldOnPublication(
+  db: Firestore,
+  pageId: string,
+  uid: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const ref = db.collection(PUBLICATIONS).doc(pageId);
+  return db.runTransaction(async (tx) => {
+    const record = (await tx.get(ref)).data() as StoredPublication | undefined;
+    if (record?.status !== "held") return false;
+    const at = Timestamp.fromDate(now);
+    tx.update(ref, {
+      status: "published",
+      reason: null,
+      publishedAt: at,
+      autoPublished: false,
+      handPublished: { uid, at, held: record.reason ?? null },
+      declinedBy: FieldValue.delete(),
+      declinedAt: FieldValue.delete(),
+      day: FieldValue.delete(),
+      updatedAt: at,
+    });
+    return true;
+  });
+}
+
+/**
+ * Puts the hold back on a page taken down again after a publication by hand
+ * closed it, for what it was held for: the person returns to the admin's list
+ * rather than disappearing from every list with the page. A page the site
+ * published itself is not touched: `restoreReverted` and its holds answer for
+ * those.
+ *
+ * Returns whether a hold was put back.
+ */
+export async function reopenHoldOnUnpublication(
+  db: Firestore,
+  pageId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const ref = db.collection(PUBLICATIONS).doc(pageId);
+  return db.runTransaction(async (tx) => {
+    const record = (await tx.get(ref)).data() as StoredPublication | undefined;
+    if (record?.status !== "published" || !record.handPublished) return false;
+    const at = Timestamp.fromDate(now);
+    tx.update(ref, {
+      status: "held",
+      reason: record.handPublished.held ?? "kept_hidden",
+      heldAt: at,
+      handPublished: FieldValue.delete(),
+      publishedAt: FieldValue.delete(),
+      updatedAt: at,
+    });
+    return true;
+  });
+}
+
+/**
+ * What a publication or unpublication of a person by hand does to the
+ * declarations flow, after it is committed: /api/nodes/publish and
+ * /api/revisions/approve call it when a person's page went from draft to
+ * public, or back. A hold is closed, or put back, and the person moves in the
+ * people count. Best effort: a hold left open costs a row on an admin's list,
+ * and a publication refused for it would be worse.
+ */
+export async function afterHandPublication(
+  db: Firestore,
+  pageId: string,
+  uid: string,
+  published: boolean,
+): Promise<void> {
+  try {
+    const changed = published
+      ? await closeHoldOnPublication(db, pageId, uid)
+      : await reopenHoldOnUnpublication(db, pageId);
+    if (changed) await restageDeclarationPeople(db, [pageId]);
+  } catch (error) {
+    console.error(
+      `[declarations] cannot ${published ? "close" : "reopen"} the hold of ${pageId}`,
+      error,
+    );
+  }
 }
 
 /** The pictures of a crop, or null for a crop that does not exist. */

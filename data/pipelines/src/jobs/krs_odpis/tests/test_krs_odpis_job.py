@@ -161,6 +161,32 @@ def test_the_gap_asks_for_the_live_companies_before_the_struck_off_ones():
     assert [c.krs for c in everybody] == [C, A, B, E, F, D]
 
 
+def test_the_sites_private_companies_come_after_the_public_ones_in_their_order():
+    companies = pd.DataFrame(
+        {
+            "krs": [A, B, C, D, E],
+            "is_public": [True, False, False, False, True],
+            "struck_off": [False, False, True, False, True],
+        }
+    )
+    # The site's private companies, most likely public first: F is not in the
+    # graph at all, C already has its odpis, A is public now and asked as such.
+    site = [F, D, "41", A]
+    attempts = {D: "gateway"}
+
+    gap = plan.without_odpis(companies, {C}, attempts, site=site)
+
+    # Never-asked before unanswered, as within the graph's groups.
+    assert [(c.krs, c.reason) for c in gap] == [
+        (A, plan.REASON_NO_ODPIS),
+        (E, plan.REASON_NO_ODPIS),
+        (F, plan.REASON_NO_ODPIS),
+        (D, plan.REASON_NO_ODPIS),
+    ]
+    everybody = plan.without_odpis(companies, {C}, attempts, private=True, site=site)
+    assert [c.krs for c in everybody] == [A, E, F, D, B]
+
+
 def test_a_graph_written_before_struck_off_existed_reads_all_live():
     companies = pd.DataFrame({"krs": [A, B], "is_public": [True, True]})
     as_text = companies.assign(struck_off=["False", "True"])
@@ -885,6 +911,62 @@ def test_the_nights_run_asks_the_paid_queues_companies_before_the_gap(
     out = capsys.readouterr().out
     assert "then 2 more the paid job owes rejestr.io for" in out
     assert "then 1 more (public) with no odpis on file" in out
+
+
+def test_the_sites_private_companies_are_read_off_last_nights_likely_public_list(
+    offline, monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        job,
+        "graph_companies",
+        lambda ctx: pd.DataFrame({"krs": [A, B, C], "is_public": [True, False, False]}),
+    )
+    monkeypatch.setattr(job.odpis_files, "stored_odpisy", lambda ctx: {})
+    monkeypatch.setattr(job, "last_attempts", lambda ctx: {})
+    reads: list = []
+
+    class Leads:
+        def read(self, ctx):
+            reads.append(ctx)
+            return pd.DataFrame({"krs": ["43", C]})
+
+        def read_or_process(self, ctx):
+            raise AssertionError("the likely-public list is never rebuilt here")
+
+    monkeypatch.setattr(job, "CompaniesLikelyPublic", Leads)
+    asked: list = []
+    monkeypatch.setattr(
+        job,
+        "make_plan",
+        lambda ctx, candidates, changes, today, limit, sources: (
+            asked.extend(candidates)
+            or plan.select(candidates, {}, changes, {}, today, limit)
+        ),
+    )
+    argv = ["--graph", "--changed-since", "2099-01-01", "--dry-run"]
+
+    assert job.main([*argv, "--missing", "site"]) == 0
+
+    # The public one, then the site's in the list's order; B is on no list.
+    assert [c.krs for c in asked] == [A, D, C]
+    assert len(reads) == 1
+    assert "then 3 more (site) with no odpis on file" in capsys.readouterr().out
+
+    asked.clear()
+    assert job.main([*argv, "--missing", "public"]) == 0
+    assert [c.krs for c in asked] == [A]
+    assert len(reads) == 1
+
+
+def test_with_no_likely_public_list_on_file_the_site_adds_nothing(monkeypatch, capsys):
+    class Missing:
+        def read(self, ctx):
+            raise FileNotFoundError("versioned/companies_likely_public")
+
+    monkeypatch.setattr(job, "CompaniesLikelyPublic", Missing)
+
+    assert job.site_order(object()) == []
+    assert "No CompaniesLikelyPublic on file" in capsys.readouterr().out
 
 
 def test_the_queue_is_added_to_a_graph_run_only(capsys):

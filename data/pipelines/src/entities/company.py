@@ -143,6 +143,25 @@ def short_name(name: str | None) -> str | None:
     """
     if not name:
         return name
+    base, statuses = _split_statuses(name)
+    return " ".join([base, *statuses])
+
+
+def register_statuses(name: str | None) -> list[str]:
+    """The statuses the register appends to a company's name, in its order.
+
+    ["W LIKWIDACJI"] for TELEWIZJA POLSKA SPÓŁKA AKCYJNA W LIKWIDACJI, and
+    none for a limited partnership whose partner is being wound up - see
+    `short_name`. Read off the register's name, not the site's: `display_name`
+    puts the town after the status.
+    """
+    if not isinstance(name, str) or not name:
+        return []
+    return _split_statuses(name)[1]
+
+
+def _split_statuses(name: str) -> tuple[str, list[str]]:
+    """`short_name` without the statuses, and the statuses."""
     base = " ".join(name.split())
     statuses: list[str] = []
     while True:
@@ -162,7 +181,7 @@ def short_name(name: str | None) -> str | None:
                 base = rest
         base = _unquoted(base)
         if base == before:
-            return " ".join([base, *statuses])
+            return base, statuses
 
 
 def display_name(name: str | None, city: str | None) -> str | None:
@@ -215,6 +234,16 @@ class Company:
     sources: list[Source] = field(default_factory=list)
     children: list[str] = field(default_factory=list)
     parents: list[Owner] = field(default_factory=list)
+    #: Who set the foundation or association up, where a public body did - see
+    #: `scrapers.krs.researched_owners.PUBLIC_FOUNDERS`. Kept apart from
+    #: `parents` because a founder holds no shares: nothing that reads the
+    #: ownership graph (the flag's propagation, the children lists, the
+    #: Wikipedia fallback for a company with no owner) should take it for one.
+    #: The site still lists it under „Właściciele”, labelled as the founder.
+    #: Not `founders`: a company sent straight from `Companies` carries its own
+    #: fields to the ingest, where `founders` is the payload's list of KRS
+    #: numbers.
+    founded_by: list[Owner] = field(default_factory=list)
     is_public: bool = False
     #: Which kind of organ supervises the company, normalised - see
     #: `scrapers.krs.organs.SUPERVISION_KINDS`. None is "no odpis was read

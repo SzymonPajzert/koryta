@@ -4,6 +4,7 @@ import { logIn, USERS } from "../e2e/helpers/auth";
 import { answerForTheSector } from "./fixtures/obronnosc";
 import { pageTag } from "./pageTags";
 import { expectFitsThePhone } from "./phoneWidth";
+import { expectSelectMenuShot } from "./selectMenu";
 
 /** The defence sector, „Obronność”, on the two pages it is worked from: the
  * queue at /eksploruj/nowe with „Typ podmiotu” set to it - the link the
@@ -77,7 +78,7 @@ test("kolejka-obronnosc-wybor", NOWE, async ({ page }) => {
   ).toBeVisible();
 
   await settle(page);
-  await expect(menu).toHaveScreenshot("kolejka-obronnosc-wybor.png");
+  await expectSelectMenuShot(page, menu, "kolejka-obronnosc-wybor.png");
 });
 
 test("tabela-obronnosc", TABELA, async ({ page }) => {

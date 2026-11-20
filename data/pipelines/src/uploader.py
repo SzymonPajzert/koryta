@@ -11,6 +11,7 @@ import requests
 from tqdm import tqdm
 
 from analysis.interesting import Companies
+from analysis.payloads.company import split_owners
 from conductor import setup_context
 from entities.company import display_name, on_the_treasury_list
 from entities.company_bodies import supervisory_body
@@ -184,6 +185,26 @@ class CompanyResult:
 def refusal(status: int, text: str) -> str:
     """A refused request as a run's errors keep it, on one line."""
     return f"{status} {' '.join(text.split())[:ERROR_TEXT_CHARS]}"
+
+
+def company_answer(krs: str, resp: requests.Response, unsaid: str) -> CompanyResult:
+    """What one answer of the company ingest says the site did with a company:
+    its `company`, or "failed" for a refusal. `unsaid` is the outcome of an
+    answer that took the company without saying what it did, as a site
+    deployed before the field answered."""
+    if resp.status_code not in [200, 201]:
+        return CompanyResult(
+            krs,
+            "failed",
+            status=resp.status_code,
+            error=f"firma {krs}: {refusal(resp.status_code, resp.text)}",
+        )
+    outcome = json_object(resp).get("company")
+    return CompanyResult(
+        krs,
+        outcome if outcome in COMPANY_OUTCOMES else unsaid,
+        status=resp.status_code,
+    )
 
 
 def one_line(error: BaseException) -> str:
@@ -376,7 +397,9 @@ class NumpyEncoder(json.JSONEncoder):
 class Args:
     endpoint: str
     submit: bool
-    type: typing.Literal["person", "company", "region", "score", "extraction"]
+    type: typing.Literal[
+        "person", "company", "region", "score", "extraction", "computeNodes"
+    ]
     database: str
     limit: int | None
     offset: int | None
@@ -767,6 +790,14 @@ class CompanyUploader(Uploader):
             payload["owners"] = owners
             payload["owner_teryts"] = owner_teryts
             payload["owner_skarb_panstwa"] = skarb_panstwa
+        # Who set it up, where a public body did, on the same terms: a company
+        # straight from `Companies` carries `founded_by` and no `founders`.
+        if "founders" not in payload:
+            (
+                payload["founders"],
+                payload["founder_teryts"],
+                payload["founder_skarb_panstwa"],
+            ) = split_owners(payload.get("founded_by"))
         if "teryt_code" in payload and payload["teryt_code"]:
             payload["teryt"] = payload["teryt_code"]
         # `CompaniesPayloads` already worked these out, but a company created
@@ -788,6 +819,7 @@ class CompanyUploader(Uploader):
                 if isinstance(wiki_categories, (list, np.ndarray))
                 else [],
                 treasury=on_the_treasury_list(payload.get("treasury_share")),
+                name=payload.get("name"),
             )
         if "supervisory_body" not in payload:
             payload["supervisory_body"] = supervisory_body(form)
@@ -969,21 +1001,11 @@ class PersonUploader(CompanyUploader):
             resp = self.submit_company(krs, None, fail=False)
         except Exception as error:
             return CompanyResult(krs, "failed", error=f"firma {krs}: {one_line(error)}")
-        if resp.status_code not in [200, 201]:
-            return CompanyResult(
-                krs,
-                "failed",
-                status=resp.status_code,
-                error=f"firma {krs}: {refusal(resp.status_code, resp.text)}",
-            )
-        outcome = json_object(resp).get("company")
-        return CompanyResult(
-            krs,
-            outcome if outcome in COMPANY_OUTCOMES else "created",
+        result = company_answer(krs, resp, "created")
+        if result.outcome != "failed":
             # Looked up, and named for display, on the way: `submit_company`.
-            name=self.company_payloads.get(krs, {}).get("name"),
-            status=resp.status_code,
-        )
+            result.name = self.company_payloads.get(krs, {}).get("name")
+        return result
 
     def answered(self, resp: requests.Response, result: PersonResult) -> PersonResult:
         """`result`, with the candidacies `resp` - the last answer about the
@@ -1258,7 +1280,11 @@ def read_payloads_filtered(args) -> list[dict]:
 def main():
     args = parse_args()
 
-    entities = read_payloads_filtered(args)
+    # The recount sends nothing: it asks the site to recount what it holds.
+    if args.type == "computeNodes":
+        entities = [{}]
+    else:
+        entities = read_payloads_filtered(args)
     print(f"Query returned {len(entities)} rows.", file=sys.stderr)
 
     if len(entities) == 0:

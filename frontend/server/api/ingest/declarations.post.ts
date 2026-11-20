@@ -2,11 +2,18 @@ import { createHash } from "node:crypto";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { getUser, requireDatascience } from "~~/server/utils/auth";
+import { restageDeclarationPeople } from "~~/server/utils/declarationPeopleCount";
 import { matchAndDrain } from "~~/server/utils/declarationPublish";
 import { resolveMergedNode } from "~~/server/utils/merge";
-import { pagesWithAPublicPost } from "~~/server/utils/publicPosts";
+import {
+  pagesReached,
+  pageTiers,
+  type QueuedPage,
+} from "~~/server/utils/readingQueue";
+import { pagesTouched } from "~~/shared/declarationPeople";
 import { pageIsPublic } from "~~/shared/model";
 import {
+  cropPriority,
   declarationIngestSchema,
   extractId,
   isPng,
@@ -15,7 +22,6 @@ import {
   MAX_REQUEST_IMAGE_BYTES,
   pngSize,
   publishLimitOf,
-  readingPriority,
   type DeclarationCandidacyInput,
   type DeclarationExtractInput,
   type DeclarationIngestResult,
@@ -36,9 +42,12 @@ import {
  * images go to their own collection so that listing extracts never loads bytes.
  *
  * A reading starts open and readers move it (`/api/declarations/<id>/answer`),
- * except a typed date the job read with high confidence, which settles here.
- * A crop settled either way is then compared with its pages, which is where
- * anything is published (server/utils/declarationPublish.ts).
+ * except a date the job read that settles here (`machineSettles`): a typed one
+ * with high confidence, or one OCR read cleanly that is already the birth date
+ * of a page the crop is for. A crop settled either way is then compared with
+ * its pages, which is where anything is published
+ * (server/utils/declarationPublish.ts). The pages of the crops stored, and
+ * those the comparison moved, move in the people count after it.
  */
 export default defineEventHandler(async (event) => {
   // The gate comes before the body: a request with 8 MB of images should not
@@ -72,7 +81,7 @@ export default defineEventHandler(async (event) => {
   // --- candidacies -------------------------------------------------------
   /** Every live page met on the way, by its id: how soon readers see its
    * crops. */
-  const pages = new Map<string, LivePage>();
+  const pages = new Map<string, QueuedPage>();
   const people = await livePeople(
     db,
     body.candidacies.flatMap((candidacy) => candidacy.kids),
@@ -161,8 +170,17 @@ export default defineEventHandler(async (event) => {
   }
 
   // Every page this request names is known by now, so the order readers are
-  // shown their crops in can be settled once for all of them.
-  const order = await readingOrder(db, pages);
+  // shown their crops in can be settled once for all of them: each page's
+  // tier, and whether a reading has reached the pages the crops are for.
+  const order = await pageTiers(db, pages.values());
+  const reached = await pagesReached(
+    db,
+    body.extracts.flatMap((extract) =>
+      extract.candidacies.flatMap(
+        (key) => candidacyByKey.get(key)?.personIds ?? [],
+      ),
+    ),
+  );
 
   const extractRefs = body.extracts.map((extract) =>
     db
@@ -172,9 +190,11 @@ export default defineEventHandler(async (event) => {
   const storedExtracts =
     extractRefs.length > 0 ? await db.getAll(...extractRefs) : [];
   /** Crops to compare with their pages once stored: the ones this request
-   * settles - a typed date the job read with high confidence - and the ones
-   * settled already that it names more pages or units for. */
+   * settles (`machineSettles`) and the ones settled already that it names
+   * more pages or units for. */
   const toCompare: string[] = [];
+  /** The pages of the crops stored, whose people the count moves. */
+  const cropPages = new Set<string>();
 
   body.extracts.forEach((extract, i) => {
     const id = extractId(extract.sha256, extract.page);
@@ -205,7 +225,12 @@ export default defineEventHandler(async (event) => {
     // while nobody has answered it.
     const writeImages =
       imageHash !== null && !answered && existing?.imageHash !== imageHash;
-    const reading = readingState(extract, existing, now);
+    const reading = readingState(
+      extract,
+      existing,
+      now,
+      personIds.map((pageId) => pages.get(pageId)?.birthDate),
+    );
     const nextPersonIds = unique([
       ...asStrings(existing?.personIds),
       ...personIds,
@@ -221,6 +246,7 @@ export default defineEventHandler(async (event) => {
         nextUnits.length >
           (Array.isArray(existing.units) ? existing.units.length : 0));
     if (reading.status === "agreed" || widened) toCompare.push(id);
+    for (const page of nextPersonIds) cropPages.add(page);
 
     writes.set(
       ref,
@@ -238,8 +264,13 @@ export default defineEventHandler(async (event) => {
           ...candidacies.map((c) => c.key),
         ]),
         personIds: nextPersonIds,
-        priority: Math.min(
-          ...personIds.map((pageId) => order.get(pageId) ?? 3),
+        priority: cropPriority(
+          personIds.map((pageId) => ({
+            tier: order.get(pageId) ?? 3,
+            read: reached.has(pageId),
+            birthDate: pages.get(pageId)?.birthDate,
+          })),
+          extract.machine?.birthDate,
         ),
         units: nextUnits,
         linkNamed: extract.linkNamed ?? null,
@@ -287,12 +318,13 @@ export default defineEventHandler(async (event) => {
   // whatever this did not.
   if (toCompare.length > 0) {
     try {
-      const { drain } = await matchAndDrain(
+      const { matched, drain } = await matchAndDrain(
         db,
         toCompare,
         new Date(),
         publishLimitOf(useRuntimeConfig(event)),
       );
+      for (const page of pagesTouched({ matched, drain })) cropPages.add(page);
       if (drain.published.length > 0) {
         await useStorage("cache").clear("nitro:handlers");
       }
@@ -300,6 +332,7 @@ export default defineEventHandler(async (event) => {
       console.error("[declarations] comparing uploaded readings failed", error);
     }
   }
+  await restageDeclarationPeople(db, [...cropPages]);
   return result;
 });
 
@@ -319,48 +352,13 @@ type StoredCandidacy = {
   files: number;
 };
 
-/** A live person page, as far as the order readers are shown its crops in
- * depends on it (`readingPriority`). Whether a draft also has a paid public
- * post takes the graph, so it is asked of every page at once, once they are
- * all known (`readingOrder`). */
-type LivePage = { id: string; published: boolean; birthDate: unknown };
-
-/** How soon readers should be shown each of these pages' crops.
- *
- * One pass, after the candidacies have named every page this request is for
- * and before the first crop is written: a crop takes the lowest of its pages'
- * numbers, as the `priority` it is written with above. The employment lookup
- * is what has to be batched - one query per 30 pages rather than one per page
- * - and a published page needs none of it, since its crops come last either
- * way.
- */
-async function readingOrder(
-  db: FirebaseFirestore.Firestore,
-  pages: Map<string, LivePage>,
-): Promise<Map<string, 0 | 1 | 2 | 3>> {
-  const drafts = [...pages.values()].filter((page) => !page.published);
-  const paid =
-    drafts.length > 0
-      ? await pagesWithAPublicPost(
-          db,
-          drafts.map((page) => page.id),
-        )
-      : new Set<string>();
-  return new Map(
-    [...pages.values()].map((page) => [
-      page.id,
-      readingPriority(page, paid.has(page.id)),
-    ]),
-  );
-}
-
 /** Each kid's live person page, followed through merges: a page that is gone,
  * deleted or not a person maps to nothing. Every page found is also put in
  * `pages`. */
 async function livePeople(
   db: FirebaseFirestore.Firestore,
   ids: readonly string[],
-  pages: Map<string, LivePage>,
+  pages: Map<string, QueuedPage>,
 ): Promise<Map<string, string | undefined>> {
   const wanted = unique(ids);
   const answer = new Map<string, string | undefined>();
@@ -405,14 +403,17 @@ function namesItsPerson(
 /** The reading fields: seeded on the first write, so the queue's
  * `status == "open"` query can find the crop (Firestore never matches an
  * absent field), and left alone afterwards except while nobody has answered:
- * a file cut again may come back from `failed` or go there, and a typed date
- * the job reads with high confidence settles the crop without readers. */
+ * a file cut again may come back from `failed` or go there, and a date the
+ * job read settles the crop without readers where `machineSettles` says so,
+ * on a crop sent again too. `pageBirthDates` are the birth dates of the
+ * crop's pages, which an OCR date has to be one of to settle. */
 function readingState(
   extract: DeclarationExtractInput,
   existing: Record<string, unknown> | undefined,
   now: Timestamp,
+  pageBirthDates: readonly unknown[],
 ): Record<string, unknown> {
-  const settled = machineSettles(extract.machine);
+  const settled = machineSettles(extract.machine, pageBirthDates);
   const status =
     extract.outcome === "failed" ? "failed" : settled ? "agreed" : "open";
   const agreed = settled

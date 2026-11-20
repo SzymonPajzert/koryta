@@ -69,7 +69,13 @@ test.describe("the home page on a phone", () => {
     ).toBeVisible();
   });
 
-  test("keeps /pomoc reachable, from the footer", async ({ page }) => {
+  // The footer is the phone's way to helping on every page but this one. It
+  // leads to /oswiadczenia, and /pomoc is one link further: at that page's
+  // foot, or on the card saying nothing is left to read, which takes the
+  // foot's line away.
+  test("keeps /pomoc reachable, from the footer through /oswiadczenia", async ({
+    page,
+  }) => {
     await page.goto("/", { waitUntil: "load" });
 
     const footerLink = page
@@ -77,6 +83,19 @@ test.describe("the home page on a phone", () => {
       .getByRole("link", { name: "Działaj z nami" });
     await expect(footerLink).toBeVisible();
     await footerLink.click();
+    await expect(page).toHaveURL(/\/oswiadczenia$/);
+
+    // The server's render carries the foot's line whatever the queue holds,
+    // so wait for the client to show a crop or the done card first.
+    const done = page.getByTestId("declaration-done");
+    await expect(page.getByTestId("declaration-task").or(done)).toBeVisible();
+    const moreHelp = (await done.isVisible())
+      ? done.getByRole("link", { name: "Zobacz, w czym jeszcze możesz pomóc" })
+      : page
+          .getByTestId("declaration-more-help")
+          .getByRole("link", { name: "koryta.pl/pomoc" });
+    await expect(moreHelp).toBeVisible();
+    await moreHelp.click();
     await expect(page).toHaveURL(/\/pomoc$/);
   });
 });

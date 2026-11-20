@@ -33,6 +33,9 @@ const COLLECTIONS = [
   ["declarationPublishLimits", "2026-10-29"],
   ["declarationReaderLimits", "2026-10-29_reader"],
   ["declarationReaderFinds", "reader_kowalska"],
+  ["declarationLinks", "kowalska_0123456789abcdef"],
+  ["declarationPeople", "meta"],
+  ["declarationPeople", "shard-0"],
 ] as const;
 
 let browsers: [string, Firestore][];

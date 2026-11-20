@@ -4,8 +4,8 @@
 (one row per won local candidacy), as the night built it last
 (``people_list``), and, unit by unit, searches the BIP of the
 office that serves the council: the gov.pl registry's address where it has
-one, else the office's website from the dane.gov.pl catalogue and the "BIP"
-link on it (``scrapers.bip.units``). Instead of the blind crawl's breadth-first
+one, else the office's website from the dane.gov.pl catalogue and the BIP it
+links (``scrapers.bip.units``, ``website``). Instead of the blind crawl's breadth-first
 walk with one budget per host, each unit gets its own page budget and walks
 the links most likely to lead to "oświadczenia majątkowe" first
 (``scrapers.bip.people.link_score``), and only the files a link names one of
@@ -33,22 +33,29 @@ nothing of the candidacy but that, by its key:
 - ``error``: the unit's search failed unexpectedly (retried by default).
 
 Politeness is the blind crawl's: robots.txt, one request per host per
-``--rate`` seconds, the same User-Agent and fetch. Madkom's BIPs are read
-through the API their pages are drawn from (``madkom``), FINN's registers
+``--rate`` seconds, the same User-Agent and fetch. Madkom's BIPs and Gdynia's
+um-bip app are read through the API their pages are drawn from (``madkom``,
+``umbip``), so are those of bip.info.pl's Angular app, a declarations list's
+articles opened for the seekers alone (``bipinfo``), FINN's registers
 through the JSON-RPC calls of the e-Urząd app their pages embed (``finn``),
 Wrota Lubelszczyzny's document lists through the JSON their pages are drawn
 from (``wrota``), SISCO eDc's attachment tables through the call their pages'
 script makes (``sisco``), BUK Softres's file buttons as links (``softres``),
-other pages a script draws are rendered (``render``).
+TYPO3's declarations app through its search, a seeker at a time (``edge``),
+Sputnik BIPv2's category lists 100 articles a page (``sputnik``), other pages
+a script draws are rendered (``render``). A page's breadcrumb says where it
+stands when its title does not (``crumbs``).
 """
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import functools
 import gzip
 import hashlib
 import heapq
+import html
 import json
 import logging
 import re
@@ -57,18 +64,38 @@ import threading
 import time
 import zlib
 from collections import Counter, defaultdict
+from collections.abc import Iterator, Mapping
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
-from urllib.parse import urljoin, urlsplit
+from typing import Any, Callable, Protocol
+from urllib.parse import parse_qsl, urljoin, urlsplit
+
+from bs4 import BeautifulSoup
 
 from conductor import setup_context
-from jobs.bip_crawler import finn, sisco, softres, wrota, zeto
+from jobs.bip_crawler import (
+    accordion,
+    crumbs,
+    doclist,
+    edge,
+    ezeto,
+    finn,
+    liferay,
+    person_page,
+    sisco,
+    softres,
+    sputnik,
+    umbip,
+    website,
+    wrota,
+)
 from jobs.bip_crawler import render as rendering
+from jobs.bip_crawler.bipinfo import BipInfo
 from jobs.bip_crawler.identity import Agents
-from jobs.bip_crawler.madkom import Madkom
+from jobs.bip_crawler.madkom import Madkom, search_base, search_url
+from jobs.bip_crawler.pace import Paces
 from jobs.bip_crawler.people_list import (
     list_policy,
     outcomes,
@@ -87,6 +114,8 @@ from scrapers.bip.classify import (
 from scrapers.bip.people import (
     ASSETS,
     DECLARATION,
+    FULL_NAME,
+    SOMEBODY_ELSE,
     Candidate,
     Seeker,
     candidates,
@@ -95,24 +124,27 @@ from scrapers.bip.people import (
     fold,
     is_file_link,
     link_score,
+    named_by_label,
     office_terms,
     same_file,
     satisfied,
     says_declarations,
+    somebody_else,
     stem,
     url_words,
 )
 from scrapers.bip.registry import parse_subjects_xml
 from scrapers.bip.units import UnitSeed, scope_of, terc_index, unit_seeds
 from scrapers.common.fetch import HttpResult, Payload, http_get, http_post
-from scrapers.common.links import LinkContext, extract_link_contexts
+from scrapers.common.links import LinkContext, decode_html, extract_link_contexts
 from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.krs.data import read_public_bodies_catalogue
 from scrapers.map.teryt import read_terc
 from scrapers.stores import (
     BipPeopleStore,
-    BipQueue,
+    DocRow,
     PersonDocRow,
+    PersonOutcome,
     PersonRow,
     UnitRow,
     with_outcomes,
@@ -127,7 +159,6 @@ logger = logging.getLogger(__name__)
 _FILE = re.compile(
     r"\.(pdf|docx?|odt|rtf|xlsx?|ods|jpe?g|png|tiff?|zip|7z|rar)(?:$|[?#])", re.I
 )
-_BIP_LINK = re.compile(r"(?:^| )bip(?: |$)|biuletyn informacji publicznej")
 _SITEMAP = re.compile(r"(?im)^\s*sitemap:\s*(\S+)")
 #: The page_url of candidates the blind crawl's URLs gave (`--known-urls`).
 KNOWN_URLS = "known-urls"
@@ -206,10 +237,21 @@ class UnitSearch:
     opened: Counter[tuple[str, str]] = field(default_factory=Counter)
 
 
-#: Hosts no unit's BIP lives on, though a unit's website may link to them.
-_NOT_A_UNITS_BIP = frozenset(
-    {"bip.gov.pl", "gov.pl", "epuap.gov.pl", "obywatel.gov.pl", "biznes.gov.pl"}
-)
+@dataclass(frozen=True)
+class PageView:
+    """What a walk made of one page (`PeopleSearch._read_page`), for
+    `koryta_scrape_bip page`: its title, the links candidates() read, the
+    links it follows, what a declarations page's own links score above the
+    rest (`DECLARATIONS_BONUS`), and what a seeker's full name scores there
+    (`FULL_NAME`)."""
+
+    title: str
+    links: list[LinkContext]
+    follow: list[LinkContext]
+    bonus: float
+    full_name: float = FULL_NAME
+
+
 #: What `_get` answers instead of a response.
 ROBOTS, UNREACHABLE, REFUSED = "robots", "unreachable", "refused"
 #: A walk's end when its BIP kept saying "not now" and pages were left unread.
@@ -274,13 +316,31 @@ class _Frontier:
     def has(self, url: str) -> bool:
         return _same_page(url) in self.seen
 
+    def continue_list(
+        self,
+        pages: list[LinkContext],
+        declared: bool,
+        lender: tuple[str, str] | None,
+    ) -> None:
+        """A list's further pages (`ezeto.pager`) are what its first is:
+        declarations, or one seeker's, whatever their buttons say."""
+        for page in pages:
+            target = normalize_url(page.url)
+            if declared:
+                self.declared.add(target)
+            if lender is not None:
+                self.lenders.setdefault(target, lender)
+
     def pop(self) -> tuple[int, str]:
         _, depth, _, url = heapq.heappop(self.heap)
         return depth, url
 
-    def adopt(self, host: str) -> None:
-        if host and host not in {h for h, _ in self.scopes}:
-            self.scopes.append((host, ""))
+    def adopt(self, host: str, path: str = "") -> None:
+        """Bring a host into scope, or one unit's path of a shared host; a host
+        the frontier holds a path of stays to its paths."""
+        held = {p for h, p in self.scopes if h == host}
+        if host and (not held or (path and not held & {"", path})):
+            self.scopes.append((host, path))
 
     def in_scope(self, url: str) -> bool:
         host, path = host_of(url), urlsplit(url).path.lower()
@@ -293,26 +353,163 @@ class _Frontier:
         depth: int,
         prefer: re.Pattern[str] | None = None,
         bonus: float = 0.0,
+        page: str = "",
+        full_name: float = FULL_NAME,
+        first_names: frozenset[str] = frozenset(),
     ) -> None:
         """Queue a page's links to other pages; files are for the download.
         ``bonus`` lifts those a declarations page leads to, after the cut, so a
-        section of tenders it links stays out (`DECLARATIONS_BONUS`)."""
+        section of tenders it links stays out (`DECLARATIONS_BONUS`); ``page``
+        is that page's address, whose pager leads to more of it (`_pager`);
+        ``full_name`` what a seeker's full name scores on its platform;
+        ``first_names`` tell a label naming somebody else (`somebody_else`)."""
+        # ESC's VelaBIP links a page's older versions, <page>/<n>, each beside
+        # a comparison with it, <page>/porownaj/<n>/<m> (`is_low_value_url`):
+        # copies of the page. A list's pages, /lista/<slug>/<n>, have none.
+        compared = {
+            m[1]
+            for x in links
+            if "/porownaj/" in x.url and (m := _COMPARE.match(normalize_url(x.url)))
+        }
         for link in links:
             target = normalize_url(link.url)
+            # Not ``page``: that is the address of the page these links are on.
+            versioned, _, version = target.rpartition("/")
             if (
                 self.has(target)
                 or _is_file(target)
                 or is_low_value_url(target)
+                or (version.isdigit() and versioned in compared)
                 or not self.in_scope(target)
             ):
                 continue
-            score = link_score(link, seekers, depth, prefer)
+            score = link_score(link, seekers, depth, prefer, full_name)
             if score > -3:
-                if says_declarations(link):
+                says = says_declarations(link)
+                if says or (bonus and _pager(page, link)):
                     self.declared.add(target)
-                if len(owners := declarants(link, seekers)) == 1:
+                owners = declarants(link, seekers)
+                # On a declarations page a link that is one seeker's full name
+                # opens their page (Kłodzko: "BRYŁA PIOTR" in "Oświadczenia
+                # majątkowe Radni - IX kadencja" to a page titled "Informacja
+                # publiczna - szczegóły", whose files say only "za rok 2025"),
+                # and one to a term or a year its next level (Strzegom:
+                # "Oświadczenia majątkowe" > "Kadencja 2024-2029" > "Michał
+                # CZAPLA" > files "2024", "2025"): declarations pages both. So
+                # does a name in a menu that says declarations, wherever it is
+                # met: Czeladź's "Oświadczenia majątkowe" > "Zbigniew Szaleniec"
+                # opens a page titled "Oświadczenie majątkowe" alone (11-13).
+                if not owners and (bonus or says):
+                    owners = named_by_label(link, seekers)
+                    if owners or _TERM.search(fold(link.anchor)):
+                        self.declared.add(target)
+                if len(owners) == 1:
                     self.lenders[target] = owners.pop()
+                # Another person's page after the list's own (`SOMEBODY_ELSE`).
+                if somebody_else(link, seekers, first_names):
+                    score -= SOMEBODY_ELSE
                 self.add(target, score + bonus, depth, link.url)
+
+
+#: A link to a term's or a year's part of a declarations section, or to one
+#: declaration under its month in roman numerals: Grudziądz files each as an
+#: article "III 2026 - roczne", "II 2024 - 2 miesiące przed końcem" (11-13).
+_TERM = re.compile(
+    r"^\W*(?:(?:[ivx]+ )?kadencj\w*|rok|za|[ivx]{1,4})?\W*(?:19|20)\d\d\b|kadencj"
+)
+#: ESC's VelaBIP comparing two versions of the page before "/porownaj".
+_COMPARE = re.compile(r"^(.+)/porownaj/\d+/\d+$")
+#: Query parameters a list numbers its pages by: SkyCMS's ?Page=4, Joomla's
+#: ?start=20, Liferay's _<portlet>_cur=2.
+_PAGE_NUMBER = re.compile(r"(?:^|_)(?:page|paged|strona|cur|start|limitstart)$")
+#: A pager link's label, folded: a number, a step ("Następna", "« Poprzednia
+#: strona"), or an arrow, which folds to nothing. Not a menu's "Władze Gminy"
+#: at doc.php?strona=1 beside its doc.php?strona=19 (biuletyn.net).
+_PAGER_LABEL = re.compile(
+    r"(?:strona )?\d{1,4}|(?:\w+ )?(?:nastepn|poprzedn|ostatn|pierwsz|dalej|wstecz"
+    r"|koniec|next|prev|last|first)\w*(?: strona)?|"
+)
+
+
+def _pager(page: str, link: LinkContext) -> bool:
+    """Whether ``link`` is another page of the list ``page`` is: the same
+    address with only its page number changed, under a pager's label. Powiat
+    opolski's councillors stand six to a page, ?Page=1 to 6, titled "Radni
+    Powiatu - strona 4", and only the first was read as declarations (11-13).
+    Not a calendar's "12": its address is another."""
+    if not page or not _PAGER_LABEL.fullmatch(fold(link.anchor)):
+        return False
+    a, b = urlsplit(page), urlsplit(link.url)
+    if (a.netloc.lower(), a.path.rstrip("/")) != (b.netloc.lower(), b.path.rstrip("/")):
+        return False
+    ours = dict(parse_qsl(a.query, keep_blank_values=True))
+    theirs = dict(parse_qsl(b.query, keep_blank_values=True))
+    changed = {k for k in ours.keys() | theirs.keys() if ours.get(k) != theirs.get(k)}
+    return (
+        len(changed) == 1
+        and bool(_PAGE_NUMBER.search((key := changed.pop()).lower()))
+        and theirs.get(key, "1").isdigit()
+    )
+
+
+_FRAME = re.compile(rb"<frame\b[^>]*?\bsrc\s*=\s*[\"']?([^\"' >]+)", re.I)
+
+
+def _frames(content: bytes, url: str) -> list[str]:
+    """The pages a frameset's frames show, as absolute addresses."""
+    if b"<frameset" not in content[:5000].lower():
+        return []
+    found = (m.group(1).decode("utf-8", "replace") for m in _FRAME.finditer(content))
+    return [
+        absolute
+        for absolute in (urljoin(url, html.unescape(f.strip())) for f in found)
+        if absolute.startswith(("http://", "https://"))
+    ]
+
+
+def _file_behind(page: HttpResult, url: str) -> str:
+    """The one file a page offers in place of the file its link promised: the
+    only file link on the page's host, or the only one that carries the
+    link's number; "" when there is no such one."""
+    if not page.ok:
+        return ""
+    _, links = extract_link_contexts(page.content, page.url, page.content_type)
+    host = host_of(page.url)
+    files = list(
+        dict.fromkeys(
+            x.url
+            for x in links
+            if is_file_link(x.url) and host_of(x.url) == host and x.url != url
+        )
+    )
+    if len(files) == 1:
+        return files[0]
+    numbers = re.findall(r"\d{2,}", urlsplit(url).path + "?" + urlsplit(url).query)
+    if not numbers:
+        return ""
+    own = [f for f in files if re.search(rf"(?<!\d){numbers[-1]}(?!\d)", f)]
+    return own[0] if len(own) == 1 else ""
+
+
+def _as_linked(frontier: _Frontier, url: str) -> str:
+    """The address to ask for a queued page: as it was linked when normalize_url
+    only sorted its query or took its final slash, which some servers read as
+    another page. bip.poznan.pl/bip/radni/<name>,<id> without its slash is the
+    councillors' list; um.bip.klodzko.pl's index.php?menu=690&n=i is the
+    office's front page, ?n=i&menu=690 its councillors' declarations (11-05).
+    Not when it dropped a parameter (`tryb_widoku`, `font_size`): that is the
+    same page."""
+    linked = frontier.linked.get(url, "")
+    if not linked:
+        return url
+    a, b = urlsplit(linked), urlsplit(url)
+    same = (
+        (a.scheme, a.netloc.lower()) == (b.scheme, b.netloc.lower())
+        and a.path.rstrip("/") == b.path.rstrip("/")
+        and sorted(parse_qsl(a.query, keep_blank_values=True))
+        == sorted(parse_qsl(b.query, keep_blank_values=True))
+    )
+    return linked if same else url
 
 
 def _under(path: str, prefix: str) -> bool:
@@ -353,6 +550,39 @@ def _app_shell(content: bytes, links: list[LinkContext]) -> bool:
     return len(links) <= 5 and b"<script" in content[:200_000].lower()
 
 
+#: Katowice's person page (SharePoint): a full menu around ``<div class="col-md-12
+#: osw5343">``, left empty for a script that fills it from the Oswiadczenia list.
+_EMPTY_DECLARATIONS = re.compile(
+    rb"""<div class="[^"]*\bosw\d+\b[^"]*"[^>]*>\s*</div>"""
+)
+
+
+def _empty_declarations(content: bytes) -> bool:
+    """Whether a page with links of its own leaves its declarations to a script."""
+    return _EMPTY_DECLARATIONS.search(content) is not None
+
+
+def _declarations_box(drawn: HttpResult) -> list[LinkContext]:
+    """The links a script drew into the box `_empty_declarations` saw. Only these
+    are the person's: the page's address says oświadczenia, so the menu's own
+    files ("Rewitalizacja - uchwała", 33 MB) would be taken for theirs too."""
+    soup = BeautifulSoup(decode_html(drawn.content, drawn.content_type), "lxml")
+    boxes = soup.find_all("div", class_=re.compile(r"^osw\d+$"))
+    fragment = "".join(str(box) for box in boxes)
+    return extract_link_contexts(fragment, drawn.url, drawn.content_type)[1]
+
+
+def _named_only(page: HttpResult, found: list[Candidate]) -> list[Candidate]:
+    """``found`` on ``page`` without the files that name nobody, when every
+    file's row there names its declarant: a um-bip declarations post
+    (`umbip.names_every_declarant`), where such a file is somebody else's,
+    never a declaration that names nobody ("Domańska-Ożga", no first name,
+    among Gdynia's 300 officials a year)."""
+    if umbip.names_every_declarant(page.content):
+        return [c for c in found if c.key]
+    return found
+
+
 def _declaration_like(url: str) -> bool:
     words = url_words(url)
     return bool(DECLARATION.search(words) or ASSETS.search(words))
@@ -360,7 +590,9 @@ def _declaration_like(url: str) -> bool:
 
 #: BIP addresses checked by hand or by a verified search for units whose start
 #: is missing or dead in both lists (the gov.pl registry, the catalogue): one row
-#: a unit, ``unit,bip_url,declarations_url,checked,source,note``.
+#: a unit, ``unit,bip_url,declarations_url,checked,source,note``. A BIP whose
+#: declarations pages link nothing between them (Tychy's years, a form's
+#: choice) gives them all, space-separated, in ``declarations_url``.
 UNIT_STARTS = Path(__file__).with_name("unit_starts.csv")
 
 
@@ -382,13 +614,15 @@ def apply_unit_starts(seeds: dict[str, UnitSeed], starts: list[dict[str, str]]) 
     } | {"samorzad.gov.pl"}
     for row in starts:
         urls = [
-            u.strip() for u in (row.get("declarations_url"), row.get("bip_url")) if u
+            *(row.get("declarations_url") or "").split(),
+            (row.get("bip_url") or "").strip(),
         ]
         urls = [u for u in dict.fromkeys(urls) if u]
         if not urls:
             continue
         seed = seeds.setdefault(row["unit"], UnitSeed(row["unit"]))
         seed.bip_urls = urls
+        seed.declarations = (row.get("declarations_url") or "").split()
         seed.scopes = sorted({scope_of(u, shared) for u in urls})
     return len(starts)
 
@@ -412,11 +646,35 @@ def load_known_urls(path: Path) -> dict[str, list[str]]:
     return dict(known)
 
 
+class _DrawnApp(Protocol):
+    """A BIP app whose pages the walk draws from the API they are drawn from
+    (`madkom.Madkom`, `umbip.UmBip`, `bipinfo.BipInfo`): a host's first page
+    probes it."""
+
+    def knows(self, url: str) -> bool: ...
+
+    def probe(self, page: HttpResult) -> bool: ...
+
+    def busy(self, url: str) -> HttpResult | None: ...
+
+    def page(self, url: str) -> HttpResult | str | None: ...
+
+
+class DocIndex(Protocol):
+    """The files the search has downloaded, by content: the crawl's ``bip_docs``
+    (`stores.bip_queue.PostgresBipQueue`), or `walk.MemoryDocIndex` for a walk
+    that keeps nothing. All the people mode asks of the crawl's queue."""
+
+    def doc_bundle(self, sha256: str) -> str | None: ...
+
+    def record_docs(self, docs: list[DocRow], crawl_id: str) -> int: ...
+
+
 class PeopleSearch:
     def __init__(
         self,
         people_store: BipPeopleStore,
-        bip_queue: BipQueue,
+        bip_queue: DocIndex,
         bundles: LocalBundleStore,
         seeds: dict[str, UnitSeed],
         options: PeopleOptions,
@@ -434,6 +692,7 @@ class PeopleSearch:
         first_names: frozenset[str] = frozenset(),
         resolve: Callable[[str], str] = lambda host: host,
         agents: Callable[[str], str] | None = None,
+        trace: Callable[[str], None] | None = None,
     ) -> None:
         self.people_store = people_store
         self.bip_queue = bip_queue
@@ -466,6 +725,11 @@ class PeopleSearch:
         self.limiter = limiter or HostTokenBucket(
             options.rate_interval_s, burst_window_s=options.rate_interval_s
         )
+        #: A host's server where the server wants its own pace (`pace`), and
+        #: that server's turns, which every unit on it shares.
+        self.paces = Paces(resolve)
+        self._server_turns: dict[str, HostTokenBucket] = {}
+        self._server_turns_lock = threading.Lock()
         self.sleep = sleep
         self.clock = clock
         self.run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -481,6 +745,11 @@ class PeopleSearch:
         self._write_lock = threading.Lock()
         #: Madkom's BIPs, read through the API their pages are drawn from.
         self.madkom = Madkom(self._get, robots_allowed)
+        #: Gdynia's um-bip, read through the API its pages are drawn from.
+        self.umbip = umbip.UmBip(self._get)
+        #: bip.info.pl's Angular BIPs, read through theirs.
+        self.bipinfo = BipInfo(self._get, robots_allowed)
+        self._apps: tuple[_DrawnApp, ...] = (self.madkom, self.umbip, self.bipinfo)
         #: FINN's registers, read through the e-Urząd app their pages embed.
         self.eurzad = finn.Eurzad(self._post)
         #: Wrota Lubelszczyzny's document lists, read through their JSON.
@@ -491,9 +760,29 @@ class PeopleSearch:
         #: Hosts whose render asked for more than `RENDER_TURNS` requests: their
         #: pages are read as their HTML for the rest of the run.
         self._render_off: set[str] = set()
+        #: Told a line for each page a walk reads and each answer that kept
+        #: something from it (`walk --trace`): where a walk went, and what
+        #: stopped it, without patching this class.
+        self.trace = trace
+        #: The unit the calling thread searches, for those lines.
+        self._here = threading.local()
+
+    def _tell(self, line: str) -> None:
+        if self.trace is not None:
+            unit = getattr(self._here, "unit", "")
+            self.trace(f"{unit} {line}" if unit else line)
 
     def _past_deadline(self) -> bool:
         return self.deadline is not None and self.clock() > self.deadline
+
+    def _kept_out(self, url: str) -> str:
+        """ROBOTS or UNREACHABLE when robots.txt keeps the crawler from ``url``
+        (UNREACHABLE when the host did not even answer for it), "" otherwise."""
+        if self.robots_allowed(url):
+            return ""
+        no = UNREACHABLE if self.robots_unreachable(url) else ROBOTS
+        self._tell(f"{no}: {url}")
+        return no
 
     # -- one request -----------------------------------------------------------
     def _get(self, url: str, tries: int = NOT_NOW_TRIES) -> HttpResult | str:
@@ -507,8 +796,8 @@ class PeopleSearch:
         Redirects are followed one hop at a time, `MAX_HOPS` at most.
         """
         for _ in range(MAX_HOPS + 1):
-            if not self.robots_allowed(url):
-                return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
+            if no := self._kept_out(url):
+                return no
             result = self._ask(
                 url,
                 functools.partial(
@@ -524,14 +813,21 @@ class PeopleSearch:
             if not (result.location and 300 <= result.status < 400):
                 break
             url = urljoin(result.url, result.location)
-        return REFUSED if _refused(result) else result
+        return self._refusal(result)
+
+    def _refusal(self, result: HttpResult) -> HttpResult | str:
+        """REFUSED for an answer that refuses the crawler (`_refused`), else it."""
+        if not _refused(result):
+            return result
+        self._tell(f"{REFUSED}: {result.url}")
+        return REFUSED
 
     def _post(self, url: str, payload: Payload) -> HttpResult | str:
         """An API call (`finn`, `sisco`), asked as `_get` asks for a page: robots.txt,
         which says the same of any method, the host's rate and its "not now"s;
         no redirect followed."""
-        if not self.robots_allowed(url):
-            return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
+        if no := self._kept_out(url):
+            return no
         call = functools.partial(
             self.post,
             url,
@@ -540,7 +836,7 @@ class PeopleSearch:
             self.agents(host_of(url)),
         )
         result = self._ask(url, call, NOT_NOW_TRIES)
-        return REFUSED if _refused(result) else result
+        return self._refusal(result)
 
     def _ask(
         self, url: str, request: Callable[[], HttpResult], tries: int
@@ -551,6 +847,8 @@ class PeopleSearch:
         for _ in range(max(1, tries)):
             self._wait_turn(host)
             result = request()
+            if self.trace is not None and not 200 <= result.status < 400:
+                self._tell_answer(url, result)
             if result.status not in _NOT_NOW:
                 break
             self.limiter.pause(host, NOT_NOW_PAUSE_S)
@@ -558,27 +856,53 @@ class PeopleSearch:
                 break
         return result
 
+    def _tell_answer(self, url: str, result: HttpResult) -> None:
+        """The trace's line for an answer that is no page: its status (or that
+        none came, and why), and for a "not now" the pause that follows."""
+        said = f"{result.status}" if result.status else "no answer"
+        why = f" ({result.error[:80]})" if result.error else ""
+        if result.status in _NOT_NOW:
+            why += f", not now: {host_of(url)} paused {NOT_NOW_PAUSE_S:.0f} s"
+        self._tell(f"{said}: {url}{why}")
+
     def _wait_turn(self, host: str) -> None:
-        while not self.limiter.acquire(host):
-            self.sleep(max(0.05, self.limiter.next_available_in(host)))
+        """The host's turn at the rate, then its server's where that server
+        wants a slower pace (`pace.SERVERS`): one turn for all its hosts."""
+        self._take(self.limiter, host)
+        server, interval = self.paces(host)
+        if server:
+            with self._server_turns_lock:
+                turns = self._server_turns.get(server)
+                if turns is None:
+                    turns = HostTokenBucket(
+                        interval, burst_window_s=interval, clock=self.clock
+                    )
+                    self._server_turns[server] = turns
+            self._take(turns, server)
+
+    def _take(self, bucket: HostTokenBucket, key: str) -> None:
+        while not bucket.acquire(key):
+            self.sleep(max(0.05, bucket.next_available_in(key)))
 
     def _get_page(self, url: str) -> HttpResult | str:
-        """A page of the walk: on a Madkom BIP drawn from its API (`madkom`), at
-        a call or two instead of a render's dozen; elsewhere fetched. A host's
-        first page tells which it is."""
-        if self.madkom.knows(url):
-            if not self.robots_allowed(url):
-                return UNREACHABLE if self.robots_unreachable(url) else ROBOTS
-            page = self.madkom.page(url)
-            return self._get(url) if page is None else page
+        """A page of the walk: on a Madkom BIP, Gdynia's um-bip or one of
+        bip.info.pl's Angular apps drawn from its API (`madkom`, `umbip`,
+        `bipinfo`), at a call or two instead of a render's dozens; elsewhere
+        fetched. A host's first page tells which it is."""
+        for app in self._apps:
+            if app.knows(url):
+                if no := self._kept_out(url):
+                    return no
+                page = app.page(url)
+                return self._get(url) if page is None else page
         result = self._get(url)
         if isinstance(result, HttpResult) and result.ok:
-            if self.madkom.probe(result):
-                page = self.madkom.page(result.url)
-                if page is not None:
-                    return page
-            elif (busy := self.madkom.busy(result.url)) is not None:
-                return busy  # its API said "not now": the shell is no page yet
+            for app in self._apps:
+                if app.probe(result):
+                    page = app.page(result.url)
+                    return result if page is None else page
+                if (busy := app.busy(result.url)) is not None:
+                    return busy  # its API said "not now": the shell is no page yet
         return result
 
     @staticmethod
@@ -596,29 +920,98 @@ class PeopleSearch:
         roots: list[str] = []
         reason = UNREACHABLE
         for www in seed.www_urls[:2]:
-            result = self._get(www)
+            result = self._first_page(www)
             if isinstance(result, str):
                 reason = result
                 continue
             if not result.ok or not self._is_page(result):
                 continue
-            _, links = extract_link_contexts(
-                result.content, result.url, result.content_type
-            )
-            found = [
-                link.url
-                for link in links
-                if host_of(link.url) not in _NOT_A_UNITS_BIP
-                and (
-                    _BIP_LINK.search(fold(link.anchor))
-                    or "bip" in host_of(link.url).split(".")
-                )
-            ]
-            # Some offices keep the BIP on the main site itself.
-            roots.extend(dict.fromkeys(found or [result.url]))
-        roots = roots[:3]
+            roots.extend(self._website_bip(result, seed))
+        roots = list(dict.fromkeys(roots))[:3]
         scopes = [_split_scope(scope_of(r, self.shared_hosts)) for r in roots]
         return roots, scopes, "" if roots else reason
+
+    def _first_page(self, url: str) -> HttpResult | str:
+        """A website's first page, a ``<meta>`` refresh followed as a redirect
+        is (`website.refresh`), `MAX_HOPS` at most."""
+        result = self._get(url)
+        for _ in range(MAX_HOPS):
+            if isinstance(result, str) or not result.ok or not self._is_page(result):
+                break
+            sent = website.refresh(result.content, result.url)
+            if not sent:
+                break
+            result = self._get(sent)
+        return result
+
+    def _website_bip(self, page: HttpResult, seed: UnitSeed) -> list[str]:
+        """Where a website's walk starts: the website itself when its host says
+        BIP; else the BIP of another host it links first (`website.bips`),
+        whether it answers or not, so the walk says robots, unreachable or
+        throttled as it did before round 1 (11-18), with the office's other
+        BIPs it links (`_foreign`) and the one its own BIP page leads to;
+        else one its own BIP pages link, or with none of those the pages a
+        level down (`website.inner_links`); else its own BIP pages, or the
+        website: some offices keep the BIP on it."""
+        home = host_of(page.url)
+        if website.bip_host(home):
+            return [page.url]
+        bips = self._bips(page, seed)
+        own = next((b.links for b in bips if b.own), [])
+        if found := _foreign(bips):
+            # The BIP the website's own BIP page leads to is the one the
+            # website itself names: Bieżuń's /5,biuletyn-informacji-publicznej
+            # answers 302 to bip.biezun.pl, where its 2024 declarations are,
+            # and the link that says www.bip.biezun.nv.pl is its old BIP's,
+            # which answers nothing (11-18).
+            page_url = normalize_url(page.url)
+            first = next((u for u in own if normalize_url(u) != page_url), "")
+            sent = self._leaves(first, home) if first else ""
+            if sent and host_of(sent) not in {host_of(u) for u in found}:
+                return [sent, *found][:3]
+            return found
+        below = [(u, True) for u in own[: website.INNER_PAGES]] or website.inner_links(
+            page.content, page.url, page.content_type, self.shared_hosts
+        )
+        for url, says in below:
+            result = self._get(url)
+            if isinstance(result, str) or not result.ok or not self._is_page(result):
+                continue
+            if host_of(result.url) != home:
+                # A link that says BIP and leads off the website is the BIP's:
+                # powiat kościański's banner /blue.php?id=103 answers 302 to
+                # bip3.wokiss.pl/koscianp/.
+                if says and _elsewhere(result.url, home):
+                    return [result.url]
+                continue
+            # A page of the website's own BIP, by its link's words or address,
+            # that lists its declarations is its BIP, whatever BIP else it
+            # links: Burzenin's /bip (11-13).
+            if says and website.keeps_declarations(
+                result.content, result.url, result.content_type
+            ):
+                return own or [result.url]
+            if found := _foreign(self._bips(result, seed)):
+                return found
+        return own or [page.url]
+
+    def _leaves(self, url: str, home: str) -> str:
+        """Where a page of the website ``url`` leads off it (`_elsewhere`), ""
+        when it answers no page or stays."""
+        result = self._get(url)
+        if isinstance(result, str) or not result.ok or not self._is_page(result):
+            return ""
+        return result.url if _elsewhere(result.url, home) else ""
+
+    def _bips(self, page: HttpResult, seed: UnitSeed) -> list[website.Bip]:
+        return website.bips(
+            page.content,
+            page.url,
+            page.content_type,
+            self.shared_hosts,
+            seed.names,
+            seed.unit,
+        )
 
     def _budget(self, candidacies: int) -> int:
         """Pages a unit's walk may read (see `PeopleOptions.unit_pages`)."""
@@ -647,7 +1040,12 @@ class PeopleSearch:
         todo: list[str] = []
         if isinstance(robots, HttpResult) and robots.ok:
             text = robots.content.decode("utf-8", "replace")
-            todo = _SITEMAP.findall("\n".join(robots_lines(text)))
+            # CONCEPT Intermedia's SAM3 writes "Sitemap: /sitemap.xml": asked as
+            # written it reached no host, and nothing else was tried (11-13).
+            todo = [
+                urljoin(base + "/robots.txt", s)
+                for s in _SITEMAP.findall("\n".join(robots_lines(text)))
+            ]
         todo = todo or [base + "/sitemap.xml"]
         seen: set[str] = set()
         found: list[str] = []
@@ -667,7 +1065,10 @@ class PeopleSearch:
                     body = gzip.decompress(body)
                 except (OSError, EOFError, zlib.error):
                     continue  # truncated or corrupt: as if unreadable
-            locs = [m.decode("utf-8", "replace") for m in _LOC.findall(body)]
+            locs = [
+                urljoin(result.url, m.decode("utf-8", "replace"))
+                for m in _LOC.findall(body)
+            ]
             if b"<sitemapindex" in body[:4000]:
                 todo = sorted(locs, key=lambda u: not _declaration_like(u)) + todo
             else:
@@ -691,11 +1092,16 @@ class PeopleSearch:
                 [u for h, _ in frontier.scopes for u in self.known.get(h, ())],
             )
         ]
-        if self.options.sitemaps and roots:
+        # Each start host's sitemaps, not the first's alone: Ustroń's walk starts
+        # from its old BIP, which answers nothing, beside its new one (11-18).
+        firsts: dict[str, str] = {}
+        for root in roots:
+            firsts.setdefault(host_of(root), root)
+        for root in firsts.values() if self.options.sitemaps else ():
             try:
-                sources.append(("sitemap", self._sitemap_urls(roots[0])))
+                sources.append(("sitemap", self._sitemap_urls(root)))
             except Exception:  # noqa: BLE001 - an optional step fails alone
-                logger.warning("unit %s: sitemaps of %s failed", out.unit, roots[0])
+                logger.warning("unit %s: sitemaps of %s failed", out.unit, root)
         for source, urls in sources:
             files: list[LinkContext] = []
             for url in dict.fromkeys(urls):
@@ -713,6 +1119,13 @@ class PeopleSearch:
                     link = LinkContext(target, "")
                     score = 50 + link_score(link, seekers, 1, prefer)
                     frontier.add(target, score, 1, url)
+                    # An address saying one seeker's declaration lends them its
+                    # page, as such a link does (`_Frontier.lenders`): Winnica's
+                    # SAM3 documents are all titled "Baza dokumentów", the
+                    # declaration their own "Pobierz plik" (11-13).
+                    said = LinkContext(target, url_words(target))
+                    if len(owners := declarants(said, seekers)) == 1:
+                        frontier.lenders[target] = owners.pop()
             found = [
                 c
                 for c in candidates(
@@ -746,6 +1159,8 @@ class PeopleSearch:
         frontier = _Frontier(scopes)
         for root in roots:
             frontier.add(normalize_url(root), 100.0, 0, root)
+            if root in seed.declarations:
+                frontier.declared.add(normalize_url(root))
         self._seed_known(out, frontier, roots, seekers, prefer)
         budget = self._budget(max(len(seekers), self.unit_sizes.get(unit, 0)))
         self._walk(out, frontier, seekers, prefer, budget, started)
@@ -790,7 +1205,7 @@ class PeopleSearch:
                 blocked += no == ROBOTS
                 down += no == UNREACHABLE
                 continue
-            result = self._get_page(url)
+            result = self._get_page(_as_linked(frontier, url))
             if isinstance(result, str):
                 if result == REFUSED:
                     out.status = REFUSED
@@ -802,17 +1217,14 @@ class PeopleSearch:
                 unread += 1
                 unread_in_a_row += 1
                 if unread_in_a_row >= NOT_NOW_IN_A_ROW:
+                    self._tell(f"stopped: {unread_in_a_row} pages in a row not now")
                     stopped = True
                     break
                 continue
             unread_in_a_row = 0
             requests += 1
-            if not result.ok or len(result.content) > self.options.max_doc_bytes:
-                down += result.status == 0
-                out.pages += 1
-                continue
-            if not self._is_page(result):
-                out.files[url] = result  # a file behind a page-like link
+            down += result.status == 0
+            if self._unread(out, url, result):
                 continue
             out.read.add(url)
             self._read_page(
@@ -847,9 +1259,63 @@ class PeopleSearch:
         slash, and AkcessNet's "Disallow: /index.php?job=rejestr" and "/admin/"
         passed that way."""
         linked = frontier.linked.get(url)
-        if not linked or self.robots_allowed(linked):
-            return ""
-        return UNREACHABLE if self.robots_unreachable(linked) else ROBOTS
+        return self._kept_out(linked) if linked else ""
+
+    def _unread(self, out: UnitSearch, url: str, result: HttpResult) -> bool:
+        """Whether an answer is no page to read: an error or a page too large
+        (each a page of the budget), or a file behind a page-like link, kept
+        for the download."""
+        if not result.ok or len(result.content) > self.options.max_doc_bytes:
+            out.pages += 1
+            if result.ok:
+                self._tell(f"too large, {len(result.content):,} bytes: {url}")
+            return True
+        if not self._is_page(result):
+            out.files[url] = result
+            self._tell(f"a file, not a page: {url}")
+            return True
+        return False
+
+    def _platform_links(
+        self, result: HttpResult, links: list[LinkContext], seekers: list[Seeker]
+    ) -> tuple[list[LinkContext], str]:
+        """A page's links as its platform means them: files offered as form
+        buttons or drawn from JSON, search forms asked for each seeker, files
+        under their person's or their card's label; and the page's breadcrumb,
+        which may alone say it stands under declarations (`crumbs`)."""
+        # Files offered as form buttons, under the position's name (`softres`).
+        links = links + softres.files(result.content, result.url)
+        # Documents a Vue component draws from JSON, under the subject (`doclist`).
+        links = links + doclist.links(result.content, result.url, self._get)
+        # Warsaw's declarations search, asked for each seeker within the
+        # district or kind of filer its address keeps to (`liferay`).
+        links = links + liferay.search_links(result.content, result.url, seekers)
+        # A Madkom list too long to read: its search box, asked for each seeker.
+        if base := search_base(result.content):
+            links = links + [
+                LinkContext(search_url(base, s.last), f"{s.first} {s.last}")
+                for s in seekers
+                if s.last
+            ]
+        # Łódź's declarations app: its list's search, asked for each seeker (`edge`).
+        links = links + edge.search_links(result.content, result.url, seekers)
+        # A person a <details>, the files inside under their name (`accordion`).
+        if owners := accordion.persons(result.content, result.url):
+            links = [
+                replace(x, row=owners[x.url]) if x.url in owners else x for x in links
+            ]
+        # A document's file cards: each file under its card's label (`doclist`).
+        if cards := doclist.attachments(result.content, result.url):
+            links = [
+                replace(x, row=cards[x.url]) if x.url in cards and not x.row else x
+                for x in links
+            ]
+        # A persons list's files, each under its person (`wrota.persons`).
+        if owners := wrota.persons(result.content, result.url):
+            links = [
+                replace(x, row=owners[x.url]) if x.url in owners else x for x in links
+            ]
+        return links, crumbs.trail(result.content)
 
     def _read_page(
         self,
@@ -861,42 +1327,38 @@ class PeopleSearch:
         prefer: re.Pattern[str] | None = None,
         led: bool = False,
         lender: tuple[str, str] | None = None,
-    ) -> None:
+    ) -> PageView:
         """Read one page: its candidates, and its links queued. ``led``: a link
         that says declarations led here (`_Frontier.declared`); ``lender``: the
         one seeker whose declaration it said (`_Frontier.lenders`)."""
         out.pages += 1
         out.pages_ok += 1
-        if depth == 0:
-            # A start page that redirected elsewhere brings its host into scope.
-            frontier.adopt(host_of(result.url))
+        before = len(out.found)
+        self._sent_on(frontier, result, depth)
         title, links = extract_link_contexts(
             result.content, result.url, result.content_type
         )
-        # Files offered as form buttons, under the position's name (`softres`).
-        links = links + softres.files(result.content, result.url)
-        # A persons list's files, each under its person (`wrota.persons`).
-        if owners := wrota.persons(result.content, result.url):
-            links = [
-                replace(x, row=owners[x.url]) if x.url in owners else x for x in links
-            ]
-        # A declarations page only its breadcrumb says is one: its files carry
-        # the breadcrumb, not its title, so it lends nobody a name (`zeto`).
-        if (where := zeto.trail(result.content)) and DECLARATION.search(fold(where)):
-            links = [
-                replace(x, heading=f"{x.heading} | {where}".lstrip(" |"))
-                if is_file_link(x.url)
-                else x
-                for x in links
-            ]
+        # A person's page that names them in a field alone (`person_page`):
+        # the title carries the name, a drawn page's title too (below).
+        who = person_page.name(result.content)
+        links, where = self._platform_links(result, links, seekers)
+        # A list's further pages offered as buttons, which are what the list is,
+        # and a seeker's documents named in their headings only (`ezeto`).
+        named = f"{who} | {title}" if who else title
+        links, pages = ezeto.links(result.content, result.url, named, links, seekers)
+        frontier.continue_list(
+            pages, led or bool(DECLARATION.search(fold(named))), lender
+        )
         follow = links
         if (
             self.render is not None
-            # A Madkom page the API does not draw (a form, a calculator) has
-            # nothing a render would show.
-            and not self.madkom.knows(result.url)
+            # A page of an app the API does not draw (a Madkom form, a
+            # calculator) has nothing a render would show.
+            and not any(app.knows(result.url) for app in self._apps)
             and host_of(result.url) not in self._render_off
-            and _app_shell(result.content, links)
+            and (
+                _app_shell(result.content, links) or _empty_declarations(result.content)
+            )
         ):
             drawn = self._drawn(result.url)
             if drawn.ok and self._is_page(drawn):
@@ -908,6 +1370,8 @@ class PeopleSearch:
                     shown = {link.url for link in drawn_links}
                     links = drawn_links + [x for x in links if x.url not in shown]
                     title, follow = drawn_title or title, links
+                    if _empty_declarations(result.content):
+                        links = _declarations_box(drawn)
                 else:
                     # The script went elsewhere: what it drew counts there.
                     out.found.extend(
@@ -920,9 +1384,13 @@ class PeopleSearch:
                         )
                     )
                     follow = links + drawn_links
+        if who:
+            title = f"{who} | {title}"
         folded_title = fold(title)
-        if DECLARATION.search(folded_title) or ASSETS.search(folded_title):
+        filed = bool(DECLARATION.search(fold(where)))
+        if DECLARATION.search(folded_title) or ASSETS.search(folded_title) or filed:
             out.declaration_pages += 1
+        mine = len(out.found)
         out.found.extend(
             candidates(
                 result.url,
@@ -931,18 +1399,99 @@ class PeopleSearch:
                 seekers,
                 first_names=self.first_names,
                 lender=lender,
+                declared=led,
+                owner=who,
+                trail=where,
             )
         )
+        out.found[mine:] = _named_only(result, out.found[mine:])
         self._read_eurzad(out, result, seekers, prefer)
         self._read_wrota(out, result, seekers, prefer)
         self._read_sisco(out, result, title, seekers)
+        self._read_bipinfo(out, result, seekers, prefer)
+        # Gdańsk's pages are all titled alike: its councillors' list for a
+        # year, reached from "Oświadczenia - 2024 rok", said nothing of
+        # declarations, and its links ranked below every menu (11-01).
+        says = bool(led or filed or DECLARATION.search(folded_title))
+        bonus = DECLARATIONS_BONUS if says else 0.0
+        self._read_whole(frontier, result, where or title, says, seekers, depth, prefer)
+        full_name = ezeto.FULL_NAME if ezeto.is_page(result.content) else FULL_NAME
         if depth < self.options.max_depth:
-            # Gdańsk's pages are all titled alike: its councillors' list for a
-            # year, reached from "Oświadczenia - 2024 rok", said nothing of
-            # declarations, and its links ranked below every menu (11-01).
-            says = led or DECLARATION.search(folded_title + " " + fold(where))
-            bonus = DECLARATIONS_BONUS if says else 0.0
-            frontier.follow(follow, seekers, depth + 1, prefer, bonus)
+            frontier.follow(
+                follow,
+                seekers,
+                depth + 1,
+                prefer,
+                bonus,
+                result.url,
+                full_name,
+                self.first_names,
+            )
+        self._tell_page(out, out.found[before:], result.url, depth, led, lender)
+        return PageView(title, links, follow, bonus, full_name)
+
+    def _tell_page(
+        self,
+        out: UnitSearch,
+        new: list[Candidate],
+        url: str,
+        depth: int,
+        led: bool,
+        lender: tuple[str, str] | None,
+    ) -> None:
+        """The trace's line for a page read: its number, its depth, whether a
+        link saying declarations led there and whose, the candidates it gave."""
+        if self.trace is None:
+            return
+        how = (" led" if led else "") + (f" for {' '.join(lender)}" if lender else "")
+        named = sum(1 for c in new if c.key)
+        self._tell(
+            f"page {out.pages} depth {depth}{how}: +{len(new)} candidates "
+            f"({named} named), {out.declaration_pages} declaration pages: {url}"
+        )
+
+    def _read_whole(
+        self,
+        frontier: _Frontier,
+        page: HttpResult,
+        where: str,
+        says: bool,
+        seekers: list[Seeker],
+        depth: int,
+        prefer: re.Pattern[str] | None,
+    ) -> None:
+        """A BIPv2 declarations list (``says``) links ten of its articles: the
+        rest wait on the same list asked for whole (`sputnik`), queued here as
+        the page it is, ``where`` its label."""
+        if not says:
+            return
+        whole = sputnik.whole_list(page.content, page.url)
+        frontier.follow(
+            [LinkContext(x, where) for x in whole],
+            seekers,
+            depth,
+            prefer,
+            DECLARATIONS_BONUS,
+        )
+
+    def _sent_on(self, frontier: _Frontier, page: HttpResult, depth: int) -> None:
+        """Where a page sends the browser on, brought into the walk."""
+        if depth == 0:
+            # A start page that redirected elsewhere brings where it went into
+            # scope, a shared host's unit path alone: powiat nowosądecki's
+            # www.bip.powiat.nowy-sacz.pl answers 302 to bip.malopolska.pl's
+            # /nowosadecki, a host of ~100 units' BIPs (11-18).
+            frontier.adopt(*_split_scope(scope_of(page.url, self.shared_hosts)))
+            # One that sends the browser on with a <meta> refresh, where it
+            # sends it (`website.refresh`): a shared host's unit path only.
+            if sent := website.refresh(page.content, page.url):
+                frontier.adopt(*_split_scope(scope_of(sent, self.shared_hosts)))
+                frontier.add(normalize_url(sent), 100.0, 1, sent)
+        # A frameset is a redirect too: Świdnica's BIP, www.bip.um.swidnica.pl,
+        # is one <frame> of bip.swidnica.nv.pl (11-05: one page read, nothing).
+        for frame in _frames(page.content, page.url):
+            frontier.adopt(*_split_scope(scope_of(frame, self.shared_hosts)))
+            frontier.add(normalize_url(frame), 100.0, depth, frame)
 
     def _read_eurzad(
         self,
@@ -1022,6 +1571,33 @@ class PeopleSearch:
                 )
             )
 
+    def _read_bipinfo(
+        self,
+        out: UnitSearch,
+        page: HttpResult,
+        seekers: list[Seeker],
+        prefer: re.Pattern[str] | None,
+    ) -> None:
+        """The articles of a bip.info.pl declarations list ``page`` is that may
+        be the seekers', each as a page of its own (`bipinfo`)."""
+        for document in self.bipinfo.documents(
+            page,
+            seekers,
+            prefer,
+            self.first_names,
+            self.options.per_person,
+            out.opened,
+        ):
+            out.found.extend(
+                candidates(
+                    document.url,
+                    document.title,
+                    list(document.links),
+                    seekers,
+                    first_names=self.first_names,
+                )
+            )
+
     def _read_sisco(
         self, out: UnitSearch, page: HttpResult, title: str, seekers: list[Seeker]
     ) -> None:
@@ -1030,9 +1606,8 @@ class PeopleSearch:
         links = sisco.attachments(page, title, self._post)
         if links is None:
             return
-        folded = fold(title)
-        if not (DECLARATION.search(folded) or ASSETS.search(folded)):
-            out.declaration_pages += 1  # its breadcrumb says so, not its title
+        # A declarations page `_read_page` counted: its title or its breadcrumb
+        # (`crumbs`) says so, as `sisco.attachments` asks.
         out.found.extend(
             candidates(page.url, title, links, seekers, first_names=self.first_names)
         )
@@ -1045,6 +1620,8 @@ class PeopleSearch:
         host = host_of(url)
         self._wait_turn(host)
         drawn, asked = self.render(url)
+        said = drawn.error[:80] or drawn.status
+        self._tell(f"rendered ({said}), {asked} more requests to {host}: {url}")
         if asked > RENDER_TURNS:
             self._render_off.add(host)
             logger.warning(
@@ -1077,7 +1654,18 @@ class PeopleSearch:
         if len(result.content) > self.options.max_doc_bytes:
             return "too_large", "", ""
         if not result.content or self._is_page(result):
-            return "html", "", ""
+            # A page between the link and its file (Polanów: "Pobierz
+            # oświadczenie" opens /oswiadczenia/pobierz/898/, which offers
+            # pobierz.php?d=osw&id=898): one hop to the file it offers.
+            behind = _file_behind(result, url) if fetched is None else ""
+            if not behind:
+                return "html", "", ""
+            result = self._get(behind, tries)
+            if isinstance(result, str) or not result.ok:
+                return "html", "", ""
+            if not result.content or self._is_page(result):
+                return "html", "", ""
+            url = behind
         digest = hashlib.sha256(result.content).hexdigest()
         with self._write_lock:
             known = self.bip_queue.doc_bundle(digest)
@@ -1101,6 +1689,7 @@ class PeopleSearch:
         past the deadline before it starts (its candidacies stay pending)."""
         if self._past_deadline():
             return None
+        self._here.unit = unit
         try:
             return self._search_and_record(unit, rows)
         except Exception:  # noqa: BLE001 - one unit's surprise is not the run's
@@ -1114,19 +1703,7 @@ class PeopleSearch:
             return {r.key: "not_found:error" for r in rows}
 
     def _search_and_record(self, unit: str, rows: list[PersonRow]) -> dict[str, str]:
-        seekers = [
-            Seeker.of(
-                r.key,
-                r.first_name,
-                r.last_name,
-                str(r.person.get("middle_name") or ""),
-            )
-            for r in rows
-        ]
-        prefer = office_terms(
-            (str(r.person.get("office") or "") for r in rows),
-            (str(r.person.get("unit_name") or "") for r in rows),
-        )
+        seekers, prefer = seekers_of(rows)
         search = self.search_unit(unit, seekers, prefer)
         # A link the walk read as a page is no file: Grójec's year pages name the
         # councillor in full, the PDF on each only by its surname, and choose()
@@ -1284,6 +1861,27 @@ class PeopleSearch:
         return dict(sorted(counts.items()))
 
 
+def seekers_of(rows: list[PersonRow]) -> tuple[list[Seeker], re.Pattern[str] | None]:
+    """A unit's candidacies as the walk seeks them, and the words naming their
+    own council and offices (`office_terms`)."""
+    seekers = [
+        Seeker.of(
+            r.key, r.first_name, r.last_name, str(r.person.get("middle_name") or "")
+        )
+        for r in rows
+    ]
+    prefer = office_terms(
+        (str(r.person.get("office") or "") for r in rows),
+        (str(r.person.get("unit_name") or "") for r in rows),
+    )
+    return seekers, prefer
+
+
+def first_names_of(people: list[PersonRow]) -> frozenset[str]:
+    """Every candidacy's first name as a stem (`PeopleSearch.first_names`)."""
+    return frozenset(stem(p.first_name, min_a=4) for p in people if p.first_name)
+
+
 def _one_hop(url: str, timeout: float, user_agent: str) -> HttpResult:
     """A GET whose redirect `PeopleSearch._get` follows, robots.txt asked first."""
     return http_get(url, timeout, user_agent, follow=False)
@@ -1296,6 +1894,32 @@ def server_of(host: str) -> str:
     except (OSError, UnicodeError):
         return host
     return str(info[0][4][0]) if info else host
+
+
+def _elsewhere(url: str, home: str) -> bool:
+    """Whether ``url`` is off the website ``home`` and may be a unit's BIP: no
+    portal of every BIP's, no other body's (`website.OTHER_BODY`)."""
+    there = host_of(url)
+    return (
+        there != home
+        and there not in website.NOT_A_UNITS_BIP
+        and not website.OTHER_BODY.search(there)
+    )
+
+
+def _foreign(bips: list[website.Bip]) -> list[str]:
+    """The links of the first BIP of another host than the website's own that
+    is no archive, and the first of each other BIP of the office's it links
+    (`website.Bip.also`), three at most: Ustroń's "BiP" leads to its old BIP,
+    which answers nothing, and its 5 were found on the new one, which it links
+    only as "Deklaracja Dostępności"; Rogów's, Oborniki's and Brudzew's on the
+    one they link second (11-18)."""
+    foreign = [b for b in bips if not b.own]
+    top = next((b for b in foreign if not b.archive), None)
+    if top is None:
+        return []
+    also = [b.links[0] for b in foreign if b is not top and b.also][:2]
+    return top.links[: 3 - len(also)] + also
 
 
 def _split_scope(scope: str) -> tuple[str, str]:
@@ -1331,28 +1955,31 @@ def _outcome(
     return "not_found", "not_listed", 0
 
 
-def run_people_mode(
-    args,  # the crawl command's argparse.Namespace
-    pg,  # PostgresClient
-    bip_queue: BipQueue,
-    bundles: LocalBundleStore,
-    robots_allowed: Callable[[str], bool],
-    robots_unreachable: Callable[[str], bool] = lambda url: False,
-    agents: Callable[[str], str] | None = None,
-) -> int:
-    """`koryta_scrape_bip crawl --people-of-interest`: read the list, search, report."""
-    # The package imports this module, so its helpers come in at call time.
-    from jobs.bip_crawler import (  # noqa: PLC0415
-        EXIT_TRY_LATER,
-        USER_AGENT,
-        registry_xml,
-    )
+def load_seeds(
+    ctx: Any, xml_cache: Path, refresh: bool = False
+) -> tuple[dict[str, UnitSeed], str, int]:
+    """Each unit's start addresses: the gov.pl registry's and the public bodies
+    catalogue's, the checked ones (`UNIT_STARTS`) in their place; where the
+    registry came from, and how many units the checked ones changed."""
+    from jobs.bip_crawler import registry_xml  # noqa: PLC0415
 
-    ctx, _ = setup_context(policy=list_policy())
-    people = read_list(ctx)
-    store = PostgresBipPeopleStore(pg)
-    rows = with_outcomes(people, store.searched())
-    pending = sum(r.status == "pending" for r in rows)
+    xml, source = registry_xml(xml_cache, refresh=refresh)
+    seeds = unit_seeds(
+        parse_subjects_xml(xml),
+        read_public_bodies_catalogue(ctx),
+        terc_index(read_terc(ctx)),
+    )
+    return seeds, source, apply_unit_starts(seeds, read_unit_starts())
+
+
+def selected(
+    args: Any,  # argparse.Namespace with the --poi-* selection flags
+    people: list[PersonRow],
+    searched: Mapping[str, PersonOutcome],
+) -> tuple[list[PersonRow], list[PersonRow]]:
+    """The list with what the search made of each candidacy so far, and the
+    candidacies a run with ``args``' selection flags searches, most wanted first."""
+    rows = with_outcomes(people, searched)
     retry = frozenset(r.strip() for r in args.poi_retry.split(",") if r.strip())
     todo = to_search(
         rows,
@@ -1364,23 +1991,43 @@ def run_people_mode(
     )
     if args.poi_units is not None:
         todo = [r for r in todo if r.unit in args.poi_units]
-    print(
-        f"people of interest: {len(people):,} candidacies ({pending:,} pending); "
-        f"{len(todo):,} to search in {len({r.unit for r in todo}):,} units",
-        flush=True,
+    return rows, todo
+
+
+@contextlib.contextmanager
+def people_search(
+    args: Any,  # argparse.Namespace with the walk flags (`add_walk_args`)
+    ctx: Any,
+    people: list[PersonRow],
+    store: BipPeopleStore,
+    docs: DocIndex,
+    bundles: LocalBundleStore,
+    robots_allowed: Callable[[str], bool],
+    robots_unreachable: Callable[[str], bool],
+    agents: Callable[[str], str] | None,
+    user_agent: str,
+    starts: list[dict[str, str]] | None = None,
+    trace: Callable[[str], None] | None = None,
+) -> Iterator[PeopleSearch]:
+    """A search set up as ``args`` say: the units' starts, the walk's options,
+    the known URLs and the renderer, which closes when the block ends. A chunk
+    (`run_people_mode`) and `walk` both search through it, so a walk shows what
+    a chunk would do. ``starts`` are rows as in unit_starts.csv, put over its
+    own: a walk tries an address before it goes in the file. ``trace`` is told
+    each page read and each refusal (`PeopleSearch.trace`)."""
+    seeds, source, checked = load_seeds(
+        ctx, args.xml_cache, getattr(args, "refresh_registry", False)
     )
-    xml, source = registry_xml(args.xml_cache, refresh=args.refresh_registry)
-    seeds = unit_seeds(
-        parse_subjects_xml(xml),
-        read_public_bodies_catalogue(ctx),
-        terc_index(read_terc(ctx)),
-    )
-    checked = apply_unit_starts(seeds, read_unit_starts())
+    if starts:
+        apply_unit_starts(seeds, starts)
+        for row in starts:
+            print(f"start tried for {row['unit']}: {seeds[row['unit']].bip_urls}")
     print(
         f"unit starts: {len(seeds):,} units (registry from {source}; "
         f"{checked:,} from {UNIT_STARTS.name})",
         flush=True,
     )
+    max_minutes = getattr(args, "max_minutes", None)
     options = PeopleOptions(
         unit_pages=args.unit_pages,
         pages_per_candidacy=args.pages_per_candidacy,
@@ -1389,8 +2036,8 @@ def run_people_mode(
         per_person=args.per_person,
         workers=args.workers,
         rate_interval_s=args.rate,
-        user_agent=USER_AGENT,
-        max_run_seconds=args.max_minutes * 60 if args.max_minutes else None,
+        user_agent=user_agent,
+        max_run_seconds=max_minutes * 60 if max_minutes else None,
         max_unit_seconds=args.max_unit_minutes * 60 if args.max_unit_minutes else None,
         max_per_host=args.max_per_host,
         max_per_server=args.max_per_server,
@@ -1405,33 +2052,72 @@ def run_people_mode(
     renderer, how = None, "read as their HTML"
     if not args.no_render and args.render_workers > 0 and rendering.available():
         try:
-            renderer = rendering.Renderer(USER_AGENT, workers=args.render_workers)
+            renderer = rendering.Renderer(user_agent, workers=args.render_workers)
             how = "rendered in headless Chromium"
         except rendering.RendererDown as exc:
             how = f"read as their HTML (no browser started: {exc})"
     print(f"JavaScript pages: {how}", flush=True)
-    search = PeopleSearch(
-        store,
-        bip_queue,
-        bundles,
-        seeds,
-        options,
-        robots_allowed=robots_allowed,
-        robots_unreachable=robots_unreachable,
-        known=known,
-        render=renderer.render if renderer else None,
-        unit_sizes=Counter(p.unit for p in people),
-        first_names=frozenset(
-            stem(p.first_name, min_a=4) for p in people if p.first_name
-        ),
-        resolve=server_of,
-        agents=agents,
-    )
     try:
-        counts = search.run(todo)
+        yield PeopleSearch(
+            store,
+            docs,
+            bundles,
+            seeds,
+            options,
+            robots_allowed=robots_allowed,
+            robots_unreachable=robots_unreachable,
+            known=known,
+            render=renderer.render if renderer else None,
+            unit_sizes=Counter(p.unit for p in people),
+            first_names=first_names_of(people),
+            resolve=server_of,
+            agents=agents,
+            trace=trace,
+        )
     finally:
         if renderer:
             renderer.close()
+
+
+def run_people_mode(
+    args,  # the crawl command's argparse.Namespace
+    pg,  # PostgresClient
+    bip_queue: DocIndex,
+    bundles: LocalBundleStore,
+    robots_allowed: Callable[[str], bool],
+    robots_unreachable: Callable[[str], bool] = lambda url: False,
+    agents: Callable[[str], str] | None = None,
+) -> int:
+    """`koryta_scrape_bip crawl --people-of-interest`: read the list, search, report."""
+    # The package imports this module, so its helpers come in at call time.
+    from jobs.bip_crawler import (  # noqa: PLC0415
+        EXIT_TRY_LATER,
+        USER_AGENT,
+    )
+
+    ctx, _ = setup_context(policy=list_policy())
+    people = read_list(ctx)
+    store = PostgresBipPeopleStore(pg)
+    rows, todo = selected(args, people, store.searched())
+    pending = sum(r.status == "pending" for r in rows)
+    print(
+        f"people of interest: {len(people):,} candidacies ({pending:,} pending); "
+        f"{len(todo):,} to search in {len({r.unit for r in todo}):,} units",
+        flush=True,
+    )
+    with people_search(
+        args,
+        ctx,
+        people,
+        store,
+        bip_queue,
+        bundles,
+        robots_allowed,
+        robots_unreachable,
+        agents,
+        USER_AGENT,
+    ) as search:
+        counts = search.run(todo)
     now = with_outcomes(people, store.searched())
     summary = {
         "this_run": counts,

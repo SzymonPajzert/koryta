@@ -7,10 +7,13 @@ employers, `PeopleScoresPageRank` reads the shape of the graph around them,
 `PeopleScoresCoappointment` reads who they keep turning up with,
 `PeopleScoresTurnover` reads what they did after an election,
 `PeopleScoresSuccession` reads whose seat they took, `PeopleScoresCapture`
-reads the institution rather than the person, and `PeopleScoresFacts` reads
-what has already been written about them. Any of them can nominate somebody the
-others miss, which is why the site takes the best score across models rather
-than the sum.
+reads the institution rather than the person, `PeopleScoresFacts` reads
+what has already been written about them, and `PeopleScoresLocality` reads
+whether they hold a post where they stood. Any of them can nominate somebody the
+others miss, which is why the site took the best score across models rather
+than the sum - until `PeopleScoresPublishable`, the chance the person gets
+published, became the number and the others its reasons (decision on
+2026-11-20).
 
 Taking the best only works if a 5 means the same thing whoever said it, and the
 first measurement against human verdicts says it did not - so each model now
@@ -31,7 +34,9 @@ from analysis.scores.capture import PeopleScoresCapture
 from analysis.scores.coappointment import PeopleScoresCoappointment
 from analysis.scores.company import CompanyScores, PeopleScores
 from analysis.scores.facts import PeopleScoresFacts
+from analysis.scores.locality import PeopleScoresLocality
 from analysis.scores.pagerank import PeopleScoresPageRank
+from analysis.scores.publishable import PeopleScoresPublishable
 from analysis.scores.succession import PeopleScoresSuccession
 from analysis.scores.turnover import PeopleScoresTurnover
 
@@ -45,6 +50,8 @@ PEOPLE_SCORE_MODELS: list[type[PeopleScoreModel]] = [
     PeopleScoresSuccession,
     PeopleScoresCapture,
     PeopleScoresFacts,
+    PeopleScoresLocality,
+    PeopleScoresPublishable,
 ]
 
 __all__ = [
@@ -57,7 +64,9 @@ __all__ = [
     "PeopleScoresCapture",
     "PeopleScoresCoappointment",
     "PeopleScoresFacts",
+    "PeopleScoresLocality",
     "PeopleScoresPageRank",
+    "PeopleScoresPublishable",
     "PeopleScoresSuccession",
     "PeopleScoresTurnover",
     "Population",

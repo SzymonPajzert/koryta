@@ -212,6 +212,11 @@
             stanowi dynamiczna grupa wolontariuszy – pasjonatów i ekspertów,
             którzy poświęcają swój czas, by wspólnie budować narzędzie
             przejrzystości.
+            <NuxtLink
+              to="/eksploruj/statystyki"
+              class="text-ink-info text-no-wrap"
+              >Zobacz, kto tworzy koryta.pl</NuxtLink
+            >.
           </p>
         </v-col>
         <v-col cols="12" md="5">
@@ -409,7 +414,7 @@ import {
   mdiShieldCheckOutline,
 } from "@mdi/js";
 useSeoMeta({
-  title: "O nas - Koryta.pl",
+  title: "O nas",
   description:
     "Przekształcamy rozproszone dane w czytelną mapę powiązań, by każdy obywatel mógł świadomie oceniać jakość zarządzania majątkiem publicznym.",
 });

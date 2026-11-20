@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { test, expect } from "./test";
 import { hospitalStatsFixture } from "./fixtures/hospitalStats";
+import { openInApp } from "./openInApp";
 import { expectFitsThePhone } from "./phoneWidth";
 import { pageTag } from "./pageTags";
 
@@ -11,13 +12,13 @@ import { pageTag } from "./pageTags";
  * copy around a chart that is not there. `tests/visual/fixtures/hospitalStats`
  * says why that is not worth fixing in the seed.
  *
- * WHY IT NAVIGATES FROM THE HOME PAGE. A route handler installed here can only
+ * WHY IT NAVIGATES FROM ANOTHER PAGE. A route handler installed here can only
  * answer requests the browser makes, and this page is server rendered - a
  * direct `goto` fetches inside nitro, where the fixture cannot reach. Arriving
  * through a client-side navigation puts the fetch in the browser instead. The
  * wait afterwards is on a number only the fixture produces, so a run where the
- * click fell through to a full page load fails here rather than quietly banking
- * an empty baseline.
+ * navigation fell through to a full page load fails here rather than quietly
+ * banking an empty baseline.
  *
  * Two shots, because the phone width is fought over in two different places.
  * The party split is what a reader lands on and the only one with no backlog to
@@ -31,17 +32,9 @@ async function openWithFixture(page: Page) {
     route.fulfill({ json: hospitalStatsFixture() }),
   );
 
-  await page.goto("/");
-  // The footer is the only link to this page at both widths - the app bar
-  // drops its navigation below 960px.
-  const link = page.getByRole("link", { name: "Rady szpitali" });
-  await link.scrollIntoViewIfNeeded();
-  // Retried as a whole: until the home page has hydrated, the click is an
-  // ordinary anchor and takes the server-rendered route instead.
-  await expect(async () => {
-    await link.click();
-    await expect(page).toHaveURL(/\/eksploruj\/szpitale$/, { timeout: 5_000 });
-  }).toPass({ timeout: 60_000 });
+  // By the router rather than the footer's link, the only link to this page
+  // at both widths: the visual tests run without the footer (./chrome.ts).
+  await openInApp(page, "/eksploruj/szpitale");
 
   // 591 is the fixture's published seat count and nothing else produces it, so
   // reaching this proves the chart is drawn from the fixture.

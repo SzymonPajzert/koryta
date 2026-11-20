@@ -1,6 +1,6 @@
 """The pages the people import created today, which the morning's export lacks.
 
-`KorytaPeople` is the site as the 04:00 export left it. The night's people
+`KorytaPeople` is the site as the 02:00 export left it. The night's people
 import (`jobs.people_import`) creates its new hires' pages after that, so until
 the next export nothing that reads the site knows those pages are there - and
 the scoring models, which can only rate somebody with a page, would leave the

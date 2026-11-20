@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Firestore } from "firebase-admin/firestore";
-import { importedOrReviewed } from "../../../server/utils/provenance";
+import {
+  importedOrReviewed,
+  writtenByImportOrReviewed,
+} from "../../../server/utils/provenance";
+import { DECLARATION_ACTOR } from "../../../shared/declarations";
 
 /** Revisions by the document they are about, oldest first. */
 let revisions: Record<string, Record<string, unknown>[]> = {};
@@ -71,6 +75,21 @@ describe("importedOrReviewed", () => {
     ).toEqual(new Set());
   });
 
+  it("refuses a post the declarations automation created", async () => {
+    revisions = {
+      declared: [
+        {
+          update_automatic: true,
+          update_user: DECLARATION_ACTOR,
+          status: "pending",
+        },
+      ],
+    };
+    expect(await importedOrReviewed(db, [{ id: "declared" }])).toEqual(
+      new Set(),
+    );
+  });
+
   it("refuses a document with no history to answer from", async () => {
     expect(await importedOrReviewed(db, [{ id: "legacy" }])).toEqual(new Set());
   });
@@ -89,5 +108,41 @@ describe("importedOrReviewed", () => {
     revisions = { a: [{ update_automatic: true }] };
     await importedOrReviewed(db, [{ id: "a" }, { id: "a" }, {}]);
     expect(asked).toEqual(["a"]);
+  });
+});
+
+describe("writtenByImportOrReviewed", () => {
+  it("asks of a first revision in hand what the query asks of the stored one", () => {
+    // computeNodes holds every revision, and must reach the teaser's answer.
+    expect(writtenByImportOrReviewed({ revision_id: "r1" }, undefined)).toBe(
+      true,
+    );
+    expect(writtenByImportOrReviewed({}, { update_automatic: true })).toBe(
+      true,
+    );
+    expect(writtenByImportOrReviewed({}, { update_automatic: false })).toBe(
+      false,
+    );
+    // No history at all is older than the question can be answered for.
+    expect(writtenByImportOrReviewed({}, undefined)).toBe(false);
+  });
+
+  it("does not take a post the declarations automation created until it is approved", () => {
+    // Automatic, but what it wrote is what readers agreed a declaration says.
+    const created = {
+      update_automatic: true,
+      update_user: DECLARATION_ACTOR,
+    };
+    expect(writtenByImportOrReviewed({}, created)).toBe(false);
+    expect(
+      writtenByImportOrReviewed({ revision_id: "revisions/r1" }, created),
+    ).toBe(true);
+    // Any other automatic writer still counts as an import.
+    expect(
+      writtenByImportOrReviewed(
+        {},
+        { update_automatic: true, update_user: "pipeline-people-import" },
+      ),
+    ).toBe(true);
   });
 });

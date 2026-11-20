@@ -90,9 +90,9 @@
         <!-- The machine took it and cannot start it yet: what it waits for
              is what the person who asked needs to know, not the start. -->
         <template v-if="run.waitingFor === 'export' && !stalled">
-          Paczki porównuje się z dzisiejszą kopią bazy, która powstaje o 04:00.
+          Paczki porównuje się z dzisiejszą kopią bazy, która powstaje o 02:00.
           Zlecenie ruszy, gdy będzie gotowa; maszyna do tego czasu się wyłącza i
-          wraca o 04:15, na noc.
+          wraca o 02:15, na noc.
         </template>
         <template v-else-if="run.waitingFor === 'night' && !stalled">
           Maszynę zajmuje teraz noc - zlecenie ruszy zaraz po niej.

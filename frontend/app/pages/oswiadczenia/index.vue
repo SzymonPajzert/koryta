@@ -119,6 +119,11 @@
               </v-btn>
             </div>
           </div>
+          <OswiadczeniaReadingProgress
+            v-if="peopleData?.people"
+            :people="peopleData.people"
+            :yours="readSoFar"
+          />
         </section>
         <div
           v-if="readSoFar > 0 && tallyInfoOpen"
@@ -243,14 +248,24 @@
     </ClientOnly>
 
     <!-- The way on to the rest of what a reader can do. „Działaj z nami” in
-         the app bar and on the home page bring readers here rather than to
-         /pomoc, so this is how they find everything else. Outside ClientOnly,
-         so the server render carries it. Gone once everything is read: the
-         card that says so has its own button to /pomoc. -->
-    <p v-if="!allRead" class="ow-more" data-testid="declaration-more-help">
-      Sprawdź inne sposoby pomocy na stronie -
-      <NuxtLink to="/pomoc" class="text-ink-info">koryta.pl/pomoc</NuxtLink>.
-    </p>
+         the app bar, on the home page and in the footer bring readers here
+         rather than to /pomoc, so this is how they find everything else.
+         Outside ClientOnly, so the server render carries it. The line to
+         /pomoc is gone once everything is read: the card that says so has its
+         own button there. The one to the stats stays, since what everybody
+         read is what a reader who has read it all would look at next. -->
+    <footer class="ow-more">
+      <p v-if="!allRead" data-testid="declaration-more-help">
+        Sprawdź inne sposoby pomocy na stronie -
+        <NuxtLink to="/pomoc" class="text-ink-info">koryta.pl/pomoc</NuxtLink>.
+      </p>
+      <p data-testid="declaration-stats-link">
+        Ile wycinków odczytali wszyscy razem, zobaczysz w statystykach -
+        <NuxtLink to="/eksploruj/statystyki" class="text-ink-info"
+          >koryta.pl/eksploruj/statystyki</NuxtLink
+        >.
+      </p>
+    </footer>
 
     <!-- Vuetify holds a snackbar to 344 px at the least, wider than a 320 px
          phone's room for it and cutting off both ends of the line at 200%
@@ -289,7 +304,7 @@ import {
 import { polishNumber } from "~/composables/polish";
 import { useSignInOnScreen } from "~/composables/signInOnScreen";
 import { lineParts } from "~/utils/declarationReading";
-import { READ_NAMES } from "~~/shared/declarations";
+import { READ_NAMES, type DeclarationPeople } from "~~/shared/declarations";
 
 /**
  * /oswiadczenia: readers type the birth date off a line cut out of a
@@ -341,6 +356,13 @@ const {
   reset,
   keepTyped,
 } = useDeclarationQueue();
+
+/** How far the readers got, in people, for the line along the tally's
+ * bottom: the snapshot the home page and /oswiadczenia/postep show. */
+const { data: peopleData } = useFetch<{ people: DeclarationPeople | null }>(
+  "/api/declarations/people",
+  { key: "declarations-people", server: false, lazy: true },
+);
 
 const current = computed(() => queue.value[0] ?? null);
 
@@ -818,6 +840,14 @@ onMounted(() => {
   margin: 40px 0 0;
   padding-top: 16px;
   text-wrap: pretty;
+}
+
+.ow-more p {
+  margin: 0;
+}
+
+.ow-more p + p {
+  margin-top: 4px;
 }
 
 /* A crop's shape, held while one is on its way, so the page does not jump

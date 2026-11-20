@@ -29,10 +29,20 @@
 1. `status`: where the declarations stand over the night's list: candidacies found, their files downloaded, cut,
    cropped and sent, by priority, and the units (TERYT) where nothing was downloaded for anybody (`--units 50`,
    `--units-csv`). It only reads, so it runs beside a cut or a crawl
-1. Not part of the nightly yet: run it by hand on predator, beside the crawler. It signs in as the people import does
-   (`KORYTA_PIPELINE_UID=pipeline-declarations`). `cut.sh` and `stats.sh` beside the code run `cut` and `status` with
-   the crawl's Postgres, the credentials for the night's list and the cut's logs, from the checkout they sit in
-   (`~/koryta-bip-declarations` on predator)
+1. `facts-part`: what the crawl, the cut and the upload did for each candidacy of the night's list - the search's
+   status and reason, a file not cut, a named file cut, a crop waiting for the upload - as a write-once part in the
+   shared cache (`jobs/bip_declarations/facts/`, `stores.bip_declaration_facts`), with no names, dates, hashes or
+   URLs. It only reads Postgres, with no DDL. `run_chunk.sh` runs it after every crawl chunk, and `cut` and a real
+   `upload` write a part when they end; one not written there is said and changes nothing else
+1. `send-facts`: the night's step `declarations`. The newest part, with the night's list and how many Poles carry
+   each surname (PESEL), to `/api/ingest/declarations/facts`, where the site counts the declarations in people for
+   the home page, /oswiadczenia/postep and /admin/oswiadczenia. Exit 75 when there is no part it can read yet, PESEL's
+   tables do not read, or the site does not answer or take it yet (404); 1 when the site refuses it, or fails the
+   count (500) again after a wait; `--dry-run` sends nothing
+1. Only `send-facts` is part of the nightly: run the rest by hand on predator, beside the crawler. It signs in as
+   the people import does (`KORYTA_PIPELINE_UID=pipeline-declarations`). `cut.sh` and `stats.sh` beside the code run
+   `cut` and `status` with the crawl's Postgres, the credentials for the night's list and the cut's logs, from the
+   checkout they sit in (`~/koryta-bip-declarations` on predator)
 
 ## krs_scrape_bulletin
 1. Reads KRS bulletin for updates on dates we haven't scraped yet
@@ -44,7 +54,7 @@
 1. Writes every answer to the crawl bucket - an empty object where there was none
 1. Writes a run summary to the shared cache (`jobs/krs_scrape_free/runs/`)
 
-Runs nightly as a step of the night on the koryta-nightly VM, after the 04:00 Firestore export - see [data/nightly/README.md](../../../nightly/README.md).
+Runs nightly as a step of the night on the koryta-nightly VM, after the 02:00 Firestore export - see [data/nightly/README.md](../../../nightly/README.md).
 
 ## krs_scrape_paid
 1. Reads which KRS numbers need to be updated
@@ -78,7 +88,7 @@ day's bulletin: `--new-registrations --reads 0`, the backlog's pace waiting on `
 1. Reads the company part of `ScrapeRejestrIO` (person feeds stay paid), KRS numbers from `--krs-file`, or every company `CompaniesKRS` knows (`--graph`)
 1. With `--changed-since DAY`, keeps only the companies the bulletin (`KRSUpdates`) names on or after that day - the weekly refresh
 1. With `--queue` (and `--graph`), then adds the companies `ScrapeRejestrIO` owes rejestr.io connections for, as the last KRS job built it (pinned, not rebuilt), the public ones first; one the service said is in neither register is left out
-1. With `--missing public` (and `--graph`), then adds the graph's public companies with no odpis pełny on file, which the bulletin may never name again; `--missing all` the private ones after them. Live before struck off (`CompaniesKRS`'s `struck_off`), and within those never asked before last unanswered (`KrsOdpisAttempts`); one the service said is in neither register is left out. `--max` caps them all together
+1. With `--missing public` (and `--graph`), then adds the graph's public companies with no odpis pełny on file, which the bulletin may never name again; `--missing site` then the companies the site has a page for and the pipeline calls private, in last night's `CompaniesLikelyPublic` order; `--missing all` then every other private one. Live before struck off (`CompaniesKRS`'s `struck_off`), and within those never asked before last unanswered (`KrsOdpisAttempts`); one the service said is in neither register is left out. `--max` caps them all together
 1. Skips companies whose odpis pełny is on file, unless the bulletin names the entry since
 1. Asks the ministry's public KRS search service for each odpis pełny, politely, stopping when the service tires
 1. Writes every PDF to the crawl bucket, and a record of every attempt to the shared cache (`jobs/krs_odpis/runs/`)
@@ -96,15 +106,15 @@ rejestr.io's for every company where the odpis is the newer of the two, on the w
 1. Writes a table of the entries found - KRS, register, NIP, name, city - that `krs_odpis --krs-file` reads as it is
 
 ## nightly
-1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 04:00 export, then `krs_scrape_free`, `krs_register_owners --new-registrations`, `krs_odpis --queue --missing public`, `krs_scrape_paid --scope fallback --max-calls 50`, the held pipelines whose code changed, every pipeline rebuilt but the held ones (backed up as `main`), the pipeline tests, the output checks, the invariants, the companies the night's people name that the export has no page for (`people_import` as the people step runs it, with `--companies-only`), `people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --max-rejestrio-current 50 --max-published 10` and `score_import`
+1. Runs the night on the koryta-nightly VM, one step after another: the compressor, then waits for tonight's 02:00 export, then `krs_scrape_free`, `krs_register_owners --new-registrations`, `krs_odpis --queue --missing site`, `krs_scrape_paid --scope fallback --max-calls 50`, the held pipelines whose code changed, every pipeline rebuilt but the held ones (backed up as `main`), the pipeline tests, the output checks, the invariants, the companies the night's people name that the export has no page for (`people_import` as the people step runs it, with `--companies-only`), `people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --max-rejestrio-current 50 --max-published 10`, `company_import --max-uploads 1000 --max-renames 0` and `score_import`
 1. The held pipelines are the ones whose sources change with a dump or an election (`HELD`). Each night the six of them it can rebuild in minutes are compared, by the git hashes of the paths they are built from, with what their last build on the VM recorded in its state dir, and each that differs - or has no record - is rebuilt alone with `koryta <Name> --refresh <Name>` before the reprocess, which still holds it. One that fails keeps the copy on disk and is tried again the next night, without failing the night or holding the people
-1. A step that fails holds only the steps that depend on it; the people and the scores wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing. The companies step runs only when the people may - skipped, not held, when they may not - and holds nothing back
+1. A step that fails holds only the steps that depend on it; the people and the scores wait for tonight's export, a reprocess that succeeded and checks with nothing newly failing. The companies step and the company updates after the people run only when the people may - skipped, not held, when they may not - and hold nothing back
 1. Writes its summary to the shared cache (`jobs/nightly/runs/`) and its log beside it (`jobs/nightly/logs/`)
 
-Started by a systemd timer on the VM at 04:30, after the export - see [data/nightly/README.md](../../../nightly/README.md).
+Started by a systemd timer on the VM at 02:30, after the export - see [data/nightly/README.md](../../../nightly/README.md).
 
 ## people_import
-1. Refuses to start (failed) unless the newest finished export - what `--on-koryta` and `--only-changed` compare with - was taken today at 04:00 or later: compared with yesterday's, it would send again what last night's run sent and create again the pages it created. The night says which export its export step took (`--export`), and the run takes that one or a newer in place of the rule, so the two never disagree. A copy of that export on disk not built from it (`KorytaNodes`, `KorytaEdges`) - cached under today's name before four, or the morning's after an export taken by hand since - is rebuilt, `--refresh none` or not
+1. Refuses to start (failed) unless the newest finished export - what `--on-koryta` and `--only-changed` compare with - was taken today at 02:00 or later: compared with yesterday's, it would send again what last night's run sent and create again the pages it created. The night says which export its export step took (`--export`), and the run takes that one or a newer in place of the rule, so the two never disagree. A copy of that export on disk not built from it (`KorytaNodes`, `KorytaEdges`) - cached under today's name before two, or the morning's after an export taken by hand since - is rebuilt, `--refresh none` or not
 1. Rebuilds the people from the newest crawl and this morning's export: `PeopleKRS` (rejestr.io), `KrsOdpisSeats` and `KrsOdpisEntries` (the odpisy), `CompaniesKRS`, `KorytaPeople`, and every pipeline between them and the payloads (`DEFAULT_REFRESH` says why each; `--refresh` names others in their place)
 1. Builds the payloads `koryta PeoplePayloads --all --on-koryta --only-changed` would print - the people the site has whose page would change; `--scope not-on-koryta` the people it has not; `--scope priority` both, ordered for a capped run: new hires at public companies first (those only an odpis names, with no rejestr.io entry, at most a tenth of the run: `--max-new-odpis-only`), then the pages of the people whose rejestr.io feed was bought in the last week (`--bought-days`), then the pages with a note no admin has closed (`KorytaNotes`) - on the page, or on a company the payload names - those saying data is missing first, then at most ten people the site lacks whom only an odpis names in a public post that has not ended and is not new (`--max-odpis-only-current`), then at most fifty with a rejestr.io entry in one, any post counting (`--max-rejestrio-current`) - the pages of both and the new hires' count against `--max-new` together - then published pages, then the rest, leaving out what it sent unchanged in the last 30 days - unless the site took it without a job for want of a page for the job's company, which goes again the next night
 1. Writes them to the shared cache as one write-once part (`jobs/people_import/payloads/date=<day>/<run>.jsonl.gz`), so what any day sent can be read back without diffing two exports
@@ -154,6 +164,19 @@ renews the token once and sends the request again; a token that cannot be renewe
 With neither of the first two set, whoever runs it signs in through the browser, as before, and again when the
 site answers 401.
 
+## company_import
+1. Refuses an export that is not today's, or not the one the night's export step took (`--export`), as `people_import` does, and rebuilds the frames of it on disk not built from it (`KorytaNodes`, `KorytaEdges`, `KorytaCompanies`)
+1. Builds a payload for every company the site has a page for (`CompaniesPayloads.build`) over `Companies` as it is on disk - on the VM the reprocess's, elsewhere the newest backup - and keeps the ones whose page would change (`SiteSnapshot.company_changes`), as `koryta CompaniesPayloads --only-changed` does
+1. Holds back, and names in its run's warnings for a hand upload: a payload that would make a public company private, the companies in `HAND_ONLY`, and one the site has no page for under its KRS number. Keeps the name the site shows, unless `--max-renames` lets the register's in; a payload that would change nothing else is not sent
+1. Writes what it is about to send to the shared cache (`jobs/company_import/payloads/date=<day>/<run>.jsonl.gz`), then sends the companies turning public first and the rest as they came to `/api/ingest/company`, one by one, at the uploader's pace
+1. Writes a run summary to the shared cache (`jobs/company_import/runs/`): each company sent, what it would write and what the site did with it, each held back and why, each name kept
+
+It reports as `company_import`, as `koryta_uploader --type company` does. It stops as failed (exit 1) when the site
+creates a page - a company the export had - and after 20 refusals in a row; as partial (exit 75) at `--max-uploads`
+(3000, 200 on the night), at `--max-minutes`, on SIGTERM after the company in hand, on Ctrl+C, and when the site
+refused some. `--dry-run` builds and counts, signs in to nothing and writes nothing of its own. Runs nightly as the
+step `company_updates`, after the people - see [data/nightly/README.md](../../../nightly/README.md).
+
 ## score_import
 1. Rebuilds every scoring model (`analysis.scores`) over what is on disk - on the VM, what the night's reprocess has just built - rating the site's people as this morning's export has them, and the pages the people import created since: `KorytaPeopleCreated` folds them from its `sent/` parts, which name the page each person went to
 1. Reconciles each model's votes on the site with what it wrote last time (`util.firestore.Firestore.replace_scores`): a changed score is written, one it no longer gives taken back; a model that rates nobody is not uploaded, since reconciled it would take back every vote it has, and fails the run
@@ -166,7 +189,7 @@ Runs nightly as the step after the people on the koryta-nightly VM, so a new hir
 1. Leaves them queued until today's export is done - the job refuses an older one (`jobs.nightly.export_refusal`) - and says so on each (`waitingFor: "export"`, and while a night holds the lock `"night"`), its heartbeat written every five minutes
 1. Runs each as `koryta_people_import --request <id> --refresh none --export <the export it waited for>`, under the night's lock
 1. Ends a run whose job could not say how it ended, by the job's exit code
-1. `--watch`: once it has run something - or found every queued run waiting for the export, which the night's 04:15 boot comes back for - and nothing more comes for ten minutes, asks for the VM to be switched off
+1. `--watch`: once it has run something - or found every queued run waiting for the export, which the night's 02:15 boot comes back for - and nothing more comes for ten minutes, asks for the VM to be switched off
 
 Started at every boot of the koryta-nightly VM, which the site starts for a request - see [data/nightly/README.md](../../../nightly/README.md).
 By hand, against the emulator or wherever there are outputs to read: `koryta_job_requests --once`.

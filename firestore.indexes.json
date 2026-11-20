@@ -1143,6 +1143,110 @@
       ]
     },
     {
+      "collectionGroup": "declarationExtracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "employment.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employment.priority",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employment.answerCount",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "employment.rand",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "declarationExtracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "employment.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employment.updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "declarationExtracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "employment.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employment.answerCount",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employment.updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "declarationExtracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "employment.applyState",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employment.updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "declarationExtracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "employment.skipReason",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employment.updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "declarationExtracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "pageMatch",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employment.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employment.rand",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "declarationPublications",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1183,6 +1287,24 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "votes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "nodeId",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -1194,6 +1316,51 @@
     {
       "collectionGroup": "declarationExtractImages",
       "fieldPath": "name",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "declarationExtractImages",
+      "fieldPath": "header",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "declarationExtractImages",
+      "fieldPath": "strips",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "declarationExtractImages",
+      "fieldPath": "lines",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "declarationExtracts",
+      "fieldPath": "employment.machine",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "declarationExtracts",
+      "fieldPath": "employment.summary",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "declarationExtracts",
+      "fieldPath": "employment.plan",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "declarationExtracts",
+      "fieldPath": "employment.applied",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "edges",
+      "fieldPath": "declared",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "declarationPeople",
+      "fieldPath": "entries",
       "indexes": []
     }
   ]

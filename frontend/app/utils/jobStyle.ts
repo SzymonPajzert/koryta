@@ -304,8 +304,11 @@ const COUNTER_LABELS: Record<string, string> = {
   to_create: "do utworzenia",
   up_to_date: "już aktualnych",
   left_out: "nieprzypisanych",
-  // company (company_import).
+  // company (company_import); koryta_company_import also counts what it held
+  // back for a hand upload, which its run's warnings name.
   uploaded: "wysłanych",
+  held: "wstrzymanych firm",
+  renames_held: "wstrzymanych zmian nazw",
   // score (score_import): votes on a model's shortlist, written, taken back
   // or `unchanged` as above; the nightly run also counts the pages created
   // since the export, and how many of them a model rated.

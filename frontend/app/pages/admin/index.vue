@@ -369,9 +369,8 @@
     </div>
 
     <StatsContributorTable
-      :contributors="weekly?.contributors ?? []"
+      :rankings="weekly?.rankings ?? null"
       :identified="weekly?.identified ?? false"
-      :contributor-count="weekly?.contributorCount ?? 0"
       :window-days="WEEKLY_DAYS"
       :loading="pending"
     />
@@ -398,6 +397,7 @@ import {
 } from "@mdi/js";
 import { authRequest, useAuthState } from "~/composables/auth";
 import { noteAdminTypeLabel, noteKindConfig } from "~/composables/notes";
+import { idTokenResultIfReachable } from "~/utils/tokenRefresh";
 import type { AdminSummary } from "~~/server/api/admin/summary.get";
 import type { ActivityStats } from "~~/server/api/stats/activity.get";
 
@@ -406,7 +406,7 @@ definePageMeta({
 });
 
 useHead({
-  title: "Panel administracyjny - koryta.pl",
+  title: "Panel administracyjny",
 });
 
 const subpages = [
@@ -475,7 +475,9 @@ const { user } = useAuthState();
  * decides by; false until it has been read, so the link never flashes up for
  * somebody it is not for. */
 const established = computedAsync(async () => {
-  const claims = (await user.value?.getIdTokenResult())?.claims;
+  const current = user.value;
+  if (!current) return false;
+  const claims = (await idTokenResultIfReachable(current))?.claims;
   return claims?.admin === true && claims.newAdmin !== true;
 }, false);
 

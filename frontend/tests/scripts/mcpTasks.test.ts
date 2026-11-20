@@ -481,6 +481,114 @@ describe("priority", () => {
   });
 });
 
+describe("decisions and merges", () => {
+  const options = [
+    { key: "A", title: "Move them" },
+    { key: "B", title: "Take them over" },
+  ];
+
+  it("files a decision with its question and options, and lists them", async () => {
+    const { store, docs } = memoryStore();
+    const text = await taskAdd(
+      store,
+      {
+        title: "Decide how a sign-in claims readings",
+        id: "decide-claims",
+        kind: "decision",
+        question: "How should a sign-in claim the readings?",
+        options,
+        recommended: "B",
+      },
+      "agent",
+      now,
+    );
+    expect(text).toContain("decision/owner [options A, B; recommended B]");
+    expect(docs.get("decide-claims")!.task).toMatchObject({
+      question: "How should a sign-in claim the readings?",
+      options,
+      recommended: "B",
+    });
+  });
+
+  it("refuses a merge without its branch", async () => {
+    const { store, docs } = memoryStore();
+    await expect(
+      taskAdd(store, { title: "Merge it", kind: "merge" }, "agent", now),
+    ).rejects.toThrow(/gałęzi/);
+    expect(docs.size).toBe(0);
+  });
+
+  it("closes an answered decision with the last task that follows from it", async () => {
+    const { store, docs } = memoryStore([
+      task("decide", {
+        kind: "decision",
+        status: "doing",
+        options,
+        picked: { key: "A", at: T0, by: "owner" },
+      }),
+      task("merge-a", {
+        kind: "merge",
+        branches: ["a"],
+        dependsOn: ["decide"],
+      }),
+    ]);
+    const text = await taskUpdate(
+      store,
+      { id: "merge-a", patch: { status: "done" } },
+      "agent",
+      now,
+    );
+    expect(text).toContain("Closed with it");
+    expect(text).toContain("- decide");
+    expect(docs.get("decide")!.task.status).toBe("done");
+    // Listed apart while it was open: the answer, not the options.
+    const list = await tasksList(
+      memoryStore([
+        task("decide", {
+          kind: "decision",
+          status: "doing",
+          options,
+          picked: { key: "A", at: T0, by: "owner" },
+        }),
+      ]).store,
+    );
+    expect(list).toContain("## Decided");
+    expect(list).toContain("[picked A]");
+  });
+
+  it("keeps a decision's and a merge's fields through the REST store", () => {
+    const DOCUMENTS = "projects/koryta-pl/databases/agent-tasks/documents";
+    const decision = task("decide", {
+      kind: "decision",
+      question: "How?",
+      options,
+      recommended: "B",
+      picked: { key: "A", at: T1, by: "owner" },
+      status: "doing",
+    });
+    const merge = task("merge-a", {
+      kind: "merge",
+      branches: ["a"],
+      mergeCheck: {
+        state: "partial",
+        branches: [{ name: "a", state: "partial", commits: 3, landed: 2 }],
+        checkedAt: T1,
+        main: "8a5f46d5",
+      },
+    });
+    for (const original of [decision, merge]) {
+      const fields = encodeTask(original);
+      expect(
+        decodeTask({ name: `${DOCUMENTS}/tasks/${original.id}`, fields }),
+      ).toEqual(original);
+    }
+    // The pick's time is a timestamp, as every `at` is.
+    expect(encodeTask(decision).picked!.mapValue!.fields!.at).toEqual({
+      timestampValue: T1,
+    });
+  });
+});
+
 describe("agentActor and taskIdFrom", () => {
   it("names the session's workspace", () => {
     expect(

@@ -1,5 +1,7 @@
 import plLocale from "apexcharts/dist/locales/pl.json";
 import type { ActivityKind } from "~~/shared/activity";
+import { OTHER_PARTY } from "~~/shared/misc";
+import { escapeHtml } from "~~/shared/notifications";
 import type { SearchEnding } from "~~/shared/searchLog";
 
 /**
@@ -9,19 +11,19 @@ import type { SearchEnding } from "~~/shared/searchLog";
  * the combinations in use were run through its validator against this app's
  * white card surface rather than picked by eye:
  *
- * - the four `activityColors` are categorical slots 1-4, checked as a stack
+ * - the five `activityColors` are categorical slots 1-5, checked as a stack
  *   (adjacent pairs) against this surface: worst CVD ΔE 9.1 (protan,
- *   yellow↔aqua), worst normal-vision ΔE 22.9 (the same pair). There were seven
- *   of them, through slot 7, until the kinds were merged down to four; the four
- *   that remain kept the first four slots rather than their old hues, so the
- *   stack is still a prefix of the fixed order and every adjacent pair in it is
- *   one the validator had already passed;
+ *   yellow↔aqua), worst normal-vision ΔE 19.6 (magenta↔yellow, the pair the
+ *   fifth added on 2026-11-02). There were seven of them, through slot 7, until
+ *   the kinds were merged down to four; the four that remained kept the first
+ *   four slots rather than their old hues, so the stack is still a prefix of
+ *   the fixed order;
  * - `diverging.negative` / `diverging.positive` are slots 8 and 1, checked
  *   all-pairs: CVD ΔE 21.6.
  *
  * Aqua, yellow and magenta sit below 3:1 against white, which the method allows
  * only with relief — so every chart using them ships a table view of the same
- * numbers. Do not add a fifth activity colour without re-running the
+ * numbers. Do not add a sixth activity colour without re-running the
  * validator; the slot *order* is the colourblind-safety mechanism, not
  * decoration, so a new kind takes the next slot rather than a hue picked to
  * suit it - and is appended to `activityKinds`, so the stack stays in slot
@@ -73,16 +75,73 @@ export const diverging = {
   neutral: "#f0efec",
 } as const;
 
-/** The home page's map of Poland. A district shades from white towards `heat`
- * with its share of the busiest district's people, `empty` is a district
- * nobody on the site works in, `hover` the one under the pointer. */
+/** The home page's map of Poland (chart/PolandMap.vue): the fills that carry
+ * no party, and the lines. White lines between powiaty and grey voivodeship
+ * borders replaced black ones (decision on 2026-11-18): the fills carry the
+ * information and the lines recede, on a dark party fill as on a phone. */
 export const choropleth = {
-  heat: "#cc0000",
+  /** Nobody on the site works in the powiat yet. */
   empty: "#fff6d5",
-  hover: "#e0e0e0",
-  district: "#333333",
-  voivodeship: "#000000",
+  /** Too few people with a party for a share to say anything. */
+  thin: "#ebeae5",
+  /** Two parties tied for the lead, or „Inne” leading: no party to paint. */
+  tie: ink.axis,
+  /** On one party's map: a powiat where nobody has that party. */
+  none: "#f6f5f1",
+  district: ink.surface,
+  voivodeship: ink.secondary,
+  /** The outline drawn round the powiat under the pointer. */
+  hover: ink.primary,
 } as const;
+
+/** People in a powiat in six classes (1-4, 5-9, 10-19, 20-49, 50-99, 100+),
+ * light to dark in the map's old red. What the map shows until the night's
+ * recount has written party counts to the region rows. */
+export const choroplethPeople = [
+  "#fee0db",
+  "#f9bdb3",
+  "#ec988b",
+  "#d96e60",
+  "#c34235",
+  "#a30101",
+] as const;
+
+/** The party most of a powiat's people have, in three steps of its share
+ * among the people with a party: under 45%, 45-59%, 60% and up (decision on
+ * 2026-11-18). Each step is the party's own hue, with `partyColors`' fill as
+ * one of them, so the strongest map still reads as that party. Built in OKLCH
+ * and checked with the data-viz validator as ordinal ramps: monotone
+ * lightness, at least 0.06 between steps, one hue. */
+export const choroplethLead: Record<string, readonly [string, string, string]> =
+  {
+    PO: ["#fdd6b2", "#fca241", "#c67712"],
+    PiS: ["#a5c0e5", "#517cb5", "#073b76"],
+    PSL: ["#b8f1d4", "#2ed396", "#23966a"],
+    "Polska 2050": ["#fceec7", "#FFCB03", "#c29a07"],
+    "Nowa Lewica": ["#ffa097", "#f75b54", "#D40E20"],
+    Konfederacja: ["#b1bfd2", "#596d8a", "#102440"],
+    Nowoczesna: ["#b7e9ee", "#00A9B7", "#017782"],
+    "Bezpartyjni Samorządowcy": ["#c8b2e8", "#9a74c9", "#6A3D9A"],
+  };
+
+/** One party's map: its share of a powiat's people with a party, in four
+ * steps (1-19%, 20-39%, 40-59%, 60% and up), built and checked as
+ * `choroplethLead` is. „Inne” gets a ramp here though it never leads: its
+ * own map is still a party's map. */
+export const choroplethShare: Record<
+  string,
+  readonly [string, string, string, string]
+> = {
+  PO: ["#ffdec1", "#fdc18a", "#fca241", "#bd700c"],
+  PiS: ["#d0e0f5", "#97b3d9", "#4f76a9", "#073b76"],
+  PSL: ["#c5f1da", "#8ce2b8", "#2ed396", "#069869"],
+  "Polska 2050": ["#f9eac4", "#FFCB03", "#d1a604", "#a58308"],
+  "Nowa Lewica": ["#ffd2cc", "#f49288", "#e85c55", "#D40E20"],
+  Konfederacja: ["#d7dfea", "#a4b2c6", "#556781", "#102440"],
+  Nowoczesna: ["#c7edf1", "#81cad3", "#00A9B7", "#02717b"],
+  "Bezpartyjni Samorządowcy": ["#e4d7f7", "#bca5dc", "#9270bd", "#6A3D9A"],
+  [OTHER_PARTY]: ["#ecebe8", "#c3c2b7", "#9d9c92", "#797870"],
+};
 
 /** The greys two older party charts - the people bars on a region's page and
  * the company bars on /eksploruj - give the people no party colour accounts
@@ -109,6 +168,7 @@ export const activityColors: Record<ActivityKind, string> = {
   revision: categorical[1],
   noteSource: categorical[2],
   publication: categorical[3],
+  reading: categorical[4],
 };
 
 /** How a search ended, on /admin/wyszukiwania. These are states, not
@@ -170,6 +230,74 @@ export function baseChartOptions() {
       labels: { style: { colors: ink.muted, fontFamily: FONT_FAMILY } },
     },
     states: { hover: { filter: { type: "lighten", value: 0.08 } } },
+  };
+}
+
+/** One line of a line chart, as its row in a tooltip shows it. */
+export type TooltipLine = { name: string; color: string };
+
+/** What apexcharts hands a `tooltip.custom`, as far as `rankedTooltip` reads
+ * it: every series' values, and the point under the pointer. */
+type TooltipPoint = {
+  series: (number | null | undefined)[][];
+  dataPointIndex: number;
+};
+
+/** The circle apexcharts puts before each row of its own tooltip. */
+const TOOLTIP_MARKER =
+  '<svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="6" cy="6" r="5" fill="currentColor"/></svg>';
+
+/** A shared tooltip whose rows stand in the order the lines do at the hovered
+ * point, the highest line first.
+ *
+ * apexcharts lists a shared tooltip's rows in series order whatever the values
+ * are, and has no option to sort them. Where that is not the order of the
+ * lines - the home chart's folded „pozostałe” comes last and is often its
+ * highest line - a reader going down the rows goes up and down the chart. So
+ * this writes the tooltip itself, in apexcharts' own markup and classes: its
+ * stylesheet still draws it, and only the order is new.
+ *
+ * The values are counts. Ties keep series order. A line with no value at the
+ * point has no row, as in apexcharts' own tooltip, which is also how a line
+ * hidden from the legend drops out: apexcharts empties its data.
+ *
+ * The lines and the title are asked for each time the tooltip is drawn.
+ * vue3-apexcharts hands every later options update to apexcharts through
+ * JSON, which drops functions, so apexcharts goes on calling the first
+ * tooltip it was given: lines baked into it stay those of the first chart.
+ */
+export function rankedTooltip(
+  lines: () => TooltipLine[],
+  title: (dataPointIndex: number) => string,
+) {
+  // The font apexcharts sets on the same two elements of its own tooltip.
+  const font = escapeHtml(`font-family: ${FONT_FAMILY}; font-size: 12px`);
+  return ({ series, dataPointIndex }: TooltipPoint): string => {
+    const rows = lines()
+      .map((line, index) => ({
+        line,
+        index,
+        value: series[index]?.[dataPointIndex],
+      }))
+      .filter(
+        (row): row is { line: TooltipLine; index: number; value: number } =>
+          typeof row.value === "number",
+      )
+      .sort((a, b) => b.value - a.value || a.index - b.index)
+      .map(
+        ({ line, value }) =>
+          `<div class="apexcharts-tooltip-series-group apexcharts-active" style="display: flex">` +
+          `<span class="apexcharts-tooltip-marker" style="color: ${escapeHtml(line.color)}">${TOOLTIP_MARKER}</span>` +
+          `<div class="apexcharts-tooltip-text" style="${font}">` +
+          `<div class="apexcharts-tooltip-y-group">` +
+          `<span class="apexcharts-tooltip-text-y-label">${escapeHtml(line.name)}: </span>` +
+          `<span class="apexcharts-tooltip-text-y-value">${formatCount(value)}</span>` +
+          `</div></div></div>`,
+      );
+    return (
+      `<div class="apexcharts-tooltip-title" style="${font}">${escapeHtml(title(dataPointIndex))}</div>` +
+      rows.join("")
+    );
   };
 }
 

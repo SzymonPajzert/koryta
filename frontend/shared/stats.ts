@@ -146,6 +146,26 @@ export function isAutomatedUid(uid: string | undefined | null): boolean {
   return isPipelineUid(uid) || isMigrationUid(uid);
 }
 
+/** The model whose score is the pipeline's part of the total: the chance that
+ * the person gets published, as `PeopleScoresPublishable` in
+ * `data/pipelines/src/analysis/scores/publishable.py` bands it (decision on
+ * 2026-11-20). Every other model stays in `models` as one of the reasons. */
+export const PUBLISH_CHANCE_MODEL = "pipeline-publishable";
+
+/** What the scoring models add to a node's `interesting`: the publication
+ * chance where that model has scored the person, and the best of the others
+ * where it has not - a page created since the last export, or any node until
+ * the model's first night. `undefined` when no model has scored it at all. */
+export function pipelineContribution(
+  models: Record<string, number> | undefined,
+): number | undefined {
+  if (!models) return undefined;
+  const chance = models[PUBLISH_CHANCE_MODEL];
+  if (typeof chance === "number") return chance;
+  const scores = Object.values(models);
+  return scores.length > 0 ? Math.max(...scores) : undefined;
+}
+
 /**
  * The vote aggregate stored on a node: what people said, plus the pipeline's
  * best guess.
@@ -155,10 +175,9 @@ export function isAutomatedUid(uid: string | undefined | null): boolean {
  * models look at the same data from different angles and largely agree, so
  * summing them would say "five voters" where there is one dataset, and adding
  * a sixth model would silently rescale a number the explore table sorts on and
- * `bucketPublicationCandidates` cuts into 1-5 bands. Instead every model's
- * verdict collapses to the highest of them - a model that spots somebody the
- * others miss still surfaces them, and one that has nothing to say costs
- * nothing.
+ * `bucketPublicationCandidates` cuts into 1-5 bands. Instead the models add one
+ * number, `pipelineContribution`: the chance the person gets published where
+ * that model has scored them, the highest of the others where it has not.
  *
  * `models` keeps each model's own score so a reader can see which one
  * nominated a person, and `humanCount` how many people voted at all. Between
@@ -221,8 +240,14 @@ export function computeVoteStats(
   }
 
   for (const [category, best] of Object.entries(pipelineBest)) {
+    // `models` holds the `interesting` scores, which is the category the
+    // publication chance answers for.
+    const contribution =
+      category === "interesting"
+        ? (pipelineContribution(models) ?? best)
+        : best;
     aggregatedVotes[category] =
-      ((aggregatedVotes[category] as number) || 0) + best;
+      ((aggregatedVotes[category] as number) || 0) + contribution;
   }
 
   if (Object.keys(models).length > 0) {

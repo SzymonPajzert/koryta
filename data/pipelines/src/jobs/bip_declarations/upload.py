@@ -15,6 +15,12 @@ stranger's declaration more often than not.
 
 What was sent is kept in `bip_decl_sent` as a hash, so a run sends what is new
 or changed since the last: a candidacy whose search moved on, a crop cut again.
+
+`--public-post` sends only the candidacies whose page holds a paid post, current
+or ended, at a public company (`BipPersonOfInterest.public_post`), and the crops
+that serve them: the site publishes a page from its declaration only then
+(`frontend/server/utils/publicPosts.ts`), so a crop of anybody else would be
+read for a page that never goes up.
 After the upload the job calls `/api/declarations/sweep`, which compares the
 readings settled since with their pages.
 """
@@ -338,12 +344,26 @@ def batches(extracts: list[Extract]) -> Iterator[list[Extract]]:
         yield batch
 
 
+class ListTooOld(RuntimeError):
+    """The night's list does not say what the run was asked to filter by."""
+
+
 class SiteError(RuntimeError):
     """The site refused a request: retrying the same one will not help."""
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        #: The HTTP status it answered with; None when no answer said why.
+        self.status = status
 
 
 class SiteUnavailable(RuntimeError):
     """The site did not answer, or not yet: a later run can try again."""
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        #: The HTTP status of the last answer; None when there was none.
+        self.status = status
 
 
 @dataclass
@@ -355,9 +375,17 @@ class Site:
     session: Any = field(default_factory=requests.Session)
     sleep: Callable[[float], None] = time.sleep
 
-    def post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    def post(
+        self,
+        path: str,
+        body: dict[str, Any],
+        *,
+        backoff: tuple[float, ...] = BACKOFF_S,
+    ) -> dict[str, Any]:
+        """The site's answer. One it did not give is asked again after each
+        of `backoff`'s waits, so a try more than there are waits."""
         refreshed = False
-        for attempt in range(len(BACKOFF_S) + 1):
+        for attempt in range(len(backoff) + 1):
             try:
                 response = self.session.post(
                     f"{self.endpoint.rstrip('/')}{path}",
@@ -366,9 +394,9 @@ class Site:
                     timeout=300,
                 )
             except (requests.ConnectionError, requests.Timeout) as exc:
-                if attempt == len(BACKOFF_S):
+                if attempt == len(backoff):
                     raise SiteUnavailable(f"{path}: {exc}") from exc
-                self.sleep(BACKOFF_S[attempt])
+                self.sleep(backoff[attempt])
                 continue
             if response.status_code == 401 and not refreshed:
                 refreshed = True
@@ -378,13 +406,17 @@ class Site:
                     raise SiteError(str(exc)) from exc
                 continue
             if response.status_code == 429 or response.status_code >= 500:
-                if attempt == len(BACKOFF_S):
-                    raise SiteUnavailable(f"{path}: {response.status_code}")
-                self.sleep(BACKOFF_S[attempt])
+                if attempt == len(backoff):
+                    raise SiteUnavailable(
+                        f"{path}: {response.status_code}", response.status_code
+                    )
+                self.sleep(backoff[attempt])
                 continue
             if not response.ok:
                 text = " ".join(response.text.split())[:500]
-                raise SiteError(f"{path}: {response.status_code} {text}")
+                raise SiteError(
+                    f"{path}: {response.status_code} {text}", response.status_code
+                )
             return dict(response.json())
         raise SiteUnavailable(f"{path}: no answer")
 
@@ -422,6 +454,7 @@ def plan(
     *,
     priorities: set[int] | None = None,
     sample: int | None = None,
+    public_post: bool = False,
 ) -> tuple[list[tuple[dict[str, Any], str]], list[Extract]]:
     """What a run would send: the candidacies and extracts new or changed since
     the last, each candidacy with its digest.
@@ -431,14 +464,26 @@ def plan(
     draft with one, 3 a published page) and the extracts that serve them.
     `sample` makes a test run of it: that many crops not sent yet, by their ids
     so that a dry run picks the same ones, and only the candidacies they serve.
+    `public_post` keeps the candidacies with a public post on their page
+    (`BipPersonOfInterest.public_post`), and raises `ListTooOld` on a list that
+    does not say.
     """
     # Every candidacy, kept or not: a file's links tell a council's file from
     # one person's by everybody they name.
     people = {p.key: p for p in store.candidacies()}
+    if public_post and all(
+        p.person.get("public_post") is None for p in people.values()
+    ):
+        raise ListTooOld(
+            "the night's list says nobody's public_post: it was built before the "
+            "field existed; the next night's list will"
+        )
     roots = store.unit_roots()
     candidacies = []
     for person in people.values():
         if priorities is not None and person.priority not in priorities:
+            continue
+        if public_post and person.person.get("public_post") is not True:
             continue
         record = candidacy_record(person, roots.get(person.unit, []))
         if record is not None:
@@ -479,12 +524,16 @@ def upload(
     max_requests: int | None = None,
     priorities: set[int] | None = None,
     sample: int | None = None,
+    public_post: bool = False,
     log: Callable[[str], None] = print,
 ) -> UploadResult:
     """Send what is new or changed: the candidacies first, as an extract names
     candidacies the site must already hold, then the extracts, a batch at a time,
-    each batch's answer kept as it comes. `priorities` and `sample` as in `plan`."""
-    candidacies, extracts = plan(store, priorities=priorities, sample=sample)
+    each batch's answer kept as it comes. `priorities`, `sample` and
+    `public_post` as in `plan`."""
+    candidacies, extracts = plan(
+        store, priorities=priorities, sample=sample, public_post=public_post
+    )
     result = UploadResult()
     log(f"to send: {len(candidacies)} candidacies, {len(extracts)} extracts")
     for start in range(0, len(candidacies), MAX_CANDIDACIES_PER_REQUEST):

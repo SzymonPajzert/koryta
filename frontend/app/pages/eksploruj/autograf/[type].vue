@@ -118,7 +118,7 @@ import { useCurrentUser } from "vuefire";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
-  title: "Eksploruj - Wizualizacje - koryta.pl",
+  title: "Eksploruj - Wizualizacje",
 });
 
 const route = useRoute();

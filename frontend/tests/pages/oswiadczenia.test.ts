@@ -6,6 +6,7 @@ import OswiadczeniaPage from "../../app/pages/oswiadczenia/index.vue";
 import DialogLogin from "../../app/components/dialog/Login.vue";
 import { useSignInMethod } from "../../app/composables/signInMethod";
 import { newsletterAnswerNote } from "../../shared/campaigns";
+import { SEEDED_DECLARATION_PEOPLE } from "../../scripts/declarationPeople";
 import type {
   DeclarationAnswerResult,
   DeclarationQueue,
@@ -73,6 +74,7 @@ const served = (
   task: crop(ids[0]!),
   upcoming: ids.slice(1).map(crop),
   open: 40,
+  settledCrops: 60,
   mine,
 });
 
@@ -116,6 +118,11 @@ let strangerMine: DeclarationQueue["mine"] = { today: 0, total: 0 };
  * an error `$fetch` failed with (`failedWith`). */
 const failing = new Map<string, unknown>();
 
+// How far the declarations got, in people, which the line along the tally's
+// bottom draws: 420 read, 90 waiting.
+registerEndpoint("/api/declarations/people", () => ({
+  people: SEEDED_DECLARATION_PEOPLE,
+}));
 registerEndpoint("/api/declarations/next", (event) => {
   asked.push({
     url: "/api/declarations/next",
@@ -469,6 +476,31 @@ describe("/oswiadczenia, the tally at the top", () => {
     expect(
       wrapper.find('[data-testid="declaration-tally-login"]').exists(),
     ).toBe(false);
+  });
+
+  it("ends the tally with how far everybody got, in people, and what the reader read", async () => {
+    window.localStorage.removeItem(READER_KEY);
+    currentUser.value = READER;
+    mockAuthRequest.mockImplementation(async () =>
+      served(["b1", "b2", "b3"], { today: 2, total: 7, found: 3 }),
+    );
+    const wrapper = await mountPage();
+    await cropShown(wrapper);
+
+    await vi.waitFor(() =>
+      expect(
+        wrapper
+          .find(
+            '[data-testid="declaration-tally"] [data-testid="declaration-progress"]',
+          )
+          .exists(),
+      ).toBe(true),
+    );
+    expect(
+      wrapper
+        .get('[data-testid="declaration-progress"]')
+        .attributes("aria-label"),
+    ).toBe("Gotowe osoby: 420 z 510. Twoje odczyty: 7.");
   });
 
   it("says how many of them it found in companies when the server counts them", async () => {

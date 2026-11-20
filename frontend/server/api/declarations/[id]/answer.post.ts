@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { z } from "zod";
+import { restageDeclarationPeople } from "~~/server/utils/declarationPeopleCount";
 import { creditFinds } from "~~/server/utils/declarationPublish";
 import { compareSettled } from "~~/server/utils/declarationSettled";
 import {
@@ -51,7 +52,8 @@ const PAGES_PER_ANSWER = 1;
  * pages and takes up the publication queue (`compareSettled`), beside
  * fetching the next crops rather than before them. Only an answer that votes
  * does: one without a vote cannot have settled anything, and a stranger's
- * request must not be what sets publication going.
+ * request must not be what sets publication going. One that settles a crop
+ * as unreadable moves its people in the people count.
  */
 export default defineEventHandler(async (event) => {
   const reader = await getReader(event);
@@ -85,11 +87,23 @@ export default defineEventHandler(async (event) => {
     reader.votes &&
     recorded.settled?.status === "agreed" &&
     recorded.settled.kind === "date";
+  const settledUnreadable =
+    reader.votes && recorded.settled?.status === "unreadable";
   const [queue] = await Promise.all([
-    queueFor(db, reader.uid, 3, new Set([id, ...(body.holding ?? [])])),
+    // The crop's people are in hand: their next crop waits until this one
+    // has settled, and its place in the queue moves only once it has.
+    queueFor(
+      db,
+      reader.uid,
+      3,
+      new Set([id, ...(body.holding ?? [])]),
+      new Set(recorded.personIds),
+    ),
     settledOnDay
       ? compareSettled(event, db, [id], PAGES_PER_ANSWER)
-      : undefined,
+      : settledUnreadable
+        ? restageDeclarationPeople(db, recorded.personIds)
+        : undefined,
   ]);
 
   setResponseHeader(event, "Cache-Control", "private, no-store");

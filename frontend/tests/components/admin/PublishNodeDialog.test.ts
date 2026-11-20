@@ -57,6 +57,8 @@ const relation = (overrides: Partial<NodeRelation> = {}): NodeRelation => ({
   published: false,
   startDate: null,
   position: null,
+  byElection: false,
+  parties: [],
   revisionToApprove: null,
   hasPendingRevision: false,
   publishable: true,
@@ -105,12 +107,12 @@ let revisionsResponse: {
 
 /** The two GETs the dialog makes on open answer with the list and the
  * revisions; every POST it makes afterwards succeeds. */
-function serveRelations(relations: NodeRelation[]) {
+function serveRelations(relations: NodeRelation[], nodeParties: string[] = []) {
   mockAuthRequest.mockImplementation(
     async (url: string, opts: { method?: string } = {}) => {
       if (url === "/api/revisions/byNode") return revisionsResponse;
       return opts.method === "GET"
-        ? { relations, nodePublished: false }
+        ? { relations, nodePublished: false, nodeParties }
         : { ok: true, url };
     },
   );
@@ -521,6 +523,8 @@ describe("PublishNodeDialog.vue", () => {
           id: "rev-new",
           data: { name: "Jan Kowalski" },
           update_time: "2026-08-12T10:00:00Z",
+          update_automatic: true,
+          update_user: "pipeline",
         },
       ],
     };
@@ -528,7 +532,69 @@ describe("PublishNodeDialog.vue", () => {
     wrapper = mountDialog();
     await open(wrapper);
 
-    expect(el("publish-auto-approve")?.textContent).toContain("12.08.2026");
+    const alert = el("publish-auto-approve")?.textContent ?? "";
+    expect(alert).toContain("12.08.2026");
+    expect(alert).not.toContain("propozycję zmiany");
+  });
+
+  it("calls neither a migration's version nor the import's under a person's uid a proposal", async () => {
+    for (const newest of [
+      { update_user: "migration:merge-duplicates" },
+      { update_automatic: true, update_user: "someone" },
+    ]) {
+      revisionsResponse = {
+        approvedRevisionId: null,
+        revisions: [
+          {
+            id: "rev-new",
+            data: { name: "Jan Kowalski" },
+            update_time: "2026-08-12T10:00:00Z",
+            ...newest,
+          },
+        ],
+      };
+      serveRelations([]);
+      wrapper = mountDialog();
+      await open(wrapper);
+
+      const alert = el("publish-auto-approve")?.textContent ?? "";
+      expect(alert).toContain("12.08.2026");
+      expect(alert).not.toContain("propozycję zmiany");
+      wrapper.unmount();
+      document.body.innerHTML = "";
+    }
+    wrapper = undefined;
+  });
+
+  it("says so when the version it is about to publish is a person's proposal", async () => {
+    // The newest version is somebody's edit nobody has read: publishing
+    // approves it all the same, as the hold's „czeka propozycja zmiany” knows.
+    revisionsResponse = {
+      approvedRevisionId: null,
+      revisions: [
+        {
+          id: "rev-import",
+          data: { name: "Jan Kowalski" },
+          update_time: "2026-07-09T10:00:00Z",
+          update_automatic: true,
+          update_user: "pipeline",
+        },
+        {
+          id: "rev-person",
+          status: "pending",
+          data: { name: "Jan Kowalski" },
+          update_time: "2026-08-12T10:00:00Z",
+          update_user: "someone",
+        },
+      ],
+    };
+    serveRelations([]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(
+      el("publish-auto-approve")?.textContent.replace(/\s+/g, " "),
+    ).toContain("najnowszą wersję, propozycję zmiany z 12.08.2026");
   });
 
   it("says nothing about approving when every revision is unusable", async () => {
@@ -692,8 +758,10 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
     wrapper = mountDialog();
     await open(wrapper);
 
-    const block = el("publish-place-clash-2002-Samorząd") as HTMLElement;
-    expect(block.textContent).toContain("Wybory 2002 · Samorząd");
+    // Named by the election, not the office: one election's runs can be filed
+    // under several.
+    const block = el("publish-place-clash-local-2002") as HTMLElement;
+    expect(block.textContent).toContain("Samorządowe 2002 - dwa miejsca naraz");
     expect(
       block.querySelector('[data-testid="publish-relation-kozienice-2002"]')
         ?.textContent,
@@ -707,6 +775,202 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
       block.querySelector('[data-testid="publish-relation-zol"]'),
     ).toBeNull();
     expect(el("publish-relation-gniezno-2006")).not.toBeNull();
+  });
+
+  /** His page with the parties the import gave it: PO from his own runs in
+   * powiat gnieźnieński, PiS from the namesake's in powiat kozienicki. */
+  const withParties = () =>
+    kowalski().map((row) =>
+      row.type !== "election"
+        ? row
+        : { ...row, parties: row.id === "kozienice-2002" ? ["PiS"] : ["PO"] },
+    );
+
+  it("names each run's party, and the one only the unticked run gives the page", async () => {
+    serveRelations(withParties(), ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    const block = el("publish-place-clash-local-2002") as HTMLElement;
+    expect(
+      block
+        .querySelector('[data-testid="publish-relation-kozienice-2002"]')
+        ?.textContent.replace(/\s+/g, " "),
+    ).toContain("Samorząd · PiS · tu tylko w 2002");
+    // PO is also his 2006 and 2010 runs' party, which nothing doubts.
+    const warning = el("publish-clash-parties-local-2002") as HTMLElement;
+    expect(warning.textContent.replace(/\s+/g, " ")).toContain(
+      "Tylko niezaznaczona kandydatura daje partię: PiS. Jeśli to imiennik, usuń ją na stronie osoby.",
+    );
+    // The person page, where „Zaproponuj zmianę” edits the parties, in a tab
+    // of its own: the dialog stays as it was.
+    const link = warning.querySelector("a");
+    expect(link?.getAttribute("href")).toBe("/entity/person/jan-kowalski");
+    expect(link?.getAttribute("target")).toBe("_blank");
+  });
+
+  it("moves the warning with the side the reviewer picks", async () => {
+    serveRelations(withParties(), ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+    const warning = () =>
+      el("publish-clash-parties-local-2002")?.textContent.replace(/\s+/g, " ");
+
+    await click(checkbox("gniezno-2002"));
+    expect(warning()).toContain("daje partię: PiS.");
+
+    // The other side picked instead: PiS is vouched for, and his career in
+    // powiat gnieźnieński, all of it unticked, is what is left out.
+    await click(checkbox("gniezno-2002"));
+    await click(checkbox("kozienice-2002"));
+    expect(warning()).toContain("dają partię: PO.");
+  });
+
+  it("names every party of a clash nobody ticked, and leaves one no run names", async () => {
+    // Only the two 2002 runs: each party is a doubtful run's alone. Razem came
+    // from somewhere else, a press list say, and is not the dialog's to doubt.
+    serveRelations(
+      withParties().filter((row) => row.id.endsWith("2002")),
+      ["PO", "PiS", "Razem"],
+    );
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(
+      el("publish-clash-parties-local-2002")?.textContent.replace(/\s+/g, " "),
+    ).toContain(
+      "Tylko niezaznaczone kandydatury dają partie: PO i PiS. Jeśli to imiennik, usuń je na stronie osoby.",
+    );
+  });
+
+  it("reads the parties of the version publishing approves, not the page as stored", async () => {
+    // Nothing approved: the newest version goes live, here the admin's own
+    // proposal from the person page, without the namesake's PiS.
+    revisionsResponse = {
+      approvedRevisionId: null,
+      revisions: [
+        {
+          id: "rev-import",
+          data: { name: "Jan Kowalski", parties: ["PO", "PiS"] },
+          update_time: "2026-07-09T10:00:00Z",
+          update_automatic: true,
+          update_user: "pipeline",
+        },
+        {
+          id: "rev-admin",
+          status: "pending",
+          data: { name: "Jan Kowalski", parties: ["PO"] },
+          update_time: "2026-08-12T10:00:00Z",
+          update_user: "admin-uid",
+        },
+      ],
+    };
+    serveRelations(withParties(), ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(el("publish-clash-parties-local-2002")).toBeNull();
+  });
+
+  it("reads the version again when the window comes back, and keeps the ticks", async () => {
+    serveRelations(withParties(), ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+    await click(checkbox("gniezno-2002"));
+    expect(el("publish-clash-parties-local-2002")).not.toBeNull();
+
+    // The admin took PiS off in another tab: a proposal, now the newest.
+    revisionsResponse = {
+      approvedRevisionId: null,
+      revisions: [
+        {
+          id: "rev-admin",
+          status: "pending",
+          data: { name: "Jan Kowalski", parties: ["PO"] },
+          update_time: "2026-08-12T10:00:00Z",
+          update_user: "admin-uid",
+        },
+      ],
+    };
+    window.dispatchEvent(new Event("focus"));
+    await flushPromises();
+
+    expect(el("publish-clash-parties-local-2002")).toBeNull();
+    expect(checkbox("gniezno-2002")?.checked).toBe(true);
+  });
+
+  it("counts the namesake's other runs in the place left out, once a side is picked", async () => {
+    // He stood in powiat kozienicki in 2014 too, for PiS: no clash that year.
+    const rows = [
+      ...withParties(),
+      candidacy("kozienice-2014", "1407", "2014", { parties: ["PiS"] }),
+    ];
+    serveRelations(rows, ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    // Before a side is picked, the 2006 run is nobody's to doubt.
+    expect(el("publish-clash-parties-local-2002")).toBeNull();
+
+    await click(checkbox("gniezno-2002"));
+
+    expect(
+      el("publish-clash-parties-local-2002")?.textContent.replace(/\s+/g, " "),
+    ).toContain("Tylko niezaznaczone kandydatury dają partię: PiS.");
+  });
+
+  it("keeps the namesake's other runs in the place left out out of „Zaznacz wszystkie”", async () => {
+    const rows = [
+      ...withParties(),
+      candidacy("kozienice-2014", "1407", "2014", { parties: ["PiS"] }),
+    ];
+    serveRelations(rows, ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+    await click(checkbox("gniezno-2002"));
+
+    await click(el("publish-select-all"));
+
+    // Ticked in bulk, his 2014 run would be vouched for and PiS go live
+    // unwarned.
+    expect(checkbox("kozienice-2014")?.checked).toBe(false);
+    expect(el("publish-clash-parties-local-2002")?.textContent).toContain(
+      "PiS",
+    );
+    await click(confirmButton());
+    expect(publishedIds()).toEqual([
+      "gniezno-2002",
+      "gniezno-2006",
+      "gniezno-2010",
+      "zol",
+    ]);
+  });
+
+  it("names a party once, under the newest block whose runs give it", async () => {
+    // A second election in two places, the namesake's run there for PiS too.
+    const rows = [
+      ...withParties(),
+      candidacy("gniezno-2018", "3003", "2018", { parties: ["PO"] }),
+      candidacy("kozienice-2018", "1407", "2018", { parties: ["PiS"] }),
+    ];
+    serveRelations(rows, ["PO", "PiS"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+    await click(checkbox("gniezno-2002"));
+    await click(checkbox("gniezno-2018"));
+
+    expect(el("publish-clash-parties-local-2018")?.textContent).toContain(
+      "PiS",
+    );
+    expect(el("publish-clash-parties-local-2002")).toBeNull();
+  });
+
+  it("says nothing about parties when no run in two places gives one", async () => {
+    serveRelations(kowalski(), ["PO"]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(el("publish-clash-parties-local-2002")).toBeNull();
   });
 
   it("leaves both sides out of „Zaznacz wszystkie”, so publishing everything publishes neither", async () => {
@@ -753,7 +1017,9 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
     await click(checkbox("kozienice-2002"));
 
     const warning = el("publish-clash-after") as HTMLElement;
-    expect(warning.textContent).toContain("w wyborach 2002 · Samorząd");
+    expect(warning.textContent).toContain(
+      "w dwóch miejscach naraz (Samorządowe 2002)",
+    );
     expect(warning.textContent).toContain(
       "Powiat gnieźnieński i Powiat kozienicki",
     );
@@ -814,5 +1080,95 @@ describe("PublishNodeDialog.vue - candidacies in two places", () => {
     ).map((head) => head.textContent.trim());
     expect(heads[0]).toContain("2014");
     expect(heads[1]).toContain("2002");
+  });
+
+  /** Page 17p1pbAJ0ZBZqbUjDtOK on the 2026-11-18 export, held for two places:
+   * a gmina council run and a sejmik run of the 2024 local election, in
+   * places neither of which contains the other, beside a 2018 council run.
+   * Each run under an office of its own. */
+  const localElection2024 = () => [
+    candidacy("gmina-2024", "1414", "2024", {
+      position: "Rada gminy",
+      otherName: "Powiat nowodworski",
+    }),
+    candidacy("sejmik-2024", "24", "2024", {
+      position: "Sejmik",
+      otherName: "śląskie",
+    }),
+    candidacy("miasto-2018", "1465", "2018", {
+      position: "Rada miasta",
+      otherName: "Warszawa",
+    }),
+  ];
+
+  it("puts one election's runs in one block, whatever their offices", async () => {
+    serveRelations(localElection2024());
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    const blocks = document.body.querySelectorAll(".place-clash");
+    expect(blocks).toHaveLength(1);
+    const block = el("publish-place-clash-local-2024") as HTMLElement;
+    expect(block.textContent).toContain("Samorządowe 2024 - dwa miejsca naraz");
+    for (const id of ["gmina-2024", "sejmik-2024"]) {
+      expect(
+        block.querySelector(`[data-testid="publish-relation-${id}"]`),
+      ).not.toBeNull();
+    }
+    expect(
+      block.querySelector('[data-testid="publish-relation-miasto-2018"]'),
+    ).toBeNull();
+    expect(el("publish-relation-miasto-2018")).not.toBeNull();
+  });
+
+  it("ticks only the run outside the clash on „Zaznacz wszystkie”", async () => {
+    serveRelations(localElection2024());
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    await click(el("publish-select-all"));
+
+    expect(checkbox("miasto-2018")?.checked).toBe(true);
+    expect(checkbox("gmina-2024")?.checked).toBe(false);
+    expect(checkbox("sejmik-2024")?.checked).toBe(false);
+    expect(el("publish-clash-after")).toBeNull();
+
+    await click(confirmButton());
+
+    expect(publishedIds()).toEqual(["miasto-2018"]);
+  });
+
+  it("warns once both runs of the election are ticked", async () => {
+    serveRelations(localElection2024());
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    await click(checkbox("gmina-2024"));
+    expect(el("publish-clash-after")).toBeNull();
+    await click(checkbox("sejmik-2024"));
+
+    const warning = el("publish-clash-after") as HTMLElement;
+    expect(warning.textContent).toContain(
+      "w dwóch miejscach naraz (Samorządowe 2024): Powiat nowodworski i śląskie",
+    );
+  });
+
+  it("leaves a by-election out of the clash, as the hold does", async () => {
+    serveRelations([
+      candidacy("gniezno-2024", "3003", "2024", { position: "Rada gminy" }),
+      candidacy("kozienice-2024", "1407", "2024", {
+        position: "Rada gminy",
+        byElection: true,
+      }),
+    ]);
+    wrapper = mountDialog();
+    await open(wrapper);
+
+    expect(document.body.querySelector(".place-clash")).toBeNull();
+
+    await click(el("publish-select-all"));
+
+    expect(checkbox("kozienice-2024")?.checked).toBe(true);
+    expect(el("publish-clash-after")).toBeNull();
   });
 });

@@ -24,6 +24,7 @@
       single-line
       variant="solo-filled"
       :menu-props="menuProps"
+      @update:menu="menuOpen = $event"
       @click:clear="nodeGroupPicked = null"
     >
       <!-- The name is written as a child element rather than handed over as
@@ -46,6 +47,18 @@
           </v-list-item-title>
           <v-list-item-subtitle v-if="item.raw?.subtitle" class="text-wrap">
             {{ item.raw.subtitle }}
+          </v-list-item-subtitle>
+          <!-- Who a person is - the town, the party, the post - so that two of
+               one name can be told apart (shared/searchLine.ts). In the meta
+               ink at full strength: Vuetify's subtitle opacity puts it at
+               4.29:1, and it is the line a reader picks the right person by. -->
+          <v-list-item-subtitle
+            v-if="item.raw?.line"
+            opacity="1"
+            class="omni-person-line text-ink-neutral"
+            data-testid="omni-search-person-line"
+          >
+            {{ item.raw.line }}
           </v-list-item-subtitle>
         </v-list-item>
       </template>
@@ -80,7 +93,7 @@
       :create-type="createType"
       :initial-name="pendingCreateName"
       hide-activator
-      @created="onNodeCreated"
+      @created="resetBox"
     />
   </div>
 </template>
@@ -118,6 +131,7 @@ import {
   type SettledSearch,
 } from "~~/shared/searchSession";
 import { noteSearchPick } from "~/composables/teaserJourney";
+import { hitLineText, type HitLine } from "~~/shared/searchLine";
 import type { NodeType } from "~~/shared/model";
 import type { ProposableNodeType } from "~~/shared/api";
 import { refDebounced } from "@vueuse/core";
@@ -145,6 +159,11 @@ const loading = ref(false);
 const search = ref();
 const nodeGroupPicked = ref<ListItem | null>(null);
 const autocompleteFocus = ref(false);
+/** Whether the menu is open, which it stops being as soon as a pick shuts it,
+ * while its rows are still on screen on their way out. Listened to rather than
+ * bound with `v-model:menu`: a bound `menu` reads the prop, a render behind what
+ * VAutocomplete has just written. */
+const menuOpen = ref(false);
 const debouncedSearch = refDebounced(search, 300);
 const createDialog = ref<{ open: () => void } | null>(null);
 
@@ -204,8 +223,24 @@ const openCreate = async (type: CreatableFromSearch) => {
   createDialog.value?.open();
 };
 
-const onNodeCreated = () => {
-  // The dialog redirects to the new page, just reset the search box behind it
+/** Queries sent to the server so far, each known by its place in this count. */
+let queriesSent = 0;
+
+/** The last of those the box is done with: its answer is in, or a reset ended
+ * its search. What comes back for it, or for anything sent before it, is out of
+ * date. An older answer that comes first is not, which is why this is not simply
+ * "the latest query": over a slow connection a reader typing on is shown each
+ * answer as it lands, and can stop at the name instead of waiting for the end. */
+let queriesDone = 0;
+
+/** Back to a box with nothing in it, ready for the next search.
+ *
+ * Opening a page does not do this. The box in the app bar outlives the page and
+ * is only replaced on the way out of /, whose box is its own, and of a page on
+ * the `gray` layout. From anywhere else a pick stayed in the field until the
+ * reader clicked somewhere else, which is what VAutocomplete itself clears on. */
+const resetBox = () => {
+  queriesDone = queriesSent;
   search.value = null;
   nodeGroupPicked.value = null;
   autocompleteFocus.value = false;
@@ -260,6 +295,8 @@ type ListItem = {
   /** The KRS number the hit was found by, where `/api/search` found it by
    * the number typed rather than by its name. */
   krsNumber?: string;
+  /** Under a person: who they are, where and as what (`shared/searchLine.ts`). */
+  line?: string;
   path?: string;
   query?: Record<string, string>;
 };
@@ -338,11 +375,22 @@ const searchData = ref<
     query?: Record<string, string>;
     /** Set on a company found by the KRS number typed. */
     krsNumber?: string;
+    /** Set on a person whose line the reader may see. */
+    line?: HitLine;
   }>
 >([]);
 
+/** The line under a person hit, under every one the server sent a line for:
+ * decided 2026-11-18 on board round search-same-name-r2, after r1 had picked
+ * it for namesakes only. */
+function personLine(hit: { line?: HitLine }) {
+  return hitLineText(hit.line) || undefined;
+}
+
 async function performSearch(searchTerm: string) {
   loading.value = true;
+  queriesSent += 1;
+  const thisQuery = queriesSent;
   try {
     // Drafts for a signed in reader, beside the token that allows them. The
     // flag went out for everybody, so the search box offered every name in
@@ -356,7 +404,6 @@ async function performSearch(searchTerm: string) {
       },
       headers: await authHeaders(user.value),
     });
-    searchData.value = response;
     const unverified = response.filter(isUnverifiedPerson).length;
     // Counted here rather than on every keystroke: `debouncedSearch` is what
     // reaches the server, so this is one event per query a reader actually
@@ -367,13 +414,31 @@ async function performSearch(searchTerm: string) {
       results: resultBucket(response.length),
       unverified: unverifiedShare(response.length, unverified),
     });
+    // A pick ends the search whether or not the answer is back: a party or
+    // „Lista wszystkich osób” is on the menu before the server has said
+    // anything. And a slow answer can land after the one to the query typed
+    // since. Either way it is not what the reader is looking at. Taken as the
+    // latest query it would be reported as a search they left, and its rows
+    // would replace the next search's: with Jan Kowalski on the menu, the
+    // answer to an earlier query took him off it and left only „Dodaj nową
+    // osobę”, which is what `createName` is there to prevent. What it can still
+    // do is say what a pick that got here first was a search for.
+    if (thisQuery <= queriesDone) {
+      report(searchSession.lateAnswer(searchTerm, response.length, unverified));
+      return;
+    }
+    queriesDone = thisQuery;
+    searchData.value = response;
     report(searchSession.results(searchTerm, response.length, unverified));
   } catch (error) {
-    // A search that fails should offer nothing rather than spin forever.
+    // A search that fails should offer nothing rather than spin forever. One
+    // the box has moved past has nothing left to take off the menu.
     console.error("Search failed", error);
-    searchData.value = [];
+    if (thisQuery > queriesDone) searchData.value = [];
   } finally {
-    loading.value = false;
+    // Only the latest: the box is still waiting for that one, and `createName`
+    // reads an idle box as one whose results are in.
+    if (thisQuery === queriesSent) loading.value = false;
   }
 }
 
@@ -441,6 +506,7 @@ const items = computed<ListItem[]>(() => {
         nodeId: item.id,
         unverified: isUnverifiedPerson(item),
         krsNumber: item.krsNumber,
+        line: personLine(item),
         ...routing,
       });
     });
@@ -451,6 +517,17 @@ const items = computed<ListItem[]>(() => {
 
 watch(nodeGroupPicked, (value) => {
   if (!value) {
+    return;
+  }
+
+  // A leaving menu takes no clicks, but for the 130 ms or so it takes to go its
+  // row keeps the keyboard's focus, and a second Enter there runs `select()`
+  // again. With the box emptied below that reads as a new pick, so a key pressed
+  // twice or held down was two search:pick events for one page opened. It is the
+  // same pick: nothing is counted or opened, but `select()` has put the title
+  // back in the field.
+  if (!menuOpen.value) {
+    resetBox();
     return;
   }
 
@@ -465,17 +542,40 @@ watch(nodeGroupPicked, (value) => {
     searchSession.pick(
       value.analyticsKind ?? "place",
       value.unverified === true,
+      // `debouncedSearch`, because `search` holds the title by now: `select()`
+      // wrote it over what was typed.
+      loading.value ? debouncedSearch.value : undefined,
     ),
   );
   // Before navigating, so the page it opens can tell it was searched for.
   noteSearchPick(value.nodeId);
   push(omniSearchTarget(currentRoute.value, value));
-  autocompleteFocus.value = false;
+  // VAutocomplete is a select: it keeps the pick and leaves its title in the
+  // field as text, so what is typed next lands inside it. On /eksploruj/tabela,
+  // where „Lista wszystkich osób” opens the page already open, two readers went
+  // on to type a name at the caret, „Lista wszystkich ospaób”, and found nobody.
+  // Emptied here, after `select()` has written the title and before the box
+  // renders, so that `search` never reaches the debounce holding it and picking
+  // the same entry again is a change this watcher can see.
+  resetBox();
 });
 </script>
 
 <style scoped>
 .omni-search.v-autocomplete--active-menu :deep(.v-autocomplete__menu-icon) {
   transform: rotate(0deg) !important;
+}
+
+/* The line under a person: one line, cut at its end (decided 2026-11-18 on
+   board round search-same-name-r1). Its start, the town and the party, is what
+   tells two people apart; the rest of a 180-letter register name is on their
+   page. At a line height the accents of „ŚWIĘTOKRZYSKI” fit under, as the box
+   clips what overflows it. */
+.omni-person-line {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.25rem;
 }
 </style>

@@ -86,4 +86,15 @@ describe("CardPeopleList", () => {
     expect(wrapper.text()).not.toContain("powiąza");
     listResult.pending.value = false;
   });
+
+  it("lets the reader unpick the powiat from its header", async () => {
+    listResult.tableItems.value = [];
+    listResult.totalItems.value = 0;
+
+    const wrapper = mountCard();
+    await flushPromises();
+    await wrapper.find('[data-testid="people-list-close"]').trigger("click");
+
+    expect(wrapper.findComponent(PeopleList).emitted("close")).toHaveLength(1);
+  });
 });

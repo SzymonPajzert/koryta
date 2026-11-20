@@ -1064,6 +1064,85 @@ describe("api/ingest/company", () => {
     expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
   });
 
+  it("draws a founder's edge as ownership marked as the founder's", async () => {
+    // A foundation holds no shares; the body that set it up is who stands
+    // behind it, and the page lists it under „Właściciele” as „Fundator”.
+    mockReadBody.mockResolvedValue({
+      krs: "0000765394",
+      name: "Fundacja Agencji Rozwoju Przemysłu",
+      founders: ["0000037957"],
+    });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({ id: "fundacja-id" });
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ ref: { id: "arp-id" }, data: () => ({}) }],
+    });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    const edgeRef = { id: "edge-id" };
+    mockDoc.mockReturnValueOnce(edgeRef);
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenNthCalledWith(
+      2,
+      mockDb,
+      expect.anything(),
+      caller,
+      edgeRef,
+      {
+        source: "arp-id",
+        target: "fundacja-id",
+        type: "owns",
+        founder: true,
+      },
+      { automatic: true, approve: true, published: true },
+    );
+  });
+
+  it("marks the Treasury as founder the same way", async () => {
+    mockReadBody.mockResolvedValue({
+      krs: "0000070275",
+      name: "Fundacja CBOS",
+      founder_skarb_panstwa: true,
+    });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({ id: "cbos-id" });
+    mockDoc.mockReturnValueOnce({
+      id: SKARB_PANSTWA_NODE_ID,
+      get: vi.fn().mockResolvedValue({ exists: true }),
+    });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+
+    await handler({} as any);
+
+    expect(createRevisionTransaction).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(createRevisionTransaction).mock.calls[1]![4]).toEqual({
+      source: SKARB_PANSTWA_NODE_ID,
+      target: "cbos-id",
+      type: "owns",
+      founder: true,
+    });
+  });
+
+  it("skips a founder the site does not have, and says so", async () => {
+    // Instytut Zootechniki, which set up Patronus Animalium, has no page.
+    mockReadBody.mockResolvedValue({
+      krs: "0000376820",
+      name: "Fundacja Patronus Animalium",
+      founders: ["0000125481"],
+    });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDoc.mockReturnValueOnce({ id: "fundacja-id" });
+    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+
+    const result = await handler({} as any);
+
+    expect(result).toMatchObject({ code: 200, unknownFounders: 1 });
+    expect(result).not.toHaveProperty("unknownOwners");
+    expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
+  });
+
   it("draws no Treasury edge when the register names no such owner", async () => {
     mockReadBody.mockResolvedValue({
       krs: "123456",

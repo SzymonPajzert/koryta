@@ -3,6 +3,7 @@ import { test, expect } from "./test";
 import { logIn, USERS } from "../e2e/helpers/auth";
 import { answerForTheSector } from "./fixtures/obronnosc";
 import { pageTag } from "./pageTags";
+import { expectSelectMenuShot } from "./selectMenu";
 
 /** „Skarb Państwa”, the companies on Prokuratoria's list of the Treasury's
  * stakes (Szymon, 2026-10-28): the table's filter bar with it picked, and the
@@ -52,7 +53,7 @@ test("kolejka-skarb-panstwa-wybor", NOWE, async ({ page }) => {
   ).toBeVisible();
 
   await settle(page);
-  await expect(menu).toHaveScreenshot("kolejka-skarb-panstwa-wybor.png");
+  await expectSelectMenuShot(page, menu, "kolejka-skarb-panstwa-wybor.png");
 });
 
 test("tabela-skarb-panstwa", TABELA, async ({ page }) => {
@@ -147,6 +148,10 @@ test("instytucja-zmiana-branze-lista", COMPANY, async ({ page }) => {
   await expect(menu.getByRole("option", { name: "Skarb Państwa" })).toHaveCount(
     0,
   );
+  // Nor the register's statuses, which follow the name.
+  for (const status of ["W likwidacji", "W upadłości"]) {
+    await expect(menu.getByRole("option", { name: status })).toHaveCount(0);
+  }
   // Opened, the list scrolls to its first ticked row. Its end is the point
   // here: it stops at the last sector.
   await menu.evaluate((list) => {

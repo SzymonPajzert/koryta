@@ -18,6 +18,7 @@ from analysis.payloads.site import (
     COMPANY_FIELDS,
     COMPANY_UNAPPROVED,
     NEW_COMPANY,
+    NEW_FOUNDER,
     NEW_OWNER,
     NEW_SEAT,
     SKARB_PANSTWA_NODE_ID,
@@ -82,6 +83,9 @@ def payload(**overrides):
         "owners": [],
         "owner_teryts": [],
         "owner_skarb_panstwa": False,
+        "founders": [],
+        "founder_teryts": [],
+        "founder_skarb_panstwa": False,
     }
     base.update(overrides)
     return base
@@ -143,6 +147,24 @@ class TestTheNode:
             == []
         )
 
+    def test_a_status_reaches_a_page_whose_sectors_a_person_set(self):
+        # The ingest lays the payload's owner and status over a person's
+        # sectors (`withRegisterFactsFrom`), so a new one is a change there too.
+        manual = nodes(company={"categoriesSource": "manual"})
+        assert changes(
+            payload(categories=["szpitale", "w-likwidacji"]), node_rows=manual
+        ) == [COMPANY_FIELDS]
+        assert changes(payload(categories=["szpitale"]), node_rows=manual) == []
+        gone = nodes(
+            company={
+                "categoriesSource": "manual",
+                "categories": ["koleje", "w-likwidacji"],
+            }
+        )
+        assert changes(payload(categories=["koleje"]), node_rows=gone) == [
+            COMPANY_FIELDS
+        ]
+
     def test_an_ownership_answer_a_person_gave_is_not_overwritten(self):
         assert (
             changes(
@@ -200,6 +222,65 @@ class TestTheNode:
         ]
 
 
+def snapshot_of(node_rows=None) -> SiteSnapshot:
+    return SiteSnapshot(node_rows if node_rows is not None else nodes(), edges())
+
+
+class TestARenameAndAPublicFlag:
+    """The two changes the night's company import judges on their own
+    (`jobs.company_import`): a rename, and a public company made private."""
+
+    def test_a_new_name_is_a_rename_from_the_sites_to_the_registers(self):
+        stored = company_node()["name"]
+
+        assert snapshot_of().company_rename(payload(name="PKP SKM")) == (
+            stored,
+            "PKP SKM",
+        )
+
+    @pytest.mark.parametrize(
+        "company",
+        [
+            {},  # the same name
+            {"name": "Stawy Milickie", "nameSource": "manual"},
+            {"name": None},  # nothing to replace: a name is filled in
+        ],
+    )
+    def test_no_rename_where_the_ingest_writes_none_or_replaces_nothing(self, company):
+        site = snapshot_of(nodes(company=company))
+
+        assert site.company_rename(payload()) is None
+
+    def test_no_rename_of_a_company_the_site_has_no_page_for(self):
+        assert snapshot_of().company_rename(payload(krs="0000999999")) is None
+
+    def test_the_flag_turns_where_the_payload_and_the_page_disagree(self):
+        public = snapshot_of()
+        private = snapshot_of(nodes(company={"isPublic": False}))
+
+        assert public.company_is_public_change(payload(is_public=False)) is False
+        assert private.company_is_public_change(payload(is_public=True)) is True
+
+    @pytest.mark.parametrize(
+        "company, sent",
+        [
+            ({}, True),
+            ({"isPublic": False}, False),
+            # A stored false is no field at all, and says private as well.
+            ({"isPublic": None}, False),
+            ({"isPublicSource": "manual"}, False),
+            ({}, None),  # no odpis said who owns it: the flag is left alone
+        ],
+    )
+    def test_the_flag_stays_where_the_ingest_would_leave_it(self, company, sent):
+        site = snapshot_of(nodes(company=company))
+        sending = payload(is_public=sent)
+        if sent is None:
+            del sending["is_public"]
+
+        assert site.company_is_public_change(sending) is None
+
+
 class TestTheOwners:
     def test_an_owner_the_site_has_no_edge_for_is_a_change(self):
         assert changes(payload(owners=[OWNER_KRS])) == [NEW_OWNER]
@@ -237,6 +318,47 @@ class TestTheOwners:
         # A local stack seeded by `seed-emulator.ts` has none, and the ingest
         # checks before pointing an edge at it.
         assert changes(payload(owner_skarb_panstwa=True)) == []
+
+
+class TestTheFounders:
+    """A founder is drawn as an `owns` edge marked `founder`, on the owners'
+    terms: looked up the same way, skipped the same way."""
+
+    def test_a_founder_the_site_has_no_edge_for_is_a_change(self):
+        assert changes(payload(founders=[OWNER_KRS])) == [NEW_FOUNDER]
+
+    def test_a_founder_already_linked_is_not(self):
+        stored = {
+            "id": "edge-1",
+            "type": "owns",
+            "source": OWNER_ID,
+            "target": COMPANY_ID,
+            "founder": True,
+        }
+        assert changes(payload(founders=[OWNER_KRS]), edge_rows=[stored]) == []
+
+    def test_any_owns_edge_between_the_two_carries_it(self):
+        # The ingest finds the pair's `owns` edge and writes nothing beside it,
+        # so a founder already linked as an owner is no change either.
+        stored = {
+            "id": "edge-1",
+            "type": "owns",
+            "source": OWNER_ID,
+            "target": COMPANY_ID,
+        }
+        assert changes(payload(founders=[OWNER_KRS]), edge_rows=[stored]) == []
+
+    def test_a_gmina_founder_is_resolved_through_its_teryt(self):
+        assert changes(payload(founder_teryts=["2262"])) == [NEW_FOUNDER]
+
+    def test_the_treasury_as_founder_is_linked_by_node_id(self):
+        treasury = {"id": SKARB_PANSTWA_NODE_ID, "type": "place", "name": "Skarb"}
+        assert changes(
+            payload(founder_skarb_panstwa=True), node_rows=nodes(treasury)
+        ) == [NEW_FOUNDER]
+
+    def test_a_founder_the_site_does_not_track_is_skipped(self):
+        assert changes(payload(founders=["0000999999"])) == []
 
 
 class TestTheSeat:

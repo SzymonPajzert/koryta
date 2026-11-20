@@ -323,7 +323,7 @@ definePageMeta({
 });
 
 useHead({
-  title: "Szczegóły rewizji - koryta.pl",
+  title: "Szczegóły rewizji",
 });
 
 const route = useRoute();

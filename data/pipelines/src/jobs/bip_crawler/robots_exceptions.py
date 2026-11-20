@@ -76,6 +76,31 @@ FILES: dict[str, str] = {
     "bip.wola-krzysztoporska.pl": "Wola Krzysztoporska: forbids its files, 1 candidacy",
     "bip.frysztak.pl": "Frysztak: forbids /download/, 1 candidacy",
     "bip.nowiny.com.pl": "Nowiny: forbids its files, 1 candidacy",
+    # 11-06: unfound people whose named declarations these hosts' robots.txt kept
+    # out, each checked: page allowed, file forbidden, labels are declarations.
+    # Not listed: bip.police.pl and bip.um.swinoujscie.pl (phone lists), the
+    # "spakowane pliki" zips, www.bip.tarnogorski.pl (two files on one page).
+    "bip.czerwonak.pl": "Czerwonak: forbids /api/download/*, 8 candidacies",
+    "bip.ug.lubin.pl": "gmina Lubin: forbids /api/download/*, 8 candidacies",
+    "bip.milowka.com.pl": "Milówka: forbids /api/download/*, 4 candidacies",
+    "bip.porabka.pl": "Porąbka: forbids /api/download/*, 4 candidacies",
+    "bip.psary.pl": "Psary: forbids /api/download/*, 3 candidacies",
+    "bip.redziny.pl": "Rędziny: forbids /upload/, 3 candidacies",
+    "bip.brok.pl": "Brok: forbids /uploads/, 3 candidacies",
+    "bip.lututowgmina.pl": "Lututów: forbids /container/, 3 candidacies",
+    "bip.czerwin.pl": "Czerwin: forbids /pliki/, 2 candidacies",
+    "bip.tworog.pl": "Tworóg: forbids /api/download/*, 2 candidacies",
+    # 11-13, round 1: the old BIP's open article pages link its declarations
+    # under /pliki/; with them the walk found 14 of 15, 8 without.
+    "powiat-leszczynski.archiwum.bip.net.pl": (
+        "powiat leszczyński (archive): forbids /pliki/, 6 candidacies"
+    ),
+    # 11-18, round 2: the new BIPs' open pages link these archives' files; with
+    # them the walks found Ciechocinek 7 of 10, Słubice 9 of 9.
+    "mst-ciechocinek.arch.rbip.mojregion.info": (
+        "Ciechocinek (archive): Disallow: / to all, 10 candidacies"
+    ),
+    "slubice.archiwum.bip.net.pl": "Słubice (archive): forbids /pliki/, 9 candidacies",
 }
 #: Hosts whose robots.txt keeps out every crawler but search engines, or all: (b).
 SITES: dict[str, str] = {
@@ -90,6 +115,8 @@ SITES: dict[str, str] = {
     "bip.powiatbrzozow.pl": "powiat brzozowski: search engines only, 35 candidacies",
     "bip.starostwo.lezajsk.pl": "powiat leżajski: Disallow: / to all, 35 candidacies",
     "bip.chorzow.eu": "Chorzów: Disallow: / to all, 34 candidacies",
+    # Its councillors' files are named links, Szymon found by hand on 11-05.
+    "bip.stalowawola.pl": "Stalowa Wola: Disallow: / to all, 43 candidacies",
     "umz.zgierz.pl": "Zgierz: forbids /bip/, 32 candidacies",
     "bip.gliwice.eu": "Gliwice: Disallow: / to all, 31 candidacies",
     "bip.powiatprzeworsk.pl": "powiat przeworski: search engines only, 30 candidacies",
@@ -159,6 +186,15 @@ SITES: dict[str, str] = {
         "Stoczek Łukowski: search engines only, 5 candidacies"
     ),
     "zlotnikikuj.ires.pl": "Złotniki Kujawskie: Disallow: / to all, 5 candidacies",
+    # Its declarations page Szymon found by hand on 11-05.
+    "umig-zagorz.ires.pl": "Zagórz: Disallow: / to all, 35 candidacies",
+    "chmielnik.ires.pl": "Chmielnik: Disallow: / to all, 7 candidacies",
+    # e-zeto.eu's BIPs let in search engines alone (11-05).
+    "spswidnica.bip.e-zeto.eu": "powiat świdnicki: search engines only, 70 candidacies",
+    "ugsiennicarozana.bip.e-zeto.eu": (
+        "Siennica Różana: search engines only, 4 candidacies"
+    ),
+    "ugtrzcinica.bip.e-zeto.eu": "Trzcinica: search engines only, 1 candidacy",
     "bip.wiazownica.com": "Wiązownica: search engines only, 5 candidacies",
     "bip.strzelce.pl": "Strzelce Krajeńskie: Disallow: / to all, 5 candidacies",
     "bip3.wokiss.pl": "Babiak and 1 more: Disallow: / to all, 5 candidacies",
@@ -198,6 +234,36 @@ SITES: dict[str, str] = {
     "zelechlinek.pl": "Żelechlinek: search engines only, 1 candidacy",
     "ugrejowiec.bip.e-zeto.eu": "Rejowiec: search engines only, 1 candidacy",
     "bip.pietrowicewielkie.pl": "Pietrowice Wielkie: Disallow: / to all, 1 candidacy",
+    # 11-13, round 1: walks past these found what robots.txt kept out:
+    # Zakopane 10 of 10, Żółkiewka 3 of 3 (e-zeto.eu, like those above), powiat
+    # kolbuszowski 26 of 26 with its old BIP's archive, Lubenia 7 of 7.
+    "bip.zakopane.eu": "Zakopane: search engines only, 10 candidacies",
+    "ugzolkiewka.bip.e-zeto.eu": "Żółkiewka: search engines only, 3 candidacies",
+    "archiwum.bip.powiat.kolbuszowski.pl": (
+        "powiat kolbuszowski (old BIP archive): Disallow: / to all, 26 candidacies"
+    ),
+    "bip.lubenia.pl": "Lubenia: Disallow: / to all, 7 candidacies",
+    # 11-13, round 2: walks past these found what robots.txt kept out:
+    # Lubliniec 7 of 7, Sulejówek 9 of 11, Skwierzyna 3 of 4, Opalenica 3 of 4,
+    # Budzyń 1 of 1.
+    "lubliniec.bip.info.pl": "Lubliniec: search engines only, 7 candidacies",
+    "bip.sulejowek.pl": "Sulejówek: Disallow: / to all, 11 candidacies",
+    "bip.skwierzyna.pl": "Skwierzyna: Disallow: / to all, 4 candidacies",
+    "bip.opalenica.pl": "Opalenica: Disallow: / to all, 4 candidacies",
+    "bip.budzyn.pl": "Budzyń: Disallow: / to all, 1 candidacy",
+    # 11-18, round 2: a walk past it (as a browser: trol.pl) found 9 of 9.
+    "bip-olszanka.2clicks.pl": "Olszanka: Disallow: / to all, 9 candidacies",
+    # e-zeto under the powiat's own name, its robots.txt read on 11-18. Past
+    # it, at e-zeto's 15 s, walks found 24 of 24 (11-13) and 5 of 5 (11-18).
+    "bip.powiatboleslawiecki.pl": (
+        "powiat bolesławiecki: search engines only, 24 candidacies"
+    ),
+    # 11-18, BIPs of offices whose websites sit on Beyond.pl: walks past these
+    # found Puchaczów 6 of 6, Kobyla Góra 2 of 2, Raniżów 2 of 2, Iwierzyce 2 of 2.
+    "ugpuchaczow.bip.e-zeto.eu": "Puchaczów: search engines only, 6 candidacies",
+    "ugkobylagora.bip.e-zeto.eu": "Kobyla Góra: search engines only, 2 candidacies",
+    "bip.ranizow.pl": "Raniżów: Disallow: / to all, 2 candidacies",
+    "bip.iwierzyce.pl": "Iwierzyce: Disallow: / to all, 2 candidacies",
 }
 
 

@@ -27,6 +27,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from entities.company_categories import REGISTER_FACTS
 from scrapers.koryta.download import KorytaEdges, KorytaNodes
 from scrapers.pkw.elections import party_sort_key
 from scrapers.stores import Context
@@ -52,6 +53,10 @@ INTERNAL_FIELDS = frozenset(
         "delete_reason",
         "visibility",
         "nameChunksLower",
+        # What declarations say about an employment, which only their
+        # automation writes.
+        "declared",
+        "as_of",
     }
 )
 
@@ -137,6 +142,11 @@ class EdgeSemantics:
     #: to another document. Mirrors `annotations` in server/utils/edges.ts:
     #: a candidacy's `elected`, and a job's `end_date`.
     annotations: tuple[str, ...] = ()
+    #: Annotations only the ingest writes, as its latest reading of the
+    #: source, which a different reading replaces rather than conflicts with.
+    #: Mirrors `restated` in server/utils/edges.ts: PKW's statements of a
+    #: candidate's party and of who backed them.
+    restated: tuple[str, ...] = ()
 
 
 EDGE_SEMANTICS: dict[str, EdgeSemantics] = {
@@ -158,6 +168,7 @@ EDGE_SEMANTICS: dict[str, EdgeSemantics] = {
         ("position", "start_date", "party", "committee", "term"),
         True,
         ("elected",),
+        ("party_member", "member_parties", "supported_by", "backing_parties"),
     ),
     "connection": EdgeSemantics(
         "authored", ("name", "content", "start_date", "end_date"), False
@@ -214,6 +225,7 @@ NEW_COMPANY = "company not on koryta.pl"
 COMPANY_FIELDS = "company node learns a field"
 COMPANY_UNAPPROVED = "company node has no approved revision"
 NEW_OWNER = "owner link not stored"
+NEW_FOUNDER = "founder link not stored"
 NEW_SEAT = "seat not stored"
 
 #: The site's own node for the Skarb Panstwa, which has no KRS and no TERYT of
@@ -336,6 +348,9 @@ def field(edge: typing.Mapping[str, typing.Any], name: str) -> typing.Any:
             return None
         if name in FOLDED_FIELDS:
             return " ".join(value.lower().split())
+    if isinstance(value, np.ndarray):
+        # A list off a frame read back from disk, compared as the list it was.
+        return value.tolist()
     return value
 
 
@@ -343,6 +358,30 @@ def semantics(edge_type: typing.Any) -> EdgeSemantics:
     if isinstance(edge_type, str):
         return EDGE_SEMANTICS.get(edge_type, UNKNOWN_SEMANTICS)
     return UNKNOWN_SEMANTICS
+
+
+def describing(edge_type: typing.Any) -> tuple[str, ...]:
+    """The fields that say something about an edge without saying which one
+    it is: its annotations, then the ones it restates."""
+    rules = semantics(edge_type)
+    return (*rules.annotations, *rules.restated)
+
+
+def learns(
+    stored: typing.Mapping[str, typing.Any],
+    incoming: typing.Mapping[str, typing.Any],
+    name: str,
+) -> bool:
+    """Whether writing `incoming` would change what the stored edge says about
+    one of the fields that describe it: a blank filled in, or a restated field
+    read differently. `learns` in server/utils/edges.ts."""
+    after = field(incoming, name)
+    if after is None:
+        return False
+    before = field(stored, name)
+    if before is None:
+        return True
+    return name in semantics(incoming.get("type")).restated and before != after
 
 
 def edge_identity(edge: typing.Mapping[str, typing.Any]) -> tuple:
@@ -394,7 +433,7 @@ def edge_relation(
     """
     added = 0
     rules = semantics(incoming.get("type"))
-    for name in (*rules.discriminators, *rules.annotations):
+    for name in (*rules.discriminators, *describing(incoming.get("type"))):
         before = field(stored, name)
         after = field(incoming, name)
         if before is None:
@@ -402,6 +441,9 @@ def edge_relation(
                 added += 1
             continue
         if after is not None and before != after:
+            if name in rules.restated:
+                added += 1
+                continue
             if narrows(name, before, after):
                 continue
             if specifies(name, before, after):
@@ -434,9 +476,9 @@ def fills_annotations(
     def adds(name: str) -> bool:
         return field(stored, name) is None and field(incoming, name) is not None
 
-    return any(adds(name) for name in rules.annotations) and not any(
-        adds(name) for name in rules.discriminators
-    )
+    return any(
+        learns(stored, incoming, name) for name in describing(incoming.get("type"))
+    ) and not any(adds(name) for name in rules.discriminators)
 
 
 def preferred_copy(
@@ -450,13 +492,17 @@ def preferred_copy(
     live one, then one needing no write, then by id.
     """
     identity = edge_identity(edge)
-    annotations = semantics(edge.get("type")).annotations
+    rules = semantics(edge.get("type"))
+
+    def disagreements(stored: dict, names: tuple[str, ...]) -> int:
+        return sum(field(stored, name) != field(edge, name) for name in names)
 
     def rank(copy: tuple[dict, str]) -> tuple:
         stored, relation = copy
         return (
             0 if edge_identity(stored) == identity else 1,
-            sum(field(stored, name) != field(edge, name) for name in annotations),
+            disagreements(stored, rules.annotations),
+            disagreements(stored, rules.restated),
             1 if stored.get("deleted") == 1 else 0,
             0 if relation == "same" else 1,
             str(stored.get("id")),
@@ -957,6 +1003,9 @@ class SiteSnapshot:
                 set(stored_parties) | set(_as_list(payload.get("parties"))),
                 key=party_sort_key,
             )
+            # The ingest also lets a lone „Inne” give way to a party the payload
+            # names (`partiesAfterImport`), which the union here does not; it
+            # does that only where the union grows, so the answer is the same.
             if len(parties) > len(stored_parties):
                 learned["parties"] = parties
         for key in ("content", "wikipedia", "rejestrIo"):
@@ -1028,8 +1077,57 @@ class SiteSnapshot:
 
         company_id = str(stored["id"])
         reasons += self._owner_changes(company_id, payload)
+        reasons += self._founder_changes(company_id, payload)
         reasons += self._seat_changes(company_id, payload)
         return reasons
+
+    def company_rename(
+        self, payload: typing.Mapping[str, typing.Any]
+    ) -> tuple[str, str] | None:
+        """The company's name as the site has it and as this payload would
+        write it, where the upload would rename the company; None where it
+        would not: the site has no page for it, or a page with no name to
+        replace, a person named it (`nameSource: "manual"`), or the payload
+        says the same.
+
+        `_company_learns`'s rule for the name, on its own, for the night's
+        company import (`jobs.company_import`), which sends the site's name in
+        place of the register's unless told to rename.
+        """
+        stored = self.company_nodes.get(str(payload.get("krs") or ""))
+        if stored is None:
+            return None
+        current = stored.get("name")
+        if not isinstance(current, str) or not current:
+            return None
+        if stored.get("nameSource") == "manual":
+            return None
+        name = payload.get("name")
+        if not isinstance(name, str) or name == current:
+            return None
+        return current, name
+
+    def company_is_public_change(
+        self, payload: typing.Mapping[str, typing.Any]
+    ) -> bool | None:
+        """The `isPublic` this payload would write over the site's, where the
+        two differ: True makes a private company public, False a public one
+        private. None where the upload would leave the flag as it is: the site
+        has no page for the company, the payload says nothing of who owns it, a
+        person decided it (`isPublicSource: "manual"`), or the two agree.
+
+        `_company_learns`'s rule for the flag, on its own. A stored `false`
+        reads as no field at all, as `field` reads it, and both say private.
+        """
+        stored = self.company_nodes.get(str(payload.get("krs") or ""))
+        if stored is None:
+            return None
+        is_public = payload.get("is_public")
+        if is_public is None or stored.get("isPublicSource") == "manual":
+            return None
+        if bool(is_public) == bool(stored.get("isPublic")):
+            return None
+        return bool(is_public)
 
     def _company_learns(
         self, stored: dict, payload: typing.Mapping[str, typing.Any]
@@ -1058,8 +1156,8 @@ class SiteSnapshot:
         # An empty `categories`, by contrast, is a real answer: this company is
         # in no sector we track. Absent means the payload did not work them out.
         categories = payload.get("categories")
-        if categories is not None and data.get("categoriesSource") != "manual":
-            written["categories"] = _as_list(categories)
+        if categories is not None:
+            written["categories"] = _categories_written(data, _as_list(categories))
 
         is_public = payload.get("is_public")
         if is_public is not None and data.get("isPublicSource") != "manual":
@@ -1110,32 +1208,53 @@ class SiteSnapshot:
         companies as shareholders that koryta.pl does not track, and a TERYT
         the region ingest has not reached yet resolves to nothing.
         """
+        sources = self._owner_nodes(
+            payload.get("owners"),
+            payload.get("owner_teryts"),
+            payload.get("owner_skarb_panstwa"),
+        )
+        return [NEW_OWNER for source in sources if not self._owns(source, company_id)]
+
+    def _founder_changes(
+        self, company_id: str, payload: typing.Mapping[str, typing.Any]
+    ) -> list[str]:
+        """The founder edges the upload would draw and the site has not.
+
+        A founder is drawn as an `owns` edge marked `founder`, so any `owns`
+        edge between the pair already carries it: the ingest finds that one and
+        writes nothing, and the same goes for an owner listed as a founder too.
+        """
+        sources = self._owner_nodes(
+            payload.get("founders"),
+            payload.get("founder_teryts"),
+            payload.get("founder_skarb_panstwa"),
+        )
+        return [NEW_FOUNDER for source in sources if not self._owns(source, company_id)]
+
+    def _owner_nodes(
+        self, krss: typing.Any, teryts: typing.Any, skarb_panstwa: typing.Any
+    ) -> list[str]:
+        """The site's nodes behind a payload's owners, each once, in order.
+
+        `createEdge` keeps its own set of the ids a request has already added,
+        because nothing is committed until the end and a payload naming one
+        owner twice would otherwise write the link twice over.
+        """
         sources: list[str] = []
-        for owner_krs in _as_list(payload.get("owners")):
+        for owner_krs in _as_list(krss):
             owner_id = self.companies.get(str(owner_krs))
             if owner_id:
                 sources.append(owner_id)
-        if payload.get("owner_skarb_panstwa") and (
-            SKARB_PANSTWA_NODE_ID in self.node_ids
-        ):
+        if skarb_panstwa and SKARB_PANSTWA_NODE_ID in self.node_ids:
             sources.append(SKARB_PANSTWA_NODE_ID)
-        for owner_teryt in _as_list(payload.get("owner_teryts")):
+        for owner_teryt in _as_list(teryts):
             region_id = self._region_by_teryt(str(owner_teryt))
             if region_id:
                 sources.append(region_id)
+        return list(dict.fromkeys(sources))
 
-        # `createEdge` keeps its own set of the ids this request has already
-        # added, because nothing is committed until the end and a payload
-        # naming one owner twice would otherwise write the link twice over.
-        drawn: set[str] = set()
-        reasons = []
-        for source in sources:
-            if source in drawn:
-                continue
-            drawn.add(source)
-            if not self._edge_exists(source, company_id, "owns"):
-                reasons.append(NEW_OWNER)
-        return reasons
+    def _owns(self, source: str, company_id: str) -> bool:
+        return self._edge_exists(source, company_id, "owns")
 
     def _seat_changes(
         self, company_id: str, payload: typing.Mapping[str, typing.Any]
@@ -1312,6 +1431,13 @@ class SiteSnapshot:
             # upload would store.
             if election.get("elected") is True:
                 edge["elected"] = True
+            # PKW's statements, as `createElection` writes them.
+            for name in ("party_member", "supported_by"):
+                if election.get(name):
+                    edge[name] = election[name]
+            for name in ("member_parties", "backing_parties"):
+                if len(_as_list(election.get(name))):
+                    edge[name] = _as_list(election.get(name))
             if election.get("election_year"):
                 edge["start_date"] = f"{election['election_year']}-01-01"
 
@@ -1504,6 +1630,19 @@ class _EdgeMatcher:
                 return "enriches"
 
         return "new"
+
+
+def _categories_written(stored: dict, categories: list) -> list:
+    """The categories the ingest would leave on a node, given the payload's.
+
+    Where a person set them, it keeps their sectors and takes the owner and
+    status from the payload (`withRegisterFactsFrom`), so only those can change.
+    """
+    if stored.get("categoriesSource") != "manual":
+        return categories
+    return [
+        c for c in _as_list(stored.get("categories")) if c not in REGISTER_FACTS
+    ] + [c for c in categories if c in REGISTER_FACTS]
 
 
 def _as_list(value: typing.Any) -> list:

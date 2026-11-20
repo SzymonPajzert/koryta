@@ -110,6 +110,10 @@ class Implied:
                 "party": stored.get("party"),
                 "committee": stored.get("committee"),
                 "elected": stored_value(stored, "elected"),
+                "party_member": stored.get("party_member"),
+                "member_parties": stored.get("member_parties"),
+                "supported_by": stored.get("supported_by"),
+                "backing_parties": stored.get("backing_parties"),
             }
             for target, stored in self.out[(node_id, "election")]
         ]

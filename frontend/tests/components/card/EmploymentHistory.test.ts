@@ -188,6 +188,45 @@ describe("CardEmploymentHistory", () => {
     expect(clashOf("e1")).toBeUndefined();
   });
 
+  it("hands one election's runs their clash whatever their offices, and no by-election", async () => {
+    // As the publication's hold groups them: a gmina council run and a
+    // sejmik run of 2024 are one local election, a by-election is not.
+    const run = (
+      id: string,
+      teryt: string,
+      position: EdgeNode["position"],
+      byElection = false,
+    ) =>
+      edge({
+        id,
+        type: "election",
+        label: "kandydatura",
+        source: "osoba",
+        target: `teryt${teryt}`,
+        start_date: "2024-04-07",
+        position,
+        by_election: byElection,
+        richNode: { id: `teryt${teryt}`, type: "region", name: teryt },
+      });
+    const wrapper = await render([
+      run("gmina", "1414", "Rada gminy"),
+      run("sejmik", "24", "Sejmik"),
+      run("uzupelniajace", "0201", "Rada gminy", true),
+    ]);
+
+    const clashOf = (id: string) =>
+      wrapper
+        .findAllComponents({ name: "ChipPlaceClash" })
+        .find((chip) => (chip.props("edge") as EdgeNode).id === id)
+        ?.props("clash") as { election: string; rows: EdgeNode[] } | undefined;
+    expect(clashOf("gmina")?.election).toBe("local-2024");
+    expect(clashOf("sejmik")?.rows.map((row) => row.id)).toEqual([
+      "gmina",
+      "sejmik",
+    ]);
+    expect(clashOf("uzupelniajace")).toBeUndefined();
+  });
+
   it("asks the page to remove the row an admin clicked", async () => {
     const wrapper = await mountSuspended(EmploymentHistory, {
       props: { edges: [edge({})], canRemove: true },
@@ -466,6 +505,79 @@ describe("EmploymentHistory", () => {
 
     expect(wrapper.findComponent(PartyChip).exists()).toBe(true);
     expect(wrapper.text()).not.toContain("psl");
+  });
+
+  it("draws the party PKW says backed the run as the backing chip, before the committee", () => {
+    const wrapper = mountHistory([
+      candidacy({
+        party: "PO",
+        committee: "KKW KOALICJA OBYWATELSKA",
+        supported_by:
+          "popierana przez partię polityczną: Polskie Stronnictwo Ludowe",
+        backing_parties: ["PSL"],
+      }),
+    ]);
+
+    const chips = wrapper.findAllComponents(PartyChip);
+    expect(chips.map((chip) => chip.text())).toEqual(["PO", "PSL"]);
+    const backing = chips[1]!.get(".chip");
+    expect(backing.classes()).toContain("chip--backing");
+    expect(backing.attributes("title")).toBe(
+      "Poparcie kandydatury (PKW: popierana przez partię polityczną: Polskie Stronnictwo Ludowe)",
+    );
+    // No word before the chip, as the list's party has none.
+    expect(wrapper.text()).not.toContain("poparcie");
+    expect(wrapper.text().indexOf("PSL")).toBeLessThan(
+      wrapper.text().indexOf("KKW KOALICJA OBYWATELSKA"),
+    );
+  });
+
+  it("names a backer that is no party, after „poparcie”", () => {
+    const wrapper = mountHistory([
+      candidacy({
+        committee: "KWW BURMISTRZA JACKA ORYCHA",
+        supported_by:
+          "popierany przez organizację: Mareckie Stowarzyszenie Gospodarcze",
+      }),
+    ]);
+
+    expect(wrapper.text()).toContain(
+      "poparcie Mareckie Stowarzyszenie Gospodarcze",
+    );
+    expect(wrapper.findComponent(PartyChip).exists()).toBe(false);
+  });
+
+  it("names a party the candidate declared that the list does not", () => {
+    const wrapper = mountHistory([
+      candidacy({
+        party: "PO",
+        party_member: "członek partii politycznej: Nowoczesna",
+        member_parties: ["Nowoczesna"],
+      }),
+    ]);
+
+    expect(wrapper.text()).toContain("członek");
+    const chips = wrapper.findAllComponents(PartyChip);
+    expect(chips.map((chip) => chip.text())).toEqual(["PO", "Nowoczesna"]);
+    expect(chips[1]!.get(".chip").classes()).not.toContain("chip--backing");
+  });
+
+  it("says nothing of a membership in the list's own party, or of none", () => {
+    for (const statement of [
+      {
+        party_member: "członek partii politycznej: PO",
+        member_parties: ["PO"],
+      },
+      { party_member: "nie należy do partii politycznej" },
+    ]) {
+      const wrapper = mountHistory([candidacy({ party: "PO", ...statement })]);
+
+      expect(wrapper.find('[data-testid="edge-statements-e1"]').exists()).toBe(
+        false,
+      );
+      expect(wrapper.text()).not.toContain("członek");
+      expect(wrapper.text()).not.toContain("bez partii");
+    }
   });
 
   it("leaves a candidacy with neither field as it was", () => {

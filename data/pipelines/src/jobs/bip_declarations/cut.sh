@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Cut the BIP people mode's downloaded declarations into the declarations job's
-# tables (bip_decl_cuts, bip_decl_crops, in the crawl's Postgres). It sends
-# nothing anywhere: the upload to the site is a separate command.
+# tables (bip_decl_cuts, bip_decl_crops, in the crawl's Postgres). It sends the
+# site nothing: the upload is a separate command. At its end it writes the facts
+# part the night counts the declarations in people from (`facts-part`).
 #
 #   cut.sh            cut everything downloaded so far
 #   cut.sh 120        stop after two hours (exit 75 when files are left)

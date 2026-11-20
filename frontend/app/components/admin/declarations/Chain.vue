@@ -233,6 +233,12 @@ const stages = computed<Stage[]>(() => {
           href: "#wstrzymane",
           tone: "warning",
         },
+        {
+          key: "setAside",
+          count: o.publications.setAside,
+          label: "nie do publikacji",
+          href: "#nie-do-publikacji",
+        },
       ],
     },
   ];

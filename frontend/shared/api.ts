@@ -62,6 +62,15 @@ export const companyRequestSchema = z.object({
    * with real regions for the company's seat. The ingest resolves it to the
    * site's own „Skarb Państwa" node; see `SKARB_PANSTWA_NODE_ID`. */
   owner_skarb_panstwa: z.boolean().optional(),
+  /** Who set up a foundation or an association, where a public body did, in
+   * the three shapes the owners above come in: KRS numbers, TERYT codes and
+   * the Treasury's flag. A founder holds no shares and the register never
+   * names one, so the pipelines carry them from a list made by hand
+   * (`PUBLIC_FOUNDERS`). Drawn as `owns` edges marked `founder`; see
+   * `Edge.founder`. */
+  founders: z.array(z.string()).optional(),
+  founder_teryts: z.array(z.string()).optional(),
+  founder_skarb_panstwa: z.boolean().optional(),
   /** Whether the public sector owns the company, as far as KRS shows — not
    * whether it is publicly traded. Only `true` is an assertion, see
    * `Company.isPublic`. */
@@ -105,6 +114,9 @@ export type CompanyRequest = {
   owners?: string[];
   owner_teryts?: string[];
   owner_skarb_panstwa?: boolean;
+  founders?: string[];
+  founder_teryts?: string[];
+  founder_skarb_panstwa?: boolean;
   teryt?: string;
   activity?: string[];
   categories?: string[];
@@ -184,6 +196,18 @@ const electionRequestSchema = z.object({
    * Accepted here or zod strips it, which is what happened to `committee` for
    * as long as it went undeclared. */
   elected: z.boolean().optional(),
+  /** What the candidate declared about their own party, as PKW wrote it
+   * („członek partii politycznej: Prawo i Sprawiedliwość”, „nie należy do
+   * partii politycznej”), and the site's parties it names
+   * (`scrapers/pkw/affiliations.py`). */
+  party_member: z.string().optional(),
+  member_parties: z.array(z.string()).optional(),
+  /** Who PKW says backed the candidacy, as it wrote it („popierana przez
+   * partię polityczną: Prawo i Sprawiedliwość”, or an association), and the
+   * site's parties it names. Recorded on any list, a voters' committee's
+   * too. */
+  supported_by: z.string().optional(),
+  backing_parties: z.array(z.string()).optional(),
   election_year: z.string().optional(),
   election_type: z.enum(electionPositionValues),
   teryt: z.string().optional(),
@@ -194,6 +218,10 @@ export type ElectionRequest = {
   committee?: string;
   party_from_committee?: boolean;
   elected?: boolean;
+  party_member?: string;
+  member_parties?: string[];
+  supported_by?: string;
+  backing_parties?: string[];
   election_year?: string;
   election_type: ElectionPosition;
   teryt?: string;

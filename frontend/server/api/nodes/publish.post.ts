@@ -3,6 +3,7 @@ import type { DocumentReference } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
 import { requireAdmin } from "~~/server/utils/auth";
 import { recordAudit } from "~~/server/utils/audit";
+import { afterHandPublication } from "~~/server/utils/declarationDecisions";
 import { cascadeUnpublishEdges } from "~~/server/utils/edgePublication";
 import {
   applyRevision,
@@ -110,6 +111,19 @@ export default defineEventHandler(async (event) => {
   // `s-maxage` the cached handler sent, which is why the endpoints a reviewer
   // needs fresh are `editorFresh` as well.
   await useStorage("cache").clear("nitro:handlers");
+
+  // A person's page held on /admin/oswiadczenia that went public has nothing
+  // left to wait for, and one taken down again after that waits again.
+  // Whichever screen it was pressed on, after the commit, like the message
+  // below, and only on a change: pressing publish on a page already public
+  // closes no hold.
+  const stored = nodeDoc.data();
+  if (
+    stored?.type === "person" &&
+    (stored.published === true) !== body.published
+  ) {
+    await afterHandPublication(db, body.node_id, user.uid, body.published);
+  }
 
   // After the commit, and never allowed to fail it: the same order and the
   // same reasoning as `/api/revisions/approve`, whose notification this is.

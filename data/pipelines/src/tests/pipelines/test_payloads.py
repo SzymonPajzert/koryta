@@ -1,11 +1,14 @@
 import json
 from unittest.mock import MagicMock
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from analysis.payloads import CompaniesPayloads, PeoplePayloads, RegionPayloads
+from analysis.payloads.company import split_owners
 from analysis.payloads.person import _extract_elections
+from entities.company import Owner
 from scrapers.map.jst import SKARB_PANSTWA
 from scrapers.stores import Context, Pipeline, ProcessPolicy
 
@@ -500,6 +503,75 @@ def test_the_treasury_travels_as_a_flag_not_as_an_owner(mock_ctx, monkeypatch):
 
     # A company the Treasury does not own says so, rather than saying nothing.
     assert by_krs["0000076705"]["owner_skarb_panstwa"] is False
+
+
+def test_split_owners_reads_every_shape_an_output_gives_back():
+    entries = [
+        {"krs": "37957", "teryt": None},
+        Owner(krs=None, teryt="1261011"),
+        {"krs": None, "teryt": SKARB_PANSTWA},
+        "not an owner",
+    ]
+    expected = (["0000037957"], ["1261011"], True)
+    assert split_owners(entries) == expected
+    assert split_owners(np.array(entries, dtype=object)) == expected
+    assert split_owners(None) == ([], [], False)
+    assert split_owners(float("nan")) == ([], [], False)
+
+
+def test_a_public_founder_travels_in_the_owners_three_shapes(mock_ctx, monkeypatch):
+    """Who set a foundation up, split the way its owners are.
+
+    A company by KRS number, a gmina by TERYT code, the Treasury as a flag - and
+    in fields of their own, because the ingest marks these edges as the
+    founder's: a foundation holds no shares.
+    """
+    pipeline = Pipeline.create(CompaniesPayloads)
+    pipeline.companies = MockPipeline(
+        [
+            {
+                "krs": "0000042901",
+                "name": "Fundacja Centrum Dokumentacji Czynu Niepodleglosciowego",
+                "city": "Krakow",
+                "activity": [],
+                "is_public": True,
+                "parents": [],
+                "founded_by": [
+                    {"krs": None, "teryt": "1261011"},
+                    {"krs": None, "teryt": SKARB_PANSTWA},
+                ],
+            },
+            {
+                "krs": "0000765394",
+                "name": "Fundacja Agencji Rozwoju Przemyslu",
+                "city": "Warszawa",
+                "activity": [],
+                "is_public": True,
+                "founded_by": [{"krs": "37957", "teryt": None}],
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        "analysis.payloads.company.KorytaCompanies",
+        lambda *args, **kwargs: MockPipeline(
+            [{"krs": krs} for krs in ("0000042901", "0000765394")]
+        ),
+    )
+
+    by_krs = {
+        row["krs"]: row for row in pipeline.process(mock_ctx).to_dict(orient="records")
+    }
+
+    cdcn = by_krs["0000042901"]
+    assert cdcn["founder_teryts"] == ["1261011"]
+    assert cdcn["founder_skarb_panstwa"] is True
+    assert cdcn["founders"] == []
+    # None of it is taken for a shareholder.
+    assert cdcn["owners"] == []
+    assert cdcn["owner_teryts"] == []
+    assert cdcn["owner_skarb_panstwa"] is False
+
+    assert by_krs["0000765394"]["founders"] == ["0000037957"]
 
 
 def test_upload_payloads_carry_the_supervisory_body(mock_ctx, monkeypatch):

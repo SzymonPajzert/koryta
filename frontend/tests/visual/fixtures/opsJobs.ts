@@ -8,8 +8,8 @@ import type { JobRun, JobsOverview } from "../../../shared/jobs";
  * it puts one job in every state the page draws: a capture stuck in the
  * extractor, a nightly scrape that stopped at its deadline, a stale mirror, a
  * finished export, the morning's people import cut short the day after a
- * trial run, a company import run by hand, a crawl still going, jobs nobody
- * has wired yet and one the registry does not know. */
+ * trial run, the night's company import just before it, a crawl still going,
+ * jobs nobody has wired yet and one the registry does not know. */
 
 function run(
   id: string,
@@ -108,18 +108,20 @@ export const opsJobs: JobsOverview = {
     {
       id: "company_import",
       record: {
-        lastRunId: "company-0827",
-        lastStartedAt: "2026-08-27T13:12:00.000Z",
-        lastScheduledAt: null,
-        lastSucceededAt: "2026-08-27T13:15:41.000Z",
+        lastRunId: "company-0901",
+        lastStartedAt: "2026-09-01T02:57:31.000Z",
+        lastScheduledAt: "2026-09-01T02:57:31.000Z",
+        lastSucceededAt: "2026-09-01T02:59:52.000Z",
       },
       runs: [
-        run("company-0827", "company_import", {
+        run("company-0901", "company_import", {
           state: "succeeded",
-          startedAt: "2026-08-27T13:12:00.000Z",
-          finishedAt: "2026-08-27T13:15:41.000Z",
-          progress: { done: 215, total: 215, unit: "firm" },
-          counters: { uploaded: 214, failed: 1, skipped: 0 },
+          trigger: "schedule",
+          host: "koryta@koryta-nightly",
+          startedAt: "2026-09-01T02:57:31.000Z",
+          finishedAt: "2026-09-01T02:59:52.000Z",
+          progress: { done: 28, total: 28, unit: "firm" },
+          counters: { planned: 28, companies_created: 28, failed: 0 },
           exitCode: 0,
         }),
       ],

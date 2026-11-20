@@ -12,6 +12,13 @@ on:
       # reads them all for what they upload and cache, so a pull request that
       # touches only a workflow is what it has to see.
       - ".github/workflows/**"
+      # The site's files the declarations job's tests and util.declaration_roles
+      # read: the role chips, the names both sides fold, and the ingests' schema
+      # and limits (src/jobs/bip_declarations/tests/test_bip_declarations_ci.py).
+      - "frontend/shared/declarationEmploymentRoles.json"
+      - "frontend/tests/shared/declarationEmploymentRoleFamilies.json"
+      - "frontend/shared/declarationEmployment.ts"
+      - "frontend/shared/declarations.ts"
 
 permissions:
   contents: read

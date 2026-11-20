@@ -1,14 +1,14 @@
 <template>
   <v-card v-if="type == 'person'" width="100%" variant="flat">
     <!-- `align-center`: without it the row is `align-items: stretch`, so the
-         h2 stretched to the height of the control block on the right and kept
+         h1 stretched to the height of the control block on the right and kept
          its text at the top of that box, while PartyChip centres itself - two
          alignments in one row, and the chip reading as if it had slipped.
 
          `ga-2` rather than a margin on each child: two parties painted the
          same red - Nowa Lewica and SLD are the same party renamed - ran into
          one block with nothing between them. The gap is the same 8px `mr-2`
-         was, which is why it comes off the h2 and off ChipDraftStatus here
+         was, which is why it comes off the h1 and off ChipDraftStatus here
          rather than being added on top of them.
 
          `flex-wrap` + `text-wrap`: on one line a long name kept its full width
@@ -18,9 +18,9 @@
          its 40. Now whatever does not fit goes to the next line whole, and a
          name too long for the line breaks between its words. -->
     <v-card-title class="px-0 d-flex flex-wrap align-center ga-2 text-wrap">
-      <h2 class="text-h5 font-weight-bold">
+      <h1 class="text-h5 font-weight-bold">
         {{ entity?.name }}
-      </h2>
+      </h1>
       <!-- Before the parties, because it is about the page rather than about
            the person on it: whoever is reading this is the only kind of reader
            who can be here at all while it shows. -->
@@ -30,10 +30,18 @@
         :node-name="entity?.name"
         @published="emit('published')"
       />
+      <PartyChip v-for="party in listedParties" :key="party" :party="party" />
+      <!-- A party only a backing ties the person to comes after the rest, in
+           the backing's chip, as the candidacy row draws it (decision on
+           2026-11-11: it counts, and looks a bit different). No label, as the
+           parties have none; the chip says what it is on hover (decision on
+           2026-11-17). -->
       <PartyChip
-        v-for="party in personEntity?.parties"
+        v-for="party in backedParties"
         :key="party"
         :party="party"
+        tie="backing"
+        :note="backingNote(party)"
       />
       <v-spacer />
       <!-- One row of controls, in the order they escalate: the two an admin
@@ -114,9 +122,20 @@
         :node-id="entity.id"
         :needs-split="personEntity?.needs_split"
       />
-      <CardPersonInfo :person="personEntity" class="mb-2" />
+      <!-- mb-0 over the row's own -12px: the facts keep their columns' 12px
+           under them, and no more (decided 2026-11-18). -->
+      <CardPersonInfo :person="personEntity" class="mb-0" />
       <!-- Under the facts, as it vouches for one of them: the birth date. -->
       <PersonDeclarationNote v-if="entity?.id" :node-id="entity.id" />
+      <!-- Before the page is up, the same place tells a signed-in reader
+           where its declarations stand, with the crops, or with none, where
+           to look for them: researching a draft by hand, a reading on its
+           way decides whether to publish it now. -->
+      <PersonDraftDeclarations
+        v-if="user && entity?.id && entity.published !== true"
+        :node-id="entity.id"
+        :birth-date="personEntity?.birthDate ?? null"
+      />
       {{ entity?.content }}
     </v-card-text>
   </v-card>
@@ -124,9 +143,9 @@
   <v-card v-if="type == 'place'" width="100%" variant="flat">
     <v-card-title class="headline px-0">
       <v-icon start :icon="mdiOfficeBuildingOutline" />
-      <h2 class="text-h5 font-weight-bold d-inline">
+      <h1 class="text-h5 font-weight-bold d-inline">
         {{ entity?.name }}
-      </h2>
+      </h1>
     </v-card-title>
     <v-card-text class="px-0">
       <div v-if="identifiers.length > 0" class="text-caption mb-2">
@@ -143,11 +162,11 @@
     data-testid="entity-article-card"
   >
     <v-card-title class="headline px-0 d-flex align-start ga-2 text-wrap">
-      <h2 class="text-h5 font-weight-bold flex-grow-1 text-break">
+      <h1 class="text-h5 font-weight-bold flex-grow-1 text-break">
         <v-icon start :icon="mdiFileDocumentOutline" />
         <template v-if="entity?.name">{{ entity.name }}</template>
         <span v-else class="text-medium-emphasis">Artykuł bez tytułu</span>
-      </h2>
+      </h1>
       <!-- The article page's pencil, on the same terms (signed in readers
            only). An article reaches this card only when it is opened by id: a
            draft, which is how /admin/rewizje links to one, or one stored
@@ -176,9 +195,9 @@
   <v-card v-if="type == 'region'" width="100%" variant="flat">
     <v-card-title class="headline px-0">
       <v-icon start :icon="mdiMapMarkerRadiusOutline" />
-      <h2 class="text-h5 font-weight-bold d-inline">
+      <h1 class="text-h5 font-weight-bold d-inline">
         {{ region?.name }}
-      </h2>
+      </h1>
     </v-card-title>
     <v-card-text class="px-0">
       {{ region?.content }}
@@ -211,9 +230,27 @@ const props = withDefaults(
      * table builds those, from what it fetches - so the page derives both
      * from its edges and hands them down. */
     extraLocations?: string[];
+    /** The person's parties their candidacies name only through a backing
+     * PKW recorded, each with the years it did. Derived from the edges by the
+     * page, as `extraLocations` is. */
+    backed?: Record<string, string[]>;
   }>(),
-  { extraLocations: undefined },
+  { extraLocations: undefined, backed: undefined },
 );
+
+const listedParties = computed(() =>
+  (personEntity.value?.parties ?? []).filter((party) => !props.backed?.[party]),
+);
+const backedParties = computed(() =>
+  (personEntity.value?.parties ?? []).filter((party) => props.backed?.[party]),
+);
+
+function backingNote(party: string): string | undefined {
+  const years = props.backed?.[party];
+  return years?.length
+    ? `Poparcie kandydatury w wyborach ${years.join(", ")} (PKW)`
+    : undefined;
+}
 
 /** The page went live from the badge above. The card holds no data of its own
  * - the entity is handed to it - so the only thing it can do is say so.

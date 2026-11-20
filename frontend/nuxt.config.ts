@@ -36,6 +36,13 @@ export default defineNuxtConfig({
         {
           charset: "utf-8",
         },
+        // The site card for every page that names no image of its own, so a
+        // shared link never renders bare. Same file as SOCIAL_CARD in
+        // composables/entitySeo.ts; nuxt-seo-utils makes it absolute on the
+        // server, which is what link previews read.
+        { property: "og:image", content: "/social-card.png" },
+        { name: "twitter:image", content: "/social-card.png" },
+        { name: "twitter:card", content: "summary_large_image" },
       ],
       htmlAttrs: {
         lang: "pl",
@@ -43,6 +50,14 @@ export default defineNuxtConfig({
       link: [
         { rel: "preconnect", href: "https://cdn.jsdelivr.net" },
         { rel: "preconnect", href: "https://firestore.googleapis.com" },
+        // Google takes a site's search result icon from this tag on the home
+        // page rather than guessing /favicon.ico.
+        {
+          rel: "icon",
+          type: "image/x-icon",
+          href: "/favicon.ico",
+          sizes: "32x32",
+        },
       ],
       style: [],
       script: [],
@@ -404,6 +419,11 @@ export default defineNuxtConfig({
     "/eksploruj/tabela": { robots: false },
     "/profil": { robots: false },
 
+    // The page's counts come from /api/stats/database, a census of the whole
+    // database cached per instance in memory; edge caching the html keeps a
+    // crawler going through the footer's link to one computation an hour.
+    "/eksploruj": { swr: 3600 },
+
     // `/lista` was removed in "Remove /lista, and point what linked to it at
     // the table", and 404ed from then on - but it kept ranking. Search Console
     // still had it drawing 140 impressions at position 7.34 in the three months
@@ -420,7 +440,15 @@ export default defineNuxtConfig({
     // easier to say and to type than /oswiadczenia. 302 rather than 301,
     // because a browser keeps a 301 for good, and /start should be free to
     // point at whatever the first task is next.
-    "/start": { redirect: { to: "/oswiadczenia", statusCode: 302 } },
+    //
+    // `utm_campaign=start` tells these arrivals apart in Plausible
+    // (Campaigns). Not `ref`: Plausible takes `ref` as the visit's source over
+    // the referrer, so Instagram, Facebook and wykop would all read „start”.
+    // The link's own query wins over this one (Nitro merges it in), so a
+    // mail's utm_campaign stays the mail's.
+    "/start": {
+      redirect: { to: "/oswiadczenia?utm_campaign=start", statusCode: 302 },
+    },
 
     // Nitro only injects a Cache-Control route rule for public assets mounted
     // under a sub-path (it zeroes maxAge for anything at the site root), so

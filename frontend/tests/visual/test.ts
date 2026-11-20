@@ -1,4 +1,5 @@
 import { test as base, expect } from "@playwright/test";
+import { hideChrome, WITH_CHROME } from "./chrome";
 import { pageTag, routeName, taggedPages } from "./pageTags";
 
 type Router = {
@@ -6,15 +7,26 @@ type Router = {
   getRoutes: () => { name?: unknown }[];
 };
 
-/** Playwright's `test`, for the visual specs. It adds one check after every
- * test tagged `@page:` (see ./pageTags.ts): the route the app is showing
- * is the page the tag names.
+/** Playwright's `test`, for the visual specs. It runs every test without the
+ * layout's chrome unless the test is tagged `WITH_CHROME` (see ./chrome.ts).
  *
- * Run after the test body rather than before the capture, because that is the
- * only hook there is, and every spec here captures last or nearly last.
- * Skipped and failed tests are left alone: a skipped one never opened
- * anything, and a failed one already says what went wrong. */
-export const test = base.extend<{ photographedPage: undefined }>({
+ * And it adds one check after every test tagged `@page:` (see ./pageTags.ts):
+ * the route the app is showing is the page the tag names. Run after the test
+ * body rather than before the capture, because that is the only hook there
+ * is, and every spec here captures last or nearly last. Skipped and failed
+ * tests are left alone: a skipped one never opened anything, and a failed one
+ * already says what went wrong. */
+export const test = base.extend<{
+  chromeless: undefined;
+  photographedPage: undefined;
+}>({
+  chromeless: [
+    async ({ page }, use, testInfo) => {
+      if (!testInfo.tags.includes(WITH_CHROME)) await hideChrome(page);
+      await use(undefined);
+    },
+    { auto: true },
+  ],
   photographedPage: [
     async ({ page }, use, testInfo) => {
       await use(undefined);

@@ -11,7 +11,7 @@
  * - `triggered`: one run per request - a page captured by the extension and
  *   read by the extractor, or a one-off import someone starts by hand. No
  *   clock is waiting for it, so it fails by breaking or by getting stuck.
- * - `scheduled`: a run at a set time - the night on the VM at 04:30. Fails by
+ * - `scheduled`: a run at a set time - the night on the VM at 02:30. Fails by
  *   breaking, or silently by never starting, which only a clock can notice.
  * - `ongoing`: a long run that drains a queue - the article crawl. Fails by
  *   going quiet while still claiming to run.
@@ -139,7 +139,7 @@ export interface JobRun {
 
 /** What a queued run waits for, as the worker writes it on the run
  * (`mark_waiting` in data/pipelines/src/stores/job_requests.py):
- * - `export`: the day's 04:00 export, which the job compares the page's
+ * - `export`: the day's 02:00 export, which the job compares the page's
  *   people with and refuses when it is older. The worker switches the VM off
  *   meanwhile, and the schedule's boot for the night brings it back.
  * - `night`: the night, which holds the machine's lock. */
@@ -360,6 +360,11 @@ export interface JobDefinition {
   schedule?: JobSchedule;
   /** Said instead of a time when the job has none yet, and why. */
   scheduleNote?: string;
+  /** A step of the night with no start time of its own: it runs when the
+   * night gets to it, or not at all when the night skips it. Its row says „co
+   * noc” where a `schedule` would give the next start, and the night's own
+   * row is what says a night went without it. */
+  nightStep?: true;
   /** A run that has said nothing for this long has stalled. Jobs heartbeat
    * every minute or so while they work, so this is a few missed beats plus
    * the longest single step. */
@@ -408,44 +413,6 @@ export const JOBS: readonly JobDefinition[] = [
       "Ekstrakcja ma 30 minut (dispatchDeadline kolejki); strona, która tyle stoi w „przetwarzam”, utknęła i nic jej już nie podejmie.",
     ],
   },
-  // The imports report one run per `koryta_uploader --submit`, under the id
-  // of the payload type they send. A person upload reports as people_import,
-  // which also has a daily run of its own, so it sits with the scheduled jobs.
-  // score_import and company_import are steps of the night too
-  // (koryta_score_import, koryta_people_import --companies-only), but the
-  // night's own row is what says a night did not run them; these are judged
-  // by their newest run, as before.
-  {
-    id: "company_import",
-    kind: "triggered",
-    title: "Import firm",
-    summary:
-      "Firmy przez /api/ingest/company. Co noc, przed importem osób: firmy, w których pracują osoby wysyłane tej nocy, a których nie ma w porannej kopii bazy - z potoku Companies, tak jak import osób dodaje brakującą firmę po drodze. Ręcznie: koryta_uploader --type company, firmy z CompaniesPayloads.",
-    runsOn:
-      "Krok nocy na VM koryta-nightly (koryta_nightly, krok „companies”, tuż przed osobami); ręcznie koryta_uploader --type company",
-    command:
-      "koryta CompaniesPayloads --output stdout | koryta_uploader --type company --submit",
-    heartbeatMinutes: 15,
-    notes: [
-      "Firmę, której nocny krok nie dodał, import osób próbuje dodać jeszcze raz; gdy i jemu się nie uda, zapisuje osobę bez tego zatrudnienia („zatrudnień bez strony firmy”).",
-      "Podsumowanie nocnego uruchomienia - każda firma, kto w niej pracuje i co z nią zrobiono - jest w koryta-pl-sharedcache/jobs/company_import/runs/.",
-    ],
-  },
-  {
-    id: "score_import",
-    kind: "triggered",
-    title: "Oceny modeli",
-    summary:
-      "Krótka lista każdego modelu oceniającego osoby jako głosy pod jego własnym uid: zmienione oceny zapisuje, a tym, których model już nie ocenia, je wycofuje. Z tych głosów kolejka /eksploruj/nowe bierze kolejność i próg.",
-    runsOn:
-      "Krok nocy na VM koryta-nightly (koryta_nightly), po imporcie osób; ręcznie ./submit_scores.sh prod",
-    command: "koryta_score_import",
-    heartbeatMinutes: 15,
-    notes: [
-      "Modele oceniają też strony utworzone tej nocy przez import osób, choć kopii bazy z 04:00 jeszcze ich nie ma - nowa osoba trafia do kolejki tego samego ranka.",
-      "Model, który nikogo nie ocenił, nie jest wysyłany: wycofałby wszystkie swoje głosy.",
-    ],
-  },
   {
     id: "extraction_import",
     kind: "triggered",
@@ -473,7 +440,7 @@ export const JOBS: readonly JobDefinition[] = [
     tasks: ["grant-site-starts-nightly-vm", "install-koryta-requests-worker"],
     notes: [
       "Porównuje paczki z porannym eksportem bazy: wysyła tylko to, co zmieniłoby stronę, i nie zgaduje po samym nazwisku, gdy dwie osoby się nie odróżniają.",
-      "Zlecenie sprzed porannego eksportu (północ-04:00) czeka na niego w kolejce: maszyna się wyłącza, a robi je po 04:15, gdy włącza się na noc.",
+      "Zlecenie sprzed porannego eksportu (północ-02:00) czeka na niego w kolejce: maszyna się wyłącza, a robi je po 02:15, gdy włącza się na noc.",
       "Maszyna wyłącza się sama 10 minut po ostatniej wysyłce - chyba że ktoś jest zalogowany albo zaraz zacznie się noc.",
     ],
   },
@@ -483,11 +450,11 @@ export const JOBS: readonly JobDefinition[] = [
     partialIsHeld: true,
     title: "Noc na maszynie koryta-nightly",
     summary:
-      "Po kolei, po kopii bazy z 04:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS, właścicieli nowo zarejestrowanych spółek i odpisy, dokupuje z rejestr.io to, czego nie dały (do 50 zapytań), przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, dodaje firmy, których brakuje osobom tej nocy, wysyła do 100 osób na stronę, a potem oceny modeli.",
+      "Po kolei, po kopii bazy z 02:00: uzupełnia lustro KRS, czeka na tę kopię, pobiera bezpłatne KRS, właścicieli nowo zarejestrowanych spółek i odpisy, dokupuje z rejestr.io to, czego nie dały (do 50 zapytań), przelicza wszystkie potoki (kopie w pamięci podręcznej jako main), puszcza testy i niezmienniki, dodaje firmy, których brakuje osobom tej nocy, wysyła do 100 osób na stronę, potem zmiany firm, które strona już ma, oceny modeli i stan oświadczeń, z którego strona liczy postęp, a na koniec przelicza na autopush statystyki stron, w tym linijki w wyszukiwarce.",
     runsOn:
-      "VM koryta-nightly (europe-central2): harmonogram włącza ją o 04:15, a po pracy sama się wyłącza - data/nightly",
+      "VM koryta-nightly (europe-central2): harmonogram włącza ją o 02:15, a po pracy sama się wyłącza - data/nightly",
     command: "koryta_nightly",
-    schedule: { dailyAt: "04:30", timeZone: WARSAW },
+    schedule: { dailyAt: "02:30", timeZone: WARSAW },
     // Przeliczenie potoków to jeden krok do dwóch i pół godziny, w którym noc
     // nie daje znaku życia.
     heartbeatMinutes: 160,
@@ -505,9 +472,9 @@ export const JOBS: readonly JobDefinition[] = [
     summary:
       "Biuletyn KRS z ostatnich dni i odpisy aktualne z api-krs dla firm z kolejki ScrapeRejestrIO; odpowiedzi trafiają do archiwum crawla.",
     runsOn:
-      "Krok nocy na VM koryta-nightly (koryta_nightly), zaraz po kopii bazy z 04:00",
+      "Krok nocy na VM koryta-nightly (koryta_nightly), zaraz po kopii bazy z 02:00",
     command: "koryta_scrape_krs_free --max-minutes=60",
-    schedule: { dailyAt: "04:30", timeZone: WARSAW },
+    schedule: { dailyAt: "02:30", timeZone: WARSAW },
     heartbeatMinutes: 15,
     graceMinutes: 60,
     tasks: ["create-nightly-vm"],
@@ -524,7 +491,7 @@ export const JOBS: readonly JobDefinition[] = [
     runsOn:
       "Krok nocy na VM koryta-nightly (koryta_nightly), po odpisach, a przed przeliczeniem potoków; ręcznie cała kolejka, z pytaniem przed każdym zakupem",
     command: "koryta_scrape_krs_paid --scope fallback --max-calls 50",
-    schedule: { dailyAt: "04:30", timeZone: WARSAW },
+    schedule: { dailyAt: "02:30", timeZone: WARSAW },
     heartbeatMinutes: 15,
     // Rusza po bezpłatnym KRS i odpisach, zwykle kwadrans po starcie nocy.
     graceMinutes: 90,
@@ -544,11 +511,14 @@ export const JOBS: readonly JobDefinition[] = [
     title: "Odpisy pełne z wyszukiwarki KRS",
     summary:
       "Pobiera bezpłatne odpisy pełne (PDF) z ministerialnej wyszukiwarki KRS - dla firm z kolejki, z pliku albo z grafu - i z nich bierze daty, od kiedy i do kiedy kto zasiadał w zarządach.",
-    runsOn: "Ręcznie na predatorze - jeden crawler na adres IP",
+    runsOn:
+      "Krok nocy na VM koryta-nightly (koryta_nightly), po przeglądzie rejestru; ręcznie jeden crawler na adres IP",
     command: "koryta_krs_odpis --graph --changed-since <dzień>",
-    scheduleNote:
-      "Cotygodniowe odświeżenie firm z biuletynu (--graph --changed-since) - pora do ustalenia",
+    schedule: { dailyAt: "02:30", timeZone: WARSAW },
     heartbeatMinutes: 15,
+    // Rusza po bezpłatnym KRS i przeglądzie rejestru, zwykle kwadrans po
+    // starcie nocy.
+    graceMinutes: 90,
     notes: [
       "Kończy się sam, gdy wyszukiwarka zwalnia albo przestaje odpowiadać; resztę bierze następne uruchomienie (wtedy „niedokończony”). 20 prób z rzędu bez odpowiedzi to błąd.",
     ],
@@ -563,7 +533,7 @@ export const JOBS: readonly JobDefinition[] = [
       "Krok nocy na VM koryta-nightly (koryta_nightly), po bezpłatnym KRS; zaległości ręcznie, partiami",
     command:
       "koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25",
-    schedule: { dailyAt: "04:30", timeZone: WARSAW },
+    schedule: { dailyAt: "02:30", timeZone: WARSAW },
     heartbeatMinutes: 15,
     // Rusza po bezpłatnym KRS, który ma na siebie godzinę.
     graceMinutes: 90,
@@ -579,11 +549,12 @@ export const JOBS: readonly JobDefinition[] = [
     title: "Kompresja lustra KRS",
     summary:
       "Pakuje nowe odpowiedzi rejestr.io i api-krs z archiwum crawla do koryta-pl-compressed; potoki czytają te hosty tylko z lustra.",
-    runsOn: "Pierwszy krok nocy na VM koryta-nightly (koryta_nightly), o 04:30",
+    runsOn: "Pierwszy krok nocy na VM koryta-nightly (koryta_nightly), o 02:30",
     command:
       "go run ./cmd/compressor -incremental -hostname rejestr.io (i -hostname api-krs.ms.gov.pl)",
     scheduleNote:
       "Co noc, na początku nocy - po północy UTC bierze cały poprzedni dzień; uruchomień jeszcze nie raportuje",
+    nightStep: true,
     heartbeatMinutes: 30,
     probe: "compressedMirror",
     mirrorHosts: ["rejestr.io", "api-krs.ms.gov.pl"],
@@ -604,13 +575,34 @@ export const JOBS: readonly JobDefinition[] = [
     summary:
       "Funkcja scheduledFirestoreExport zapisuje dziewięć kolekcji do koryta-pl-crawled; z tej kopii czytają potoki, nocne testy i agenci.",
     runsOn: "Cloud Functions (europe-west1)",
-    schedule: { dailyAt: "04:00", timeZone: WARSAW },
+    schedule: { dailyAt: "02:00", timeZone: WARSAW },
     heartbeatMinutes: 120,
     graceMinutes: 60,
     probe: "firestoreExport",
     notes: [
-      "Noc na VM rusza o 04:30 i porównuje osoby właśnie z tą kopią, więc czeka, aż eksport się skończy.",
+      "Noc na VM rusza o 02:30 i porównuje osoby właśnie z tą kopią, więc czeka, aż eksport się skończy.",
       "Stan bierze się z pliku .overall_export_metadata, który eksport zapisuje na końcu.",
+    ],
+  },
+  // The night's imports, in its order: company_import on both sides of the
+  // people, then the scores. A night that holds the people back runs none of
+  // them, so they are night steps rather than jobs with a start to miss.
+  {
+    id: "company_import",
+    kind: "scheduled",
+    title: "Import firm",
+    summary:
+      "Firmy przez /api/ingest/company, w nocy dwa razy. Przed importem osób: firmy wysyłanych osób, których nie ma w porannej kopii bazy. Po nim: zmiany firm, które strona już ma.",
+    runsOn:
+      "Kroki nocy na VM koryta-nightly (koryta_nightly): „companies” przed osobami, „company_updates” po nich; ręcznie koryta_company_import",
+    command: "koryta_company_import",
+    scheduleNote: "Co noc, razem z importem osób",
+    nightStep: true,
+    heartbeatMinutes: 15,
+    notes: [
+      "Firmę, której nocny krok nie dodał, import osób próbuje dodać jeszcze raz; gdy i jemu się nie uda, zapisuje osobę bez tego zatrudnienia („zatrudnień bez strony firmy”).",
+      "Zmiany firm: do 200 na noc, najpierw te, które stają się publiczne. Zmian nazw i firm, które stałyby się prywatne, noc nie wysyła - wymienia je w ostrzeżeniach.",
+      "Podsumowania nocnych uruchomień - każda firma i co z nią zrobiono - są w koryta-pl-sharedcache/jobs/company_import/runs/.",
     ],
   },
   {
@@ -624,6 +616,7 @@ export const JOBS: readonly JobDefinition[] = [
     command: "koryta_people_import --scope priority --max-uploads 100",
     scheduleNote:
       "Co noc, gdy dzisiejsza kopia bazy, przeliczenie potoków i testy na to pozwalają (wiersz „Noc na maszynie koryta-nightly”)",
+    nightStep: true,
     // Building the payloads is one long step that says nothing until it is
     // done; only the upload after it heartbeats.
     heartbeatMinutes: 60,
@@ -633,6 +626,23 @@ export const JOBS: readonly JobDefinition[] = [
       "Porównuje paczki z dzisiejszą kopią bazy: wysyła tylko osoby, którym import zmieniłby coś na stronie, i nie wysyła drugi raz tej samej paczki przez 30 dni.",
       "Strony tworzy tylko świeżo zatrudnionym; strona utworzona komuś, kto według kopii już ją ma, zatrzymuje import jako błąd.",
       "W dni próbne (--dry-run) niczego nie wysyła: uruchomienie kończy się jako „próba - nic nie wysłano”, a „w paczce” mówi, ile osób poszłoby na stronę.",
+    ],
+  },
+  {
+    id: "score_import",
+    kind: "scheduled",
+    title: "Oceny modeli",
+    summary:
+      "Krótka lista każdego modelu oceniającego osoby jako głosy pod jego własnym uid: zmienione oceny zapisuje, a tym, których model już nie ocenia, je wycofuje. Z tych głosów kolejka /eksploruj/nowe bierze kolejność i próg.",
+    runsOn:
+      "Krok nocy na VM koryta-nightly (koryta_nightly), po imporcie osób; ręcznie ./submit_scores.sh prod",
+    command: "koryta_score_import",
+    scheduleNote: "Co noc, razem z importem osób",
+    nightStep: true,
+    heartbeatMinutes: 15,
+    notes: [
+      "Modele oceniają też strony utworzone tej nocy przez import osób, choć kopii bazy z 02:00 jeszcze ich nie ma - nowa osoba trafia do kolejki tego samego ranka.",
+      "Model, który nikogo nie ocenił, nie jest wysyłany: wycofałby wszystkie swoje głosy.",
     ],
   },
   {
@@ -882,8 +892,9 @@ export function zoneOffsetMinutes(at: Date, timeZone: string): number {
 }
 
 /** The instant a wall-clock time on a calendar day is, in a zone. Correct
- * across the DST changes, which in Warsaw happen at 02:00/03:00 and so never
- * touch a schedule at 04:00 or 04:30. */
+ * across the DST changes; a time the spring change skips (Warsaw's 02:00-03:00
+ * on the last Sunday of March) comes out an hour later, as the VM's schedule
+ * and timer take it. */
 export function zonedTime(day: string, hhmm: string, timeZone: string): Date {
   const [year, month, date] = day.split("-").map(Number);
   const [hour, minute] = hhmm.split(":").map(Number);
@@ -955,8 +966,8 @@ export function missedSlot(
 
 /** When a queued run was last heard from, as far as its allowance goes. One
  * waiting for the day's export waits with the machine off - the worker does
- * not keep it up until four - so its silence counts from the night's start,
- * the schedule booting the machine for it at 04:15 with the export done;
+ * not keep it up until two - so its silence counts from the night's start,
+ * the schedule booting the machine for it at 02:15 with the export done;
  * from then on the worker writes its heartbeat every five minutes. */
 function heardFrom(
   run: Pick<JobRun, "state" | "heartbeatAt" | "waitingFor">,
@@ -1351,7 +1362,7 @@ export function jobHealth(
  * plan. A job that reports shows it by having run on it once; until then
  * every night of the plan would read as missed. A probe job never reports,
  * and is watched because it is already running - the export has been firing
- * at 04:00 for months - so its schedule counts from the start. */
+ * every day for months - so its schedule counts from the start. */
 export function scheduleIsLive(
   definition: Pick<JobDefinition, "schedule" | "probe">,
   record: JobRecord | null | undefined,

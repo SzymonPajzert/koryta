@@ -7,6 +7,8 @@ one flag.
 
 from __future__ import annotations
 
+import codecs
+import functools
 import re
 from dataclasses import dataclass
 from urllib.parse import urljoin
@@ -58,8 +60,8 @@ def extract_link_pairs(
             seen.setdefault(absolute.rstrip("/") or absolute, text)
             continue
         parsed = NormalizedParse.parse(absolute)
-        clean = (
-            f"{parsed.scheme}://{parsed.hostname_normalized}{parsed.path}".rstrip("/")
+        clean = f"{parsed.scheme}://{parsed.hostname_normalized}{parsed.path}".rstrip(
+            "/"
         )
         seen.setdefault(clean, text)
     return list(seen.items())
@@ -84,6 +86,11 @@ class LinkContext:
     ``path`` is the menu sections above it, outermost first ("Rada Gminy >
     Oświadczenia majątkowe radnych > IX Kadencja 2024-2029" over "Natalia
     Piksa"): a menu has no headings, its nesting says where a link leads.
+    ``frame`` says it stands in the site's frame around the page's own
+    content, the same on every page: a menu, the site's header or footer, a
+    sidebar (`_frame_elements`). ``caption`` is the title of the table the link
+    stands in (`_table_title`): Gliwice heads each person's table with their
+    name and labels the files "2024 za rok 2024".
     """
 
     url: str
@@ -91,6 +98,8 @@ class LinkContext:
     row: str = ""
     heading: str = ""
     path: str = ""
+    frame: bool = False
+    caption: str = ""
 
 
 _BLOCKS = ("tr", "li", "p", "dd", "dt")
@@ -101,6 +110,128 @@ _HEADINGS = frozenset(
 
 #: Menu sections a link's path carries, the innermost.
 _PATH_DEPTH = 4
+
+#: Roles of the site's frame: its menus, its header and its footer. Not "menu",
+#: which a file's own drop-down of formats may have.
+_FRAME_ROLES = frozenset({"navigation", "banner", "contentinfo"})
+#: Where a header, footer or aside is a part's own, not the site's: an
+#: article's header holds its title, a section's footer its files.
+_SECTIONS = ("main", "article", "section")
+#: The words a frame's id or class is made of, besides where it stands:
+#: Lwówek Śląski's "MenuLeft", biuletyn.net's "menu-lewe-1-poziom", ibip.pl's
+#: "right_menu", "topbar", "stopka", Łódź's "aside" and "aside-nav" (a
+#: ``<div>`` in its ``<main>``, beside the content). A word more and it is no
+#: frame's name: Kraków's declarations stand in a "nav-container", Lubicz's in
+#: a "footer-bg", Toruń's under each file's "header", and a "dropdown-menu"
+#: may be a file's own. "nav" names a frame only beside a frame's word:
+#: Bootstrap's "nav" alone may be a content's tabs.
+_FRAME_NAMES = frozenset(
+    "menu navbar navigation nawigacja sidebar topbar footer stopka aside".split()
+)
+_FRAME_SIDES = frozenset(
+    """left right top bottom main side mobile primary secondary lewe lewa lewy
+    prawe prawa prawy gora gorne gorna gorny dol dolne dolna dolny glowne glowna
+    glowny boczne boczna boczny pion poziom przedmiotowe przedmiotowy podmiotowe
+    podmiotowy nav""".split()
+)
+_NAME_WORD = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|[0-9]+")
+
+
+@functools.lru_cache(maxsize=8192)
+def _frame_name(value: str) -> bool:
+    """Whether an id or a class names the site's frame (`_FRAME_NAMES`): BIPs
+    call their menus "Menu przedmiotowe" and "Menu podmiotowe"."""
+    words = [w.lower() for w in _NAME_WORD.findall(value) if not w.isdigit()]
+    return any(w in _FRAME_NAMES for w in words) and all(
+        w in _FRAME_NAMES or w in _FRAME_SIDES for w in words
+    )
+
+
+#: An id or class that names the page's own content: "content",
+#: "main-content", "tresc", "strona-tresc", "skip-tresc".
+_CONTENT_NAMES = frozenset("content tresc zawartosc".split())
+_CONTENT_SIDES = frozenset("main page site strona skip glowna glowne".split())
+
+
+@functools.lru_cache(maxsize=8192)
+def _content_name(value: str) -> bool:
+    words = [w.lower() for w in _NAME_WORD.findall(value) if not w.isdigit()]
+    return any(w in _CONTENT_NAMES for w in words) and all(
+        w in _CONTENT_NAMES or w in _CONTENT_SIDES for w in words
+    )
+
+
+def _names(node: Tag) -> list[str]:
+    """``node``'s id and classes."""
+    value = node.get("class")
+    classes = value.split() if isinstance(value, str) else list(value or [])
+    return [str(node.get("id") or ""), *(str(c) for c in classes)]
+
+
+def _is_content(node: Tag) -> bool:
+    """Whether ``node`` is the page's main part, an article or what is called
+    the content."""
+    return (
+        node.name in ("main", "article")
+        or str(node.get("role") or "").strip().lower() == "main"
+        or any(_content_name(name) for name in _names(node) if name)
+    )
+
+
+def _holding_content(soup: BeautifulSoup) -> set[int]:
+    """The elements (by id) that hold the page's content (`_is_content`): a
+    frame never does, whatever it is called. lxml reads some pages' header as
+    never closed, and the content as standing in it: Krzyżanowice's
+    ``<div id="content">`` in its ``<header>``'s ``<nav>`` (11-13)."""
+    holding: set[int] = set()
+    for node in soup.find_all(_is_content):
+        for parent in node.parents:
+            if id(parent) in holding:
+                break
+            holding.add(id(parent))
+    return holding
+
+
+def _frame_elements(soup: BeautifulSoup) -> set[int]:
+    """The elements (by id) of the site's frame around a page's content.
+
+    A ``<nav>`` or the role of one, wherever it stands: biuletyn.net's left
+    menu is a ``<nav>`` in an ``<aside>`` in ``<main>``. A ``<header>``,
+    ``<footer>`` or ``<aside>`` outside the page's main part, articles and
+    sections, or the role of the site's header or footer. And an element whose
+    id or class names a frame (`_frame_name`): the old BIPs'
+    ``<div id="MenuLeft">``. None of them when it holds the page's content
+    (`_holding_content`). A file there is the site's, the same on every page
+    (11-13: Mysłowice's menu lent "Odprowadzenie wód opadowych z posesji" to
+    eleven councillors, Gliwice's footer "Wniosek o wydanie prawa jazdy" to
+    fifteen).
+    """
+    holding = _holding_content(soup)
+    found: set[int] = set()
+    for node in soup.find_all(True):
+        if not isinstance(node, Tag) or id(node) in holding:
+            continue
+        role = str(node.get("role") or "").strip().lower()
+        if node.name == "nav" or role in _FRAME_ROLES:
+            found.add(id(node))
+        elif node.name in ("header", "footer", "aside"):
+            if (
+                node.find_parent(_SECTIONS) is None
+                and node.find_parent(role="main") is None
+            ):
+                found.add(id(node))
+        elif any(_frame_name(name) for name in _names(node) if name):
+            found.add(id(node))
+    return found
+
+
+def _frame_of(node: Tag, frames: set[int]) -> int:
+    """The outermost frame element ``node`` stands in, by id; 0 if none."""
+    outermost = 0
+    for parent in node.parents:
+        if id(parent) in frames:
+            outermost = id(parent)
+    return outermost
 
 
 def _path(anchor: Tag, labels: dict[int, tuple[int, str]]) -> str:
@@ -126,6 +257,26 @@ def _path(anchor: Tag, labels: dict[int, tuple[int, str]]) -> str:
 def _text(node: object) -> str:
     raw = node.get_text(" ", strip=True) if isinstance(node, Tag) else str(node)
     return " ".join(raw.split())
+
+
+def _table_title(table: Tag) -> str:
+    """A table's title: its ``<caption>``, or a header cell its first row holds
+    alone, spanning the columns (`LinkContext.caption`). A spanning cell further
+    down heads a part of the table, not the table."""
+    caption = table.find("caption", recursive=False)
+    if isinstance(caption, Tag) and (text := _text(caption)):
+        return text[:200]
+    for row in table.find_all("tr"):
+        if row.find_parent("table") is not table:
+            continue
+        cells = row.find_all(["th", "td"], recursive=False)
+        if not cells:
+            continue
+        span = str(cells[0].get("colspan") or "1").strip()
+        if len(cells) == 1 and cells[0].name == "th" and span.isdigit():
+            return _text(cells[0])[:200] if int(span) > 1 else ""
+        return ""
+    return ""
 
 
 def _links_in(node: object) -> bool:
@@ -194,6 +345,33 @@ def _row_text(anchor: Tag, block: Tag, rows: _Rows | None = None) -> str:
     return " ".join(" ".join(parts).split())
 
 
+def _cp1250_bytes(error: UnicodeError) -> tuple[str, int]:
+    """A byte UTF-8 cannot read, read as windows-1250 (`decode_html`)."""
+    assert isinstance(error, UnicodeDecodeError)
+    bad = error.object[error.start : error.end]
+    return bytes(bad).decode("cp1250", "replace"), error.end
+
+
+codecs.register_error("koryta-cp1250", _cp1250_bytes)
+
+_META_CHARSET = re.compile(rb"<meta[^>]+charset=[\"']?([\w.:-]+)", re.I)
+
+
+def _meta_charset(content: bytes) -> str:
+    """The charset the page's own ``<meta>`` declares, "" when none does."""
+    found = _META_CHARSET.search(content[:4096])
+    return found.group(1).decode("ascii", "replace") if found else ""
+
+
+def _bold_span(node: Tag) -> bool:
+    """A span styled bold, a heading as much as a <strong>: powiat chełmiński
+    names each councillor so over their "pobierz oświadczenie" (11-05)."""
+    if node.name != "span":
+        return False
+    style = str(node.get("style") or "").replace(" ", "").lower()
+    return "font-weight:bold" in style or "font-weight:700" in style
+
+
 def decode_html(content: bytes | str, content_type: str = "") -> str:
     """A page's text, in the charset its header or ``<meta>`` declares.
 
@@ -204,8 +382,43 @@ def decode_html(content: bytes | str, content_type: str = "") -> str:
         return content
     declared = re.search(r"charset=[\"']?([\w.:-]+)", content_type or "", re.I)
     known = [declared.group(1)] if declared else []
+    # A page that says UTF-8 and is, but for its template's few strings in
+    # windows-1250 (gmina Sanok, 11-05: 25 bytes of "Przejdź do treści" among
+    # 218 Polish letters in UTF-8): UnicodeDammit gave the whole page up for
+    # mac_latin2, and its "Oświadczenia majątkowe" read "OŇõwiadczenia". Read
+    # as written: UTF-8, any byte that is not as windows-1250.
+    said = (declared.group(1) if declared else "") or _meta_charset(content)
+    if said.lower().replace("-", "").replace("_", "") == "utf8":
+        text = content.decode("utf-8", "koryta-cp1250")
+        strays = content.decode("utf-8", "replace").count("\ufffd")
+        letters = sum(1 for c in text if ord(c) > 127) - strays
+        # A page in windows-1250 throughout has hardly a letter that reads
+        # as UTF-8.
+        if letters >= 2 * strays:
+            return text
     dammit = UnicodeDammit(content, known, is_html=True)
     return dammit.unicode_markup or content.decode("utf-8", "replace")
+
+
+def _anchors(soup: BeautifulSoup, base_url: str) -> list[tuple[Tag, str]]:
+    """Each link of the page with its absolute address, in document order."""
+    found = []
+    for anchor in soup.find_all("a", href=True):
+        if not isinstance(anchor, Tag):
+            continue
+        raw = anchor.get("href")
+        if not isinstance(raw, str):
+            continue
+        href = raw.strip()
+        if not href or href.startswith(_SKIP_PREFIXES):
+            continue
+        try:
+            absolute = urljoin(base_url, href).split("#")[0]
+        except ValueError:
+            continue
+        if absolute.startswith(("http://", "https://")):
+            found.append((anchor, absolute))
+    return found
 
 
 def extract_link_contexts(
@@ -237,35 +450,47 @@ def extract_link_contexts(
     last: Tag | None = None
     for node in soup.descendants:
         if isinstance(node, Tag):
-            if node.name in _HEADINGS:
-                last = node
+            if node.name in _HEADINGS or _bold_span(node):
+                # Not an empty one: gmina Bolesławiec's "<strong>Leszek
+                # Berny</strong><strong>&nbsp;</strong>" left his files with
+                # no heading (11-13).
+                if any(piece.strip() for piece in node.strings):
+                    last = node
             elif node.name == "a" and last is not None:
                 headings[id(node)] = last
+    frames = _frame_elements(soup)
+    anchors = [(a, url, _frame_of(a, frames)) for a, url in _anchors(soup, base_url)]
+    # A link the frame has is the frame's, wherever else the page has it:
+    # Mysłowice's template draws its menu twice, in the header's <nav> and
+    # down the content's side.
+    in_frame = {absolute for _, absolute, frame in anchors if frame}
     links: list[LinkContext] = []
     seen: set[str] = set()
     rows: _Rows = {}
     labels: dict[int, tuple[int, str]] = {}
-    for anchor in soup.find_all("a", href=True):
-        if not isinstance(anchor, Tag):
-            continue
-        raw = anchor.get("href")
-        if not isinstance(raw, str):
-            continue
-        href = raw.strip()
-        if not href or href.startswith(_SKIP_PREFIXES):
-            continue
-        try:
-            absolute = urljoin(base_url, href).split("#")[0]
-        except ValueError:
-            continue
-        if not absolute.startswith(("http://", "https://")) or absolute in seen:
+    captions: dict[int, str] = {}
+    for anchor, absolute, frame in anchors:
+        if absolute in seen:
             continue
         seen.add(absolute)
+        framed = absolute in in_frame
         text = _text(anchor) or str(anchor.get("title") or "").strip()
         block = anchor.find_parent(_BLOCKS)
         row = _row_text(anchor, block, rows)[:300] if isinstance(block, Tag) else ""
         previous = headings.get(id(anchor))
+        # A link of the frame stands under the frame's own headings: a footer
+        # is not under the last heading of the content above it (Gliwice's
+        # "Oświadczenia majątkowe", 11-13).
+        if framed and previous is not None and _frame_of(previous, frames) != frame:
+            previous = None
         heading = _text(previous)[:200] if previous is not None else ""
         path = _path(anchor, labels)
-        links.append(LinkContext(absolute, text, row, heading, path))
+        caption = ""
+        if isinstance(table := anchor.find_parent("table"), Tag):
+            if id(table) not in captions:
+                captions[id(table)] = _table_title(table)
+            caption = captions[id(table)]
+        links.append(
+            LinkContext(absolute, text, row, heading, path, framed, caption=caption)
+        )
     return title, links

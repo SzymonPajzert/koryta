@@ -5,6 +5,7 @@ import { freezeClock } from "./clock";
 import {
   CLASH_PERSON,
   twoPlacesGraph,
+  twoPlacesParties,
   twoPlacesRelations,
   twoPlacesRevisions,
 } from "./fixtures/twoPlaces";
@@ -24,10 +25,15 @@ import { expectFitsThePhone } from "./phoneWidth";
  *
  * The dialog is photographed alone, in a window tall enough for all of it: it
  * scrolls inside itself, and a shot of the part that fits a phone's screen
- * would leave out the warning that is the point of the second capture. */
+ * would leave out the warning that is the point of the second capture. The
+ * person's rows likewise: on a phone they are taller than the screen. */
 
 const DIALOG = { tag: pageTag("admin/rewizje/[id]") };
 const PERSON = { tag: pageTag("[seoType]/[slug]") };
+
+/** Tall enough for the dialog with its five blocks and the warning by the
+ * button on a phone, and for the person's rows. */
+const TALL = 1900;
 
 /** After the clicks: the pointer off the last button, whose hover tint would
  * otherwise be in the shot, and every ripple played out. */
@@ -39,7 +45,7 @@ async function settle(page: Page) {
 async function openDialog(page: Page) {
   await page.setViewportSize({
     width: page.viewportSize()!.width,
-    height: 1400,
+    height: TALL,
   });
   await freezeClock(page);
   await page.route("**/api/revisions/byNode**", (route) =>
@@ -47,7 +53,11 @@ async function openDialog(page: Page) {
   );
   await page.route("**/api/edges/byNode**", (route) =>
     route.fulfill({
-      json: { relations: twoPlacesRelations, nodePublished: false },
+      json: {
+        relations: twoPlacesRelations,
+        nodePublished: false,
+        nodeParties: twoPlacesParties,
+      },
     }),
   );
   await logIn(page, USERS.admin, `/admin/rewizje/${CLASH_PERSON}`);
@@ -57,10 +67,25 @@ async function openDialog(page: Page) {
   // The block only the fixture's clash produces, so a run that somehow drew
   // the seed fails here rather than banking a dialog with no warning in it.
   await expect(
-    dialog.getByTestId("publish-place-clash-2002-Samorząd"),
+    dialog.getByTestId("publish-place-clash-local-2002"),
   ).toBeVisible({ timeout: 30_000 });
-  await expect(dialog.getByText("tu też w 2006 i 2010")).toBeVisible();
+  await expect(
+    dialog.getByText("tu też w 2006, 2010, 2018, 2023 i 2024"),
+  ).toBeVisible();
   await expect(dialog.getByText("tu tylko w 2002")).toBeVisible();
+  // And a block for each pair an office key let through: the Sejm and the
+  // Senat, a sejmik and a city council, a city and a district council, a run
+  // with no office and a „Samorząd” one.
+  for (const election of [
+    "local-2024",
+    "parliament-2023",
+    "local-2018",
+    "local-2010",
+  ]) {
+    await expect(
+      dialog.getByTestId(`publish-place-clash-${election}`),
+    ).toBeVisible();
+  }
   await expect(
     page.locator('[class*="-enter-active"], [class*="-leave-active"]'),
   ).toHaveCount(0);
@@ -84,6 +109,10 @@ test("publikacja-dwa-miejsca", DIALOG, async ({ page }, testInfo) => {
       .locator("input"),
   ).not.toBeChecked();
   await expect(dialog.getByTestId("publish-clash-after")).toHaveCount(0);
+  // PiS comes from the namesake's run alone, which nobody ticked.
+  await expect(
+    dialog.getByTestId("publish-clash-parties-local-2002"),
+  ).toContainText("Tylko niezaznaczona kandydatura daje partię: PiS.");
 
   await settle(page);
   await expect(dialog).toHaveScreenshot("publikacja-dwa-miejsca.png");
@@ -103,6 +132,9 @@ test("publikacja-dwa-miejsca-obie", DIALOG, async ({ page }, testInfo) => {
   await expect(dialog.getByTestId("publish-clash-after")).toContainText(
     "Powiat gnieźnieński i Powiat kozienicki",
   );
+  await expect(
+    dialog.getByTestId("publish-clash-parties-local-2002"),
+  ).toHaveCount(0);
 
   await settle(page);
   await expect(dialog).toHaveScreenshot("publikacja-dwa-miejsca-obie.png");
@@ -112,6 +144,10 @@ test("publikacja-dwa-miejsca-obie", DIALOG, async ({ page }, testInfo) => {
 
 test("powiazania-dwa-miejsca", PERSON, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
+  await page.setViewportSize({
+    width: page.viewportSize()!.width,
+    height: TALL,
+  });
   // The rows carry dates, and their bars are scaled to today: frozen, so the
   // shot is the same tomorrow.
   await freezeClock(page);
@@ -129,6 +165,13 @@ test("powiazania-dwa-miejsca", PERSON, async ({ page }, testInfo) => {
   await expect(
     relations.getByTestId("place-clash-chip-visrungniezno2002"),
   ).toBeVisible();
+  // The Senat run and the namesake's Sejm run of 2023, one election.
+  await expect(
+    relations.getByTestId("place-clash-chip-visrunsenat2023"),
+  ).toBeVisible();
+  await expect(
+    relations.getByTestId("place-clash-chip-visrunsejm2023"),
+  ).toBeVisible();
   // Another election, one place: no chip.
   await expect(
     relations.getByTestId("place-clash-chip-visrungniezno2006"),
@@ -137,11 +180,8 @@ test("powiazania-dwa-miejsca", PERSON, async ({ page }, testInfo) => {
     relations.getByTestId("edge-draft-publish-visrunkozienice2002"),
   ).toBeVisible();
 
-  // The feedback button floats over the last row on a phone, and the pointer
-  // is left where the login form's button was - over a row, which it borders.
-  await page.addStyleTag({
-    content: ".feedback-fab { visibility: hidden !important; }",
-  });
+  // The pointer is left where the login form's button was - over a row, which
+  // it borders.
   await settle(page);
   await page.evaluate(() => document.fonts.ready);
   await expect(relations).toHaveScreenshot("powiazania-dwa-miejsca.png");

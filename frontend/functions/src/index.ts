@@ -110,7 +110,8 @@ const adminClient = new v1.FirestoreAdminClient();
 
 /**
  * The nightly dump the scrapers read (`snapshot.py`) and `npm run db:pull`
- * seeds the emulator from, taken at 04:00 Warsaw time.
+ * seeds the emulator from, taken at 02:00 Warsaw time (decision on 2026-11-20:
+ * the night on the VM follows it and is over before the morning).
  *
  * Once a day, not twice, because an export is billed one document read per
  * document exported - 94,103 of them as of 12 August 2026, and the reads do
@@ -125,9 +126,11 @@ const adminClient = new v1.FirestoreAdminClient();
  */
 export const scheduledFirestoreExport = onSchedule(
   {
-    // 04:00 in Warsaw, where the people who read the dump are, rather than in
-    // UTC - which would be 06:00 for half the year and 05:00 for the other.
-    schedule: "every day 04:00",
+    // 02:00 in Warsaw, where the people who read the dump are, rather than in
+    // UTC - which would be 04:00 for half the year and 03:00 for the other.
+    // 02:00 is the hour the clocks change in: on the last Sunday of March the
+    // export may come at 03:00 or not at all, in October it may run twice.
+    schedule: "every day 02:00",
     timeZone: "Europe/Warsaw",
     region: "europe-west1",
   },
@@ -164,16 +167,22 @@ export const scheduledFirestoreExport = onSchedule(
           // when the collection shipped, so `tests/pipelines/test_audit.py`
           // has been reading an empty list and passing vacuously ever since.
           "audit",
-          // BIP declarations, without the crops and without who answered
-          // what (declarationExtractImages and declarationAnswers stay out):
-          // the settled readings, the searches and what was published. The
-          // pipeline's join reads them to propose a birth date where the
-          // page has none - the site never holds the register's date for
-          // those, and the BIP side must never carry it.
+          // BIP declarations without the crops (declarationExtractImages
+          // stays out): the searches, the settled readings and what was
+          // published, which the pipeline's join reads to propose a birth
+          // date where the page has none - the site never holds the
+          // register's date for those, and the BIP side must never carry it.
+          // And every reader's answers, uid and all, on purpose (decision on
+          // 2026-10-31): the readings are checked by settling the answers
+          // again offline, and who read without an account, and who signed
+          // in later, is told by them alone.
           "declarationCandidacies",
           "declarationExtracts",
           "declarationPublications",
           "declarationAnswers",
+          // Links to declarations readers found by hand on a draft's page,
+          // which the crawl fetches: it reads them from here.
+          "declarationLinks",
         ],
       });
 
@@ -181,6 +190,36 @@ export const scheduledFirestoreExport = onSchedule(
     } catch (err) {
       logger.error(err);
       throw new Error("Export operation failed", { cause: err });
+    }
+  },
+);
+
+/**
+ * A daily copy of the owner's task list (`agent-tasks`, written by the agents
+ * as ops-writer and by the site) in its own bucket, so a bad write or a
+ * migration on the list can be undone. A few thousand documents, so the
+ * export's reads cost nothing worth counting. Restore with
+ * `gcloud firestore import <prefix> --database=agent-tasks`.
+ */
+export const scheduledOpsTasksExport = onSchedule(
+  {
+    schedule: "every day 04:20",
+    timeZone: "Europe/Warsaw",
+    region: "europe-west1",
+  },
+  async (_event: unknown) => {
+    const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT;
+    if (!projectId) throw new Error("No project ID found");
+    const timestamp = new Date().toISOString();
+    try {
+      const [response] = await adminClient.exportDocuments({
+        name: adminClient.databasePath(projectId, "agent-tasks"),
+        outputUriPrefix: `gs://koryta-pl-firestore-backups/agent-tasks/date=${timestamp}`,
+      });
+      logger.info(`Operation Name: ${response.name}`);
+    } catch (err) {
+      logger.error(err);
+      throw new Error("Export of agent-tasks failed", { cause: err });
     }
   },
 );

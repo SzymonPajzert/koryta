@@ -141,7 +141,7 @@ definePageMeta({
   maxWidth: 1100,
 });
 
-useHead({ title: "Zgłoszenia (Admin) - koryta.pl" });
+useHead({ title: "Zgłoszenia (Admin)" });
 
 const route = useRoute();
 const router = useRouter();

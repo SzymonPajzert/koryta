@@ -83,7 +83,7 @@ export const GOALS = {
   },
   "home-explorer:pick": {
     description:
-      "Reader clicked through from the home explorer into the data - today only a powiat on the map, the treemap that was the other half of this goal having been removed. `panel` is kept so a second panel that converts can be compared against it directly.",
+      "Reader clicked through from the home explorer into the data: a powiat on the map (`panel` map, `value` its teryt), or a way on from the declarations panel (`panel` oswiadczenia, `value` czytaj, postep or blog). One goal for both, so the panels compare directly.",
     props: ["panel", "value"],
   },
   // The chart panel's two controls, counted apart from `home-explorer:tab` and
@@ -93,6 +93,13 @@ export const GOALS = {
   "home-timeline:grouping": {
     description:
       "Reader re-split the home timeline. `value` is `party`, `region` or `category` - which of the three cuts anybody actually wants, and so which one should be the default.",
+    props: ["value"],
+  },
+  // The map's party chips (decision on 2026-11-18): which parties a reader
+  // asks the map about, once it opens on the leading one.
+  "home-map:party": {
+    description:
+      "Reader switched what the home map is coloured by. `value` is the party picked, or `all` for the leading party in each powiat. Which parties readers look up, and whether anybody leaves the default.",
     props: ["value"],
   },
   "home-timeline:range": {
@@ -198,7 +205,7 @@ export const GOALS = {
   },
   "cta:shown": {
     description:
-      "The help call to action was scrolled into view. The denominator every cta:* goal has been missing - the section sits well below the fold on „/”, so the page's visitor count is not one.",
+      "A call to action was scrolled into view. `surface` is `home` (the help section on „/”) or `osoba` (the ask above a person's history to read a few declaration scans: signed-out readers in the `prosba` arm of the `osoba-skany` split). The denominator every cta:* goal has been missing - neither sits where every visitor sees it, so a page's visitor count is not one.",
     props: ["surface"],
     // Fires from an IntersectionObserver, not from a click. Interactive, it
     // would un-bounce every reader who scrolls past it.

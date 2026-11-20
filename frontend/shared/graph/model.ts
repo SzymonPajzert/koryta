@@ -1,4 +1,5 @@
 import type { ElectionPosition } from "../model";
+import type { PublicDeclaredPost } from "../declaredPosts";
 
 export interface Node {
   name: string;
@@ -88,4 +89,16 @@ export interface Edge {
   by_election?: boolean;
   start_date?: string;
   end_date?: string;
+  /** See `Edge.founder` in shared/model.ts. */
+  founder?: boolean;
+  /** PKW's statements on a candidacy; see `Edge.party_member` in
+   * shared/model.ts. */
+  party_member?: string;
+  member_parties?: string[];
+  supported_by?: string;
+  backing_parties?: string[];
+  /** See `Edge.as_of` and `Edge.declared` in shared/model.ts; each entry cut
+   * to what a page reads (`publicDeclared`). */
+  as_of?: string;
+  declared?: Record<string, PublicDeclaredPost>;
 }

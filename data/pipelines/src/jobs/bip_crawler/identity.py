@@ -26,6 +26,26 @@ SERVERS = {
     # machine with another User-Agent gets the pages.
     "91.224.198.130": "E-LINE SYSTEMDOBIP.PL",
     "176.119.35.31": "E-LINE SYSTEMDOBIP.PL",
+    # SkyCMS's server (11-13): bip.gminaboleslawiec.pl and the websites and
+    # BIPs of Głuchołazy, Walce, Ujazd, Pakosławice and Tułowice (39
+    # candidacies) answer the crawler's name 403, robots.txt too, and a browser
+    # 200; the robots.txt a browser sees names 157 bots, not us. 65 of the
+    # hosts below sit on this address too, listed one by one after the same
+    # refusal.
+    "176.119.62.218": "SkyCMS",
+    # The offices' BIPs on bip.org.pl (ug<name>.bip.org.pl, 22 units, 11-13):
+    # the crawler's name gets an HTTP/2 INTERNAL_ERROR or an empty reply, a
+    # browser 200, and robots.txt answers a browser with an HTML page, so there
+    # is none. Somianka walked as a browser found 3 of 3.
+    "195.117.178.13": "bip.org.pl",
+    # trol.pl's two servers (srv38, srv79; 11-13, again 11-18): a User-Agent
+    # with "crawler" in it gets 429 on about half its requests at any pace
+    # (one a host every 20 s too), and its 200s come 3-4 s late; the browser
+    # agent gets every page in under a second. 117 units' starts sit on .38
+    # (BIPs), 144 on .79 (websites mostly). As a browser Czarnia found 2 of 2,
+    # Olszanka 9 of 9, Piła 10 of 13.
+    "92.43.119.38": "trol.pl",
+    "92.43.119.79": "trol.pl",
 }
 
 #: Hosts, without www.
@@ -58,6 +78,61 @@ HOSTS = {
     "bip.wilkow.pl": "Wilków, 8 candidacies",
     "bip.gogolin.pl": "Gogolin, 8 candidacies",
     "bip.ug.wislica.pl": "Wiślica, 8 candidacies",
+    # The same, checked on 11-05 for every unit still unreachable: each start
+    # answered the crawler with a refusal or nothing and a browser 200; their
+    # robots.txt names other bots, not us. Gdynia and the two powiats below
+    # answer the crawler 403 on their BIPs too.
+    "powiat-mielecki.pl": "powiat mielecki, 39 candidacies",
+    "bip.um.gdynia.pl": "Gdynia, 34 candidacies",
+    "umgkaluszyn.bip.org.pl": "Kałuszyn, 24 candidacies",
+    "sandomierz.eu": "Sandomierz, 20 candidacies",
+    "blonie.pl": "Błonie, 17 candidacies",
+    "powiatostrolecki.pl": "powiat ostrołęcki, 14 candidacies",
+    "gminagubin.pl": "Gubin, 12 candidacies",
+    "umplonsk.bip.org.pl": "Płońsk, 10 candidacies",
+    "plonsk.pl": "Płońsk, 10 candidacies",
+    "opatow.gmina.pl": "Opatów, 10 candidacies",
+    "zaluski.pl": "Załuski, 9 candidacies",
+    "stronie.pl": "Stronie Śląskie, 8 candidacies",
+    "glubczyce.pl": "Głubczyce, 8 candidacies",
+    "umgostynin.bip.org.pl": "Gostynin, 6 candidacies",
+    "krzepice.pl": "Krzepice, 6 candidacies",
+    "olesno.pl": "Olesno, 5 candidacies",
+    "zawonia.pl": "Zawonia, 4 candidacies",
+    "gmina.zgorzelec.pl": "Zgorzelec, 4 candidacies",
+    "uglack.bip.org.pl": "Łąck, 4 candidacies",
+    "korfantow.pl": "Korfantów, 4 candidacies",
+    "lambinowice.pl": "Łambinowice, 4 candidacies",
+    "gminaorly.pl": "Orły, 4 candidacies",
+    "bialosliwie.pl": "Białośliwie, 4 candidacies",
+    "miedzylesie.pl": "Międzylesie, 3 candidacies",
+    "chrzastowice.pl": "Chrząstowice, 3 candidacies",
+    "gminarutki.pl": "Rutki, 3 candidacies",
+    "piaski-wlkp.pl": "Piaski, 3 candidacies",
+    "gminazary.pl": "Żary, 2 candidacies",
+    "ugslupno.bip.org.pl": "Słupno, 2 candidacies",
+    "zebowice.biuletyn.info.pl": "Zębowice, 2 candidacies",
+    "gminaprzystajn.pl": "Przystajń, 2 candidacies",
+    "sosno.pl": "Sośno, 1 candidacy",
+    "gminajozefow.pl": "Józefów nad Wisłą, 1 candidacy",
+    "starablotnica.bip.org.pl": "Stara Błotnica, 1 candidacy",
+    "maldyty.pl": "Małdyty, 1 candidacy",
+    "leka-opatowska.pl": "Łęka Opatowska, 1 candidacy",
+    "bip.powiat.klodzko.pl": "powiat kłodzki, 50 candidacies",
+    "bip.powiatstrzelecki.pl": "powiat strzelecki, 35 candidacies",
+    # The BIPs those websites link to, and the two powiats' websites: the same
+    # refusal of the crawler's name, a browser 200 (11-05, after their run).
+    "bip.powiat-mielecki.pl": "powiat mielecki, 39 candidacies",
+    "powiat.klodzko.pl": "powiat kłodzki, 50 candidacies",
+    "powiatstrzelecki.pl": "powiat strzelecki, 35 candidacies",
+    "bip.powiatostrolecki.pl": "powiat ostrołęcki, 14 candidacies",
+    "ugzaluski.bip.org.pl": "Załuski, 9 candidacies",
+    "bip.krzepice.pl": "Krzepice, 6 candidacies",
+    "bip.olesno.pl": "Olesno, 5 candidacies",
+    "bip.zawonia.pl": "Zawonia, 4 candidacies",
+    "bip.korfantow.pl": "Korfantów, 4 candidacies",
+    # Resets the crawler's connection (curl 92), a browser 200 (11-05).
+    "bip.powiatpultuski.pl": "powiat pułtuski, 19 candidacies",
     "bip.glogowek.pl": "Głogówek, 7 candidacies",
     "bip.lask.pl": "Łask, 6 candidacies",
     "bip.gminadabrowa.pl": "Dąbrowa, 6 candidacies",
@@ -83,6 +158,24 @@ HOSTS = {
     "bip.dobrodzien.pl": "Dobrodzień, 1 candidacies",
     "bip.swierczow.pl": "Świerczów, 1 candidacies",
     "bip.dobrzenwielki.pl": "Dobrzeń Wielki, 1 candidacies",
+    # Łódź's firewall resets the crawler's connection (curl 56) on every address
+    # with a cHash or an [action] parameter: every person page of its
+    # declarations search, every list page after the first. A browser gets
+    # 200 and is never challenged; robots.txt 404 (11-13).
+    "bip.uml.lodz.pl": "Łódź, 75 candidacies",
+    # Gdynia's BIP reads its declarations from a data API (/contents/posts/)
+    # whose files are on legacy.um.gdynia.pl: both answer the crawler 403 and
+    # a browser 200 (11-13).
+    "api.um.gdynia.pl": "Gdynia, 34 candidacies",
+    "legacy.um.gdynia.pl": "Gdynia, 34 candidacies",
+    # The crawler's name gets its connection reset (curl 56), robots.txt too,
+    # a browser 200 (11-13, again 11-18). As a browser Dębica found 19 of 19,
+    # Pilzno 7 of 7.
+    "bip.ugdebica.pl": "Dębica, 19 candidacies",
+    "pilzno.un.pl": "Pilzno, 7 candidacies",
+    # The crawler's name gets 502 Proxy Error, robots.txt too, a browser 200
+    # (11-13, again 11-18); as a browser 8 of 8 found.
+    "bip.sokolow-mlp.pl": "Sokołów Małopolski, 8 candidacies",
 }
 
 

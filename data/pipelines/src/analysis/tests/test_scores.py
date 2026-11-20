@@ -5,19 +5,23 @@ import datetime
 import pandas as pd
 import pytest
 
+from analysis.extract import SUPERVISORY_ROLE
 from analysis.scores import (
     PEOPLE_SCORE_MODELS,
     CompanyScores,
     PeopleScoresCapture,
     PeopleScoresCoappointment,
     PeopleScoresFacts,
+    PeopleScoresLocality,
     PeopleScoresPageRank,
     PeopleScoresSuccession,
     PeopleScoresTurnover,
 )
+from analysis.scores import base as scores_base
 from analysis.scores.base import (
     FULL_RANGE,
     QUEUE_THRESHOLD,
+    RADA_SPOLECZNA_ONLY_CEILING,
     Candidacy,
     CompanyFacts,
     Employment,
@@ -25,6 +29,7 @@ from analysis.scores.base import (
     Population,
     ScoreRange,
     banded_scores,
+    demote_rada_spoleczna_only,
     person_key,
     rejestr_io_id,
 )
@@ -34,8 +39,11 @@ from analysis.scores.facts import (
     MAX_EXTRA_POINTS,
     article_points,
 )
+from analysis.scores.locality import UNDATED, stood_where_seated
 from analysis.scores.succession import as_date, successions
 from analysis.scores.turnover import same_region, year_of
+from entities.company_bodies import RADA_SPOLECZNA
+from entities.company_categories import SPZOZ
 from entities.person import is_pipeline_uid
 from scrapers.stores import Pipeline
 
@@ -161,6 +169,10 @@ class TestScoreRanges:
         )
         assert PeopleScoresPageRank.score_range == ScoreRange(ceiling=QUEUE_THRESHOLD)
         assert PeopleScoresCoappointment.score_range == ScoreRange(ceiling=2)
+        # Measured on 2026-11-20; the numbers are on the model.
+        assert PeopleScoresLocality.score_range == ScoreRange(
+            floor=QUEUE_THRESHOLD + 1, ceiling=5
+        )
 
     def test_the_fact_model_is_floored_but_unmeasured(self):
         # Floored so the people it names are actually read - the signal cannot
@@ -273,6 +285,122 @@ class TestPopulation:
         )
 
         assert result.shortlist == []
+
+
+class TestRadaSpolecznaCeiling:
+    """People whose only public posts are seats on a rada społeczna, which is
+    unpaid, stay under the queue (decision on 2026-11-11)."""
+
+    COMPANIES = {
+        "hospital": CompanyFacts(
+            name="Szpital SPZOZ",
+            teryt="1465",
+            is_public=True,
+            supervisory_body=RADA_SPOLECZNA,
+        ),
+        "spolka": CompanyFacts(
+            name="Wodociągi sp. z o.o.", teryt="1465", is_public=True
+        ),
+        "club": CompanyFacts(name="Klub sportowy", teryt="1465", is_public=False),
+    }
+
+    @staticmethod
+    def post(krs, role=SUPERVISORY_ROLE, end=None):
+        return Employment(krs=krs, role=role, start="2024-05-01", end=end)
+
+    def held(self, posts, scores):
+        pop = population(posts, seeds={}, companies=self.COMPANIES)
+        return demote_rada_spoleczna_only(scores, pop)
+
+    def test_the_ceiling_is_under_the_queue(self):
+        assert RADA_SPOLECZNA_ONLY_CEILING is not None
+        assert RADA_SPOLECZNA_ONLY_CEILING < QUEUE_THRESHOLD
+
+    def test_a_seat_on_a_rada_spoleczna_alone_is_held_under_the_queue(self):
+        posts = {"Anna": [self.post("hospital")], "Beata": [self.post("hospital")]}
+
+        assert self.held(posts, {"Anna": 5, "Beata": 1}) == {
+            "Anna": RADA_SPOLECZNA_ONLY_CEILING,
+            "Beata": 1,
+        }
+
+    def test_the_hospitals_director_is_not_held(self):
+        posts = {"Anna": [self.post("hospital", role="Zarząd")]}
+
+        assert self.held(posts, {"Anna": 5}) == {"Anna": 5}
+
+    def test_a_public_post_beside_the_seat_carries_the_person_even_ended(self):
+        posts = {"Anna": [self.post("hospital"), self.post("spolka", end="2019-01-01")]}
+
+        assert self.held(posts, {"Anna": 5}) == {"Anna": 5}
+
+    def test_a_post_nobody_showed_to_be_public_does_not(self):
+        posts = {"Anna": [self.post("hospital"), self.post("club", role="Zarząd")]}
+
+        assert self.held(posts, {"Anna": 5}) == {"Anna": RADA_SPOLECZNA_ONLY_CEILING}
+
+    def test_a_spolkas_supervisory_board_is_not_a_rada_spoleczna(self):
+        posts = {"Anna": [self.post("spolka")], "Beata": [self.post("unknown")]}
+
+        assert self.held(posts, {"Anna": 5, "Beata": 4}) == {"Anna": 5, "Beata": 4}
+
+    def test_the_rule_turns_off(self, monkeypatch):
+        monkeypatch.setattr(scores_base, "RADA_SPOLECZNA_ONLY_CEILING", None)
+        posts = {"Anna": [self.post("hospital")]}
+
+        assert self.held(posts, {"Anna": 5}) == {"Anna": 5}
+
+    def test_every_model_writes_the_held_score(self):
+        scorer = model(PeopleScoresTurnover)
+        pop = population(
+            {"Anna": [self.post("hospital")], "Beata": [self.post("spolka")]},
+            seeds={},
+            companies=self.COMPANIES,
+        )
+        scorer.population = lambda ctx: pop
+        scorer.raw_scores = lambda ctx, population: {"Anna": 4.0, "Beata": 1.0}
+
+        output = scorer.process(None)
+
+        # Turnover is floored at the queue: Anna's 5 is held under it.
+        assert dict(zip(output["name"], output["score"])) == {
+            "Anna": RADA_SPOLECZNA_ONLY_CEILING,
+            "Beata": QUEUE_THRESHOLD,
+        }
+
+    def test_the_legal_form_is_read_off_the_register(self):
+        scorer = model(PeopleScoresCapture)
+        scorer.people_payloads.read_or_process = lambda ctx: pd.DataFrame.from_records(
+            [
+                {
+                    "name": "Anna",
+                    "companies": [{"krs": "0000000001", "role": SUPERVISORY_ROLE}],
+                    "elections": [],
+                }
+            ]
+        )
+        scorer.people_koryta.read_or_process = lambda ctx: pd.DataFrame.from_records(
+            [{"id": "n1", "full_name": "Anna", "is_public": False, "parties": []}]
+        )
+        scorer.people_created.read_or_process = lambda ctx: pd.DataFrame()
+        scorer.people_votes.read_or_process = lambda ctx: pd.DataFrame()
+        scorer.companies_krs.read_or_process = lambda ctx: pd.DataFrame.from_records(
+            [
+                {
+                    "krs": "0000000001",
+                    "name": "Szpital",
+                    "is_public": True,
+                    "form": SPZOZ,
+                },
+                {"krs": "0000000002", "name": "Klub", "is_public": None, "form": None},
+            ]
+        )
+
+        result = scorer.population(None)
+
+        assert result.companies["0000000001"].supervisory_body == RADA_SPOLECZNA
+        assert result.companies["0000000002"].supervisory_body == ""
+        assert result.holds_only_rada_spoleczna_seats("Anna")
 
 
 class TestPagesCreatedSinceTheExport:
@@ -753,6 +881,81 @@ class TestTurnover:
         pop = self.build({"Anna": [("1", "2019-03-01")]}, {})
 
         assert model(PeopleScoresTurnover).raw_scores(None, pop) == {}
+
+
+class TestLocality:
+    COMPANIES = {
+        "here": CompanyFacts(name="Wodociągi Kraków", teryt="1261", is_public=True),
+        "gmina": CompanyFacts(name="ZGK Wieliczka", teryt="1219064", is_public=True),
+        "away": CompanyFacts(name="MPK Gdańsk", teryt="2261", is_public=True),
+        "nowhere": CompanyFacts(name="Bez adresu", teryt=None, is_public=True),
+    }
+
+    @staticmethod
+    def stood(teryt, year="2018"):
+        return Candidacy(year=year, teryt=teryt, party=None, committee=None)
+
+    def scores(self, employments, candidacies):
+        pop = population(employments, candidacies=candidacies, companies=self.COMPANIES)
+        return model(PeopleScoresLocality).raw_scores(None, pop)
+
+    def test_a_place_is_matched_down_to_the_powiat(self):
+        assert stood_where_seated("1261", "1261")
+        # A Sejm or sejmik candidacy names only the voivodeship.
+        assert stood_where_seated("12", "1261")
+        # A company seated in a gmina is in that gmina's powiat...
+        assert stood_where_seated("1219", "1219064")
+        # ...and two gminas of one powiat are the same place at that depth.
+        assert stood_where_seated("1219011", "1219064")
+        assert not stood_where_seated("1261", "2261")
+        assert not stood_where_seated(None, "1261")
+
+    def test_a_post_where_the_person_stood_counts_whenever_it_began(self):
+        # Turnover only looks at the election year and the one after.
+        scores = self.scores(
+            {"Anna": [("here", "2023-06-01")]}, {"Anna": [self.stood("1261")]}
+        )
+
+        assert scores == {"Anna": 2023.0}
+
+    def test_the_newest_matching_post_is_what_ranks(self):
+        scores = self.scores(
+            {
+                "Anna": [("here", "2025-02-01"), ("gmina", "2012-01-01")],
+                "Beata": [("here", "2012-01-01")],
+            },
+            {
+                "Anna": [self.stood("1261"), self.stood("1219")],
+                "Beata": [self.stood("12")],
+            },
+        )
+
+        assert scores == {"Anna": 2025.0, "Beata": 2012.0}
+
+    def test_an_undated_post_still_counts_below_any_dated_one(self):
+        scores = self.scores({"Anna": [("here", None)]}, {"Anna": [self.stood("1261")]})
+
+        assert scores == {"Anna": UNDATED}
+
+    def test_a_post_somewhere_else_or_unplaced_says_nothing(self):
+        scores = self.scores(
+            {"Anna": [("away", "2023-06-01"), ("nowhere", "2023-06-01")]},
+            {"Anna": [self.stood("1261")]},
+        )
+
+        assert scores == {}
+
+    def test_somebody_who_never_stood_is_not_this_models_business(self):
+        assert self.scores({"Anna": [("here", "2023-06-01")]}, {}) == {}
+
+    def test_whoever_it_names_lands_above_the_queue_threshold(self):
+        bands = banded_scores(
+            {"Anna": 2025.0, "Beata": 2012.0, "Celina": UNDATED},
+            PeopleScoresLocality.score_range,
+        )
+
+        assert min(bands.values()) > QUEUE_THRESHOLD
+        assert bands["Anna"] == 5
 
 
 class TestCapture:

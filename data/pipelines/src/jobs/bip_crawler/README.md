@@ -116,6 +116,23 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   robots.txt hides by the app's own addresses (`<office>,a,<id>,artykul.html`,
   `e,pobierz,get.html?id=<id>`) are left out, and an API robots.txt closes is
   not read around by rendering.
+- Gdynia's BIP, its own React app "um-bip" (bip.um.gdynia.pl), is read the same
+  way through the API its `/js/config.js` names (`umbip.py`): the main page as
+  its menu shows it, two levels deep; a category's subcategories and posts; a
+  declarations post as a table, a row a declarant (name, position, files). A
+  host counts as um-bip when its first page is the app's shell and config.js
+  names the API. Every row names its declarant, so a file there that names no
+  seeker is somebody else's, never a declaration that names nobody.
+- Warsaw's declarations (bip.warszawa.pl: the city's, 18 district councils',
+  the boards' and the staff's, 22,125 behind one search page whose pages past
+  the first a script draws) are asked for by GET, each seeker's surname within
+  the district or kind of filer the page's address keeps to (`liferay.py`);
+  each district's row in `unit_starts.csv` gives that address.
+- TYPO3's declarations app (EdgeFinancialDisclosure: Łódź files ~2,600 people
+  there, 20 a page in alphabetical order) is searched for each seeker: on the
+  app's list page the walk fills its GET form with the longest part of the
+  seeker's surname as the list spells it (`edge.py`) and opens the people the
+  answer lists.
 - Other pages a script draws (next to no links and a `<script>`) are rendered
   in headless Chromium, `--render-workers` (2) at once, pictures and styles
   skipped, one turn of the host's rate for every request a render makes there
@@ -139,7 +156,10 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   through a link it took for a page is not fetched twice.
 - A declarations page's files that name nobody (one file for the whole council)
   go to the people nothing named, at most three, when they say "majątkowe" and
-  are not blank forms.
+  are not blank forms, nor on a page whose "Imię"/"Nazwisko" fields name
+  somebody nobody seeks (one filer's page: Warsaw's "Pobierz" files), nor a list
+  of the people obliged to file ("Lista osób zobowiązanych do składania
+  oświadczeń majątkowych").
 - Every candidacy ends the run `found` (a file a link names them in came down),
   `unconfirmed` (only files that name nobody came down: the OCR step has to
   find the person in them), or `not_found` with a reason: `no_seed`,
@@ -168,10 +188,67 @@ koryta_scrape_bip crawl --people-of-interest              # everyone still pendi
   `--max-per-host`, 1, on one start host: they share its rate; and at most
   `--max-per-server`, 2, on one server, the address the start hosts resolve to:
   a hosting platform serves dozens of BIPs under their own names), `--rate` the
-  seconds between hits on one host, from the first one (no burst).
+  seconds between hits on one host, from the first one (no burst). A server in
+  `pace.py`'s table is asked once in its own interval, whichever of its hosts a
+  request is for: ZETO Lublin's e-zeto (185.182.96.228) answers 403 to a client
+  asking about once a second, and gets 15 s.
+- ZETO Lublin's e-zeto BIPs (`ezeto.py`) offer a list's further pages as form
+  buttons, read as links to them, and spell one page many ways, which
+  `normalize_url` gives one address: the query encoded whole, as the server
+  answers a pager's page only. A list that names a document in its heading
+  alone, its link saying "przejdź do dokumentu", has that link read under the
+  document's name when the name says it is a seeker's declaration. On its
+  pages a seeker's full name adds 12 to a link's score, elsewhere 3: its left
+  menu's declarations tree outscored a councillor's own page.
 - One crawler per `--out`: the startup repair re-wraps every `.part` bundle
   there, so a second run on the same directory refuses to start
   (`.crawl.lock`).
+
+### `walk`, `page` and `files`: a change tried before a chunk takes it
+
+`walk` searches a few units as a chunk would, with the code of the checkout it
+runs from, and keeps nothing (`walk.py`): no Postgres, no shared cache, its
+files in a scratch folder unless `--out` keeps them. `page` reads one page as
+a unit's walk would, and `files` opens what a walk kept (`inspect.py`). All
+three ask the hosts as a chunk does: identity, robots.txt and its exceptions,
+the rate.
+
+```bash
+koryta_scrape_bip walk 021203 --list people.jsonl --max-unit-minutes 6
+koryta_scrape_bip walk 021203 --start https://bip.lwowekslaski.pl/   # a unit_starts.csv row
+koryta_scrape_bip walk 021203 --trace           # a line a page read, and a line a refusal
+koryta_scrape_bip walk 160302 --as-browser bip.x.pl --pass-robots bip.y.pl
+koryta_scrape_bip walk 021203 --out /tmp/w --json /tmp/w/report.json
+koryta_scrape_bip files /tmp/w/report.json      # whose declaration each credited file is
+koryta_scrape_bip page https://bip.x.pl/oswiadczenia --unit 021203 --led --grep kowalsk
+```
+
+- `--trace` prints each page read (its number, depth, whether a link saying
+  declarations led there, the candidates it gave, the declaration pages so
+  far) and each answer that kept something from the walk: robots.txt, a host
+  that did not answer for it, a refusal, "not now" (429, 503: the host
+  paused), any other error status.
+- `--start`/`--declarations`, `--as-browser HOST|IP`, `--pass-robots HOST` and
+  `--pass-robots-files HOST` try a row of `unit_starts.csv`, an entry of
+  `identity.py` (a host, or every host on a server address) and one of
+  `robots_exceptions.py` (`SITES`, `FILES`) for that walk alone, before it goes
+  in the file. They are for the entries Szymon's rules allow (11-01: a BIP that
+  keeps public declarations from the crawler's own User-Agent; 11-02: robots.txt
+  that forbids the files open pages link, or admits search engines alone), never
+  to get past a bot check.
+- `files` reads the report of a walk run with `--out` and `--json`: for each
+  credited file that came down, its kind and pages, the declarant its text
+  layer names on the form's first lines (as `bip_declarations` reads it) and
+  whether that is the seeker, and for a scan a picture of page 1's top, beside
+  a copy of the file in `OUT/files`. A credited file is only good when it is
+  the seeker's asset declaration: a walk of Lwówek credited "rodo.pdf", a
+  data-protection notice, to three councillors (11-13).
+- `page URL --unit U` prints the page's title, each link with its row, heading
+  and menu path, what the walk does with it (follows it at a score, a file, or
+  leaves it), whom each file credits, and what the download would take for
+  each of the unit's candidacies, or why nothing: "why did this page not
+  credit X" in one call. `--led` reads it as a page a declarations link led
+  to, `--render` draws it in Chromium where the walk would.
 
 ### `found`
 
@@ -188,10 +265,66 @@ koryta_scrape_bip found --dry-run   # count; write nothing
 koryta_scrape_bip found
 ```
 
+### `state` and `problems`
+
+The people mode's state, for whoever has no access to its Postgres on predator:
+`state` writes a part to the shared cache,
+`jobs/bip_crawler/state/date=<UTC day>/<UTC stamp>.jsonl.gz`, with a line a
+unit (its walk, its candidacies' outcomes, how its start addresses answered)
+and a line a candidacy (key, unit, outcome; no name or birth date). Before
+writing it asks the starts of each unit nobody was found in whose walk did not
+get in (or read two pages at most), once as the crawler and once as a browser,
+and keeps the answers in `bip_unit_probes`. Each such unit gets a kind:
+`no_answer` (neither agent got an answer from predator), `refused` (both 403 or
+5xx), `app_shell` (the page is drawn by a script), `browser_only` (a browser
+got in: a candidate for `identity.HOSTS`), `robots`, `no_address` or `open`.
+
+`problems` lists the stuck units from the newest part, by kind; it needs only
+read access to the shared cache.
+
+```bash
+koryta_scrape_bip state                  # probe, then write (run_chunk.sh does)
+koryta_scrape_bip state --no-probe       # write with the probes on record
+koryta_scrape_bip state --dry-run        # probe and count; write nothing
+koryta_scrape_bip problems               # no_answer, refused, app_shell, browser_only
+koryta_scrape_bip problems --kind no_answer --csv blocked.csv
+koryta_scrape_bip problems --part state.jsonl.gz   # a part on disk
+```
+
+### `reset`
+
+Make candidacies pending again, so the next chunk searches them: when a fix
+takes back what the crawl credited them (11-13: a menu's files stored as a
+councillor's declarations). It deletes their `bip_poi` and `bip_poi_docs` rows
+in one transaction, nothing else (the files stay in `bip_docs` and their
+bundles), each row first written to `--backup`, a new JSON file flushed to disk
+before anything goes. It refuses while a crawl holds the crawl's folder
+(`--out`, `$BIP_CRAWL_OUT`; its `.crawl.lock`), and holds it until done: run it
+between chunks.
+
+```bash
+koryta_scrape_bip reset @unfound-keys.txt --dry-run     # count; delete nothing
+koryta_scrape_bip reset @unfound-keys.txt --backup reset-2026-11-13.json
+```
+
+### `sent`
+
+What the declarations upload sent the site from the files stored for some
+candidacies: every extract of them in `bip_decl_sent` (a crop of a page, or a
+file that gave none), with the name read on the crop. Run it before a `reset`,
+while `bip_poi_docs` still holds the files: the extracts of files a fix takes
+back are for Szymon to withdraw. It reads the crawl's Postgres and writes
+nothing there.
+
+```bash
+koryta_scrape_bip sent @unfound-keys.txt                       # count and list
+koryta_scrape_bip sent @unfound-keys.txt --csv withdraw-2026-11-13.csv
+```
+
 ### On predator: `run_chunk.sh`
 
 The people mode runs in chunks from `run_chunk.sh` beside this file: a crawl
-of `--max-minutes` (95), the found list after it, and a stop when / falls under
+of `--max-minutes` (95), the found list and the state after it, and a stop when / falls under
 5 GB free. It brings the crawl's Postgres (`BIP_POSTGRES_ENV`), its directory
 (`BIP_CRAWL_OUT`, `~/.cache/koryta/bip-people-crawl`: bundles, registry, CA
 bundle, `runs/` logs) and `--known-urls` (`BIP_KNOWN_URLS`), and runs the code

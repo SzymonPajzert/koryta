@@ -121,7 +121,7 @@
 
         <!-- What happened to the proposals comes before the switches that
              control the mail about them. -->
-        <ProfileMyRevisions />
+        <ProfileMyInteractions />
 
         <v-card class="mb-4" rounded="lg">
           <v-card-title>Powiadomienia o Twoich zmianach</v-card-title>
@@ -289,7 +289,7 @@ definePageMeta({
 });
 
 useHead({
-  title: "Twój profil - koryta.pl",
+  title: "Twój profil",
 });
 
 const { user, userConfig, logout, isAdmin } = useAuthState();

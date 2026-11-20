@@ -6,7 +6,7 @@ import ProposeEditNode from "../../../app/components/dialog/ProposeEditNode.vue"
 
 /** A company's „Branże”: the sectors a person may correct, and not its owner,
  * „Skarb Państwa”, which follows Prokuratoria's list whatever the form says -
- * see `withOwnersFrom` in shared/companyCategories.ts. */
+ * see `withRegisterFactsFrom` in shared/companyCategories.ts. */
 
 const { mockAuthRequest } = vi.hoisted(() => ({ mockAuthRequest: vi.fn() }));
 

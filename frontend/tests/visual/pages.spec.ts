@@ -1,6 +1,8 @@
 import { test, expect } from "./test";
 import type { Page } from "@playwright/test";
+import { WITH_CHROME } from "./chrome";
 import { freezeClock } from "./clock";
+import { openInApp } from "./openInApp";
 import { expectFitsThePhone } from "./phoneWidth";
 import { pageTag } from "./pageTags";
 
@@ -13,7 +15,9 @@ import { pageTag } from "./pageTags";
  * `act` is for state a visitor reaches by clicking rather than by url - it
  * runs once the page has settled and before the capture. `inApp` opens the
  * path the way a link inside the site would, under the frozen clock, for a
- * page that prints dates counted from today. */
+ * page that prints dates counted from today. `chrome` keeps the app bar, the
+ * footer and the „Zgłoś” button in the shot, which every other test runs
+ * without (see ./chrome.ts). */
 const pages: {
   name: string;
   path: string;
@@ -22,8 +26,11 @@ const pages: {
   viewports?: string[];
   act?: (page: Page) => Promise<void>;
   inApp?: boolean;
+  chrome?: boolean;
 }[] = [
-  { name: "home", path: "/", file: "index" },
+  // Kept with its chrome, as the long page. Its bar has no search box: the
+  // page opens with its own.
+  { name: "home", path: "/", file: "index", chrome: true },
   { name: "login", path: "/login", file: "login" },
   { name: "zrodla", path: "/zrodla", file: "zrodla" },
   { name: "o-nas", path: "/o-nas", file: "o-nas" },
@@ -56,6 +63,26 @@ const pages: {
       await expect(page.locator(".apexcharts-svg")).toHaveCount(3);
     },
   },
+  // The first real post: its ::stats and ::chart as a reader gets them.
+  {
+    name: "blog-sprawdzamy-samorzadowcow",
+    path: "/blog/sprawdzamy-samorzadowcow",
+    file: "blog/[slug]",
+    act: async (page) => {
+      await expect(page.locator(".apexcharts-svg")).toHaveCount(1);
+    },
+  },
+  // How far the declarations got, in people, from the night's count the seed
+  // writes (scripts/declarationPeople.ts). The published-a-day columns draw
+  // in the browser after the document arrives.
+  {
+    name: "oswiadczenia-postep",
+    path: "/oswiadczenia/postep",
+    file: "oswiadczenia/postep",
+    act: async (page) => {
+      await expect(page.locator(".apexcharts-svg")).toHaveCount(1);
+    },
+  },
   // Not a page: the path is deliberately unroutable, so this captures
   // app/error.vue's 404 branch. Keep it single-segment - two segments would
   // match pages/[seoType]/[slug].vue and render an entity instead.
@@ -68,8 +95,9 @@ const pages: {
     file: "entity/[...path]",
   },
   // For the owners of the sites the article crawler reads: its user agent is
-  // `KorytaCrawler/0.1 (+http://koryta.pl/crawler)`.
-  { name: "crawler", path: "/crawler", file: "crawler" },
+  // `KorytaCrawler/0.1 (+http://koryta.pl/crawler)`. Kept with its chrome, as
+  // the short page: on a desktop the footer sits on the window's bottom edge.
+  { name: "crawler", path: "/crawler", file: "crawler", chrome: true },
   {
     name: "statystyki",
     path: "/eksploruj/statystyki",
@@ -158,45 +186,32 @@ const pages: {
   },
 ];
 
-type MountPoint = Element & {
-  __vue_app__?: {
-    config: {
-      globalProperties: {
-        $router: { push: (to: string) => Promise<unknown> };
-      };
-    };
-  };
-};
-
-/** Open `path` the way a link inside the site would: land on /o-nas, then hand
- * the path to the router. The page is then drawn in the browser, under the
- * clock ./clock.ts stops, rather than arriving drawn by the server, whose
- * clock nothing here can stop. */
-async function openInApp(page: Page, path: string) {
-  await freezeClock(page);
-  await page.goto("/o-nas");
-  // Vue sets `__vue_app__` on the mount point when it mounts - hydration
-  // included - so from then on the router takes a push.
-  await page.waitForFunction(
-    () =>
-      !!(document.querySelector("#__nuxt") as MountPoint | null)?.__vue_app__,
-  );
-  await page.evaluate(async (to) => {
-    const root = document.querySelector("#__nuxt") as MountPoint;
-    await root.__vue_app__!.config.globalProperties.$router.push(to);
-  }, path);
-  await page.waitForURL(`**${path}`);
-}
-
-for (const { name, path, file, settled, viewports, act, inApp } of pages) {
-  const tag = file ? [pageTag(file)] : [];
+for (const {
+  name,
+  path,
+  file,
+  settled,
+  viewports,
+  act,
+  inApp,
+  chrome,
+} of pages) {
+  const tag = [
+    ...(file ? [pageTag(file)] : []),
+    ...(chrome ? [WITH_CHROME] : []),
+  ];
   test(name, { tag }, async ({ page }, testInfo) => {
     test.skip(
       !!viewports && !viewports.includes(testInfo.project.name),
       `captured only in ${viewports?.join(", ")}`,
     );
-    if (inApp) await openInApp(page, path);
-    else await page.goto(path);
+    // In the app, the page is drawn in the browser, under the clock ./clock.ts
+    // stops, rather than arriving drawn by the server, whose clock nothing
+    // here can stop.
+    if (inApp) {
+      await freezeClock(page);
+      await openInApp(page, path);
+    } else await page.goto(path);
     await page.locator(".v-main").waitFor();
     for (const text of settled ?? []) {
       await page.getByText(text).first().waitFor({ timeout: 30_000 });

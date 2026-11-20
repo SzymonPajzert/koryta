@@ -4,6 +4,7 @@ import {
   HOME_DEFAULT_EXPERIMENT,
   armPropertyName,
   assignArm,
+  experimentIsLive,
   hashToUnitInterval,
   type Experiment,
 } from "../../shared/experiments";
@@ -98,17 +99,41 @@ describe("assignArm", () => {
 });
 
 describe("the registry", () => {
-  it("ships dormant", () => {
+  it("splits only what was decided", () => {
     // The guard on accidentally deploying a live split. Activating an
     // experiment means changing this test in the same commit, which is where
-    // the decision gets reviewed.
+    // the decision gets reviewed. `home-default` went live on 2026-11-15
+    // (board round oswiadczenia-osoby-r2), and since 2026-11-20 is half the
+    // map and half the declarations; `osoba-skany` on 2026-11-17, half the
+    // signed-out readers of a person page with the ask and half without; every other
+    // experiment hands out its control.
+    const decided: Record<string, string[]> = {
+      "home-default": ["map", "oswiadczenia"],
+      "osoba-skany": ["bez", "prosba"],
+    };
     for (const experiment of Object.values(EXPERIMENTS)) {
       const live = experiment.arms.filter((arm) => arm.weight > 0);
       expect(
         live.map((arm) => arm.id),
         experiment.id,
-      ).toEqual([experiment.arms[0]!.id]);
+      ).toEqual(decided[experiment.id] ?? [experiment.arms[0]!.id]);
     }
+  });
+
+  it("calls an experiment live when two arms or more carry weight", () => {
+    const arms = (weights: number[]) => ({
+      id: "x",
+      question: "?",
+      arms: weights.map((weight, i) => ({
+        id: `a${i}`,
+        weight,
+        description: "",
+      })),
+    });
+    expect(experimentIsLive(arms([1, 0, 0]))).toBe(false);
+    expect(experimentIsLive(arms([0, 0]))).toBe(false);
+    expect(experimentIsLive(arms([1, 1]))).toBe(true);
+    expect(experimentIsLive(HOME_DEFAULT_EXPERIMENT)).toBe(true);
   });
 
   it("keys each experiment by its own id", () => {
@@ -131,13 +156,15 @@ describe("the registry", () => {
 
   it("keeps the home arms the panels the explorer can render", () => {
     // `gry` is declared for the games hub on another branch, so this is the
-    // reminder that HomeExplorer only implements two of the three. `parties`
-    // was the second and went with the treemap panel: an arm naming a panel
-    // that no longer exists would have sent its readers to a blank window.
+    // reminder that HomeExplorer implements three of the four: the map, the
+    // chart and the declarations. `parties` was the second and went with the
+    // treemap panel: an arm naming a panel that no longer exists would have
+    // sent its readers to a blank window.
     expect(HOME_DEFAULT_EXPERIMENT.arms.map((arm) => arm.id)).toEqual([
       "map",
       "graph",
       "gry",
+      "oswiadczenia",
     ]);
   });
 });

@@ -35,6 +35,7 @@ from entities.composite import Company, Election, Person, Source
 from entities.priority_groups import Declared, Group
 from scrapers.koryta.download import KorytaNotes, KorytaPeople
 from scrapers.krs.columns import is_public
+from scrapers.pkw.affiliations import parties_of_statement, unclassified_names
 from scrapers.pkw.elections import parties_of_committee, party_sort_key
 from scrapers.pkw.offices import LOCAL_OFFICES
 from scrapers.stores import Context, Pipeline
@@ -127,9 +128,12 @@ class PeoplePayloads(Pipeline[Person]):
         if self.args.not_on_koryta:
             result = self.not_on_koryta(ctx, result)
         unmapped: typing.Counter[str] = collections.Counter()
+        unnamed: typing.Counter[str] = collections.Counter()
         for person in result:
             unmapped.update(unmapped_committees(person.elections))
+            unnamed.update(unclassified_statement_names(person.elections))
         report_unmapped_committees(unmapped)
+        report_unclassified_statements(unnamed)
         report_collapsed_people()
         if self.args.only_changed:
             result = self.only_changed(ctx, result)
@@ -485,10 +489,10 @@ class PeoplePayloads(Pipeline[Person]):
         # The press lists used to supply these two; nothing does now.
         sources: list[Source] = []
         content = ""
-        # The committees name everybody who ever stood for one, which is the
-        # only party evidence left once the hardcoded lists are gone - less
-        # the candidacies that put the person in two places at once.
-        party = parties_from_committees(elections)
+        # The committees name everybody who ever stood for one, and PKW's
+        # membership and backing statements name more - less the candidacies
+        # that put the person in two places at once.
+        party = parties_from_candidacies(elections)
 
         wiki_name = get_scalar("wiki_name")
         wikipedia_url = get_scalar("wikipedia") or get_scalar("wiki_url")
@@ -719,6 +723,8 @@ def _extract_elections(row: pd.Series) -> list[Election]:
                 teryt_val = candidacy_teryt(e)
 
                 committee = _committee(e.get("party"))
+                party_member = _committee(e.get("party_member"))
+                supported_by = _committee(e.get("supported_by"))
                 election_payload = Election(
                     election_type=_office(e)
                     or get_election_type(str(e.get("election_type"))),
@@ -726,6 +732,10 @@ def _extract_elections(row: pd.Series) -> list[Election]:
                     party=party_of_candidacy(committee),
                     party_from_committee=bool(parties_of_committee(committee)),
                     elected=_elected(e.get("candidacy_success")),
+                    party_member=party_member,
+                    member_parties=parties_of_statement(party_member) or None,
+                    supported_by=supported_by,
+                    backing_parties=parties_of_statement(supported_by) or None,
                 )
                 if e.get("election_year"):
                     election_payload.election_year = str(e.get("election_year"))
@@ -1119,17 +1129,23 @@ def party_of_candidacy(committee: str | None) -> str | None:
     return parties[0] if len(parties) == 1 else None
 
 
-def parties_from_committees(elections: list[Election]) -> list[str]:
+def parties_from_candidacies(elections: list[Election]) -> list[str]:
     """Which parties a person's candidacies put them with.
 
-    The committee a candidacy was run under is the only party evidence PKW
-    records, and until now the pipeline threw it away: `parties` came entirely
-    from two hand-copied press lists of a few hundred names, which is why only
-    864 of 6077 people had one and why reviewers keep leaving notes that say
-    nothing but "PIS".
+    The committee a candidacy was run under was long the only party evidence
+    read off PKW: before it, `parties` came entirely from two hand-copied press
+    lists of a few hundred names, which is why only 864 of 6077 people had one
+    and why reviewers keep leaving notes that say nothing but "PIS".
 
     A coalition counts as both of its parties. The candidate stood on a joint
     list, which is what PKW recorded and all anybody can say from it.
+
+    PKW also records what the candidate declared about their own membership,
+    and which party or organisation backed the candidacy - on a voters'
+    committee's list too, whose name names no party. Both count (Szymon,
+    2026-11-11: the site's parties mean affiliation in the broad sense), and
+    the candidacy carries which of the three it was, for the page to tell
+    apart.
 
     In the order the site stores them in, `party_sort_key`'s: „Inne” after the
     parties it is the remainder of.
@@ -1150,6 +1166,8 @@ def parties_from_committees(elections: list[Election]) -> list[str]:
     for index, election in enumerate(elections):
         if index not in clashing:
             parties.update(parties_of_committee(election.committee))
+            parties.update(election.member_parties or [])
+            parties.update(election.backing_parties or [])
     return sorted(parties, key=party_sort_key)
 
 
@@ -1416,6 +1434,32 @@ def report_another_pesel() -> None:
         f"name and birth date on the page of a rejestr.io entry with another "
         f"PESEL: " + ", ".join(sorted(another_pesel)[:COLLAPSED_PEOPLE_REPORTED])
     )
+
+
+def unclassified_statement_names(elections: list[Election]) -> list[str]:
+    """Names in the candidacies' membership and backing statements that
+    `scrapers.pkw.affiliations.party_names` does not know."""
+    return [
+        name
+        for election in elections
+        for text in (election.party_member, election.supported_by)
+        for name in unclassified_names(text)
+    ]
+
+
+def report_unclassified_statements(unnamed: typing.Counter[str]) -> None:
+    """Name the parties and organisations in PKW's membership and backing
+    statements that no site party is known for, most common first. Most are
+    local associations and unions, which stand for no party; the ones that do
+    belong in `party_names`."""
+    if not unnamed:
+        return
+    print(
+        f"{sum(unnamed.values())} membership or backing statements name one of "
+        f"{len(unnamed)} bodies no party is known for. The most common:"
+    )
+    for name, count in unnamed.most_common(UNMAPPED_COMMITTEES_REPORTED):
+        print(f"  {count:6d}  {name}")
 
 
 def report_unmapped_committees(unmapped: typing.Counter[str]) -> None:

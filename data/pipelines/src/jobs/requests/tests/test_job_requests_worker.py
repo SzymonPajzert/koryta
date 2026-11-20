@@ -11,12 +11,12 @@ from jobs.requests import Lock, Worker, parser, within
 
 #: 12:00 in Warsaw, nowhere near the night.
 NOON = datetime(2026, 10, 6, 10, 0, tzinfo=UTC)
-#: 00:30 in Warsaw on the 6th: the 6th's export is three and a half hours off.
+#: 00:30 in Warsaw on the 6th: the 6th's export is an hour and a half off.
 HALF_PAST_MIDNIGHT = datetime(2026, 10, 5, 22, 30, tzinfo=UTC)
 
-#: The 6th's 04:00 export, done at 04:03, and the 5th's.
-TODAYS = Export("2026-10-06T02:00:35.112Z", datetime(2026, 10, 6, 2, 3, tzinfo=UTC))
-YESTERDAYS = Export("2026-10-05T02:00:41.950Z", datetime(2026, 10, 5, 2, 3, tzinfo=UTC))
+#: The 6th's 02:00 export, done at 02:03, and the 5th's.
+TODAYS = Export("2026-10-06T00:00:35.112Z", datetime(2026, 10, 6, 0, 3, tzinfo=UTC))
+YESTERDAYS = Export("2026-10-05T00:00:41.950Z", datetime(2026, 10, 5, 0, 3, tzinfo=UTC))
 
 
 class Queue:
@@ -340,12 +340,12 @@ def test_no_export_at_all_or_none_to_be_read_is_waited_for_too(queue, bucket):
 
 
 def test_a_waiting_run_starts_once_the_export_is_done_and_names_it(queue):
-    """Asked for at 03:50, while the VM is kept up for the night: the
-    morning's export is done at 04:03, and the run goes at the next look,
+    """Asked for at 01:50, while the VM is kept up for the night: the
+    night's export is done at 02:03, and the run goes at the next look,
     told which export it was - the bucket asked once a minute meanwhile."""
     queue.runs.update(Queue(("a", "people_request")).runs)
     bucket = Bucket(YESTERDAYS)
-    clock = Clock(datetime(2026, 10, 6, 1, 50, tzinfo=UTC))
+    clock = Clock(datetime(2026, 10, 5, 23, 50, tzinfo=UTC))
     worker, jobs, _ = make_worker(
         queue, ["--watch", "--poll-seconds", "20"], clock=clock, bucket=bucket
     )
@@ -363,9 +363,9 @@ def test_a_waiting_run_starts_once_the_export_is_done_and_names_it(queue):
 
     assert queue.claims == ["a"]
     assert jobs.argv[0][-2:] == ["--export", TODAYS.stamp]
-    # 03:50 to 04:03, a look a minute: fourteen, the last one finding it.
+    # 01:50 to 02:03, a look a minute: fourteen, the last one finding it.
     assert bucket.looks == 14
-    # Said at 03:50, and its heartbeat written again at 03:55 and 04:00.
+    # Said at 01:50, and its heartbeat written again at 01:55 and 02:00.
     assert queue.said() == [("a", "export"), ("a", "export"), ("a", "export")]
 
 
@@ -477,10 +477,10 @@ def test_after_its_runs_and_ten_idle_minutes_it_asks_for_the_vm_off(queue, tmp_p
     assert clock.sleeps == 10
 
 
-def test_runs_waiting_for_the_export_do_not_keep_the_vm_up_till_four(queue, tmp_path):
+def test_runs_waiting_for_the_export_do_not_keep_the_vm_up_till_two(queue, tmp_path):
     """Started by a request at half past midnight, with nothing it can run
     before the morning's export: off after the ten idle minutes, the runs
-    left queued for the 04:15 boot - their heartbeat written every five."""
+    left queued for the 02:15 boot - their heartbeat written every five."""
     flag, clock = watch(
         queue, tmp_path, at=HALF_PAST_MIDNIGHT, runs=2, bucket=Bucket(YESTERDAYS)
     )
@@ -496,17 +496,17 @@ def test_runs_waiting_for_the_export_do_not_keep_the_vm_up_till_four(queue, tmp_
 
 
 def test_runs_waiting_for_the_export_keep_the_vm_up_for_the_night(queue, tmp_path):
-    # At 03:50, with the export not done by 04:45: never off before that,
-    # as for any run - the schedule's 04:15 start finds the VM up.
+    # At 01:50, with the export not done by 02:45: never off before that,
+    # as for any run - the schedule's 02:15 start finds the VM up.
     flag, clock = watch(
         queue,
         tmp_path,
-        at=datetime(2026, 10, 6, 1, 50, tzinfo=UTC),
+        at=datetime(2026, 10, 5, 23, 50, tzinfo=UTC),
         bucket=Bucket(YESTERDAYS),
     )
 
     assert flag.exists()
-    assert clock.now() == datetime(2026, 10, 6, 2, 45, tzinfo=UTC)
+    assert clock.now() == datetime(2026, 10, 6, 0, 45, tzinfo=UTC)
 
 
 def test_a_vm_nobodys_request_started_stays_up(queue, tmp_path):
@@ -522,12 +522,12 @@ def test_the_vm_stays_up_while_somebody_is_logged_in(queue, tmp_path):
 
 
 def test_the_vm_stays_up_for_the_night_about_to_start(queue, tmp_path):
-    # Done at 04:00 in Warsaw, after the schedule's 04:15 start had nothing to
-    # start: switched off before 04:30, the VM would miss the night.
-    flag, clock = watch(queue, tmp_path, at=datetime(2026, 10, 6, 2, 0, tzinfo=UTC))
+    # Done at 02:00 in Warsaw, after the schedule's 02:15 start had nothing to
+    # start: switched off before 02:30, the VM would miss the night.
+    flag, clock = watch(queue, tmp_path, at=datetime(2026, 10, 6, 0, 0, tzinfo=UTC))
 
     assert flag.exists()
-    assert clock.now() == datetime(2026, 10, 6, 2, 45, tzinfo=UTC)
+    assert clock.now() == datetime(2026, 10, 6, 0, 45, tzinfo=UTC)
 
 
 def test_the_vm_stays_up_while_a_night_runs(queue, tmp_path, monkeypatch):
@@ -568,9 +568,9 @@ def test_pending_says_whether_anything_is_queued(queue):
 @pytest.mark.parametrize(
     ("utc", "window", "inside"),
     [
-        ("01:40", "03:45-04:45", False),  # 03:40 in Warsaw (CEST, UTC+2)
-        ("02:00", "03:45-04:45", True),  # 04:00
-        ("02:46", "03:45-04:45", False),  # 04:46
+        ("23:40", "01:45-02:45", False),  # 01:40 in Warsaw (CEST, UTC+2)
+        ("00:00", "01:45-02:45", True),  # 02:00
+        ("00:46", "01:45-02:45", False),  # 02:46
         ("21:30", "23:00-01:00", True),  # 23:30 Warsaw, a window over midnight
         ("23:30", "23:00-01:00", False),  # 01:30 Warsaw
     ],

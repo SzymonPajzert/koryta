@@ -1,14 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mountSuspended } from "@nuxt/test-utils/runtime";
+import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
 import { defineComponent, h, ref } from "vue";
 import OswiadczeniaPage from "../../../app/pages/admin/oswiadczenia.vue";
 import type {
   DeclarationOverview,
+  DeclarationPeople,
   DeclarationPublicationRow,
   DeclarationReviewRow,
   DrainResult,
+  HeldCropRow,
 } from "../../../shared/declarations";
+import { SEEDED_DECLARATION_PEOPLE as seededPeople } from "../../../scripts/declarationPeople";
+
+/** The night's people count, public and fetched apart from the overview. */
+let peopleAnswer: { people: DeclarationPeople | null } = { people: null };
+registerEndpoint("/api/declarations/people", () => peopleAnswer);
 
 const { mockAuthRequest } = vi.hoisted(() => ({ mockAuthRequest: vi.fn() }));
 
@@ -158,6 +165,7 @@ const overview = (over: Partial<DeclarationOverview> = {}) =>
       queued: 9,
       published: 74,
       held: 11,
+      setAside: 4,
       today: 7,
       heldBy: [{ reason: "pending_proposal", count: 11 }],
     },
@@ -170,8 +178,10 @@ const overview = (over: Partial<DeclarationOverview> = {}) =>
           name: "Ewa Pozorna",
           status: "held",
           reason: "pending_proposal",
+          paidPost: true,
         }),
       ],
+      setAside: [],
       recent: [published({})],
     },
     runs: [
@@ -210,8 +220,15 @@ const empty = (): DeclarationOverview => ({
   },
   readers: { answers: 0, readers: 0, days: [] },
   pages: { same: 0, different: 0, noDate: 0, confirmed: 0 },
-  publications: { queued: 0, published: 0, held: 0, today: 0, heldBy: [] },
-  lists: { disputed: [], different: [], held: [], recent: [] },
+  publications: {
+    queued: 0,
+    published: 0,
+    held: 0,
+    setAside: 0,
+    today: 0,
+    heldBy: [],
+  },
+  lists: { disputed: [], different: [], held: [], setAside: [], recent: [] },
   runs: [],
 });
 
@@ -328,6 +345,30 @@ describe("/admin/oswiadczenia", () => {
       ),
     ).toHaveLength(1);
     expect(page.find("[data-row-panel]").exists()).toBe(false);
+  });
+
+  it("puts the night's people above the declarations by state", async () => {
+    peopleAnswer = { people: seededPeople as DeclarationPeople };
+    clearNuxtData("declarations-people");
+    try {
+      const page = await mountPage();
+      const people = page.get('[data-testid="declarations-people"]');
+      // Everybody counted but the namesakes, who are said apart.
+      expect(people.text()).toContain(
+        "1150 polityków na płatnych stanowiskach",
+      );
+      expect(people.text()).toContain("duplikaty:");
+      // Every stage in the colours of the bar below it.
+      expect(people.find('[data-testid="people-bar"]').exists()).toBe(true);
+      const states = page.get('[data-testid="declarations-states"]');
+      expect(
+        people.element.compareDocumentPosition(states.element) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    } finally {
+      peopleAnswer = { people: null };
+      clearNuxtData("declarations-people");
+    }
   });
 
   it("puts the declarations by state above the chain", async () => {
@@ -611,7 +652,7 @@ describe("/admin/oswiadczenia", () => {
     expect(snackbar(page)).toEqual({
       text:
         "Opublikowano z kolejki jedną osobę. " +
-        "Wstrzymano 2 osoby; powody są na liście „Wstrzymane publikacje”. " +
+        "Wstrzymano 2 osoby; powody są na listach „Wstrzymane publikacje” i „Nie do publikacji”. " +
         "W kolejce czeka jeszcze jedna osoba.",
       color: null,
     });
@@ -628,7 +669,7 @@ describe("/admin/oswiadczenia", () => {
 
     expect(snackbar(page)).toEqual({
       text:
-        "Nikogo nie opublikowano: od 3:00 do 9:00 trwa nocny import osób, " +
+        "Nikogo nie opublikowano: od 1:00 do 7:00 trwa nocny import osób, " +
         "który mógłby cofnąć publikację. W kolejce czeka jeszcze 9 osób.",
       color: null,
     });
@@ -732,7 +773,7 @@ describe("/admin/oswiadczenia", () => {
         "Szkic z tą samą datą publikuje się sam, razem z zatrudnieniami w KRS i wyborami w regionie z oświadczenia, najwyżej 10 osób dziennie. " +
         "Przycisk „Opublikuj z kolejki” publikuje od razu do 25 czekających osób, ponad dzienny limit, także przy wyłączonym publikowaniu automatycznym. " +
         "Każda strona przechodzi te same sprawdzenia co przy publikacji automatycznej, więc część może zostać wstrzymana, a „Dziś” liczy tylko publikacje automatyczne. " +
-        "W czasie importu osób, w tym nocnego od 3:00 do 9:00, nie publikuje się nikogo, także przyciskiem. " +
+        "W czasie importu osób, w tym nocnego od 1:00 do 7:00, nie publikuje się nikogo, także przyciskiem. " +
         "Data przyjęta przez administratora nikogo nie publikuje: szkic z nią czeka w sekcji „Wstrzymane publikacje” na publikację ręczną.",
     );
     // Not every date on the list is one readers agreed on.
@@ -742,17 +783,23 @@ describe("/admin/oswiadczenia", () => {
         "Jedna cyfra różnicy to zwykle źle odczytany wycinek albo literówka na stronie; inny rok to częściej oświadczenie innej osoby, i wtedy wycinek się wycofuje. " +
         "Przyjęta tu data, która dalej różni się od strony, wraca na tę listę, a szkic z tą samą datą trafia do sekcji „Wstrzymane publikacje”.",
     );
-    // The press holds what the automation would; a page that is public
-    // already cannot be published by hand.
+    // The three ways out of a hold, and that a publication by hand closes it
+    // wherever it was pressed.
     expect(info("Wstrzymane publikacje")).toBe(
-      "Osoby z tą samą datą, których stron nie opublikowano ani automatycznie, ani przyciskiem „Opublikuj z kolejki”, bo ktoś już o nich zdecydował albo coś budzi wątpliwość. " +
-        "Niebieskie to cudza decyzja, bursztynowe czekają na wyjaśnienie. " +
-        "Szkic można opublikować ręcznie z jego strony. Wiersz zostaje wtedy na liście, ze stroną oznaczoną jako publiczna.",
+      "Osoby z tą samą datą i płatnym stanowiskiem, których automat nie opublikował, bo ktoś już o nich zdecydował (niebieskie) albo coś budzi wątpliwość (bursztynowe). " +
+        "„Sprawdź ponownie” powtarza sprawdzenia automatu i publikuje stronę z powiązaniami, jeśli przejdą. " +
+        "„Opublikuj ręcznie” je pomija: powiązania wybierasz sam. " +
+        "„Nie publikuj” przenosi osobę do sekcji „Nie do publikacji”. " +
+        "Strona opublikowana ręcznie znika z listy, skądkolwiek ją opublikowano.",
+    );
+    expect(info("Nie do publikacji")).toBe(
+      "Osoby bez płatnego stanowiska w instytucji publicznej, bez którego automat nikogo nie publikuje, i osoby odłożone przez administratora. " +
+        "Gdy na stronie pojawi się stanowisko, osoba sama wraca do wstrzymanych; można ją też opublikować ręcznie.",
     );
     // Not every page on the list is one the automation published; the note
     // goes once the reading stops confirming the page's date.
     expect(info("Opublikowane ostatnio")).toBe(
-      "Strony, które opublikował automat albo administrator przyciskiem „Opublikuj z kolejki”, razem z zatrudnieniami w KRS i wyborami w regionie z oświadczenia; kto, widać w otwartym wierszu. " +
+      "Strony, które opublikował automat albo administrator, przyciskiem „Opublikuj z kolejki” albo ręcznie z listy wstrzymanych, razem z zatrudnieniami w KRS i wyborami w regionie z oświadczenia; kto, widać w otwartym wierszu. " +
         "Każda ma na sobie notkę z linkiem do oświadczenia, dopóki jego odczyt potwierdza datę urodzenia na stronie.",
     );
   });
@@ -830,14 +877,463 @@ describe("/admin/oswiadczenia", () => {
     expect(draft.classes()).toContain("arow--tone-warning");
     expect(draft.get("[data-page-public]").text()).toBe("szkic");
     expect(draft.get("[data-hold-note]").text()).toBe(
-      "Opublikuj ręcznie ze strony osoby, jeśli się zgadza.",
+      "Datę ustalił administrator, więc automat nie publikuje. Opublikuj ręcznie, jeśli się zgadza.",
     );
 
     const up = await held("fx0007");
     expect(up.classes()).toContain("arow--tone-info");
     expect(up.get("[data-page-public]").text()).toBe("publiczna");
     expect(up.get("[data-hold-note]").text()).toBe(
-      "Strona jest już publiczna. Oświadczenia na niej nie podpięto, bo datę ustalił administrator.",
+      "Strona jest już publiczna.",
     );
+  });
+  describe("deciding a held publication", () => {
+    const row = (
+      personId: string,
+      fields: Partial<DeclarationPublicationRow>,
+    ) =>
+      published({
+        personId,
+        name: `Osoba ${personId}`,
+        status: "held",
+        ...fields,
+      });
+
+    /** Three waiting, two of one reason, and one set aside. */
+    const holds = () =>
+      overview({
+        publications: {
+          ...overview().publications,
+          held: 3,
+          setAside: 1,
+          heldBy: [
+            { reason: "two_places", count: 2 },
+            { reason: "conflicting_reading", count: 1 },
+          ],
+        },
+        lists: {
+          ...overview().lists,
+          held: [
+            row("hp1", {
+              reason: "two_places",
+              pagePublic: false,
+              paidPost: true,
+            }),
+            row("hp2", {
+              reason: "two_places",
+              pagePublic: false,
+              paidPost: true,
+            }),
+            row("hp3", {
+              reason: "conflicting_reading",
+              pagePublic: false,
+              paidPost: true,
+            }),
+          ],
+          setAside: [
+            row("hp4", {
+              reason: "no_public_post",
+              pagePublic: false,
+              paidPost: false,
+            }),
+          ],
+        },
+      });
+
+    const listed = (page: Wrapper, list: string) =>
+      page
+        .findAll(`[data-testid="${list}"] [data-publication-row]`)
+        .map((line) => line.attributes("data-person-id"));
+
+    async function openHeld(
+      page: Wrapper,
+      personId: string,
+      list = "declarations-held",
+    ) {
+      const selector = `[data-testid="${list}"] [data-person-id="${personId}"]`;
+      await page.get(`${selector} [data-row-toggle]`).trigger("click");
+      await flushPromises();
+      return page.get(selector);
+    }
+
+    const answer = (url: string, value: unknown) => {
+      const before = mockAuthRequest.getMockImplementation()!;
+      mockAuthRequest.mockImplementation(
+        async (asked: string, options: unknown) =>
+          asked === url ? value : before(asked, options),
+      );
+    };
+
+    beforeEach(() => {
+      current = holds;
+      // What the publish dialog reads when it opens: nothing to tick.
+      answer("/api/edges/byNode", {
+        relations: [],
+        nodePublished: false,
+        nodeParties: [],
+      });
+      answer("/api/revisions/byNode", {
+        revisions: [],
+        approvedRevisionId: null,
+      });
+    });
+
+    /** The overview the server reads after a decision: the lists are read
+     * on every request, so they show it. */
+    const after = (
+      held: DeclarationPublicationRow[],
+      setAside: DeclarationPublicationRow[] = holds().lists.setAside,
+    ) => {
+      const base = holds();
+      return {
+        ...base,
+        publications: { ...base.publications, held: held.length },
+        lists: { ...base.lists, held, setAside },
+      };
+    };
+
+    const open = (page: Wrapper, list: string, personId: string) =>
+      page.get(`[data-testid="${list}"] [data-person-id="${personId}"]`);
+
+    it("reads the lists again when a decision is refused as made already", async () => {
+      const page = await mountPage();
+      const line = await openHeld(page, "hp2");
+      const [hp1, hp2, hp3] = holds().lists.held;
+      // Declined in another tab meanwhile.
+      current = () =>
+        after(
+          [hp1!, hp3!],
+          [{ ...hp2!, status: "declined" }, ...holds().lists.setAside],
+        );
+      const before = mockAuthRequest.getMockImplementation()!;
+      mockAuthRequest.mockImplementation(async (url: string, options) => {
+        if (url.endsWith("/hp2/decline")) {
+          throw {
+            statusCode: 409,
+            data: { message: "Ta osoba jest już odłożona." },
+          };
+        }
+        return before(url, options);
+      });
+
+      await line.get("[data-hold-decline]").trigger("click");
+      await flushPromises();
+
+      expect(snackbar(page)).toEqual({
+        text: "Ta osoba jest już odłożona.",
+        color: "error",
+      });
+      expect(overviewLoads()).toBe(2);
+      expect(listed(page, "declarations-held")).toEqual(["hp1", "hp3"]);
+    });
+
+    it("keeps the list as it was when a decision fails otherwise", async () => {
+      const page = await mountPage();
+      const line = await openHeld(page, "hp2");
+      const before = mockAuthRequest.getMockImplementation()!;
+      mockAuthRequest.mockImplementation(async (url: string, options) => {
+        if (url.endsWith("/hp2/decline")) throw new Error("fetch failed");
+        return before(url, options);
+      });
+
+      await line.get("[data-hold-decline]").trigger("click");
+      await flushPromises();
+
+      expect(overviewLoads()).toBe(1);
+      expect(listed(page, "declarations-held")).toContain("hp2");
+    });
+
+    it("sends „Nie publikuj” for the row's person, and shows the list read after it", async () => {
+      answer("/api/declarations/publications/hp2/decline", { id: "hp2" });
+      const page = await mountPage();
+      const line = await openHeld(page, "hp2");
+      const [hp1, hp2, hp3] = holds().lists.held;
+      current = () =>
+        after(
+          [hp1!, hp3!],
+          [{ ...hp2!, status: "declined" }, ...holds().lists.setAside],
+        );
+
+      await line.get("[data-hold-decline]").trigger("click");
+      await flushPromises();
+
+      expect(writes().map(([url]) => url)).toEqual([
+        "/api/declarations/publications/hp2/decline",
+      ]);
+      expect(snackbar(page).text).toBe("Przeniesiono do „Nie do publikacji”.");
+      expect(overviewLoads()).toBe(2);
+      expect(listed(page, "declarations-held")).toEqual(["hp1", "hp3"]);
+      expect(listed(page, "declarations-set-aside")[0]).toBe("hp2");
+    });
+
+    it("keeps a row held again for another reason first on the list, open, past the filter", async () => {
+      answer("/api/declarations/publications/hp1/recheck", {
+        outcome: "held",
+        reason: "conflicting_reading",
+      });
+      const page = await mountPage();
+      page
+        .findComponent({ name: "VSelect" })
+        .vm.$emit("update:modelValue", "two_places");
+      await flushPromises();
+      expect(listed(page, "declarations-held")).toEqual(["hp1", "hp2"]);
+      const line = await openHeld(page, "hp1");
+      // Held again, it goes to the end of the server's list.
+      const [hp1, hp2, hp3] = holds().lists.held;
+      current = () =>
+        after([hp2!, hp3!, { ...hp1!, reason: "conflicting_reading" }]);
+
+      await line.get("[data-hold-recheck]").trigger("click");
+      await flushPromises();
+
+      expect(snackbar(page).text).toBe(
+        "Nadal wstrzymana: inne oświadczenie podaje inną datę.",
+      );
+      // First, though the filter is still on the reason it no longer has.
+      expect(listed(page, "declarations-held")).toEqual(["hp1", "hp2"]);
+      expect(
+        open(page, "declarations-held", "hp1")
+          .find("[data-hold-note]")
+          .exists(),
+      ).toBe(true);
+    });
+
+    it("keeps the pinned row in view past the fold of twenty", async () => {
+      const many = Array.from({ length: 25 }, (_, i) =>
+        row(`cr${i}`, {
+          reason: "conflicting_reading",
+          pagePublic: false,
+          paidPost: true,
+        }),
+      );
+      current = () => after([holds().lists.held[0]!, ...many]);
+      answer("/api/declarations/publications/hp1/recheck", {
+        outcome: "held",
+        reason: "conflicting_reading",
+      });
+      const page = await mountPage();
+      const line = await openHeld(page, "hp1");
+      current = () =>
+        after([
+          ...many,
+          { ...holds().lists.held[0]!, reason: "conflicting_reading" },
+        ]);
+
+      await line.get("[data-hold-recheck]").trigger("click");
+      await flushPromises();
+
+      const shown = listed(page, "declarations-held");
+      expect(shown[0]).toBe("hp1");
+      expect(shown).toHaveLength(20);
+    });
+
+    it("puts a restored person first on the held list, open, with its decisions", async () => {
+      const declined = row("hp5", {
+        status: "declined",
+        reason: "ambiguous_candidacy",
+        paidPost: true,
+      });
+      current = () => after(holds().lists.held, [declined]);
+      answer("/api/declarations/publications/hp5/restore", { id: "hp5" });
+      const page = await mountPage();
+      const line = await openHeld(page, "hp5", "declarations-set-aside");
+      current = () =>
+        after([...holds().lists.held, { ...declined, status: "held" }], []);
+
+      await line.get("[data-hold-restore]").trigger("click");
+      await flushPromises();
+
+      expect(snackbar(page).text).toBe("Przywrócono.");
+      expect(listed(page, "declarations-held")[0]).toBe("hp5");
+      expect(
+        open(page, "declarations-held", "hp5")
+          .find("[data-hold-decline]")
+          .exists(),
+      ).toBe(true);
+    });
+
+    it("takes a page a check published off the list", async () => {
+      answer("/api/declarations/publications/hp1/recheck", {
+        outcome: "published",
+      });
+      const page = await mountPage();
+      const line = await openHeld(page, "hp1");
+      current = () => after(holds().lists.held.slice(1));
+
+      await line.get("[data-hold-recheck]").trigger("click");
+      await flushPromises();
+
+      expect(snackbar(page).text).toBe("Opublikowano.");
+      expect(listed(page, "declarations-held")).toEqual(["hp2", "hp3"]);
+    });
+
+    it("keeps the row as it was when the night or an import stopped the check", async () => {
+      answer("/api/declarations/publications/hp1/recheck", {
+        outcome: "skipped",
+        skipped: "night",
+      });
+      const page = await mountPage();
+      const line = await openHeld(page, "hp1");
+
+      await line.get("[data-hold-recheck]").trigger("click");
+      await flushPromises();
+
+      expect(listed(page, "declarations-held")).toEqual(["hp1", "hp2", "hp3"]);
+      expect(
+        open(page, "declarations-held", "hp1")
+          .find("[data-hold-decline]")
+          .exists(),
+      ).toBe(true);
+    });
+
+    it("opens the publish dialog on the row's own person, from a set-aside row too", async () => {
+      const page = await mountPage();
+      const line = await openHeld(page, "hp4", "declarations-set-aside");
+
+      await line.get("[data-hold-publish]").trigger("click");
+      await flushPromises();
+
+      const dialog = page.findComponent({ name: "AdminPublishNodeDialog" });
+      expect(dialog.props("nodeId")).toBe("hp4");
+      expect(dialog.props("modelValue")).toBe(true);
+    });
+
+    it("closes the row of a person published by hand and reads the list again", async () => {
+      const page = await mountPage();
+      const line = await openHeld(page, "hp1");
+      await line.get("[data-hold-publish]").trigger("click");
+      await flushPromises();
+      current = () => after(holds().lists.held.slice(1));
+
+      page
+        .findComponent({ name: "AdminPublishNodeDialog" })
+        .vm.$emit("published", { relations: 2 });
+      await flushPromises();
+
+      expect(snackbar(page).text).toBe("Opublikowano stronę z 2 powiązaniami.");
+      expect(overviewLoads()).toBe(2);
+      expect(listed(page, "declarations-held")).toEqual(["hp2", "hp3"]);
+    });
+
+    it("forgets a reason whose last row left, so it does not come back by itself", async () => {
+      const page = await mountPage();
+      page
+        .findComponent({ name: "VSelect" })
+        .vm.$emit("update:modelValue", "conflicting_reading");
+      await flushPromises();
+
+      // Its only row decided elsewhere, then another one of the reason held.
+      current = () => {
+        const base = after(holds().lists.held.slice(0, 2));
+        return {
+          ...base,
+          publications: {
+            ...base.publications,
+            heldBy: [{ reason: "two_places", count: 2 }],
+          },
+        };
+      };
+      await page.get("[data-overview-refresh]").trigger("click");
+      await flushPromises();
+      current = holds;
+      await page.get("[data-overview-refresh]").trigger("click");
+      await flushPromises();
+
+      expect(listed(page, "declarations-held")).toEqual(["hp1", "hp2", "hp3"]);
+    });
+
+    it("drops an overview answer that lands after a newer one", async () => {
+      let release: (value: DeclarationOverview) => void = () => {};
+      const slow = new Promise<DeclarationOverview>((resolve) => {
+        release = resolve;
+      });
+      const page = await mountPage();
+      const before = mockAuthRequest.getMockImplementation()!;
+      let calls = 0;
+      mockAuthRequest.mockImplementation(
+        async (url: string, options: unknown) => {
+          if (url !== "/api/declarations/overview") return before(url, options);
+          calls += 1;
+          // The first reload is slow and old; the second is quick and new.
+          return calls === 1 ? slow : after(holds().lists.held.slice(1));
+        },
+      );
+
+      page.get("[data-overview-refresh]").trigger("click");
+      await flushPromises();
+      await page.get("[data-overview-refresh]").trigger("click");
+      await flushPromises();
+      release(holds());
+      await flushPromises();
+
+      expect(listed(page, "declarations-held")).toEqual(["hp2", "hp3"]);
+    });
+
+    describe("the crops of a conflicting reading", () => {
+      const crop = (fields: Partial<HeldCropRow>): HeldCropRow => ({
+        ...DIFFERENT,
+        id: `${"c".repeat(64)}-p0`,
+        agreed: "1971-09-03",
+        people: [
+          {
+            id: "hp3",
+            name: "Osoba hp3",
+            published: false,
+            birthDate: "1971-09-13",
+          },
+        ],
+        decidable: true,
+        ...fields,
+      });
+
+      it("lets the admin decide a crop that waits for one", async () => {
+        answer("/api/declarations/publications/hp3/crops", [crop({})]);
+        const page = await mountPage();
+        const line = await openHeld(page, "hp3");
+
+        expect(line.find("[data-hold-note]").exists()).toBe(true);
+        expect(line.find("[data-hold-recheck]").exists()).toBe(true);
+        expect(line.find("[data-hold-crops] [data-settle]").exists()).toBe(
+          true,
+        );
+        expect(line.find("[data-hold-crops-others]").exists()).toBe(false);
+      });
+
+      it("says whose a settled crop is, offers nothing on it, and no recheck", async () => {
+        answer("/api/declarations/publications/hp3/crops", [
+          crop({
+            decidable: false,
+            people: [
+              {
+                id: "hp3",
+                name: "Osoba hp3",
+                published: false,
+                birthDate: "1971-09-13",
+              },
+              {
+                id: "namesake",
+                name: "Jan Imiennik",
+                published: true,
+                birthDate: "1971-09-03",
+              },
+            ],
+          }),
+        ]);
+        const page = await mountPage();
+        const line = await openHeld(page, "hp3");
+
+        expect(line.get("[data-hold-crops-others]").text()).toBe(
+          "Inną datę podają wycinki innych stron. Opublikuj ręcznie albo nie publikuj.",
+        );
+        expect(line.find("[data-hold-note]").exists()).toBe(false);
+        expect(line.find("[data-hold-recheck]").exists()).toBe(false);
+        expect(line.get("[data-crop-settled]").text()).toBe(
+          "To wycinek strony Jan Imiennik: zgadza się z jej datą.",
+        );
+        expect(line.find("[data-hold-crops] [data-settle]").exists()).toBe(
+          false,
+        );
+      });
+    });
   });
 });

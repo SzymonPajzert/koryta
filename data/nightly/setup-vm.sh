@@ -103,4 +103,4 @@ as_user "cd $repo/data/compressor && /usr/local/go/bin/go build -o /var/lib/kory
 systemctl restart koryta-requests.service
 
 systemctl list-timers koryta-nightly.timer --no-pager
-echo "Done. The night runs at 04:30 Warsaw - see data/nightly/README.md for the first one."
+echo "Done. The night runs at 02:30 Warsaw - see data/nightly/README.md for the first one."

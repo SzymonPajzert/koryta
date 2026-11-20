@@ -55,14 +55,19 @@
           </v-list-item>
         </v-list>
 
-        <!-- Only the best model counts towards the total, so a breakdown that
+        <!-- One model's score counts towards the total, so a breakdown that
              listed six models next to a total of 4 would look like an
-             arithmetic error unless it said so. -->
+             arithmetic error unless it said which. -->
         <div
           v-if="modelEntries.length > 1"
           class="text-caption text-medium-emphasis mt-1"
         >
-          Do wyniku liczy się tylko najwyższa ocena modelu ({{ modelBest }}).
+          <template v-if="hasChance">
+            Do wyniku liczy się szansa publikacji ({{ modelPart }}).
+          </template>
+          <template v-else>
+            Do wyniku liczy się tylko najwyższa ocena modelu ({{ modelPart }}).
+          </template>
         </div>
 
         <v-divider class="my-2" />
@@ -86,8 +91,9 @@
  *
  * The total on its own is ambiguous in a way that matters to somebody deciding
  * where to spend the next click: `computeVoteStats` sums human verdicts and
- * takes the *best* of the models, so a 4 is four models agreeing, or one
- * reader insisting, or a bit of both, and the column cannot tell them apart.
+ * adds one number for the models (`pipelineContribution`), so a 4 is a likely
+ * publication, or one reader insisting, or a bit of both, and the column
+ * cannot tell them apart.
  * In prod today a node carries between one and six model votes and almost
  * never more than one human one, so most of the number is machine opinion -
  * which is exactly the thing a reader would want to discount.
@@ -98,8 +104,13 @@
  */
 import { computed } from "vue";
 import { mdiChevronDown } from "@mdi/js";
-import { scoreModelLabel, voteLevelLabel } from "~/composables/votes";
+import {
+  publishChanceLabel,
+  scoreModelLabel,
+  voteLevelLabel,
+} from "~/composables/votes";
 import type { NodeStats } from "~~/shared/model";
+import { pipelineContribution, PUBLISH_CHANCE_MODEL } from "~~/shared/stats";
 
 const { votes } = defineProps<{
   /** The node's `stats.votes` aggregate, exactly as stored. */
@@ -114,24 +125,28 @@ const modelEntries = computed(() =>
       uid,
       score,
       label: scoreModelLabel(uid),
-      meaning: voteLevelLabel("interesting", score),
+      // A chance band is not a verdict, so it reads as the chance it stands for.
+      meaning:
+        uid === PUBLISH_CHANCE_MODEL
+          ? publishChanceLabel(score)
+          : voteLevelLabel("interesting", score),
     }))
-    .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label, "pl")),
+    // The model that counts first, then the reasons by score.
+    .sort(
+      (a, b) =>
+        Number(b.uid === PUBLISH_CHANCE_MODEL) -
+          Number(a.uid === PUBLISH_CHANCE_MODEL) ||
+        b.score - a.score ||
+        a.label.localeCompare(b.label, "pl"),
+    ),
 );
 
-/** The best score any model gave, which is the whole of what they contribute.
- *
- * Seeded from the first entry rather than from 0, because `computeVoteStats`
- * adds whatever the maximum is - and a maximum of 0 is not the same claim as
- * no model at all. `banded_scores` only ever emits 1-5 today, so this is
- * defensive; it costs nothing and stops the human total below from absorbing a
- * negative model score as if a reader had cast it.
- */
-const modelBest = computed(() =>
-  modelEntries.value.length === 0
-    ? 0
-    : Math.max(...modelEntries.value.map((entry) => entry.score)),
+const hasChance = computed(
+  () => typeof votes?.models?.[PUBLISH_CHANCE_MODEL] === "number",
 );
+
+/** What the models add to the total, by the rule `computeVoteStats` adds it. */
+const modelPart = computed(() => pipelineContribution(votes?.models) ?? 0);
 
 const humanCount = computed(() => votes?.humanCount ?? 0);
 
@@ -142,8 +157,8 @@ const hasHumanVotes = computed(
 
 /** What the people who voted said, taken together.
  *
- * Derived rather than stored: the total is the human sum plus the best model,
- * so subtracting the one gives the other. Storing it as well would be a second
+ * Derived rather than stored: the total is the human sum plus what the models
+ * add, so subtracting the one gives the other. Storing it as well would be a second
  * number that could disagree with the first.
  *
  * Only meaningful when somebody actually voted. A node carrying `models` but no
@@ -151,7 +166,7 @@ const hasHumanVotes = computed(
  * to a negative that no reader ever cast, so the template gates on
  * `hasHumanVotes` rather than on this being non-zero.
  */
-const humanTotal = computed(() => total.value - modelBest.value);
+const humanTotal = computed(() => total.value - modelPart.value);
 
 const modelSummary = computed(() => {
   const n = modelEntries.value.length;

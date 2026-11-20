@@ -4,6 +4,7 @@ import {
   everyNthDayLabel,
   formatDayRange,
   formatShare,
+  rankedTooltip,
 } from "~/utils/chartTheme";
 
 /** The plot of „Co się działo w bazie” at 375px: the page's and the card's
@@ -81,5 +82,88 @@ describe("formatShare", () => {
 
   it("calls an empty column's parts nothing", () => {
     expect(formatShare(0, 0)).toBe("0% (0)");
+  });
+});
+
+describe("rankedTooltip", () => {
+  const lines = [
+    { name: "Województwo mazowieckie", color: "blue" },
+    { name: "Województwo śląskie", color: "orange" },
+    { name: "Pozostałe województwa", color: "grey" },
+  ];
+  const tooltip = rankedTooltip(
+    () => lines,
+    (index) => `month ${index}`,
+  );
+
+  /** The rows as a reader reads them, top down, and the title above them. */
+  function read(html: string) {
+    const box = document.createElement("div");
+    box.innerHTML = html;
+    return {
+      title: box.querySelector(".apexcharts-tooltip-title")?.textContent,
+      rows: [...box.querySelectorAll(".apexcharts-tooltip-series-group")].map(
+        (row) => row.textContent,
+      ),
+    };
+  }
+
+  it("lists the rows in the order of the lines at the hovered point", () => {
+    // Series order puts the folded remainder last; at point 1 it is the
+    // highest line, and at point 0 the lowest.
+    const series = [
+      [80, 400],
+      [30, 230],
+      [7, 650],
+    ];
+
+    expect(read(tooltip({ series, dataPointIndex: 1 })).rows).toEqual([
+      "Pozostałe województwa: 650",
+      "Województwo mazowieckie: 400",
+      "Województwo śląskie: 230",
+    ]);
+    expect(read(tooltip({ series, dataPointIndex: 0 })).rows).toEqual([
+      "Województwo mazowieckie: 80",
+      "Województwo śląskie: 30",
+      "Pozostałe województwa: 7",
+    ]);
+  });
+
+  it("keeps series order between lines that meet", () => {
+    const series = [[5], [9], [9]];
+
+    expect(read(tooltip({ series, dataPointIndex: 0 })).rows).toEqual([
+      "Województwo śląskie: 9",
+      "Pozostałe województwa: 9",
+      "Województwo mazowieckie: 5",
+    ]);
+  });
+
+  it("drops a line hidden from the legend, whose data apexcharts empties", () => {
+    const series = [[80], [], [650]];
+
+    expect(read(tooltip({ series, dataPointIndex: 0 })).rows).toEqual([
+      "Pozostałe województwa: 650",
+      "Województwo mazowieckie: 80",
+    ]);
+  });
+
+  it("titles the tooltip with the hovered point and colours each marker", () => {
+    const html = tooltip({ series: [[1], [2], [3]], dataPointIndex: 0 });
+
+    expect(read(html).title).toBe("month 0");
+    const box = document.createElement("div");
+    box.innerHTML = html;
+    expect(
+      [...box.querySelectorAll<HTMLElement>(".apexcharts-tooltip-marker")].map(
+        (marker) => marker.style.color,
+      ),
+    ).toEqual(["grey", "orange", "blue"]);
+  });
+
+  it("writes a count as the rest of the site does", () => {
+    const html = tooltip({ series: [[12345], [0], [0]], dataPointIndex: 0 });
+
+    expect(read(html).rows[0]).toBe("Województwo mazowieckie: 12 345");
   });
 });

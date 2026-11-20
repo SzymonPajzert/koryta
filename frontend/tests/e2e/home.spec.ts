@@ -52,9 +52,9 @@ test.describe("Home", () => {
     }).toPass({ timeout: 30_000 });
   });
 
-  // The app bar's „Działaj z nami” goes the same way as the home page's; the
-  // footer's still goes to /pomoc, which /oswiadczenia links to at its foot.
-  test("the app bar's Działaj z nami leads to oswiadczenia", async ({
+  // The app bar's and the footer's „Działaj z nami” go the same way as the
+  // home page's; /oswiadczenia links /pomoc at its foot.
+  test("the app bar's and the footer's Działaj z nami lead to oswiadczenia", async ({
     page,
   }) => {
     await expect(
@@ -62,18 +62,32 @@ test.describe("Home", () => {
     ).toHaveAttribute("href", "/oswiadczenia");
     await expect(
       page.locator("footer").getByRole("link", { name: "Działaj z nami" }),
-    ).toHaveAttribute("href", "/pomoc");
+    ).toHaveAttribute("href", "/oswiadczenia");
   });
 
   test("koryta.pl/start redirects to oswiadczenia", async ({ page }) => {
     const response = await page.goto("/start", {
       waitUntil: "domcontentloaded",
     });
-    expect(new URL(page.url()).pathname).toBe("/oswiadczenia");
+    const url = new URL(page.url());
+    expect(url.pathname).toBe("/oswiadczenia");
+    // What Plausible files these arrivals under, in Campaigns.
+    expect(url.searchParams.get("utm_campaign")).toBe("start");
     expect(response?.request().redirectedFrom()?.url()).toMatch(/\/start$/);
     await expect(
       page.getByTestId("declaration-more-help").getByRole("link"),
     ).toHaveAttribute("href", "/pomoc");
+  });
+
+  test("koryta.pl/start keeps the tags a link brings", async ({ page }) => {
+    await page.goto(
+      "/start?utm_source=newsletter&utm_medium=email&utm_campaign=pilot",
+      { waitUntil: "domcontentloaded" },
+    );
+    const url = new URL(page.url());
+    expect(url.pathname).toBe("/oswiadczenia");
+    expect(url.searchParams.get("utm_source")).toBe("newsletter");
+    expect(url.searchParams.get("utm_campaign")).toBe("pilot");
   });
 
   test("the search fills most of its line on a desktop", async ({ page }) => {

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
-import { nextTick, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
+import * as firestore from "firebase/firestore";
 import EntityDetailsCard from "../../app/components/EntityDetailsCard.vue";
 import { authRequest, useAuthState } from "~/composables/auth";
 import type { Article, Person } from "../../shared/model";
@@ -21,6 +22,27 @@ vi.mock("@plausible-analytics/tracker", () => ({
   init: vi.fn(),
   track: vi.fn(),
 }));
+
+/** The vote pill, without its subscription. For a signed in reader the real
+ * `useVotes` opens a live Firestore listener on their vote. No Firestore runs
+ * under vitest, so the listener only ever fails to reach the emulator at
+ * 127.0.0.1:8080, and Firestore logs each failure, retry after retry, for as
+ * long as it lives - past the end of this file, whose mounts are never torn
+ * down. The first failure lands as the last test ends, and a log still on its
+ * way to vitest when the worker closes fails the whole run with every test
+ * passing: "Closing rpc while "onUserConsoleLog" was pending" (main's Vitest
+ * on 10-28, 10-29 and 11-01, the morning check on 10-27, 10-28, 10-30 and
+ * 11-11). Nothing here asks about the vote. */
+vi.mock("~/composables/votes", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/composables/votes")>();
+  const useVotes: typeof actual.useVotes = (_id, category) => ({
+    userCategoryVotes: computed(() => ({})),
+    config: actual.voteCategoryConfig[category],
+    loading: ref(false),
+    castVote: vi.fn(),
+  });
+  return { ...actual, useVotes };
+});
 
 const person: Person = {
   id: "jan",
@@ -51,6 +73,81 @@ describe("EntityDetailsCard", () => {
     vi.mocked(authRequest).mockRejectedValue(new Error("Page not found"));
   });
 
+  it("shows a signed-in reader a draft's declarations under the facts, and asks nothing of a public page", async () => {
+    vi.mocked(authRequest).mockImplementation(async (url: string) => {
+      if (url === "/api/nodes/jan-szkic/declaration-crops") {
+        return {
+          publication: null,
+          crops: [],
+          searches: [
+            {
+              year: 2018,
+              office: "Rada gminy",
+              unit: "Strzelin (gmina miejsko-wiejska)",
+              status: null,
+              reason: null,
+              files: 0,
+              bipUrl: null,
+            },
+          ],
+          links: [],
+        };
+      }
+      throw new Error("Page not found");
+    });
+    const draft = await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: { ...person, id: "jan-szkic", published: false } as Person,
+        type: "person",
+      },
+    });
+    await flushPromises();
+    const html = draft.html();
+    const block = html.indexOf('data-testid="person-draft-declarations"');
+    expect(block).toBeGreaterThan(html.indexOf("Data urodzenia"));
+    expect(
+      draft.get('[data-testid="person-draft-declarations"]').text(),
+    ).toContain("Nie mamy oświadczenia majątkowego.");
+
+    const live = await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: { ...person, id: "jan-publiczny", published: true } as Person,
+        type: "person",
+      },
+    });
+    await flushPromises();
+    expect(
+      live.find('[data-testid="person-draft-declarations"]').exists(),
+    ).toBe(false);
+    expect(authRequest).not.toHaveBeenCalledWith(
+      "/api/nodes/jan-publiczny/declaration-crops",
+      expect.anything(),
+    );
+  });
+
+  it("asks nothing of a draft's declarations for a reader who is not signed in", async () => {
+    (useAuthState as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      user: ref(null),
+      isAdmin: ref(false),
+    });
+    await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: { ...person, id: "jan-gosc", published: false } as Person,
+        type: "person",
+      },
+    });
+    await flushPromises();
+    expect(authRequest).not.toHaveBeenCalledWith(
+      "/api/nodes/jan-gosc/declaration-crops",
+      expect.anything(),
+    );
+    // Signed in again, as the tests after this one take for granted.
+    (useAuthState as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      user: ref({ uid: "test-user" }),
+      isAdmin: ref(false),
+    });
+  });
+
   it("vouches for the birth date under the facts when a declaration confirms it", async () => {
     const declarations: PersonDeclarations = {
       autoPublished: null,
@@ -63,11 +160,20 @@ describe("EntityDetailsCard", () => {
         },
       ],
     };
-    vi.mocked(authRequest).mockResolvedValue(declarations);
-    // Its own id: the declarations are kept under the node's key.
+    vi.mocked(authRequest).mockImplementation(async (url: string) => {
+      if (url === "/api/nodes/jan-bip/declarations") return declarations;
+      throw new Error("Page not found");
+    });
+    // Its own id: the declarations are kept under the node's key. Public, as
+    // a page whose date a declaration confirmed is.
     const wrapper = await mountSuspended(EntityDetailsCard, {
       props: {
-        entity: { ...person, id: "jan-bip", birthDate: "1968-03-14" } as Person,
+        entity: {
+          ...person,
+          id: "jan-bip",
+          birthDate: "1968-03-14",
+          published: true,
+        } as Person,
         type: "person",
       },
     });
@@ -170,6 +276,26 @@ describe("EntityDetailsCard", () => {
     expect(title.classes()).toContain("text-wrap");
   });
 
+  it("puts a party only a backing ties the person to after the rest, in the backing chip", async () => {
+    const wrapper = await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: { ...person, parties: ["PO", "PSL"] } as Person,
+        type: "person",
+        backed: { PSL: ["2018"] },
+      },
+    });
+    const chips = wrapper.get(".v-card-title").findAll(".chip");
+
+    expect(chips.map((chip) => chip.text())).toEqual(["PO", "PSL"]);
+    expect(chips[0]!.classes()).not.toContain("chip--backing");
+    expect(chips[1]!.classes()).toContain("chip--backing");
+    expect(chips[1]!.attributes("title")).toBe(
+      "Poparcie kandydatury w wyborach 2018 (PKW)",
+    );
+    // No label, as the parties have none.
+    expect(wrapper.get(".v-card-title").text()).not.toContain("poparcie");
+  });
+
   it("marks an unpublished page as a draft, and says nothing on a live one", async () => {
     const draft = await mountCard(false);
     expect(draft.text()).toContain("szkic");
@@ -181,6 +307,24 @@ describe("EntityDetailsCard", () => {
       },
     });
     expect(live.text()).not.toContain("szkic");
+  });
+
+  /** What the stand-in for `useVotes` above is for: no mount here may leave a
+   * live Firestore listener behind. With no emulator it only ever logs failed
+   * connections, and one of those landing as vitest closes the worker fails
+   * the run with every test passing. A control the card gains with a listener
+   * of its own needs a stand-in as well, and this says so on the first run
+   * rather than in one CI run out of a few. An admin's card has every control
+   * there is. */
+  it("opens no Firestore listener, even with every control an admin gets", async () => {
+    const listen = vi.spyOn(firestore, "onSnapshot");
+    try {
+      await mountCard(true);
+      await flushPromises();
+      expect(listen).not.toHaveBeenCalled();
+    } finally {
+      listen.mockRestore();
+    }
   });
 });
 
@@ -206,7 +350,7 @@ describe("EntityDetailsCard for an article", () => {
 
   it("says an article has no title rather than showing an empty heading", async () => {
     const wrapper = await mountArticle(true);
-    expect(wrapper.get("h2").text()).toBe("Artykuł bez tytułu");
+    expect(wrapper.get("h1").text()).toBe("Artykuł bez tytułu");
   });
 
   it("gives a signed in reader the pencil to name it", async () => {

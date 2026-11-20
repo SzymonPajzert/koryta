@@ -94,6 +94,7 @@
             :can-add="canAddRelations"
             :can-remove="canRemoveRelations"
             :subject-published="subjectPublished"
+            :founder-label="() => founderNoun(company)"
             add-testid="owners"
             @add="openAdd(['owns_parent'], 'Dodaj właściciela')"
             @remove="openRemove"
@@ -105,6 +106,7 @@
             :can-add="canAddRelations"
             :can-remove="canRemoveRelations"
             :subject-published="subjectPublished"
+            :founder-label="(edge) => foundedParticiple(edgeCompany(edge))"
             add-testid="subsidiaries"
             @add="openAdd(['owns_child'], 'Dodaj spółkę zależną')"
             @remove="openRemove"
@@ -219,8 +221,14 @@ import {
   mdiRefresh,
 } from "@mdi/js";
 import { useDisplay } from "vuetify";
-import { onePerNode, useEdges, type EdgeNode } from "~/composables/edges";
+import {
+  edgeCompany,
+  onePerNode,
+  useEdges,
+  type EdgeNode,
+} from "~/composables/edges";
 import { edgeSentence } from "~/utils/edgeSentence";
+import { founderNoun, foundedParticiple } from "~/utils/founders";
 import { useEdgeRemoval } from "~/composables/edgeRemoval";
 import { useEdgeEditing } from "~/composables/edgeEditing";
 import {
@@ -313,6 +321,10 @@ const ownerEdges = computed(() =>
  * and the row is its `owns` one - the seat is still what „Lokalizacja" is read
  * from. See `onePerNode`. */
 const owners = computed(() => onePerNode(ownerEdges.value, ["owns", "seat"]));
+/** What the company holds, and the foundations and associations it set up,
+ * which hold no shares to be held: those come in as an `owns` edge marked
+ * `founder`, and the list says „założona” beside them (Szymon picked them
+ * among the subsidiaries over a list of their own, 2026-11-11). */
 const subsidiaries = computed(() =>
   targets.value.filter((e) => e.type === "owns" && e.richNode.type === "place"),
 );

@@ -28,7 +28,8 @@ import {
 } from "~~/server/utils/edges";
 import { approveWaitingEdge } from "~~/server/utils/edgePublication";
 import { resolveMergedNode } from "~~/server/utils/merge";
-import { electionPositions, sortParties } from "~~/shared/misc";
+import { electionPositions } from "~~/shared/misc";
+import { partiesAfterImport } from "~~/shared/partyFloor";
 import type {
   Edge,
   Article,
@@ -330,11 +331,13 @@ function updatedPerson(
     const storedParties = Array.isArray(stored.parties)
       ? (stored.parties as string[])
       : [];
-    // By name with „Inne” last, the order the pipeline sends them in.
-    const parties = sortParties(
-      new Set([...storedParties, ...(body.parties ?? [])]),
-    );
-    if (parties.length > storedParties.length) learned.parties = parties;
+    // By name with „Inne” last, the order the pipeline sends them in. A lone
+    // „Inne” gives way to a party the payload names (`partiesAfterImport`).
+    const parties = partiesAfterImport(storedParties, body.parties ?? []);
+    const same =
+      parties.length === storedParties.length &&
+      parties.every((party) => storedParties.includes(party));
+    if (!same) learned.parties = parties;
   }
 
   if (body.content) learned.content = body.content;
@@ -681,6 +684,17 @@ async function createElection(
   // election PKW may simply have said nothing about - and it says nothing
   // about 70% of the register. See `elected` in shared/api.ts.
   if (election.elected) edgeData.elected = true;
+  // PKW's statements of the candidate's party and of who backed them. Written
+  // without a reviewer, as the result is: PKW records them, and the parties are
+  // read off them through an exact table, as `vouched` committees are.
+  if (election.party_member) edgeData.party_member = election.party_member;
+  if (election.member_parties?.length) {
+    edgeData.member_parties = election.member_parties;
+  }
+  if (election.supported_by) edgeData.supported_by = election.supported_by;
+  if (election.backing_parties?.length) {
+    edgeData.backing_parties = election.backing_parties;
+  }
   if (election.election_year) {
     edgeData.start_date = `${election.election_year}-01-01`;
   }

@@ -316,9 +316,10 @@ const ownershipOptions = [
 
 /** The sectors the filter on /eksploruj offers, which is the whole of what may
  * be proposed: a value off this list would file the company under a category
- * nothing can ever filter on. Its owner, „Skarb Państwa”, is left out: it
- * follows Prokuratoria's list rather than anybody's edit, and
- * `/api/revisions/create` keeps whatever the entry carries (`withOwnersFrom`). */
+ * nothing can ever filter on. Its owner, „Skarb Państwa”, and its status, „W
+ * likwidacji” or „W upadłości”, are left out: they follow Prokuratoria's list
+ * and the register rather than anybody's edit, and `/api/revisions/create`
+ * keeps whatever the entry carries (`withRegisterFactsFrom`). */
 const categoryOptions = companyCategories
   .filter((category) => isSector(category.value))
   .map((category) => ({ title: category.title, value: category.value }));

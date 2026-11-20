@@ -23,10 +23,10 @@ pytest_plugins = ["pytester"]
 #: `budget_warnings` and `budget_slack` read.
 INVARIANTS_CONFTEST = Path(__file__).parents[3] / "tests/pipelines/conftest.py"
 
-# The 04:00 Warsaw export, in UTC as its folder is named; the night starts at
-# 04:30 Warsaw, half an hour later.
-FRESH = "2026-10-04T02:00:04.120Z"
-STALE = "2026-10-03T02:00:04.120Z"
+# The 02:00 Warsaw export, in UTC as its folder is named; the night starts at
+# 02:30 Warsaw, half an hour later.
+FRESH = "2026-10-04T00:00:04.120Z"
+STALE = "2026-10-03T00:00:04.120Z"
 #: What the processes would answer, by the entry point's name.
 GOOD = {
     "koryta_scrape_krs_free": 0,
@@ -37,7 +37,10 @@ GOOD = {
     # The companies step runs the people import too, with one flag more.
     "koryta_people_import --companies-only": 0,
     "koryta_people_import": 0,
+    "koryta_company_import": 0,
     "koryta_score_import": 0,
+    "koryta_bip_declarations": 0,
+    "koryta_uploader": 0,
     "compressor": 0,
     # The held pipelines' rebuilds, as `koryta <Name>`.
     **{f"koryta {name}": 0 for name in night.REBUILT_ON_CHANGE},
@@ -284,7 +287,10 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "pytest invariants",
         "koryta_people_import --companies-only",
         "koryta_people_import",
+        "koryta_company_import",
         "koryta_score_import",
+        "koryta_bip_declarations",
+        "koryta_uploader",
     ]
     assert set(world.steps().values()) == {("succeeded", "")} | {
         ("succeeded", FRESH),
@@ -350,14 +356,14 @@ def test_the_people_go_up_capped_in_priority_order_from_what_is_on_disk(world):
 
 
 def test_the_people_compare_with_the_export_the_export_step_took(world, monkeypatch):
-    """A night forced at three, the 04:00 export not taken yet: the export
+    """A night forced at one, the 02:00 export not taken yet: the export
     step takes one taken by hand at eleven, inside its six hours, and the
     people step is told to compare with that one, which its own rule -
-    today's, at four or later - would refuse."""
+    today's, at two or later - would refuse."""
     eleven = "2026-10-03T21:00:12.004Z"
     world.export = eleven
     monkeypatch.setattr(
-        night, "utc_now", lambda: datetime.fromisoformat("2026-10-04T01:00:00+00:00")
+        night, "utc_now", lambda: datetime.fromisoformat("2026-10-03T23:00:00+00:00")
     )
 
     assert night.main([]) == 0
@@ -506,6 +512,80 @@ def test_a_people_dry_run_creates_no_company_either(world):
 
     argv, _ = world.command("koryta_people_import --companies-only")
     assert argv[-2:] == ["--dry-run", "--companies-only"]
+
+
+def test_what_tonights_data_changes_on_the_companies_goes_up_after_the_people(world):
+    """Decision on 2026-11-12: the companies the site has go up after the
+    people, as `koryta_company_import` sends them: over the export the night
+    took, under the night's caps, in the step's own time."""
+    assert night.main([]) == 0
+
+    ran = world.ran()
+    assert ran.index("koryta_company_import") == ran.index("koryta_people_import") + 1
+    assert ran.index("koryta_score_import") == ran.index("koryta_company_import") + 1
+    argv, env = world.command("koryta_company_import")
+    assert argv[1:] == [
+        "--max-uploads",
+        "200",
+        "--max-renames",
+        "0",
+        "--max-minutes",
+        "30",
+        "--export",
+        FRESH,
+    ]
+    assert world.steps()["company_updates"] == ("succeeded", "")
+    assert env.get("DISABLE_BACKUP") != "1"
+
+
+def test_the_nights_company_caps_and_dry_run_reach_the_company_step(world):
+    night.main(
+        ["--max-company-uploads", "50", "--max-company-renames", "3"]
+        + ["--company-dry-run"]
+    )
+
+    argv, _ = world.command("koryta_company_import")
+    assert argv[argv.index("--max-uploads") + 1] == "50"
+    assert argv[argv.index("--max-renames") + 1] == "3"
+    assert "--dry-run" in argv
+    # The people's flags are the people's.
+    people, _ = world.command("koryta_people_import")
+    assert "--dry-run" not in people
+    assert people[people.index("--max-uploads") + 1] == "100"
+
+
+def test_a_held_upload_skips_the_company_changes_too(world):
+    world.export = STALE
+
+    assert night.main([]) == night.EXIT_TRY_LATER
+
+    assert world.steps()["company_updates"] == (
+        "skipped",
+        "pominięte - osoby wstrzymane: nie ma dzisiejszej kopii bazy",
+    )
+    assert "koryta_company_import" not in world.ran()
+    ending = world.runs[-1].ending()
+    assert ending["stop_reason"] == (
+        "people: held - wstrzymane: nie ma dzisiejszej kopii bazy"
+    )
+
+
+def test_what_the_company_step_leaves_or_breaks_holds_nothing_after_it(world):
+    world.codes["koryta_company_import"] = night.EXIT_TRY_LATER
+
+    assert night.main([]) == 0
+
+    assert world.steps()["company_updates"] == ("partial", "zostało na następny raz")
+    assert world.steps()["scores"] == ("succeeded", "")
+
+    world.commands.clear()
+    world.objects.clear()
+    world.codes["koryta_company_import"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["company_updates"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["scores"] == ("succeeded", "")
 
 
 def test_the_scores_go_up_after_the_people_within_the_steps_time(world):
@@ -678,12 +758,17 @@ def test_the_odpisy_go_to_the_bulletins_companies_then_public_ones_with_none(
 
     argv, _ = world.command("koryta_krs_odpis")
     assert argv[1:3] == ["--graph", "--changed-since"]
-    # The gap the bulletin never closes, public only by default, and under
-    # the step's one cap: the service tires after ~1,000 documents a run.
-    assert argv[argv.index("--missing") + 1] == "public"
+    # The gap the bulletin never closes: the public companies, then the site's
+    # private ones, by default, and under the step's one cap: the service
+    # tires after ~1,000 documents a run.
+    assert argv[argv.index("--missing") + 1] == "site"
     assert argv[argv.index("--max") + 1] == "300"
 
-    for scope, expected in (("all", ["--missing", "all"]), ("none", [])):
+    for scope, expected in (
+        ("public", ["--missing", "public"]),
+        ("all", ["--missing", "all"]),
+        ("none", []),
+    ):
         world.commands.clear()
         world.objects.clear()
         night.main(["--odpis-missing", scope, "--only", "krs_odpis"])
@@ -694,7 +779,7 @@ def test_the_odpisy_go_to_the_bulletins_companies_then_public_ones_with_none(
     night.main(["--dry-run", "--only", "krs_odpis"])
     assert (
         "koryta_krs_odpis --graph --changed-since <yesterday> --queue "
-        "--missing public --max 300" in capsys.readouterr().out
+        "--missing site --max 300" in capsys.readouterr().out
     )
 
 
@@ -712,11 +797,11 @@ def test_the_odpisy_go_to_the_paid_queues_companies_before_the_gap(world, capsys
 
     argv, _ = world.command("koryta_krs_odpis")
     assert "--queue" not in argv
-    assert argv[argv.index("--missing") + 1] == "public"
+    assert argv[argv.index("--missing") + 1] == "site"
 
     night.main(["--dry-run", "--no-odpis-queue", "--only", "krs_odpis"])
     assert (
-        "koryta_krs_odpis --graph --changed-since <yesterday> --missing public "
+        "koryta_krs_odpis --graph --changed-since <yesterday> --missing site "
         "--max 300" in capsys.readouterr().out
     )
 
@@ -1221,8 +1306,15 @@ def test_the_scores_do_not_wait_on_how_the_people_went(world):
     assert night.main([]) == night.EXIT_FAILED
 
     assert world.steps()["people"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["company_updates"] == ("succeeded", "")
     assert world.steps()["scores"] == ("succeeded", "")
-    assert world.ran()[-2:] == ["koryta_people_import", "koryta_score_import"]
+    assert world.ran()[-5:] == [
+        "koryta_people_import",
+        "koryta_company_import",
+        "koryta_score_import",
+        "koryta_bip_declarations",
+        "koryta_uploader",
+    ]
 
 
 def test_a_failed_score_upload_fails_the_night(world):
@@ -1231,6 +1323,70 @@ def test_a_failed_score_upload_fails_the_night(world):
     assert night.main([]) == night.EXIT_FAILED
 
     assert world.steps()["scores"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["tidy"][0] == "succeeded"
+
+
+def test_the_declarations_facts_go_up_whatever_holds_the_people(world):
+    world.export = STALE
+
+    assert night.main([]) == night.EXIT_TRY_LATER
+
+    assert world.steps()["people"][0] == "held"
+    assert world.steps()["declarations"] == ("succeeded", "")
+    argv, _ = world.command("koryta_bip_declarations")
+    assert argv[1:] == ["send-facts"]
+
+
+def test_no_declarations_facts_yet_is_partial_and_a_refusal_fails_the_night(world):
+    # No part from predator yet, or the site without the endpoint (404).
+    world.codes["koryta_bip_declarations"] = night.EXIT_TRY_LATER
+
+    assert night.main([]) == 0
+
+    assert world.steps()["declarations"] == ("partial", "zostało na następny raz")
+
+    world.commands.clear()
+    world.objects.clear()
+    world.codes["koryta_bip_declarations"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["declarations"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["tidy"][0] == "succeeded"
+
+
+def test_the_site_recounts_on_autopush_after_everything_the_night_sent(world):
+    assert night.main([]) == 0
+
+    assert world.ran()[-2:] == ["koryta_bip_declarations", "koryta_uploader"]
+    argv, _ = world.command("koryta_uploader")
+    assert argv[1:] == [
+        "--type",
+        "computeNodes",
+        "--endpoint",
+        "https://autopush.koryta.pl",
+        "--submit",
+    ]
+    assert world.steps()["compute_nodes"] == ("succeeded", "")
+
+
+def test_a_held_night_still_recounts(world):
+    world.export = STALE
+
+    assert night.main([]) == night.EXIT_TRY_LATER
+
+    assert world.steps()["people"][0] == "held"
+    assert world.steps()["compute_nodes"] == ("succeeded", "")
+
+
+def test_a_recount_that_fails_fails_the_night_and_holds_nothing(world):
+    # The site's 504 after 300 s, or a refusal: the uploader exits 1.
+    world.codes["koryta_uploader"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["compute_nodes"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["people"] == ("succeeded", "")
     assert world.steps()["tidy"][0] == "succeeded"
 
 
@@ -1335,7 +1491,20 @@ def test_a_dry_run_runs_nothing_and_prints_the_plan(world, capsys):
         "companies the people step's people name that the export has no page "
         "for, created first" in out
     )
+    assert (
+        "koryta_company_import --max-uploads 200 --max-renames 0 --export <the "
+        "export step's>: what tonight's data changes on the companies the site "
+        "has, those turning public first; none made private" in out
+    )
     assert "koryta_score_import" in out
+    assert (
+        "declarations at most 15 min: koryta_bip_declarations send-facts: "
+        "predator's newest facts part, with tonight's list, to the site" in out
+    )
+    assert (
+        "compute_nodes at most 10 min: koryta_uploader --type computeNodes "
+        "--endpoint https://autopush.koryta.pl --submit" in out
+    )
     assert "koryta_scrape_krs_paid --scope fallback --max-calls 50" in out
     assert (
         "koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25"
@@ -1508,13 +1677,13 @@ def test_the_newest_finished_export_is_found_past_a_running_one():
 
     class Listing(list):
         prefixes = {
-            "hostname=koryta.pl/date=2026-10-03T02:00:04.120Z/",
-            "hostname=koryta.pl/date=2026-10-04T02:00:04.120Z/",
+            "hostname=koryta.pl/date=2026-10-03T00:00:04.120Z/",
+            "hostname=koryta.pl/date=2026-10-04T00:00:04.120Z/",
             "hostname=koryta.pl/date=2026-10-04T05:10:00.000Z/",  # still writing
             "hostname=koryta.pl/date=2026-10-04/",  # page captures
         }
 
-    finished = {"2026-10-03T02:00:04.120Z", "2026-10-04T02:00:04.120Z"}
+    finished = {"2026-10-03T00:00:04.120Z", "2026-10-04T00:00:04.120Z"}
 
     class Bucket:
         def list_blobs(self, prefix, delimiter):
@@ -1539,7 +1708,7 @@ def test_tidy_removes_old_export_shards_and_day_named_outputs(tmp_path, monkeypa
     downloaded, versioned = tmp_path / "downloaded", tmp_path / "versioned"
     downloaded.mkdir()
     versioned.mkdir()
-    shard = "hostname=koryta.pl.date={}T02:00:04.120Z.all_namespaces.kind_nodes" + (
+    shard = "hostname=koryta.pl.date={}T00:00:04.120Z.all_namespaces.kind_nodes" + (
         ".output-0"
     )
     old, new = shard.format("2026-09-20"), shard.format("2026-10-03")

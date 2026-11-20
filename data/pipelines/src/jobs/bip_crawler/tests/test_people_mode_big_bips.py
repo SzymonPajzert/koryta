@@ -12,6 +12,8 @@ from collections import Counter
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 from jobs.bip_crawler import people as people_mode
 from jobs.bip_crawler.people import (
     DECLARATIONS_BONUS,
@@ -26,7 +28,15 @@ from jobs.bip_crawler.people_list import to_search
 from jobs.bip_crawler.tests.test_bip import FakeFrontier
 from jobs.bip_crawler.tests.test_people_mode_review import PDF, Web, html, row
 from scrapers.bip.classify import normalize_url
-from scrapers.bip.people import Seeker, link_score, office_terms, says_declarations
+from scrapers.bip.people import (
+    SOMEBODY_ELSE,
+    Seeker,
+    link_score,
+    office_terms,
+    says_declarations,
+    somebody_else,
+    stem,
+)
 from scrapers.bip.units import UnitSeed
 from scrapers.common.fetch import HttpResult
 from scrapers.common.links import LinkContext, extract_link_contexts
@@ -45,6 +55,7 @@ def search(
     scopes=None,
     render=None,
     clock=time.monotonic,
+    first_names=frozenset(),
     **options,
 ):
     web = Web(sites)
@@ -70,6 +81,7 @@ def search(
         known=known,
         render=render,
         clock=clock,
+        first_names=first_names,
     )
     people.run(
         to_search(
@@ -295,7 +307,16 @@ def test_a_known_page_starts_the_walk(tmp_path):
     assert store.outcomes["lis"].status == "found"
 
 
-def test_a_sitemap_leads_to_the_declarations(tmp_path):
+@pytest.mark.parametrize(
+    "sitemap",
+    [
+        "https://u1.pl/sitemap-index.xml",
+        # CONCEPT Intermedia's SAM3 (bip.powiat.olecko.pl, 11-13), read
+        # against the host: as written it reached none.
+        "/sitemap-index.xml",
+    ],
+)
+def test_a_sitemap_leads_to_the_declarations(tmp_path, sitemap):
     index = (
         "<sitemapindex><sitemap><loc>https://u1.pl/sm-news.xml</loc></sitemap>"
         "<sitemap><loc>https://u1.pl/sm-oswiadczenia.xml.gz</loc></sitemap>"
@@ -310,7 +331,7 @@ def test_a_sitemap_leads_to_the_declarations(tmp_path):
         "https://u1.pl/robots.txt": (
             200,
             "text/plain",
-            b"User-agent: *\nSitemap: https://u1.pl/sitemap-index.xml\n",
+            f"User-agent: *\nSitemap: {sitemap}\n".encode(),
         ),
         "https://u1.pl/sitemap-index.xml": (200, "application/xml", index.encode()),
         "https://u1.pl/sm-oswiadczenia.xml.gz": (
@@ -412,6 +433,42 @@ def test_a_page_a_script_draws_is_read_once_rendered(tmp_path):
     ]
 
 
+KATOWICE_MENU = '<a href="/menu/uchwala.pdf">Rewitalizacja - uchwała</a>' + "".join(
+    f'<a href="/m{i}">Menu {i}</a>' for i in range(8)
+)
+KATOWICE_PERSON = (
+    "<h2>Ewa Lis</h2>"
+    '<div class="col-md-12 osw5343" style="margin-bottom: 30px;">{box}</div>'
+    + KATOWICE_MENU
+)
+KATOWICE_URL = "https://u1.pl/oswiadczeniamajatkowe/osw_osoba.aspx?OsobaID=5343"
+KATOWICE = {
+    "https://u1.pl": html(
+        "Oświadczenia majątkowe",
+        f'<a href="{KATOWICE_URL}">Ewa Lis</a>',
+    ),
+    KATOWICE_URL: html("Strona podstawowa", KATOWICE_PERSON.format(box="")),
+    "https://u1.pl/files/1.pdf": (200, "application/pdf", PDF + b"1"),
+    "https://u1.pl/menu/uchwala.pdf": (200, "application/pdf", PDF + b"2"),
+}
+
+
+def test_a_box_a_script_fills_gives_the_person_its_files_not_the_menus(tmp_path):
+    drawn: list[str] = []
+
+    def render(url: str) -> tuple[HttpResult, int]:
+        drawn.append(url)
+        box = '<ul><li><a href="/files/1.pdf">Oświadczenie za 2025</a></li></ul>'
+        page = html("Strona podstawowa", KATOWICE_PERSON.format(box=box))
+        return HttpResult(url, *page[:1], "text/html", page[2]), 0
+
+    rows = [row("lis", "u1", "Ewa", "Lis")]
+    _, store, _ = search(tmp_path, KATOWICE, rows, render=render, sitemaps=False)
+    assert drawn == [KATOWICE_URL]
+    assert store.outcomes["lis"].status == "found"
+    assert {url for _, url in store.docs} == {"https://u1.pl/files/1.pdf"}
+
+
 def test_unrendered_a_script_drawn_bip_shows_nothing(tmp_path):
     rows = [row("lis", "u1", "Ewa", "Lis")]
     _, store, _ = search(tmp_path, JS_SITE, rows, sitemaps=False)
@@ -444,8 +501,20 @@ def test_checked_starts_replace_what_the_lists_had():
             "bip_url": "https://samorzad.gov.pl/web/gmina-skolyszyn",
             "declarations_url": "",
         },
+        {
+            # Tychy: a year a page, chosen in a form, none linking the next.
+            "unit": "247701",
+            "bip_url": "https://bip.umtychy.pl/",
+            "declarations_url": "https://bip.umtychy.pl/om/2026 "
+            "https://bip.umtychy.pl/om/2025",
+        },
     ]
-    assert apply_unit_starts(seeds, starts) == 3
+    assert apply_unit_starts(seeds, starts) == 4
+    assert seeds["247701"].bip_urls == [
+        "https://bip.umtychy.pl/om/2026",
+        "https://bip.umtychy.pl/om/2025",
+        "https://bip.umtychy.pl/",
+    ]
     assert seeds["020101"].bip_urls == [
         "https://bip.um.boleslawiec.pl/oswiadczenia-majatkowe",
         "https://bip.um.boleslawiec.pl/",
@@ -461,6 +530,8 @@ def test_the_checked_in_starts_parse(tmp_path):
     for start in read_unit_starts():
         assert len(start["unit"]) == 6 and start["unit"].isdigit()
         assert start["bip_url"].startswith(("http://", "https://"))
+        for url in start["declarations_url"].split():
+            assert url.startswith(("http://", "https://")), start["unit"]
     assert read_unit_starts(tmp_path / "missing.csv") == []
 
 
@@ -830,3 +901,120 @@ def test_a_walk_past_its_own_time_ends_as_budget(tmp_path):
         "budget",
     )
     assert len(web.calls) <= 4  # the depth limit (6) would have allowed 7
+
+
+#: First names as `PeopleSearch.first_names` holds them: every candidacy's.
+NAMES = frozenset(
+    stem(n, min_a=4)
+    for n in "Ryszard Marcin Jarosław Daniel Ewa Anna Jan Piotr Adam".split()
+)
+
+
+def test_a_label_naming_somebody_nobody_seeks():
+    kabat = Seeker.of("k", "Ryszard", "Kabat")
+    page = "https://bip.powiat-ilawski.pl/oswiadczenia/10004"
+
+    def other(anchor: str, url: str = f"{page}/1/") -> bool:
+        return somebody_else(LinkContext(url, anchor), [kabat], NAMES)
+
+    assert other("Marcin Bednarczyk Członek Zarządu")
+    assert other("Daniel Zalewski, oświadczenie majątkowe, coroczne 2023")
+    assert other("BEDNARCZYK Marcin")
+    # The seeker's own, by surname alone too, as link_score lifts it.
+    assert not other("Ryszard Kabat Członek Zarządu")
+    assert not other("Kabat Ryszard")
+    assert not other("Marcin Bednarczyk", f"{page}/2/Ryszard_Kabat/")
+    # A list's own pages and the site's menu name nobody.
+    for label in (
+        "2",
+        "Następna strona",
+        "Kadencja 2024-2029",
+        "Oświadczenia majątkowe radnych",
+        "Rada Powiatu",
+        "Szkoła Podstawowa im. Jana Pawła II",
+    ):
+        assert not other(label), label
+    # Without the list's first names nobody is told apart.
+    assert not somebody_else(
+        LinkContext(f"{page}/1/", "Marcin Bednarczyk"), [kabat], frozenset()
+    )
+
+
+def test_a_list_reads_its_own_pages_before_people_nobody_seeks():
+    # Powiat iławski (SYSTEMDOBIP): ten declarations a page, each linked by its
+    # filer's name and post, 2 above the pager; the walk read 150 other people's
+    # pages and their change logs, and found two of six (11-18).
+    host = "https://bip.powiat-ilawski.pl/oswiadczenia/10004"
+    kabat = Seeker.of("k", "Ryszard", "Kabat")
+    own = f"{host}/939/Ryszard_Kabat/"
+    other = f"{host}/938/Marcin_Bednarczyk/"
+    pager = f"{host}/2/rok/"
+    links = [
+        LinkContext(own, "Ryszard Kabat Członek Zarządu"),
+        LinkContext(other, "Marcin Bednarczyk Członek Zarządu"),
+        LinkContext(pager, "2"),
+    ]
+
+    def queued(first_names: frozenset[str]) -> dict[str, float]:
+        frontier = people_mode._Frontier([("bip.powiat-ilawski.pl", "")])
+        frontier.follow(
+            links,
+            [kabat],
+            1,
+            None,
+            DECLARATIONS_BONUS,
+            f"{host}/rok/",
+            first_names=first_names,
+        )
+        return {url: -score for score, _, _, url in frontier.heap}
+
+    before, after = queued(frozenset()), queued(NAMES)
+    own, other, pager = (normalize_url(u) for u in (own, other, pager))
+    assert before[other] > before[pager]
+    assert after[own] > after[pager] > after[other]
+    # Read last, not left out: a small unit still reads everybody.
+    assert after[other] == before[other] - SOMEBODY_ELSE
+    # Below the pager five pages on (0.5 a level), the depth limit's last.
+    assert after[other] < after[pager] - 0.5 * 5
+    assert after[own] == before[own]
+
+
+def test_a_seeker_on_a_lists_second_page_is_found_within_the_budget(tmp_path):
+    others = "Marcin Bednarczyk|Jarosław Piechotka|Piotr Mazur|Adam Nowak|Jan Wilk"
+    rows = "".join(
+        f'<tr><td><a href="/om/{i}/p">{name} Członek Zarządu</a></td>'
+        f'<td><a href="/f/{i}.pdf">Pobierz załącznik</a></td></tr>'
+        for i, name in enumerate(others.split("|"))
+    )
+    sites = {
+        "https://u1.pl": html("BIP", '<a href="/om">Oświadczenia majątkowe</a>'),
+        "https://u1.pl/om": html(
+            "Oświadczenia majątkowe", f'<table>{rows}</table><a href="/om/2/rok">2</a>'
+        ),
+        "https://u1.pl/om/2/rok": html(
+            "Oświadczenia majątkowe",
+            '<table><tr><td><a href="/om/9/p">Ewa Lis Radna Powiatu</a></td>'
+            '<td><a href="/f/lis.pdf">Ewa Lis - oświadczenie majątkowe</a></td>'
+            "</tr></table>",
+        ),
+        **{
+            f"https://u1.pl/om/{i}/p": html(f"{name} - Oświadczenia majątkowe", "")
+            for i, name in enumerate(others.split("|"))
+        },
+        "https://u1.pl/f/lis.pdf": (200, "application/pdf", PDF + b"lis"),
+    }
+
+    def walk(first_names: frozenset[str]) -> str:
+        _, store, _ = search(
+            tmp_path / str(len(first_names)),
+            sites,
+            [row("lis", "u1", "Ewa", "Lis")],
+            unit_pages=4,
+            pages_per_candidacy=0,
+            sitemaps=False,
+            first_names=first_names,
+        )
+        return store.outcomes["lis"].status
+
+    assert walk(frozenset()) == "not_found"
+    assert walk(NAMES) == "found"

@@ -814,7 +814,12 @@ def test_a_title_initial_a_seeker_could_be_keeps_the_unnamed_files():
             "Załączniki",
         )
     ]
-    title = "Rada Miejska - J. Kaczmarka - Stan majątkowy na 31.12.2025 r."
+    # Chojnów's breadcrumb: an unnamed file is the pool's on a page that says
+    # declarations, not on one that says "majątkowy" alone.
+    title = (
+        "Rada Miejska - Oświadczenia majątkowe - J. Kaczmarka - "
+        "Stan majątkowy na 31.12.2025 r."
+    )
     found = candidates("https://u.pl/w/1", title, links, [kaczmarek])
     # Unnamed: whether it is his, the OCR step decides.
     assert [c.key for c in found] == [""]

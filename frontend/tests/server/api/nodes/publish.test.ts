@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { requireAdmin } from "../../../../server/utils/auth";
+import { afterHandPublication } from "../../../../server/utils/declarationDecisions";
 import { notifyRevisionReviewed } from "../../../../server/utils/revisionNotifications";
 import handler from "../../../../server/api/nodes/publish.post";
 
@@ -71,6 +72,10 @@ vi.mock("../../../../server/utils/revisionNotifications", () => ({
   notifyRevisionReviewed: vi.fn(async () => "sent"),
 }));
 
+vi.mock("../../../../server/utils/declarationDecisions", () => ({
+  afterHandPublication: vi.fn(async () => {}),
+}));
+
 const { mockReadValidatedBody, mockCacheClear } = vi.hoisted(() => {
   const mockReadValidatedBody = vi.fn();
   const mockCacheClear = vi.fn();
@@ -124,6 +129,53 @@ describe("api/nodes/publish", () => {
 
     // A page taken down has to leave the cached lists as surely as one put up.
     expect(mockCacheClear).toHaveBeenCalledWith("nitro:handlers");
+  });
+
+  describe("a person held on /admin/oswiadczenia", () => {
+    const person = {
+      type: "person",
+      name: "X",
+      revision_id: { path: "revisions/r" },
+    };
+
+    it("closes the hold of a person's page going public, in the admin's name", async () => {
+      stored["nodes/node-1"] = person;
+
+      await handler({} as never);
+
+      expect(afterHandPublication).toHaveBeenCalledWith(
+        mockDb,
+        "node-1",
+        "admin-uid",
+        true,
+      );
+    });
+
+    it("puts the hold back on a person's page going down", async () => {
+      stored["nodes/node-1"] = { ...person, published: true };
+      requestPublished(false);
+
+      await handler({} as never);
+
+      expect(afterHandPublication).toHaveBeenCalledWith(
+        mockDb,
+        "node-1",
+        "admin-uid",
+        false,
+      );
+    });
+
+    it("leaves the hold alone when nothing changed, and on a company", async () => {
+      // Publishing a page already public would otherwise close a two_pages
+      // hold nobody answered.
+      stored["nodes/node-1"] = { ...person, published: true };
+      await handler({} as never);
+
+      stored["nodes/node-1"] = { ...person, type: "place" };
+      await handler({} as never);
+
+      expect(afterHandPublication).not.toHaveBeenCalled();
+    });
   });
 
   it("publishes a node that has an approved revision", async () => {

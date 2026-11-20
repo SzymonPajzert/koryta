@@ -34,6 +34,8 @@ contract `isPublic`/`isPublicSource` already has. See
 
 from dataclasses import dataclass
 
+from entities.company import register_statuses
+
 
 @dataclass(frozen=True)
 class Override:
@@ -201,9 +203,32 @@ WODOCIAGI = Category(
         ),
         Override("0000146925", "Chemar", "a steel foundry, PKD 24.52"),
         Override(
+            "0000109444",
+            "Huta Kosciuszko",
+            "a steelworks in bankruptcy liquidation, PKD 24.10; the pair is "
+            "codes 15 and 16 of its 38",
+        ),
+        Override(
+            "0000069432",
+            "Rafineria Nafty Glimar",
+            "an oil refinery, PKD 19.20; the pair is codes 16 and 17 of its 36",
+        ),
+        Override(
+            "0000051491",
+            "Fabryka Lozysk Tocznych - Krasnik",
+            "a bearings works, PKD 28.15",
+        ),
+        Override("0000033727", "Lerg", "a chemical works, PKD 20.16"),
+        Override(
             "0000041661",
             "Tauron Ekoserwis",
             "services power-station equipment, PKD 33.14",
+        ),
+        Override(
+            "0000191663",
+            "Ekotar",
+            "a waste-recovery company, PKD 38.32, held by Grupa Azoty Prorem, "
+            "Grupa Azoty JRCh and two others; the pair is two of its 60 codes",
         ),
         # Generators and traders. Cooling water is not a water utility.
         Override("0000517891", "Tameh Polska", "an industrial power plant, PKD 35.11"),
@@ -212,6 +237,18 @@ WODOCIAGI = Category(
         Override("0000109223", "Ekomedia", "distributes electricity, PKD 35.13"),
         Override("0000528715", "PGE Baltica 5", "an offshore wind SPV, PKD 35.14"),
         Override("0000087694", "Zaklad Energoelektryczny Energo-Stil", "PKD 35.14"),
+        Override(
+            "0000973325",
+            "ARP Energia",
+            "a generator held by Agencja Rozwoju Przemyslu, PKD 35.11",
+        ),
+        Override("0000520322", "PGE Inwest 12", "a PGE project company, PKD 35.12"),
+        Override("0000315512", "ESV Fabryczna", "a generator, PKD 35.11"),
+        Override(
+            "0001045921",
+            "Veolia Mala Kogeneracja Warszawa 1",
+            "a small cogeneration plant, PKD 35.11",
+        ),
         Override(
             "0000408185",
             "Ekoenergia Silesia",
@@ -231,6 +268,11 @@ WODOCIAGI = Category(
             "Legnicka Specjalna Strefa Ekonomiczna",
             "an economic-zone operator, PKD 68.10; the water pair is the zone's mains",
         ),
+        Override(
+            "0000047934",
+            "Lubelski Rynek Hurtowy",
+            "a wholesale market, PKD 68.20; the water pair is the market estate's",
+        ),
         # Neither code is in the register any more; the node's stored activity
         # is stale. Remove this once the ingest refreshes `activity`.
         Override(
@@ -243,6 +285,19 @@ WODOCIAGI = Category(
             "0000119699",
             "Wielkopolskie Centrum Hodowli i Rozrodu Zwierzat",
             "animal breeding services, PKD 01.62",
+        ),
+        # Companies that declare most of the classification, so the pair is
+        # there beside everything else rather than as a licence.
+        Override(
+            "0000501687",
+            "Vitamedica.eu",
+            "a development company in liquidation, PKD 41.10; the pair is two "
+            "of its 71 codes",
+        ),
+        Override(
+            "0000065962",
+            "Akwawit",
+            "PKD 01.11, crop growing; the pair is two of its 296 codes",
         ),
     ),
     include=(
@@ -1066,7 +1121,21 @@ SECTORS: tuple[Category, ...] = (
 #: sectors.
 SKARB_PANSTWA = Category("skarb-panstwa", "Skarb Państwa")
 
-COMPANY_CATEGORIES: tuple[Category, ...] = (*SECTORS, SKARB_PANSTWA)
+#: Not sectors but the register's status: a company being wound up, as the
+#: register appends it to the name (KSH art. 274). Decision on 2026-11-20:
+#: categories to filter by, like `SKARB_PANSTWA`, one for liquidation and one
+#: for bankruptcy, kept apart - the one is the owners' decision, the other a
+#: court's - and none for restructuring, after which a company carries on.
+W_LIKWIDACJI = Category("w-likwidacji", "W likwidacji")
+W_UPADLOSCI = Category("w-upadlosci", "W upadłości")
+STATUSES: tuple[Category, ...] = (W_LIKWIDACJI, W_UPADLOSCI)
+
+COMPANY_CATEGORIES: tuple[Category, ...] = (*SECTORS, SKARB_PANSTWA, *STATUSES)
+
+#: The categories the register decides rather than a person: a page whose
+#: sectors somebody set still takes these from the payload, as
+#: `withRegisterFactsFrom` in `frontend/shared/companyCategories.ts` lays them.
+REGISTER_FACTS: tuple[str, ...] = (SKARB_PANSTWA.value, *(s.value for s in STATUSES))
 
 CATEGORY_VALUES: tuple[str, ...] = tuple(c.value for c in COMPANY_CATEGORIES)
 
@@ -1154,6 +1223,7 @@ def categories_for(
     form: str | None = None,
     wiki_categories: list[str] | None = None,
     treasury: bool = False,
+    name: str | None = None,
 ) -> list[str]:
     """Every category a company belongs to, in `COMPANY_CATEGORIES` order.
 
@@ -1182,10 +1252,14 @@ def categories_for(
     listed companies that declare no sector of their own, PGE Polska Grupa
     Energetyczna among them.
 
+    `name` is the register's name, whose status files the company under
+    `STATUSES` after that, on the same terms (`wound_up`).
+
     Returns a list rather than a set so the value is stable from one run to the
     next - it ends up in a Firestore document that a diff is taken against.
     """
-    owners = [SKARB_PANSTWA.value] if treasury else []
+    # Filed after the sectors, and never counted as one.
+    after = ([SKARB_PANSTWA.value] if treasury else []) + wound_up(name)
     normalized = str(krs).zfill(10) if krs is not None else None
     result = []
     for category in SECTORS:
@@ -1202,10 +1276,40 @@ def categories_for(
         ):
             result.append(category.value)
     if result:
-        return result + owners
+        return result + after
     return [
         category.value
         for category in SECTORS
         if not (normalized is not None and normalized in category.excluded_krs)
         and matches_wikipedia(wiki_categories, category.wikipedia)
-    ] + owners
+    ] + after
+
+
+#: The register's statuses, as `register_statuses` spells them upper-cased and
+#: without diacritics, and the category each files a company under. "W UPADŁOŚCI
+#: LIKWIDACYJNEJ" and "W UPADŁOŚCI UKŁADOWEJ" are the bankruptcies of the law
+#: before 2016, under which the register still names some: bankruptcies, not
+#: liquidations.
+_STATUS_CATEGORIES = {
+    "W LIKWIDACJI": W_LIKWIDACJI,
+    "W UPADLOSCI": W_UPADLOSCI,
+    "W UPADLOSCI LIKWIDACYJNEJ": W_UPADLOSCI,
+    "W UPADLOSCI UKLADOWEJ": W_UPADLOSCI,
+}
+
+
+def wound_up(name: str | None) -> list[str]:
+    """The `STATUSES` a company's register name files it under, in that order.
+
+    Both where the register appends both: a company being liquidated that then
+    went bankrupt. None for one in restructuring, and none for a limited
+    partnership whose partner is being wound up rather than the company.
+    """
+    found = {
+        _STATUS_CATEGORIES.get(_plain(status)) for status in register_statuses(name)
+    }
+    return [category.value for category in STATUSES if category in found]
+
+
+def _plain(status: str) -> str:
+    return status.upper().translate(str.maketrans("ŁŚ", "LS"))

@@ -32,6 +32,16 @@
         >
           {{ feedKindGroupLabels[group] }}
         </v-chip>
+        <!-- Named after who did it, like „Automat”: short enough that the
+             kinds stay one row on a computer. -->
+        <v-chip
+          :value="SITE_CHANGES"
+          variant="outlined"
+          class="activity__kind"
+          data-testid="activity-site-changes-filter"
+        >
+          koryta.pl
+        </v-chip>
       </v-chip-group>
 
       <!-- Who, rather than what: a row of its own under the kinds, so it never
@@ -166,7 +176,7 @@
       <v-skeleton-loader v-if="waiting" type="list-item-two-line@4" />
 
       <v-alert
-        v-else-if="filtered.length === 0"
+        v-else-if="filtered.length === 0 && filteredReleases.length === 0"
         type="info"
         variant="tonal"
         data-testid="activity-empty"
@@ -217,6 +227,7 @@ import {
   type FeedKind,
   type FeedKindGroup,
   type FeedRange,
+  type SiteChange,
 } from "~~/shared/activityFeed";
 import { isoDay, warsawDate } from "~~/shared/dates";
 import { authRequest } from "~/composables/auth";
@@ -233,10 +244,13 @@ definePageMeta({
   maxWidth: 800,
 });
 
-useHead({ title: "Aktywność - koryta.pl" });
+useHead({ title: "Aktywność" });
 
 /** The toggle's value for "no kind filter", kept out of the url. */
 const ALL_KINDS = "wszystko";
+
+/** The toggle's value, and `?rodzaj=`, for the site's own changes alone. */
+const SITE_CHANGES = "zmiany";
 
 /** `?kto=` for the reader's own lines. */
 const SELF = "ja";
@@ -319,8 +333,15 @@ function isKindGroup(value: string | null): value is FeedKindGroup {
   return kindGroupOptions.some((group) => group === value);
 }
 
-const kindGroup = computed<FeedKindGroup | typeof ALL_KINDS>({
-  get: () => (isKindGroup(rodzaj.value) ? rodzaj.value : ALL_KINDS),
+const kindGroup = computed<
+  FeedKindGroup | typeof ALL_KINDS | typeof SITE_CHANGES
+>({
+  get: () =>
+    rodzaj.value === SITE_CHANGES
+      ? SITE_CHANGES
+      : isKindGroup(rodzaj.value)
+        ? rodzaj.value
+        : ALL_KINDS,
   set: (value) => {
     rodzaj.value = value === ALL_KINDS ? null : value;
   },
@@ -405,8 +426,9 @@ function isMine(batch: FeedBatch): boolean {
 /** What the kind and the person filters leave, the reader's own lines
  * included. */
 const matching = computed(() => {
-  const batches = feed.value?.batches ?? [];
   const group = kindGroup.value;
+  if (group === SITE_CHANGES) return [];
+  const batches = feed.value?.batches ?? [];
   const kinds: readonly FeedKind[] | null =
     group === ALL_KINDS ? null : feedKindGroups[group];
   const person = personFilter.value;
@@ -426,14 +448,51 @@ const filtered = computed(() =>
 /** Why the list is empty, read only while it is. A line the filters left is
  * then one the hiding took away, and a reader who is the only one at work
  * would otherwise be told that nothing matches, with no word of the box above
- * that is hiding their lines. */
+ * that is hiding their lines. The site's changes alone, empty, are a window
+ * the site did not change in only when the feed holds none: otherwise a
+ * person is picked above, and no rollout is anybody's. */
 const emptyText = computed(() => {
+  if (kindGroup.value === SITE_CHANGES && !feed.value?.siteChanges.length) {
+    return "W tym okresie nic się na stronie nie zmieniło.";
+  }
   if (matching.value.length > 0) {
     return "Są tu tylko Twoje zmiany, a te są ukryte. Odznacz „Ukryj moje zmiany”, żeby je zobaczyć.";
   }
-  return feed.value?.batches.length
+  return feed.value?.batches.length || feed.value?.siteChanges.length
     ? "Nic nie pasuje do wybranych filtrów."
     : "W tym okresie nikt nic nie zrobił.";
+});
+
+/** A day's rollouts as one: `at` is when the last of them went live, which is
+ * where the day's block sits among the lines, and `firstAt` the first. */
+type Release = { at: string; firstAt: string; changes: SiteChange[] };
+
+/** The site's changes as the filters leave them, one entry per Warsaw day:
+ * autopush rolls out on every push, so a day of merges was a stack of rows
+ * (decision on 2026-11-18). None once a kind of line or a person is picked: a
+ * rollout is not a vote, and nobody did it. */
+const filteredReleases = computed((): Release[] => {
+  const group = kindGroup.value;
+  if (group !== ALL_KINDS && group !== SITE_CHANGES) return [];
+  if (personFilter.value) return [];
+  const releases: (Release & { day: string })[] = [];
+  // Newest first, so a day's first change carries its last rollout.
+  for (const change of feed.value?.siteChanges ?? []) {
+    const day = warsawDate(new Date(change.at));
+    const last = releases.at(-1);
+    if (last?.day === day) {
+      last.changes.push(change);
+      last.firstAt = change.at;
+    } else {
+      releases.push({
+        day,
+        at: change.at,
+        firstAt: change.at,
+        changes: [change],
+      });
+    }
+  }
+  return releases;
 });
 
 /** What the closable chip says. The new-admin filter has a chip of its own. */
@@ -540,6 +599,16 @@ const visible = computed(() => filtered.value.slice(0, shown.value));
 
 const hasMoreLoaded = computed(() => filtered.value.length > shown.value);
 
+/** The days' rollouts down to the oldest line on screen, while there are lines
+ * left to show: past it, a day's block would sit under lines the list has not
+ * reached yet. */
+const visibleReleases = computed(() => {
+  const oldest = hasMoreLoaded.value ? visible.value.at(-1)?.lastAt : null;
+  return oldest
+    ? filteredReleases.value.filter((release) => release.at >= oldest)
+    : filteredReleases.value;
+});
+
 /** Set by the click that asked for the month, until it answers. Not `status`:
  * the page also widens by itself, and "Pokaż więcej" only pages through what
  * is loaded, so neither may spin for a request this click did not start. */
@@ -583,7 +652,10 @@ function showMore() {
  * week - which would otherwise flash "nikt nic nie zrobił" first. */
 const waiting = computed(
   () =>
-    !feed.value || (status.value === "pending" && filtered.value.length === 0),
+    !feed.value ||
+    (status.value === "pending" &&
+      filtered.value.length === 0 &&
+      filteredReleases.value.length === 0),
 );
 
 const WEEKDAY = new Intl.DateTimeFormat("pl-PL", {
@@ -611,22 +683,39 @@ function dayLabel(day: string, at: Date, today: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-/** The visible lines under their Warsaw day, by when each sitting ended. The
- * list is newest first, so a day's lines are always consecutive. */
+type DayGroup = {
+  day: string;
+  label: string;
+  batches: FeedBatch[];
+  releases: Release[];
+};
+
+/** The visible lines under their Warsaw day, by when each sitting ended, and
+ * each day's rollouts under that day. Both lists are newest first, so a day's
+ * entries of either kind are consecutive in their own list. */
 const dayGroups = computed(() => {
   const today = warsawDate();
-  const groups: { day: string; label: string; batches: FeedBatch[] }[] = [];
-  for (const batch of visible.value) {
-    const at = new Date(batch.lastAt);
+  const groups = new Map<string, DayGroup>();
+  const groupOf = (iso: string): DayGroup => {
+    const at = new Date(iso);
     const day = warsawDate(at);
-    const last = groups.at(-1);
-    if (last?.day === day) {
-      last.batches.push(batch);
-    } else {
-      groups.push({ day, label: dayLabel(day, at, today), batches: [batch] });
+    let group = groups.get(day);
+    if (!group) {
+      group = {
+        day,
+        label: dayLabel(day, at, today),
+        batches: [],
+        releases: [],
+      };
+      groups.set(day, group);
     }
+    return group;
+  };
+  for (const batch of visible.value) groupOf(batch.lastAt).batches.push(batch);
+  for (const release of visibleReleases.value) {
+    groupOf(release.at).releases.push(release);
   }
-  return groups;
+  return [...groups.values()].sort((a, b) => b.day.localeCompare(a.day));
 });
 </script>
 

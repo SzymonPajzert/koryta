@@ -11,8 +11,8 @@
  *
  * The declaration is evidence against the register, so nothing on the BIP
  * side ever carries a date the site already knows: not the upload, not the
- * reading task. The two meet only here, after the reading is settled.
- * Readers read blind.
+ * reading task. The two meet only on the server, never in what a reader is
+ * shown before typing. Readers read blind.
  */
 import { z } from "zod";
 import { isoDay } from "./dates";
@@ -138,18 +138,35 @@ export type MachineReading = z.infer<typeof machineReadingSchema>;
 
 /** The date the job's own reading settles, or null when readers must read.
  *
- * Only a typed date inside the candidacy's exact PKW birth-date window comes
- * as "high": such a date settles without readers, while handwriting and
- * scans go to them. A year alone is never enough: there is
- * no day to compare with the page's. */
+ * A typed date inside the candidacy's exact PKW birth-date window comes as
+ * "high" and settles on its own. A date OCR read cleanly inside that window
+ * settles too, but only when it is the birth date one of the crop's pages
+ * already has (`pageBirthDates`, as the pages store it): readers agreed with
+ * all 1,719 such dates they had settled by 2026-11-15, and Szymon asked for
+ * them to go to the publication queue on 2026-11-16. Any other OCR date,
+ * handwriting and scans go to readers. A year alone is never enough: there
+ * is no day to compare with the page's. */
 export function machineSettles(
   machine: MachineReading | null | undefined,
+  pageBirthDates: readonly unknown[] = [],
 ): string | null {
-  if (machine?.confidence !== "high" || !machine.birthDate) return null;
-  return readingKind(machine.birthDate) === "date" ? machine.birthDate : null;
+  const day = machine?.birthDate;
+  if (!day || readingKind(day) !== "date") return null;
+  if (machine.confidence === "high") return day;
+  const ocrInWindow =
+    machine.method === "ocr" &&
+    machine.confidence === "medium" &&
+    machine.inPkwWindow === "yes";
+  const pageHasIt = pageBirthDates.some(
+    (born) => typeof born === "string" && born.trim() === day,
+  );
+  return ocrInWindow && pageHasIt ? day : null;
 }
 
-const base64Png = z.string().max(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 8);
+/** A PNG as base64, no bigger than `MAX_IMAGE_BYTES` once decoded. */
+export const base64Png = z
+  .string()
+  .max(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 8);
 
 export const declarationExtractSchema = z
   .object({
@@ -303,6 +320,16 @@ export const extractStatuses = [
 ] as const;
 export type ExtractStatus = (typeof extractStatuses)[number];
 
+/** A crop that wants no more readers: its date agreed, its line found
+ * unreadable, or its readers at odds, which an admin takes up. With the open
+ * crops these are all a reader can ever read: a crop the cutter failed on
+ * never reached them, and a withdrawn one is gone. */
+export const settledStatuses = [
+  "agreed",
+  "unreadable",
+  "disputed",
+] as const satisfies readonly ExtractStatus[];
+
 /** A full date or a year: which one a reading is, or null for neither. */
 export function readingKind(value: string): "date" | "year" | null {
   if (/^\d{4}$/.test(value)) return "year";
@@ -439,7 +466,9 @@ function compatible(a: string, b: string): boolean {
 
 /** Whether an answer has a say in what a crop settles: a person's, and not
  * one stored without a vote. */
-export function answerVotes(answer: ReaderAnswer): boolean {
+export function answerVotes(
+  answer: Pick<ReaderAnswer, "uid" | "votes">,
+): boolean {
   return !isAutomatedUid(answer.uid) && answer.votes !== false;
 }
 
@@ -465,9 +494,9 @@ export function answerVotes(answer: ReaderAnswer): boolean {
  * „Pomiń” alone: a crop nobody can read would otherwise stay in the queue
  * for good.
  *
- * The job's own reading is not a voice here: a high-confidence one settles
- * the crop at upload (`machineSettles`) and never reaches readers, and any
- * other is a guess readers must not be anchored by.
+ * The job's own reading is not a voice here: one that settles the crop at
+ * upload (`machineSettles`) never reaches readers, and any other is a guess
+ * readers must not be anchored by.
  */
 export function settleReading(
   answers: readonly ReaderAnswer[],
@@ -613,6 +642,9 @@ export type DeclarationQueue = {
   upcoming: DeclarationTask[];
   /** Crops still waiting for a reader, and what this reader has done. */
   open: number;
+  /** Crops that want no more readers (`settledStatuses`): over these and
+   * `open`, how far all the readers got. */
+  settledCrops: number;
   mine: {
     today: number;
     total: number;
@@ -621,6 +653,235 @@ export type DeclarationQueue = {
      * answer is saved. The tally's „Znaleziono”. */
     found: number;
   };
+};
+
+// ---------------------------------------------------------------------------
+// How far the declarations got, in people
+// ---------------------------------------------------------------------------
+
+/** Why nobody has a readable date of a person yet, as the people snapshot
+ * counts them. The first eight are the BIP not letting the crawler through
+ * (`jobs/bip_crawler`'s not_found reasons), the next two a search that went
+ * through and found no declaration of theirs, the last four a file that came
+ * down with no date to read, or nothing tried yet. */
+export const peopleSearchReasons = [
+  "unreachable",
+  "refused",
+  "robots",
+  "throttled",
+  "timeout",
+  "download_failed",
+  "budget",
+  "no_seed",
+  "not_listed",
+  "no_declarations",
+  "no_date_line",
+  "unreadable",
+  "other_page",
+  "pending",
+] as const;
+export type PeopleSearchReason = (typeof peopleSearchReasons)[number];
+
+/** The stages of the people snapshot, in its order. Each person is in one. */
+export const peopleStages = [
+  "published",
+  "namesakes",
+  "mismatched",
+  "held",
+  "reading",
+  "cropped",
+  "downloaded",
+  "searching",
+] as const;
+export type PeopleStage = (typeof peopleStages)[number];
+
+const headCount = z.number().int().min(0).max(10_000_000);
+
+/**
+ * Where the declarations stand, counted in people (`stats/declaration_people`).
+ * The site counts it whole when the night sends what predator knows
+ * (`declarationFactsIngestSchema`), and moves the people a daytime event
+ * touches (server/utils/declarationPeopleCount.ts, shared/declarationPeople.ts).
+ *
+ * Who is counted: the draft pages with a won local
+ * candidacy and a public post, which a declaration can publish, and the pages
+ * a declaration did publish that have one. Every person is in exactly one
+ * stage, so the stages add up to `people`.
+ */
+export const declarationPeopleSchema = z
+  .object({
+    /** When it was last counted, whole or for the people an event touched. */
+    at: z.string().datetime(),
+    /** The Warsaw day counted, YYYY-MM-DD. */
+    exportDay: z.string().refine((value) => isoDay(value), "YYYY-MM-DD"),
+    people: headCount,
+    /** Published because a declaration's birth date matched the page's. */
+    published: headCount,
+    /** A declaration gave another birth date, a day other than a slip of the
+     * pen: a namesake, not the councillor. */
+    namesakes: headCount,
+    /** A declaration gave another birth date that looks like a misreading,
+     * a typo or somebody else's file: an admin's to clear up. */
+    mismatched: headCount,
+    /** The dates match, and the page waits for an admin (`held`). */
+    held: headCount,
+    /** A crop on the site, waiting for readers. */
+    reading: headCount,
+    /** A crop cut on predator, not on the site yet. */
+    cropped: headCount,
+    /** A declaration downloaded, not cut yet. */
+    downloaded: headCount,
+    /** No date to read yet. */
+    searching: headCount,
+    searchingBy: z
+      .array(
+        z.object({ reason: z.enum(peopleSearchReasons), count: headCount }),
+      )
+      .max(peopleSearchReasons.length),
+    /** Namesakes to expect among the people whose date nobody has read yet
+     * (reading, cropped, downloaded, searching), from how often a surname
+     * that common turned out a namesake so far; null when too few have
+     * settled to say. */
+    expectedNamesakes: z
+      .object({ count: headCount, low: headCount, high: headCount })
+      .nullable(),
+    /** The settled people by how many Poles carry their surname (PESEL, the
+     * same sex's form), and how many in each band turned out namesakes. */
+    bySurname: z
+      .array(
+        z.object({
+          min: headCount,
+          max: headCount.nullable(),
+          settled: headCount,
+          namesakes: headCount,
+          remaining: headCount,
+        }),
+      )
+      .max(12),
+    /** The units holding the most people whose BIP would not let the
+     * crawler through. */
+    topUnits: z
+      .array(
+        z.object({
+          teryt: z.string().regex(/^\d{6}$/),
+          name: z.string().min(1).max(200),
+          people: headCount,
+          reason: z.enum(peopleSearchReasons),
+        }),
+      )
+      .max(20),
+    /** People published a day, counted the same way. */
+    publishedByDay: z
+      .array(
+        z.object({
+          day: z.string().refine((value) => isoDay(value), "YYYY-MM-DD"),
+          count: headCount,
+        }),
+      )
+      .max(400),
+  })
+  .refine(
+    (snapshot) =>
+      snapshot.published +
+        snapshot.namesakes +
+        snapshot.mismatched +
+        snapshot.held +
+        snapshot.reading +
+        snapshot.cropped +
+        snapshot.downloaded +
+        snapshot.searching ===
+      snapshot.people,
+    "the stages must add up to `people`",
+  );
+export type DeclarationPeople = z.infer<typeof declarationPeopleSchema>;
+
+/** The people snapshot's stages, grouped the way a reader is told them:
+ * published, under way (a declaration in hand) and still to find, out of
+ * `total`. A namesake is counted apart, outside the total: the declaration
+ * showed that the page is not the councillor's, so there is nobody of theirs
+ * left to publish. */
+export function peopleGroups(snapshot: DeclarationPeople) {
+  const underway =
+    snapshot.held +
+    snapshot.mismatched +
+    snapshot.reading +
+    snapshot.cropped +
+    snapshot.downloaded;
+  return {
+    published: snapshot.published,
+    underway,
+    searching: snapshot.searching,
+    total: snapshot.people - snapshot.namesakes,
+    namesakes: snapshot.namesakes,
+  };
+}
+
+/** Candidacies one facts body carries at most. */
+export const MAX_FACT_CANDIDACIES = 100_000;
+
+/** One candidacy of the night's list, with what predator knows of its files:
+ * what the site counts the people snapshot from. No names and no dates: the
+ * night reads it from the shared cache. */
+export const declarationFactSchema = z.object({
+  /** BipPersonOfInterest.key. */
+  key: z.string().regex(/^[0-9a-f]{8,64}$/),
+  /** koryta_ids: the pages the list matched the candidacy to. */
+  kids: z.array(z.string().min(1).max(64)).min(1).max(5),
+  teryt: z.string().regex(/^\d{6}$/),
+  unitName: z.string().max(200),
+  /** The election year. */
+  year: z.number().int().min(1990).max(2100),
+  /** What the crawl concluded, and its reason as it gives it. */
+  status: z.enum(candidacyStatuses),
+  reason: z.string().max(40),
+  /** A file of theirs this version of the cutter has not cut. */
+  uncut: z.boolean(),
+  /** A file a link names them in, cut. */
+  cutNamed: z.boolean(),
+  /** A crop of theirs cut, not on the site yet and not skipped for good. */
+  waiting: z.boolean(),
+  /** Living Poles with the surname in the person's sex's form (PESEL). */
+  bearers: z.number().int().min(0).max(100_000_000),
+});
+export type DeclarationFact = z.infer<typeof declarationFactSchema>;
+
+/** `POST /api/ingest/declarations/facts`: the night's facts, which the site
+ * counts the people snapshot from, whole. */
+export const declarationFactsIngestSchema = z.object({
+  /** When the night built it. One older than the site's is refused. */
+  generation: z.string().datetime(),
+  /** When the night's list was built, where known. */
+  listAt: z.string().datetime().nullable(),
+  /** The predator part the facts came from, and when it was written. */
+  part: z.string().max(500),
+  partAt: z.string().datetime(),
+  /** Count an older generation all the same. */
+  force: z.boolean().optional(),
+  candidacies: z.array(declarationFactSchema).max(MAX_FACT_CANDIDACIES),
+});
+export type DeclarationFactsIngest = z.infer<
+  typeof declarationFactsIngestSchema
+>;
+
+/** What the facts ingest answers: the people counted by stage, and the
+ * not_found reasons the site has no word for, counted as `pending`. */
+export type DeclarationFactsResult = {
+  status: "ok";
+  people: number;
+  stages: Record<PeopleStage, number>;
+  unknownReasons: Record<string, number>;
+};
+
+/** `GET /api/declarations/progress`: this reader's part in how far the
+ * readers got. */
+export type DeclarationProgress = {
+  /** Settled crops (`settledStatuses`) with a reading of this reader's that
+   * voted. A crop takes two readers at least, so these overlap with other
+   * readers' and add up to more than the crops settled. */
+  settled: number;
+  /** Whether this reader's answers vote now: a reader without one has no part
+   * in what settles, and is told what would give them one. */
+  votes: boolean;
 };
 
 /** `POST /api/declarations/<id>/answer`. */
@@ -683,8 +944,8 @@ export type DeclarationFinds = {
 };
 
 /** How soon readers should be shown a person page's crops, lowest first - the
- * `priority` /api/ingest/declarations writes on a crop and
- * /api/declarations/next orders the readers' queue by.
+ * tier of the `priority` /api/ingest/declarations writes on a crop
+ * (`cropPriority`) and /api/declarations/next orders the readers' queue by.
  *
  * The interest is in drafts nobody has verified yet, and among them in the
  * ones a reading could actually publish:
@@ -702,7 +963,9 @@ export type DeclarationFinds = {
  *   crop is still worth a reading: a settled one is linked on the page.
  *
  * The crawl orders drafts the other way round, as it looks for the dates the
- * pages lack. Only whether a page has a date is read here, never the date.
+ * pages lack. Only whether a page has a date is read here, never the date;
+ * what a crop's own machine reading says of it moves the crop within its
+ * tier (`cropPriority`).
  *
  * `hasPublicPost` is `isPublicEmployment` over the page's own employment
  * edges, which only a caller with the graph can answer
@@ -717,14 +980,97 @@ export function readingPriority(
   return page.birthDate ? 0 : 1;
 }
 
+/** The queue's last tier, past every page's (`readingPriority`): a crop
+ * whose every page a reading has reached already (`readingReached`).
+ * Reading another of their declarations publishes nobody: after a match it
+ * repeats the date, and a page read as another day is held whatever the
+ * next reading finds (`conflicting_reading`). On 2026-11-17 almost a third
+ * of all answers (31%) had gone to such crops. They are still served once
+ * nothing else is left, as a second declaration read as another day holds a
+ * matched page too. */
+export const READ_PRIORITY = 4;
+
+/** How far back within its tier a crop goes when the job's own reading of
+ * it is a full date the page's birth date contradicts: readers settled 92%
+ * of such crops as another person's date (2026-11-17). Half a tier, so it
+ * stays ahead of the next one, and a person's crop that may still be theirs
+ * is served before it. */
+const CONTRADICTED_BY_PAGE = 0.5;
+
+/** One page a crop is for, as its `priority` depends on it. */
+export type QueuePage = {
+  /** `readingPriority` of the page. */
+  tier: 0 | 1 | 2 | 3;
+  /** Whether a reading has reached the page (`readingReached`). */
+  read: boolean;
+  /** The page's birth date, as the page stores it. */
+  birthDate: unknown;
+};
+
+/**
+ * The `priority` a crop is written with, which /api/declarations/next orders
+ * the queue by: the lowest of its pages', each page's being its tier
+ * (`readingPriority`), `READ_PRIORITY` once a reading has reached it, and
+ * half a tier later where the job read a full date off the crop that is not
+ * the page's birth date. A crop with no live page orders as a public one.
+ */
+export function cropPriority(
+  pages: readonly QueuePage[],
+  machineDate: unknown,
+): number {
+  if (pages.length === 0) return 3;
+  const machine =
+    typeof machineDate === "string" && readingKind(machineDate) === "date"
+      ? machineDate
+      : null;
+  return Math.min(
+    ...pages.map((page) => {
+      if (page.read) return READ_PRIORITY;
+      const born =
+        typeof page.birthDate === "string" ? page.birthDate.trim() : "";
+      const contradicted = machine !== null && born !== "" && born !== machine;
+      return page.tier + (contradicted ? CONTRADICTED_BY_PAGE : 0);
+    }),
+  );
+}
+
+/**
+ * Whether a reading has reached the page: one of these crops (any of the
+ * page's, as stored) settled on a full date and was compared with the page,
+ * whatever the comparison found (`pageOutcomes`): a match, another day, or
+ * no date on the page to compare with. A year alone, a crop still read, one
+ * readers could not agree on and one an admin took back reach nobody.
+ */
+export function readingReached(
+  crops: readonly {
+    status?: unknown;
+    agreed?: unknown;
+    pageOutcomes?: unknown;
+  }[],
+  pageId: string,
+): boolean {
+  return crops.some((crop) => {
+    if (crop.status !== "agreed") return false;
+    const agreed = crop.agreed as { kind?: unknown } | null | undefined;
+    if (agreed?.kind !== "date") return false;
+    const outcomes = crop.pageOutcomes;
+    return (
+      !!outcomes &&
+      typeof outcomes === "object" &&
+      typeof (outcomes as Record<string, unknown>)[pageId] === "string"
+    );
+  });
+}
+
 /** Why a page whose date matches was not published automatically. Each is
  * somebody's decision the automation must not overrule, or a doubt it cannot
  * settle itself.
  *
  * `admin_decision` holds a draft whose date matches only a date an admin
  * settled on /admin/oswiadczenia (`agreed.by` "admin"). The admin chose it
- * with the pages' dates a click away, so it confirms nothing, and the draft
- * waits for somebody to publish it by hand. A public page born that day is
+ * with the pages' dates a click away, so the automation does not publish on
+ * it, and the draft waits for somebody to publish it by hand; once public,
+ * the page shows the declaration (decision on 2026-11-18). A public page born that day is
  * given no record: it has nothing to wait for, and the admin's date links
  * nothing on it.
  *
@@ -765,6 +1111,9 @@ export const publicationHoldReasons = [
 ] as const;
 export type PublicationHoldReason = (typeof publicationHoldReasons)[number];
 
+/** The hold that is the rule itself rather than a doubt anybody can settle. */
+export const RULED_OUT: PublicationHoldReason = "no_public_post";
+
 /** The daily limit as the runtime config gives it: a whole number, 0 for
  * anything else. An environment override arrives as whatever `destr` made of
  * the string, so it is not trusted to be a number. Here rather than beside
@@ -789,7 +1138,7 @@ export function publishLimitOf(config: {
  * report (`peopleImportRunning`), which also covers the runs asked for during
  * the day and a night that runs late. Here rather than beside the queue, so
  * /admin/oswiadczenia can say the hours. */
-export const PEOPLE_IMPORT_WINDOW = { from: 3, to: 9 } as const;
+export const PEOPLE_IMPORT_WINDOW = { from: 1, to: 7 } as const;
 
 /** People one press of „Opublikuj z kolejki” takes up at most. The snackbar
  * says how many still wait, for the next press.
@@ -808,7 +1157,12 @@ export const PRESS_BATCH = 25;
  * nothing to publish, but the declaration is linked on it. `publishing` is a
  * page a pass has taken up - the automation under a slot of the day, an
  * admin's press without one - and whose writes are under way, or were cut
- * short; one left there for long is tried again. */
+ * short; one left there for long is tried again.
+ *
+ * A held page an admin said will not be published stays `held`, with
+ * `declinedAt` on the record (`declinePublication`): a release that knows
+ * nothing of it then keeps it held too, where a status of its own would be
+ * queued again by the first reading it meets. */
 export const publicationStatuses = [
   "queued",
   "publishing",
@@ -823,8 +1177,14 @@ export type PublicationStatus = (typeof publicationStatuses)[number];
  * settled, which holds a draft and leaves a public page without a record),
  * `queued` a draft waiting for its slot, `confirmed` a page that was public
  * already. */
-export type PageOutcome =
-  "no_date" | "different" | "confirmed" | "queued" | "held";
+export const pageOutcomes = [
+  "no_date",
+  "different",
+  "confirmed",
+  "queued",
+  "held",
+] as const;
+export type PageOutcome = (typeof pageOutcomes)[number];
 
 /** What a settled reading said about its pages, summed up on the crop: `same`
  * when any page has the date, else `different` when any has another one. */
@@ -887,6 +1247,9 @@ export type SweepResult = {
   checked: number;
   /** Crops whose comparison came out differently this time. */
   changed: number;
+  /** Bands of declarations' posts that moved when placed again by their
+   * gate: what a comparison's own placing missed. */
+  placed: number;
   reverted: {
     restored: string[];
     held: { personId: string; reason: PublicationHoldReason }[];
@@ -894,8 +1257,18 @@ export type SweepResult = {
   drain: DrainResult;
 };
 
+/** What an admin's „Sprawdź ponownie” on a held page did: it went up, it was
+ * public already, something still holds it (the reason may be a new one), or
+ * it was not looked at, for the reasons no pass runs (`DrainResult.skipped`). */
+export type RecheckResult =
+  | { outcome: "published" }
+  | { outcome: "confirmed" }
+  | { outcome: "held"; reason: PublicationHoldReason }
+  | { outcome: "skipped"; skipped: "night" | "import" };
+
 /** Who settled a crop's date (`agreed.by`): readers who agreed on it blind,
- * the job off a typed form at upload (`machineSettles`), or an admin on
+ * the job at upload (`machineSettles`: off a typed form, or by OCR when the
+ * date is already the page's; `machine.method` says which), or an admin on
  * /admin/oswiadczenia. */
 export const settledBy = ["readers", "machine", "admin"] as const;
 export type SettledBy = (typeof settledBy)[number];
@@ -914,7 +1287,12 @@ export type DeclarationReviewRow = {
   agreed: string | null;
   /** Who settled `agreed`; null while nothing is settled. */
   agreedBy: SettledBy | null;
-  machine: { birthDate: string | null; confidence: string | null } | null;
+  machine: {
+    birthDate: string | null;
+    confidence: string | null;
+    /** How the job read it: `text_layer`, `ocr` or `handwriting`. */
+    method?: string | null;
+  } | null;
   /** The pages, with the date each stores: admins compare them. */
   people: {
     id: string;
@@ -925,16 +1303,28 @@ export type DeclarationReviewRow = {
   updatedAt: string;
 };
 
-/** A person published from the queue, waiting in it or held: by the
- * automation, or at an admin's press of „Opublikuj z kolejki”. */
+/** A crop that gives a held page another date, as its row lists it: whether
+ * an admin can still decide it here, or it was settled already, as another
+ * page's declaration with that page's date. */
+export type HeldCropRow = DeclarationReviewRow & { decidable: boolean };
+
+/** A person published from the queue, waiting in it, held or declined: by the
+ * automation, at an admin's press of „Opublikuj z kolejki”, or by hand while
+ * held. `declined` is a held record with `declinedAt`. */
 export type DeclarationPublicationRow = {
   personId: string;
   name: string;
-  status: "queued" | "published" | "held";
+  status: "queued" | "published" | "held" | "declined";
+  /** What the page was held for when it was last looked at, which can be out
+   * of date: read `paidPost` for the one thing that decides what becomes of
+   * it. */
   reason: PublicationHoldReason | null;
   /** Whether the page is public now. A held one can be: published by hand
    * while it waited, or public already when a second page held it. */
   pagePublic: boolean;
+  /** Of a held page: whether somebody is paid for a public post on it now,
+   * read off the page rather than the record (`pagesWithAPublicPost`). */
+  paidPost?: boolean;
   at: string;
   unit: string;
   documentUrl: string;
@@ -943,7 +1333,34 @@ export type DeclarationPublicationRow = {
   /** Whether an admin's press took the page up last, rather than the
    * automation on its own. */
   pressed: boolean;
+  /** Whether an admin published the page by hand while it was held
+   * (`closeHoldOnPublication`). */
+  byHand?: boolean;
 };
+
+/**
+ * Whether a person is one the site will not publish, and so not on the list of
+ * what waits for an admin: an admin said so, or the page has no paid public
+ * post, which is what the automation publishes nobody without.
+ *
+ * Asked of the page as it is now, and whatever the page was held for. A hold
+ * records the first reason that applied when it was last looked at, and the
+ * reasons are asked in an order, so a stored reason says nothing about the
+ * ones after it: 21 of the 142 pages held for something else on 2026-11-06 had
+ * no such post either, and resolving their candidacies would have been work on
+ * people nobody publishes. It also lets a page come back by itself the day it
+ * gains a post, where a stored reason would keep it out for good.
+ *
+ * A page that is public is neither: its row has a hold left to close.
+ */
+export function publicationSetAside(
+  row: Pick<DeclarationPublicationRow, "status" | "pagePublic" | "paidPost">,
+): boolean {
+  return (
+    row.status === "declined" ||
+    (row.status === "held" && !row.pagePublic && row.paidPost === false)
+  );
+}
 
 /** Everything /admin/oswiadczenia shows, counted when asked. */
 export type DeclarationOverview = {
@@ -979,16 +1396,21 @@ export type DeclarationOverview = {
   publications: {
     queued: number;
     published: number;
+    /** Held and waiting for an admin: `lists.held`. */
     held: number;
+    /** Who will not be published (`publicationSetAside`). */
+    setAside: number;
     /** Published by the automation today (Warsaw), against `dailyLimit`. An
      * admin's press takes no place of it, so its pages are not counted. */
     today: number;
+    /** `held` by reason. */
     heldBy: { reason: PublicationHoldReason; count: number }[];
   };
   lists: {
     disputed: DeclarationReviewRow[];
     different: DeclarationReviewRow[];
     held: DeclarationPublicationRow[];
+    setAside: DeclarationPublicationRow[];
     recent: DeclarationPublicationRow[];
   };
   /** Uploads, newest first. */
@@ -1009,3 +1431,138 @@ export type PersonDeclarations = {
     office: LocalOffice | null;
   }[];
 };
+
+/** One of a page's crops, as a signed-in reader sees it on the page while it
+ * is a draft. */
+export type PersonDeclarationCrop = {
+  id: string;
+  /** Never `withdrawn`: a crop an admin took back is nobody's. */
+  status: ExtractStatus;
+  /** Why the cutter cut nothing, of a `failed` one: the job's code
+   * (`declarationReasonLabel` names it). */
+  failure: string | null;
+  unit: string;
+  office: LocalOffice | null;
+  /** The whole declaration on BIP. */
+  documentUrl: string;
+  /** Answers that vote, given so far. */
+  answers: number;
+  /** The settled reading, `YYYY-MM-DD` or `YYYY`, and who settled it. */
+  agreed: string | null;
+  agreedBy: SettledBy | null;
+  /** What the settled reading said about this page, once compared. */
+  outcome: PageOutcome | null;
+  /** The pictures' own pixels; null for a date the job read off a typed
+   * form and sent without one. */
+  imageSize: {
+    date: { width: number; height: number };
+    name: { width: number; height: number } | null;
+  } | null;
+};
+
+/** Where the publication of a page that is not public stands, as its
+ * record says (`declarationPublications`). `declined` is a held record an
+ * admin said will not be published. */
+export type PersonPublicationState = {
+  status: "queued" | "publishing" | "held" | "declined";
+  reason: PublicationHoldReason | null;
+  /** Of a held page: whether a paid public post is on it now
+   * (`pagesWithAPublicPost`), which decides what an admin does with it. */
+  paidPost: boolean;
+};
+
+/** The first local elections whose winners a page with no crop lists, with
+ * the search for each one's declaration (decision on 2026-11-20): the terms
+ * the crawler looks for declarations of. */
+export const DECLARATION_SEARCH_SINCE = 2014;
+
+/** A local election the person won, and what the crawler found when it
+ * looked for their declaration on that unit's BIP: on a draft with no crop,
+ * where to look for it by hand. */
+export type PersonDeclarationSearch = {
+  year: number;
+  office: LocalOffice;
+  /** The gmina as the crawler names it, or the region the page files the
+   * candidacy under where the crawler never looked. */
+  unit: string;
+  /** The crawler's verdict, or null where it never looked. */
+  status: CandidacyStatus | null;
+  /** The crawler's code for it (`declarationReasonLabel` names it). */
+  reason: string | null;
+  /** Files that came down for it. */
+  files: number;
+  /** Where its search started: the unit's BIP, or its office's website. */
+  bipUrl: string | null;
+};
+
+/** A link to a person's declaration somebody found by hand and gave on the
+ * page (`declarationLinks`), for the crawl to fetch. Who gave it stays on the
+ * server: the page says only whether it was this reader. */
+export type PersonDeclarationLink = {
+  url: string;
+  /** When it was given, ISO. */
+  at: string;
+  mine: boolean;
+};
+
+/** The longest link the page takes, as the ingest takes a declaration's. */
+export const MAX_DECLARATION_LINK_LENGTH = 2000;
+
+/** `POST /api/nodes/<id>/declaration-links`. */
+export const declarationLinkSchema = z.object({
+  url: z
+    .string()
+    .trim()
+    .max(MAX_DECLARATION_LINK_LENGTH)
+    .refine((value) => {
+      try {
+        const url = new URL(value);
+        return (
+          (url.protocol === "http:" || url.protocol === "https:") &&
+          url.hostname.includes(".")
+        );
+      } catch {
+        return false;
+      }
+    }, "an http(s) address"),
+});
+
+/** `GET /api/nodes/<id>/declaration-crops`: the crops of a draft's
+ * declarations and where its publication stands, for a signed-in reader of
+ * the page before it is public (decision on 2026-11-20), and with no crop,
+ * the elections it won, the searches for their declarations and the links
+ * readers gave. */
+export type PersonDeclarationCrops = {
+  publication: PersonPublicationState | null;
+  /** The ones that tell most first (`cropOrder`). */
+  crops: PersonDeclarationCrop[];
+  /** Only where there is no crop: the newest first. */
+  searches: PersonDeclarationSearch[];
+  /** Only where there is no crop: the oldest first. */
+  links: PersonDeclarationLink[];
+};
+
+/** How much a crop says about its page, for the order it is shown in: a
+ * date that matches the page first, then a date that contradicts it -
+ * likely a namesake's declaration, or a date wrong on one side, and either
+ * way more than a reading still to come - then one readers left to an admin,
+ * then what still waits for readers (the most answered first), then a
+ * reading compared with nothing, then the unreadable, and last a declaration
+ * nothing could be cut from. */
+export function cropOrder(crop: PersonDeclarationCrop): number {
+  if (crop.status === "agreed") {
+    if (
+      crop.outcome === "queued" ||
+      crop.outcome === "held" ||
+      crop.outcome === "confirmed"
+    ) {
+      return 0;
+    }
+    if (crop.outcome === "different") return 1;
+    return 4;
+  }
+  if (crop.status === "disputed") return 2;
+  if (crop.status === "open") return 3;
+  if (crop.status === "failed") return 6;
+  return 5;
+}

@@ -143,14 +143,19 @@ describe("ExploreTable's merged person and history cells", () => {
     expect(link.classes()).toContain("font-weight-bold");
   });
 
-  /** The drawer-less pages (`disableFocus`) print the name as plain text, and
-   * it was the same unreadable sage. */
-  it("paints an unlinked name the same way", async () => {
+  /** The drawer-less page (`disableFocus`, /eksploruj/nowe) has no drawer for
+   * the name to open, so it links to the person's own page instead, painted
+   * the same way. */
+  it("links the name to the person's page where there is no drawer", async () => {
     const wrapper = await mountTable({ disableFocus: true });
 
     const name = wrapper.get("tbody td .person-name");
-    expect(name.element.tagName).toBe("SPAN");
+    expect(name.element.tagName).toBe("A");
+    expect(name.attributes("href")).toBe("/osoba/jan-kowalski-p1");
     expect(name.classes()).toContain("text-primary");
+
+    await name.trigger("click");
+    expect(wrapper.emitted("focus")).toBeUndefined();
   });
 
   /** A person with no employer and no election gets an empty cell rather than

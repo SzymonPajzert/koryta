@@ -178,7 +178,7 @@ definePageMeta({
   maxWidth: 1100,
 });
 
-useHead({ title: "Procesy (Admin) - koryta.pl" });
+useHead({ title: "Procesy (Admin)" });
 
 const route = useRoute();
 const router = useRouter();

@@ -36,6 +36,7 @@ import zoneinfo
 
 import pytest
 
+from analysis.bip_people_of_interest import UNPAID_BODIES, names_a_supervisory_seat
 from analysis.payloads.site import (
     DISTRICT_OFFICES,
     ELECTION_YEARS,
@@ -46,6 +47,7 @@ from analysis.payloads.site import (
 )
 from scrapers.koryta.snapshot import is_reference, reference_id
 from scrapers.wiki.shareholders import normalize_title
+from util.declaration_roles import read_roles
 from util.polish import format_person_name, names_agree
 
 #: Every test here reads the production export rather than a fixture, which is
@@ -135,6 +137,11 @@ EXTRACTION_FACT_TYPES = {
 # `computeVoteStats` never counts the pipeline's own votes as human review, and
 # each scoring model votes under its own uid containing this word.
 PIPELINE_USER = "pipeline"
+
+#: The uid the declarations automation writes under, `DECLARATION_ACTOR` in
+#: `frontend/shared/declarations.ts`. A post it creates is what readers agreed
+#: an asset declaration says, and it is the only writer of `Edge.as_of`.
+DECLARATION_ACTOR = "pipeline-declarations"
 
 
 def sample(items, limit: int = 10) -> list:
@@ -367,16 +374,9 @@ def notes(snapshot):
 
 
 @pytest.fixture(scope="session")
-def entered_by_hand(revisions) -> set[str]:
-    """The documents a person created through the site rather than an ingest.
-
-    Told by the document's first revision, since `update_automatic` is on every
-    one (`test_every_revision_says_whether_a_person_made_it`). The December 2025
-    backfill that minted a revision for every document without one marked them
-    as a person's, which they were: every employment stored then had been
-    typed in. A document with no revision at all is not counted as a person's,
-    so nothing goes unchecked for want of a history.
-    """
+def first_revisions(revisions) -> dict[str, dict]:
+    """Each document's first revision, the one that created it, by the
+    document's id."""
     first: dict[str, dict] = {}
     for revision in revisions:
         document_id = reference_id(revision.get("node_id"))
@@ -387,10 +387,36 @@ def entered_by_hand(revisions) -> set[str]:
             held.get("update_time")
         ):
             first[document_id] = revision
+    return first
+
+
+@pytest.fixture(scope="session")
+def entered_by_hand(first_revisions) -> set[str]:
+    """The documents a person created through the site rather than an ingest.
+
+    Told by the document's first revision, since `update_automatic` is on every
+    one (`test_every_revision_says_whether_a_person_made_it`). The December 2025
+    backfill that minted a revision for every document without one marked them
+    as a person's, which they were: every employment stored then had been
+    typed in. A document with no revision at all is not counted as a person's,
+    so nothing goes unchecked for want of a history.
+    """
     return {
         document_id
-        for document_id, revision in first.items()
+        for document_id, revision in first_revisions.items()
         if revision.get("update_automatic") is False
+    }
+
+
+@pytest.fixture(scope="session")
+def created_by_declarations(first_revisions) -> set[str]:
+    """The documents the declarations automation created, told by who wrote
+    the first revision, as `writtenByImportOrReviewed` in
+    `frontend/server/utils/provenance.ts` tells them."""
+    return {
+        document_id
+        for document_id, revision in first_revisions.items()
+        if revision.get("update_user") == DECLARATION_ACTOR
     }
 
 
@@ -826,6 +852,8 @@ INTERNAL_FIELDS = {
     "needs_split",
     "nameChunksLower",
     "content_changed_at",
+    "declared",
+    "as_of",
 }
 
 
@@ -1816,11 +1844,11 @@ def test_nobody_stands_in_two_places_at_once(edges, nodes, within_budget):
     24 of them waiting in the queue.
 
     The publish dialog warns a reviewer by the place rule before a click adds
-    to this count: `placeClashes` in frontend/shared/twoPlaces.ts. A change to
-    one belongs in the other, but that port still groups by the office: moving
-    it to the election is a follow-up, because it changes what the dialog
-    shows. Until then the dialog misses the clashes this test finds by the
-    election alone.
+    to this count, and the site holds back a page it would publish itself:
+    `placeClashes` in frontend/shared/twoPlaces.ts, which groups by the
+    election too. A change to one belongs in the other. That port leaves out
+    a by-election, and files a run with no office in a year of two elections
+    under the one `candidacyElection` reads it as.
     """
     # 29 on the 2026-10-25T03:00:33.098Z export, 29 on the 10-24 one. 24 of
     # them are the clashes the office key counted, on 18 published pages on the
@@ -2427,6 +2455,12 @@ def test_a_dated_edge_says_when_it_began(
     is the form working, not a defect to hold the night's upload over. The
     count used to include them and could only grow: every fact promoted from an
     article review added one.
+
+    Nor is a post a declaration speaks for (`declared`). An asset declaration
+    says a post is held as of the day it was made out, and the form asks for no
+    start: such a post is dated by its declarations, the latest of them as
+    `as_of` on a post the automation created, which
+    `test_a_post_a_declaration_created_says_how_old_it_is` holds it to.
     """
     # 195 employment edges on the 2026-08-03 export. Nearly all of them are old:
     # 183 in December 2025, when 183 was *every* employment stored, and still 184
@@ -2453,6 +2487,7 @@ def test_a_dated_edge_says_when_it_began(
         and not is_removed(edge)
         and edge["id"] not in entered_by_hand
         and not has_date(edge, "start_date")
+        and not edge.get("declared")
     ]
     budget = UNDATED[edge_type]
 
@@ -2460,6 +2495,171 @@ def test_a_dated_edge_says_when_it_began(
         f"{len(undated)} {edge_type} edges do not say when they began, so they "
         f"count for no experience and cannot be told from another spell - up "
         f"from the {budget} known ones. Sample IDs: {sample(undated)}"
+    )
+
+
+def declared_posts(edges, created_by_declarations) -> list[dict]:
+    """The live employments the declarations automation created."""
+    return [
+        edge
+        for edge in edges
+        if edge.get("type") == "employed"
+        and edge["id"] in created_by_declarations
+        and not is_removed(edge)
+    ]
+
+
+def declared_entries(edge: dict) -> list[dict]:
+    """The entries of an edge's `declared` map: what declarations say of the
+    post, one an agreed row (`declaredEntries` in
+    frontend/shared/declaredPosts.ts)."""
+    declared = edge.get("declared")
+    if not isinstance(declared, dict):
+        return []
+    return [entry for entry in declared.values() if isinstance(entry, dict)]
+
+
+def test_a_post_a_declaration_created_says_how_old_it_is(
+    edges, created_by_declarations
+):
+    """A post the declarations automation created carries its entries
+    (`declared`) and `as_of`.
+
+    A declaration names a post as held on the day it was made out, and gives
+    no end; read off it, a post is as old as the latest declaration behind it,
+    which is what `as_of` keeps and what a page dates the post by.
+    `test_a_dated_edge_says_when_it_began` leaves an edge with `declared` out
+    for that reason, so this is where an undated one has to have it.
+
+    And a created post with no entry is one nothing stands behind: withdrawing
+    an item soft-deletes a post it created that no other entry holds, so a
+    live one is a write that dropped the map, or a withdrawal that left the
+    post behind.
+
+    Stated of the posts the automation created, dated or not, and not of every
+    undated edge with `declared`: an edge another writer created keeps its own
+    dates when a declaration names it, and never gets an `as_of`
+    (`test_only_a_post_a_declaration_created_has_an_as_of`). None exists
+    before the automation writes, and it writes the two together, so this is
+    strict.
+    """
+    ageless = [
+        edge["id"]
+        for edge in declared_posts(edges, created_by_declarations)
+        if not declared_entries(edge) or not edge.get("as_of")
+    ]
+
+    assert not ageless, (
+        f"{len(ageless)} posts the declarations automation created say nothing "
+        f"of what declared them (`declared`) or how old they are (`as_of`): "
+        f"{sample(ageless)}"
+    )
+
+
+def test_only_a_post_a_declaration_created_has_an_as_of(edges, created_by_declarations):
+    """`as_of` is the declarations automation's, on the edges it created.
+
+    It says how old the declarations behind a post are. On a register or a
+    hand-typed edge it would be read as the age of a reading the edge never
+    came from, so a merge that folds a declared copy into one carries the
+    entries and not the `as_of` (`unionDeclared` in
+    `frontend/shared/declaredPosts.ts`), and nothing else writes it. A removed
+    copy keeps what it had.
+    """
+    stray = [
+        (edge["id"], edge.get("as_of"))
+        for edge in edges
+        if edge.get("as_of")
+        and not is_removed(edge)
+        and edge["id"] not in created_by_declarations
+    ]
+
+    assert not stray, (
+        f"{len(stray)} edges carry an `as_of` the declarations automation did "
+        f"not write, as (edge, as_of): {sample(stray)}"
+    )
+
+
+def role_families(edge) -> frozenset[str]:
+    """The families of roles an employment is matched by, as the declarations
+    automation matches a declared row to a stored post.
+
+    Those of the chips its declared entries name (`roleId`), which is what it
+    was matched by; else the one its name folds into, as the site folds it
+    (`roleFamilyOf`, over frontend/shared/declarationEmploymentRoles.json);
+    else its folded name, a family of its own.
+    """
+    roles = read_roles()
+    chips = {
+        chip.family
+        for entry in declared_entries(edge)
+        if (chip := roles.chip(entry.get("roleId"))) is not None and chip.family
+    }
+    if chips:
+        return frozenset(chips)
+    name = edge.get("name")
+    return frozenset({roles.family(name) or f"name: {roles.fold(name)}"})
+
+
+def spell_day(value, *, end: bool) -> str | None:
+    """A stored relation date as the first day it can mean, or for an end the
+    last; None for none."""
+    if isinstance(value, datetime.datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=datetime.UTC)
+        return value.astimezone(WARSAW).date().isoformat()
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()[:10]
+    if re.fullmatch(r"\d{4}", text):
+        return f"{text}-12-31" if end else f"{text}-01-01"
+    if re.fullmatch(r"\d{4}-\d{2}", text):
+        return f"{text}-31" if end else f"{text}-01"
+    return text if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text) else None
+
+
+def test_a_declared_post_is_not_a_second_copy_of_one_stored(
+    edges, created_by_declarations
+):
+    """A post the declarations automation created is the person's only post
+    of its kind at that place when the declaration was made out.
+
+    The automation writes what a declaration says onto the person's stored
+    post at the place when one is there, of the same family of roles
+    (`role_families`, by the site's own roles file) and held on the
+    declaration's day, and creates a post only when none is. One beside such
+    a post is that post twice: a page that lists the job twice, and two of
+    everything counted from it. The people import storing the register's seat
+    beside a declared one would do the same. Nothing writes these yet, so it
+    starts strict.
+    """
+    by_place: dict[tuple, list[dict]] = collections.defaultdict(list)
+    for edge in edges:
+        if edge.get("type") == "employed" and not is_removed(edge):
+            by_place[(edge.get("source"), edge.get("target"))].append(edge)
+
+    # By the pair, since two created posts can each find the other.
+    twins: dict[tuple, str | None] = {}
+    for post in declared_posts(edges, created_by_declarations):
+        days = {
+            spell_day(entry.get("as_of"), end=True) for entry in declared_entries(post)
+        } | {spell_day(post.get("as_of"), end=True)}
+        days.discard(None)
+        families = role_families(post)
+        for other in by_place[(post.get("source"), post.get("target"))]:
+            if other["id"] == post["id"] or not families & role_families(other):
+                continue
+            start = spell_day(other.get("start_date"), end=False) or "0000"
+            stop = spell_day(other.get("end_date"), end=True) or "9999"
+            if any(start <= day <= stop for day in days):
+                pair = (post["id"], other["id"])
+                twins.setdefault(tuple(sorted(pair)), post.get("name"))
+
+    found = [(*pair, role) for pair, role in sorted(twins.items())]
+    assert not found, (
+        f"{len(found)} posts the declarations automation created sit beside "
+        f"the same person's post of the same kind at the same place, held on "
+        f"the declaration's day, as (post, post, role): {sample(found)}"
     )
 
 
@@ -3060,6 +3260,67 @@ def test_a_party_list_a_person_pinned_is_changed_only_by_a_person(
         f"party list a person had pinned, up from the {KNOWN_CHANGED} known. As "
         f"(page, revision, applied on, author, pinned list, list it states): "
         f"{sample(changed, 5)}"
+    )
+
+
+def paid_public_post(edge: dict, company: dict | None) -> bool:
+    """`isPublicEmployment` in frontend/shared/stats.ts: an `employed` edge at a
+    company the register shows the public sector owns, and not a seat on an
+    organ nobody is paid to sit on."""
+    if edge.get("type") != "employed" or not company:
+        return False
+    if company.get("isPublic") is not True:
+        return False
+    unpaid = company.get("supervisoryBody") in UNPAID_BODIES
+    return not (unpaid and names_a_supervisory_seat(edge.get("name")))
+
+
+def test_a_published_candidate_with_a_paid_post_names_a_party(
+    nodes, edges, within_budget
+):
+    """A published page that shows a candidacy and a paid public post names a
+    party: „Inne” where it stood for none of the site's (decision on
+    2026-11-18).
+
+    `partyFloor` in frontend/shared/partyFloor.ts. The declarations automation
+    files „Inne” as it puts such a page up, and
+    scripts/migrate/inne-for-published-candidates.ts gave it to the pages up
+    before. Anything else that puts one up without a party - an admin's
+    publish, a candidacy or a job published later - shows here, and the
+    migration can be run again for it.
+
+    A page whose list a person set is counted too, though nothing automatic
+    may change it (`test_a_party_list_a_person_pinned_is_changed_only_by_a_person`):
+    it waits for a person.
+    """
+    # 260 on the 2026-11-18T03:00:42 export, before the migration: the 244 it
+    # gives „Inne”, and 16 lists a person set, each of them empty all along.
+    KNOWN_WITHOUT = 260
+
+    nodes_by_id = {node["id"]: node for node in nodes}
+    shown: dict[str, set[str]] = collections.defaultdict(set)
+    for edge in edges:
+        if not page_is_public(edge):
+            continue
+        if edge.get("type") == "election":
+            shown[edge["source"]].add("candidacy")
+        elif paid_public_post(edge, nodes_by_id.get(edge.get("target"))):
+            shown[edge["source"]].add("paid post")
+
+    without = sorted(
+        (node["id"], node.get("name"))
+        for node in nodes
+        if node.get("type") == "person"
+        and page_is_public(node)
+        and is_live(node)
+        and shown[node["id"]] == {"candidacy", "paid post"}
+        and not party_list(node.get("parties"))
+    )
+
+    assert within_budget(len(without), KNOWN_WITHOUT), (
+        f"{len(without)} published pages show a candidacy and a paid public post "
+        f"and name no party, up from the {KNOWN_WITHOUT} known: "
+        f"{sample(without, 10)}"
     )
 
 

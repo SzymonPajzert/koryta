@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from entities.util import format_query, parse_query
+from entities.util import encode_whole, format_query, parse_query
 
 # URL shapes that serve a file rather than a page. Extensionless endpoints
 # (attachments/download, getFile, bip.net.pl's <office>-api host) are included
@@ -18,6 +18,38 @@ _DOC_PATTERNS = [
     re.compile(r"/attachments?/\d+/download", re.IGNORECASE),
     re.compile(r"/attachments/download/\d+", re.IGNORECASE),
     re.compile(r"/api/attachments/\d+(?:$|[?#])", re.IGNORECASE),
+    # Zabrze's document files (`jobs.bip_crawler.doclist`), /attachment/101871,
+    # and gov.pl's, /attachment/ce72e032-b641-4a15-95cc-9190a4bc1532.
+    re.compile(
+        r"/attachment/(?:\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+        r"(?:$|[?#])",
+        re.IGNORECASE,
+    ),
+    # Lesko's: /zalacznik/9565, the file's name only in its label (11-06);
+    # Żywiec's: /zalacznik/get/22517, application/octet-stream (11-13).
+    re.compile(r"/zalacznik/(?:get/)?\d+(?:$|[/?#])", re.IGNORECASE),
+    # CONCEPT Intermedia's SAM3 attachments, a PDF behind an address ending in
+    # .html: /Common/pobierzPlik/id/53981/module_short/port/.../pub.html (11-13).
+    re.compile(r"/Common/pobierzPlik/id/\d+", re.IGNORECASE),
+    # Joomla Phoca Download's, on its category page's own address:
+    # ?download=17628:kowalski-krzysztof, the colon %3A once normalised (11-13).
+    # Not Wrota's ?download=1, the same file asked for as a download.
+    re.compile(r"[?&]download=\d+(?::|%3A)", re.IGNORECASE),
+    # Olsztyn's: /attachment/informacja/23871/<sha1>.html, a PDF (11-05).
+    re.compile(r"/attachment/[a-z_-]+/\d+/[0-9a-f]{40}\.html(?:$|[?#])", re.IGNORECASE),
+    # Strzegom's: /public/get_file.php?id=592024, /public/getFile?id=625335.
+    re.compile(r"/get_?file(?:\.php)?(?:$|[?#])", re.IGNORECASE),
+    # Powiat chełmiński's: bip_download.php?id=12052 (11-05).
+    re.compile(r"/\w+_download\.php(?:$|[?#])", re.IGNORECASE),
+    # Powiat przeworski's: /downloadFile/16799 (11-05).
+    re.compile(r"/downloadFile/\d+(?:$|[?#/])", re.IGNORECASE),
+    # Tychy's: index.php?action=PobierzPlik&id=514193 (&d=1 to download).
+    re.compile(r"[?&]action=PobierzPlik(?:&|$)", re.IGNORECASE),
+    # Poznań's: /public/bip/zalaczniki.html?co=show&lz_id=12017.
+    re.compile(r"/zalaczniki\.html\?(?:[^#]*&)?lz_id=\d+", re.IGNORECASE),
+    # mojbip.pl's: a numbered page's ?file=, /1541.html?file=10170, served as
+    # application/octet-stream (powiat sztumski, Sztum, Czersk; 11-18).
+    re.compile(r"/\d+\.html\?file=\d+(?:$|[&#])", re.IGNORECASE),
     re.compile(r"/download/attachment/\d+/", re.IGNORECASE),
     re.compile(r"/api/files/\d+", re.IGNORECASE),
     re.compile(r"/fobjects/download/", re.IGNORECASE),
@@ -47,10 +79,24 @@ _DOC_CONTENT_TYPES = (
 )
 
 # Pages that never lead to documents and would eat the host's page budget.
+# SAM3's downloadZip is a ZIP of the page's attachments, each linked on its own
+# too. ESC's VelaBIP compares two versions of a page, /<page>/porownaj/2/1:
+# 3.7 MB each, 71 of 315 requests at Łaziska Górne (11-13), and the files on
+# them were taken for a declarations page's.
 _LOW_VALUE_RE = re.compile(
     r"/(?:banners?|view|tags?|search|szukaj|print|drukuj|rss|feed|login"
     r"|logowanie|polityka-prywatnosci|deklaracja-dostepnosci|mapa-strony"
-    r"|sitemap)(?:/|$|\?)",
+    r"|sitemap|downloadZip)(?:/|$|\?)"
+    r"|/porownaj/\d+/\d+(?:$|[?#])",
+    re.IGNORECASE,
+)
+
+# A viewer showing a file, not the file: AkcessNet links each file again as
+# docs.google.com/a/<host>/viewer?url=<file>.pdf, which comes down as a page
+# and took one of a councillor's three picks (11-13, powiat częstochowski).
+_VIEWER_RE = re.compile(
+    r"^https?://docs\.google\.com/(?:a/[^/?#]+/)?(?:viewer|viewerng/viewer|gview)"
+    r"(?:$|[?#/])",
     re.IGNORECASE,
 )
 
@@ -65,6 +111,8 @@ def is_html(content_type: str) -> bool:
 
 
 def is_document_url(url: str) -> bool:
+    if _VIEWER_RE.search(url):
+        return False
     return any(pattern.search(url) for pattern in _DOC_PATTERNS)
 
 
@@ -93,13 +141,68 @@ _AMP_PREFIX_RE = re.compile(r"^(?:amp;)+", re.IGNORECASE)
 # ZETO-RZESZÓW's &printtype=pdf is the page printed, ?font_size= a 302 back to
 # it with bigger letters.
 _NOISE_QUERY_PARAMS = frozenset(
-    {"x", "y", "fontsize", "font_size", "print", "printtype", "pokaz_rejestr_zmian"}
+    {
+        "x",
+        "y",
+        "fontsize",
+        "font_size",
+        "print",
+        "printtype",
+        "pokaz_rejestr_zmian",
+        # The high-contrast view of the same page (um.bip.klodzko.pl, 11-05:
+        # every menu page read three times over, the councillors never).
+        "tryb_widoku",
+    }
 )
 _NOISE_QUERY_PREFIXES = ("switch_",)
 # A way back, not a page: Liferay's ?redirect= holds the page linking, and
 # nests deeper on each visit (bip.warszawa.pl, 11-01: one councillor's page as
 # a dozen URLs).
 _NOISE_QUERY_SUFFIXES = ("redirect", "backurl")
+# ZETO Lublin's e-zeto pages: index.php?type=4&func=selectsite&value[0]=mnu55
+# &value[1]=12, a list's further pages func=dispNaviBar (`jobs.bip_crawler.ezeto`).
+_EZETO_FUNCS = frozenset({"selectsite", "dispnavibar"})
+# What its server reads past: a link's name=bt<N>, numbered anew each render,
+# or a breadcrumb's name=vb, whose page also carries value[2..4] (its buttons
+# param[wartosc][2..4]) = selectsite, 0, 0. The same page byte for byte, the
+# breadcrumb's but for the buttons' names (11-13).
+_EZETO_NAME = re.compile(r"bt\d+|vb")
+_EZETO_BREADCRUMB = frozenset(
+    (f"{key}[{i}]", value)
+    for key in ("value", "param[wartosc]")
+    for i, value in (("2", "selectsite"), ("3", "0"), ("4", "0"))
+)
+
+
+def _ezeto_url(base: str, pairs: list[tuple[str, str]]) -> str | None:
+    """An e-zeto page's one address; None for any other page.
+
+    Its links spell a page a dozen ways: the whole query percent-encoded once
+    more (index.php?type%3D4%26name%3Dbt31%26func%3Dselectsite...) or not,
+    under a name the server reads past (`_EZETO_NAME`). Read as one parameter,
+    an encoded query came back as "...=", which opens the home page instead of
+    a document; decoded, a list's further page is the home page too: the server
+    reads a pager's page only so encoded (11-13). So the query is decoded,
+    stripped of those, sorted and encoded whole once more: the bytes the site's
+    own link gets, for a menu's page, a document and a pager's page alike.
+    """
+    if not base.lower().endswith("/index.php"):
+        return None
+    if len(pairs) == 1 and not pairs[0][1] and "=" in pairs[0][0]:
+        pairs = parse_query(pairs[0][0])  # encoded whole
+    if ("type", "4") not in pairs or not any(
+        k == "func" and v.lower() in _EZETO_FUNCS for k, v in pairs
+    ):
+        return None
+    kept = sorted(
+        {
+            (key, value)
+            for key, value in pairs
+            if not (key == "name" and _EZETO_NAME.fullmatch(value))
+            and (key, value) not in _EZETO_BREADCRUMB
+        }
+    )
+    return f"{base}?{encode_whole(format_query(kept))}"
 
 
 def normalize_url(url: str) -> str:
@@ -110,6 +213,7 @@ def normalize_url(url: str) -> str:
     supply of distinct URLs from one page. Unescaping `&amp;`, stripping `amp;`
     prefixes from parameter names, dropping presentation-only toggles and
     duplicate pairs, and sorting the rest makes those permutations converge.
+    An e-zeto page gets the one address its server answers (`_ezeto_url`).
     """
     clean = _AMP_ENTITY_RE.sub("&", url).split("#", maxsplit=1)[0].strip()
     if clean.endswith("/") and clean.count("/") > 3:
@@ -120,6 +224,8 @@ def normalize_url(url: str) -> str:
     pairs: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
     parsed = [(_AMP_PREFIX_RE.sub("", key), value) for key, value in parse_query(query)]
+    if (ezeto := _ezeto_url(base, parsed)) is not None:
+        return ezeto
     # AkcessNet (?idg=) places a page in its menu by x and y: without them every
     # page below the top answers "Błąd 404", articles included (10-31).
     noise = _NOISE_QUERY_PARAMS

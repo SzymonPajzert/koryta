@@ -128,7 +128,7 @@ definePageMeta({
 });
 
 useHead({
-  title: "Powiązania do opublikowania (Admin) - koryta.pl",
+  title: "Powiązania do opublikowania (Admin)",
 });
 
 const headers = [

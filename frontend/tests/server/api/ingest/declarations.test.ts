@@ -23,9 +23,11 @@ function snapshot(path: string) {
   };
 }
 
-/** `where(...).where(...).get()` over `stored`, for the employment lookup the
- * reader queue's order needs (`pagesWithAPublicPost`): equality and `in`, on
- * one collection, which is all of Firestore this endpoint asks for. */
+/** `where(...).where(...).get()` over `stored`, for what the reader queue's
+ * order needs: the employment lookup (`pagesWithAPublicPost`) and the crops
+ * that name a page (`pagesReached`). Equality, `in` and `array-contains`, on
+ * one collection, which is all of Firestore this endpoint asks for. `select`
+ * hands back every field, and `limit` is never reached. */
 function query(
   collection: string,
   filters: { field: string; op: string; value: unknown }[] = [],
@@ -33,15 +35,19 @@ function query(
   return {
     where: (field: string, op: string, value: unknown) =>
       query(collection, [...filters, { field, op, value }]),
+    select: () => query(collection, filters),
+    limit: () => query(collection, filters),
     get: async () => {
       const docs = Object.entries(stored)
         .filter(([path]) => path.startsWith(`${collection}/`))
         .filter(([, data]) =>
           filters.every(({ field, op, value }) => {
             const held = (data ?? {})[field];
-            return op === "in"
-              ? (value as unknown[]).includes(held)
-              : held === value;
+            if (op === "in") return (value as unknown[]).includes(held);
+            if (op === "array-contains") {
+              return Array.isArray(held) && held.includes(value);
+            }
+            return held === value;
           }),
         )
         .map(([path]) => snapshot(path));
@@ -56,8 +62,9 @@ const mockDb = {
     where: (field: string, op: string, value: unknown) =>
       query(collection).where(field, op, value),
   })),
-  getAll: vi.fn(async (...refs: { path: string }[]) =>
-    refs.map((ref) => snapshot(ref.path)),
+  // A field mask, last, is read as every field.
+  getAll: vi.fn(async (...refs: { path?: string }[]) =>
+    refs.flatMap((ref) => (ref.path ? [snapshot(ref.path)] : [])),
   ),
   batch: vi.fn(() => {
     const pending: { path: string; data: Record<string, unknown> }[] = [];
@@ -82,23 +89,25 @@ vi.mock("firebase-admin/firestore", () => ({
 }));
 vi.mock("firebase-admin/app", () => ({ getApp: vi.fn() }));
 
-const { mockGetUser, mockMatchAndDrain, mockCacheClear } = vi.hoisted(() => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  globalThis.createError = (err: any) =>
-    Object.assign(new Error(err.message), err);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  globalThis.defineEventHandler = (fn: any) => fn;
-  const mockCacheClear = vi.fn();
-  globalThis.useStorage = vi.fn(() => ({ clear: mockCacheClear }));
-  return {
-    mockGetUser: vi.fn().mockResolvedValue({
-      uid: "pipeline-bip-declarations",
-      datascience: true,
-    }),
-    mockMatchAndDrain: vi.fn(),
-    mockCacheClear,
-  };
-});
+const { mockGetUser, mockMatchAndDrain, mockCacheClear, mockRestage } =
+  vi.hoisted(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    globalThis.createError = (err: any) =>
+      Object.assign(new Error(err.message), err);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    globalThis.defineEventHandler = (fn: any) => fn;
+    const mockCacheClear = vi.fn();
+    globalThis.useStorage = vi.fn(() => ({ clear: mockCacheClear }));
+    return {
+      mockGetUser: vi.fn().mockResolvedValue({
+        uid: "pipeline-bip-declarations",
+        datascience: true,
+      }),
+      mockMatchAndDrain: vi.fn(),
+      mockCacheClear,
+      mockRestage: vi.fn(),
+    };
+  });
 
 // What a settled crop does to its pages is tested in
 // tests/server/utils/declarationPublish.test.ts; here only that the upload
@@ -107,6 +116,11 @@ const { mockGetUser, mockMatchAndDrain, mockCacheClear } = vi.hoisted(() => {
 // as the site reads it.
 vi.mock("../../../../server/utils/declarationPublish", () => ({
   matchAndDrain: mockMatchAndDrain,
+}));
+// Which pages the upload hands the people count, which
+// tests/server/utils/declarationPeopleCount.test.ts runs.
+vi.mock("../../../../server/utils/declarationPeopleCount", () => ({
+  restageDeclarationPeople: mockRestage,
 }));
 
 // `requireDatascience` stays real; only the token lookup is faked.
@@ -337,6 +351,81 @@ describe("api/ingest/declarations", () => {
       ).toBe(0);
     });
 
+    it("puts the crops of a person a reading has reached last", async () => {
+      // Another of her declarations, settled and compared with her page.
+      const read = (fields: Record<string, unknown>) => ({
+        "declarationExtracts/read": {
+          status: "agreed",
+          agreed: { value: "1979-07-15", kind: "date", by: "readers" },
+          personIds: ["kowalska"],
+          pageOutcomes: { kowalska: "queued" },
+          ...fields,
+        },
+      });
+      expect(await priorityOf({ birthDate: "1979-07-15" }, read({}))).toBe(4);
+      // Read as another day, it reached her all the same.
+      expect(
+        await priorityOf(
+          { birthDate: "1979-07-15" },
+          read({ pageOutcomes: { kowalska: "different" } }),
+        ),
+      ).toBe(4);
+      // A year alone, a reading an admin took back, and one never compared
+      // reach nobody.
+      for (const fields of [
+        { agreed: { value: "1979", kind: "year", by: "readers" } },
+        { status: "withdrawn" },
+        { pageOutcomes: {} },
+      ]) {
+        expect(
+          await priorityOf({ birthDate: "1979-07-15" }, read(fields)),
+        ).toBe(0);
+      }
+    });
+
+    it("puts a crop the job read another date off half a tier back", async () => {
+      const withMachine = async (
+        node: Record<string, unknown>,
+        birthDate: string,
+      ) => {
+        stored = {
+          "nodes/kowalska": { type: "person", name: "Anna Kowalska", ...node },
+          "nodes/wodociagi": {
+            type: "place",
+            name: "Wodociągi Strzelin",
+            isPublic: true,
+          },
+          "edges/kowalska-job": {
+            type: "employed",
+            name: "Rada Nadzorcza",
+            source: "kowalska",
+            target: "wodociagi",
+            start_date: "2020-03-01",
+          },
+        };
+        await send({
+          candidacies: [candidacy()],
+          extracts: [
+            extract({
+              machine: { birthDate, confidence: "low", method: "ocr" },
+            }),
+          ],
+        });
+        return stored[EXTRACT]!.priority;
+      };
+      // Most likely somebody else's: still ahead of an undated draft.
+      expect(await withMachine({ birthDate: "1979-07-15" }, "1981-02-03")).toBe(
+        0.5,
+      );
+      // The page's own date, or a page with no date to contradict.
+      expect(await withMachine({ birthDate: "1979-07-15" }, "1979-07-15")).toBe(
+        0,
+      );
+      expect(await withMachine({}, "1981-02-03")).toBe(1);
+      // A year alone says nothing of the day.
+      expect(await withMachine({ birthDate: "1979-07-15" }, "1981")).toBe(0);
+    });
+
     it("leaves a page whose post somebody removed behind", async () => {
       expect(
         await priorityOf(
@@ -540,6 +629,56 @@ describe("api/ingest/declarations", () => {
     });
   });
 
+  it("moves the people of the crops it stores, and those its comparison touched", async () => {
+    mockMatchAndDrain.mockResolvedValueOnce({
+      matched: [{ outcomes: { kowalska: "queued" } }],
+      drain: { published: ["nowak"] },
+    });
+    await send({
+      candidacies: [candidacy()],
+      extracts: [
+        extract({
+          outcome: "read",
+          images: undefined,
+          machine: { birthDate: "1979-07-15", confidence: "high" },
+        }),
+      ],
+    });
+
+    expect(mockRestage).toHaveBeenCalledWith(mockDb, ["kowalska", "nowak"]);
+  });
+
+  it("still answers the upload when the people count cannot be moved", async () => {
+    // The real re-staging, on a database it cannot read.
+    const { restageDeclarationPeople } = await vi.importActual<
+      typeof import("../../../../server/utils/declarationPeopleCount")
+    >("../../../../server/utils/declarationPeopleCount");
+    mockRestage.mockImplementationOnce((_db, pages) =>
+      restageDeclarationPeople(
+        {
+          ...mockDb,
+          getAll: async () => {
+            throw new Error("unavailable");
+          },
+        } as never,
+        pages,
+      ),
+    );
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await send({
+      candidacies: [candidacy()],
+      extracts: [extract()],
+    });
+
+    expect(result.extracts.created).toBe(1);
+    expect(quiet).toHaveBeenCalledWith(
+      expect.stringContaining("re-staging kowalska"),
+      expect.any(Error),
+    );
+    quiet.mockRestore();
+  });
+
   it("compares a settled crop again when it is sent for one more page", async () => {
     await send({ candidacies: [candidacy()], extracts: [extract()] });
     stored[EXTRACT] = {
@@ -582,6 +721,101 @@ describe("api/ingest/declarations", () => {
 
     expect(stored[EXTRACT]).toMatchObject({ pageMatch: "same" });
     expect(mockMatchAndDrain).not.toHaveBeenCalled();
+  });
+
+  describe("a date OCR read cleanly", () => {
+    const ocr = {
+      birthDate: "1979-07-15",
+      confidence: "medium",
+      method: "ocr",
+      inPkwWindow: "yes",
+    };
+
+    it("settles the crop when it is already the page's birth date", async () => {
+      stored["nodes/kowalska"] = {
+        type: "person",
+        name: "Anna Kowalska",
+        birthDate: "1979-07-15",
+      };
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+      expect(stored[EXTRACT]).toMatchObject({
+        status: "agreed",
+        agreed: { value: "1979-07-15", kind: "date", by: "machine" },
+        machine: { method: "ocr" },
+        pageMatch: null,
+      });
+      // The picture is kept, for the admin who looks at the crop later.
+      expect(stored[IMAGES]).toBeDefined();
+      expect(mockMatchAndDrain).toHaveBeenCalledTimes(1);
+      expect(mockMatchAndDrain.mock.calls[0]![1]).toEqual([`${SHA}-p0`]);
+    });
+
+    it("leaves it to readers when the page has another date or none", async () => {
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+      expect(stored[EXTRACT]).toMatchObject({ status: "open", agreed: null });
+
+      stored["nodes/kowalska"] = {
+        type: "person",
+        name: "Anna Kowalska",
+        birthDate: "1979-07-16",
+      };
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+      expect(stored[EXTRACT]).toMatchObject({ status: "open", agreed: null });
+      expect(mockMatchAndDrain).not.toHaveBeenCalled();
+    });
+
+    it("settles an open crop sent again once the page has the date", async () => {
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+      stored["nodes/kowalska"] = {
+        type: "person",
+        name: "Anna Kowalska",
+        birthDate: "1979-07-15",
+      };
+
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+
+      expect(stored[EXTRACT]).toMatchObject({
+        status: "agreed",
+        agreed: { value: "1979-07-15", by: "machine" },
+      });
+      expect(mockMatchAndDrain).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves a crop somebody has answered to its readers", async () => {
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+      stored[EXTRACT] = { ...stored[EXTRACT], answerCount: 1 };
+      stored["nodes/kowalska"] = {
+        type: "person",
+        name: "Anna Kowalska",
+        birthDate: "1979-07-15",
+      };
+
+      await send({
+        candidacies: [candidacy()],
+        extracts: [extract({ machine: ocr })],
+      });
+
+      expect(stored[EXTRACT]).toMatchObject({ status: "open", agreed: null });
+      expect(mockMatchAndDrain).not.toHaveBeenCalled();
+    });
   });
 
   it("leaves a lower-confidence reading to readers", async () => {

@@ -8,8 +8,10 @@ import type { Task } from "../../../shared/tasks";
  * upload waiting on the deploy - beside a second chain with a decision at its
  * head and a goal at its end. The upload is urgent, which makes the deploy and
  * the merge under it urgent too, and the goal is high, which lifts both steps
- * that lead to it. Times are fixed rather than relative, since the page prints
- * them as dates. */
+ * that lead to it. The merge's branch is partly on main; the decision offers
+ * three answers, the second recommended; a second decision is answered, with
+ * one task after it done and the upload of links still open. Times are fixed
+ * rather than relative, since the page prints them as dates. */
 
 const at = (day: string, time = "09:00") => `2026-09-${day}T${time}:00.000Z`;
 
@@ -35,8 +37,17 @@ function task(id: string, fields: Partial<Task> & Pick<Task, "title">): Task {
 export const opsTasks: Task[] = [
   task("merge-przykladowa-galaz", {
     title: "Scal gałąź przykladowa-galaz: spółki bez nazwy dostają numer KRS",
+    kind: "merge",
     tags: ["deploy"],
     branches: ["przykladowa-galaz"],
+    mergeCheck: {
+      state: "partial",
+      branches: [
+        { name: "przykladowa-galaz", state: "partial", commits: 3, landed: 1 },
+      ],
+      checkedAt: at("28", "07:10"),
+      main: "8a5f46d5e98f",
+    },
     rank: 1,
   }),
   task("deploy-indeksow", {
@@ -69,10 +80,42 @@ export const opsTasks: Task[] = [
     title: "Zdecyduj, które powiązania z umów są publiczne od razu",
     kind: "decision",
     tags: ["umowy"],
+    question: "Które powiązania z umów publikować od razu?",
+    options: [
+      { key: "A", title: "Wszystkie od razu" },
+      {
+        key: "B",
+        title: "Z publicznych spółek od razu, resztę po przejrzeniu",
+      },
+      { key: "C", title: "Żadne, każde po przejrzeniu" },
+    ],
+    recommended: "B",
+  }),
+  task("decyzja-zrodlo-umow", {
+    title: "Zdecyduj, skąd brać umowy: rejestr czy BIP-y gmin",
+    kind: "decision",
+    status: "doing",
+    tags: ["umowy"],
+    question: "Skąd brać umowy?",
+    options: [
+      { key: "A", title: "Z centralnego rejestru umów" },
+      { key: "B", title: "Z BIP-ów gmin" },
+    ],
+    recommended: "A",
+    picked: { key: "A", at: at("27", "12:00"), by: "owner" },
+  }),
+  task("pobierz-umowy", {
+    title: "Pobierz umowy z rejestru",
+    who: "agent",
+    kind: "task",
+    status: "done",
+    dependsOn: ["decyzja-zrodlo-umow"],
+    tags: ["umowy"],
+    closedAt: at("28", "08:00"),
   }),
   task("wgraj-powiazania", {
     title: "Wgraj powiązania z umów po decyzji o widoczności",
-    dependsOn: ["decyzja-widocznosc"],
+    dependsOn: ["decyzja-widocznosc", "decyzja-zrodlo-umow"],
     tags: ["umowy", "data"],
   }),
   task("umowy-na-produkcji", {

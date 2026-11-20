@@ -158,7 +158,23 @@ const scoreModelLabels: Record<string, string> = {
   "pipeline-succession": "Następca na stanowisku",
   "pipeline-capture": "Przejęta instytucja",
   "pipeline-facts": "Artykuły w bazie",
+  "pipeline-locality": "Posada w miejscu kandydowania",
+  "pipeline-publishable": "Szansa publikacji",
 };
+
+/** What a band of the publication chance stands for, by the cut-offs
+ * `CHANCE_BANDS` in `data/pipelines/src/analysis/scores/publishable.py`. */
+const publishChanceLabels: Record<number, string> = {
+  5: "szansa od 90%",
+  4: "szansa 75-90%",
+  3: "szansa 50-75%",
+  2: "szansa 15-50%",
+  1: "szansa poniżej 15%",
+};
+
+export function publishChanceLabel(band: number): string | undefined {
+  return publishChanceLabels[band];
+}
 
 /** A readable name for the model behind one pipeline vote. */
 export function scoreModelLabel(uid: string): string {

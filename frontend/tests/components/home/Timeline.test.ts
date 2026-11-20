@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
+import { getHeader, getQuery } from "h3";
+import { computed, defineComponent, h, ref } from "vue";
 import { clearNuxtData } from "#app";
 import Timeline from "../../../app/components/home/Timeline.vue";
 import { OTHER_KEY } from "../../../shared/homeTimeline";
@@ -9,13 +11,35 @@ import type {
   TimelineGrouping,
 } from "../../../server/api/stats/homeTimeline.get";
 
+/** Who is signed in: null for nobody, as `tests/setup.ts` has it. */
+const { authUser } = vi.hoisted(() => ({
+  authUser: { value: null as { getIdToken: () => Promise<string> } | null },
+}));
+
+vi.mock("vuefire", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("vuefire")>();
+  return {
+    ...actual,
+    useFirestore: vi.fn(() => ({})),
+    useFirebaseAuth: vi.fn(() => ({ currentUser: null })),
+    useCurrentUser: vi.fn(() => computed(() => authUser.value)),
+    useIsCurrentUserLoaded: vi.fn(() => ref(true)),
+  };
+});
+
 /** What the endpoint answers with. Replaced per test. */
 let response: HomeTimelineResponse;
 
-registerEndpoint(
-  "/api/stats/homeTimeline",
-  (): HomeTimelineResponse => response,
-);
+/** What each request for it carried. */
+let asked: { latest: unknown; token: boolean }[] = [];
+
+registerEndpoint("/api/stats/homeTimeline", (event): HomeTimelineResponse => {
+  asked.push({
+    latest: getQuery(event).latest,
+    token: !!getHeader(event, "authorization"),
+  });
+  return response;
+});
 
 /** `months` counted forward from a start, so a case can say "two years of
  * data" without writing 24 strings out. */
@@ -105,6 +129,20 @@ describe("HomeTimeline", () => {
   beforeEach(() => {
     clearNuxtData();
     response = timeline();
+    asked = [];
+  });
+
+  it("asks for what everybody gets, signed in too", async () => {
+    // The chart counts published posts only. Asked with `latest=true` and a
+    // token, a signed-in reader skipped the six-hour cache and Cloud CDN, and
+    // on an instance just started waited for the whole count.
+    authUser.value = { getIdToken: async () => "token" };
+    try {
+      await mountTimeline();
+      expect(asked).toEqual([{ latest: undefined, token: false }]);
+    } finally {
+      authUser.value = null;
+    }
   });
 
   it("says so rather than drawing an empty chart when a grouping has no lines", async () => {
@@ -170,6 +208,63 @@ describe("HomeTimeline", () => {
     const wrapper = await mountTimeline("category");
 
     expect(wrapper.text()).toMatch(/1\u00a0?315 z 3\u00a0?103 stanowisk/);
+  });
+
+  it("lists the tooltip's rows in the order of the lines at the hovered month", async () => {
+    // As under „Województwa” on production: the folded remainder comes last
+    // in the series and is the highest line.
+    response = timeline();
+    response.groupings.region[2]!.counts = response.months.map(() => 500);
+
+    /** Stands in for apexcharts, to read what the component hands it. */
+    const Apexchart = defineComponent({
+      name: "apexchart",
+      props: { options: Object, series: Array, type: String, height: String },
+      setup: () => () => h("div"),
+    });
+    // Opened on „Partie” and switched, as a reader does it. The tooltip is the
+    // one the chart was first given: vue3-apexcharts drops functions from
+    // every later options update, so apexcharts keeps calling that one.
+    const wrapper = await mountSuspended(Timeline, {
+      props: { grouping: "party", range: "all" },
+      global: { stubs: { apexchart: Apexchart } },
+    });
+    await vi.waitUntil(() => wrapper.findComponent(Apexchart).exists(), {
+      timeout: 2000,
+    });
+    const chart = wrapper.findComponent(Apexchart);
+    const { tooltip } = chart.props("options") as {
+      tooltip: {
+        custom: (point: {
+          series: number[][];
+          dataPointIndex: number;
+        }) => string;
+      };
+    };
+    await wrapper.setProps({ grouping: "region" });
+    await flushPromises();
+    const series = (chart.props("series") as { data: { y: number }[] }[]).map(
+      (line) => line.data.map((point) => point.y),
+    );
+
+    const box = document.createElement("div");
+    box.innerHTML = tooltip.custom({
+      series,
+      dataPointIndex: series[0]!.length - 1,
+    });
+
+    expect(box.querySelector(".apexcharts-tooltip-title")?.textContent).toBe(
+      "Grudzień 2025",
+    );
+    expect(
+      [...box.querySelectorAll(".apexcharts-tooltip-text-y-label")].map(
+        (label) => label.textContent,
+      ),
+    ).toEqual([
+      "Pozostałe województwa: ",
+      "Województwo mazowieckie: ",
+      "Województwo śląskie: ",
+    ]);
   });
 
   it("keeps a series shorter than the picked range whole", async () => {

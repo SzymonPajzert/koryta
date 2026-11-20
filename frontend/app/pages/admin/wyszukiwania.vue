@@ -133,7 +133,7 @@ definePageMeta({
 });
 
 useHead({
-  title: "Wyszukiwania (Admin) - koryta.pl",
+  title: "Wyszukiwania (Admin)",
 });
 
 const DAY_OPTIONS = [7, 30, 90, RETENTION_DAYS] as const;

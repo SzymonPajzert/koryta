@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { omniSearchFor } from "./helpers/omniSearch";
+import { omniSearchFor, openOmniSearch } from "./helpers/omniSearch";
 
 test.describe("OmniSearch", () => {
   test.beforeEach(async ({ page }) => {
@@ -87,5 +87,70 @@ test.describe("OmniSearch", () => {
 
     await item.click();
     await expect(page).toHaveURL(/.*\/instytucja\/.+/);
+  });
+
+  test("starts again from an empty box after each pick on the table", async ({
+    page,
+  }) => {
+    // The table is where the box is not replaced by a pick: its own entries
+    // lead back to the page already open, and a person's page has the same
+    // layout. Two readers picked „Lista wszystkich osób” here and went on to
+    // type a name at the caret inside the label it left behind, „Lista
+    // wszystkich ospaób”, so they found nobody.
+    await page.goto("/eksploruj/tabela", { waitUntil: "domcontentloaded" });
+    const input = page.locator("input#omni-search");
+    const selection = page.locator(".v-autocomplete__selection-text");
+    const row = (name: string) =>
+      page.locator(".v-overlay--active .v-list-item", { hasText: name });
+
+    await openOmniSearch(page, row("Lista wszystkich osób"));
+    await row("Lista wszystkich osób").click();
+    await expect(input).toHaveValue("");
+    await expect(selection).toHaveCount(0);
+
+    // A party changes the query and nothing else, so the page stays too.
+    await omniSearchFor(page, "Konfederacja", row("Konfederacja").first());
+    await row("Konfederacja").first().click();
+    await expect(page).toHaveURL(/\/eksploruj\/tabela\?.*party=Konfederacja/);
+    await expect(input).toHaveValue("");
+    await expect(selection).toHaveCount(0);
+
+    // Typed key by key, because `fill` replaces whatever the field holds, and
+    // what went wrong was keys landing in the middle of what it held. Sent to
+    // the page rather than to the input, which would focus it first: these
+    // keys have to find the field as the pick left it.
+    await page.keyboard.type("Jan Kowal");
+    await expect(input).toHaveValue("Jan Kowal");
+    await row("Jan Kowalski").first().click();
+    await expect(page).toHaveURL(/\/osoba\/jan-kowalski/);
+    await expect(input).toHaveValue("");
+    await expect(selection).toHaveCount(0);
+  });
+
+  test("shows everybody when the list is picked on a filtered table", async ({
+    page,
+  }) => {
+    // The entry leads to the page already open and asks for nothing narrower,
+    // and it kept the filters: a reader looking at „Brak danych” picked it and
+    // went on looking at „Brak danych”, with nothing left in the box to say the
+    // pick had been heard.
+    await page.goto("/eksploruj/tabela?party=Konfederacja", {
+      waitUntil: "domcontentloaded",
+    });
+    const chip = page.locator(".tabela-query-bar__rail .v-chip", {
+      hasText: "Konfederacja",
+    });
+    const list = page.locator(".v-overlay--active .v-list-item", {
+      hasText: "Lista wszystkich osób",
+    });
+    await expect(chip).toBeVisible();
+
+    await openOmniSearch(page, list);
+    await list.click();
+
+    await expect(page).toHaveURL(/\/eksploruj\/tabela$/);
+    await expect(chip).toHaveCount(0);
+    // Not in the party, so only the whole list has him.
+    await expect(page.locator(".table-card")).toContainText("Jan Kowalski");
   });
 });

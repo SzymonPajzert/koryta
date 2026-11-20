@@ -217,6 +217,62 @@ describe("api/nodes/merge", () => {
     expect(wrote("edges/e-surv")).toBeUndefined();
   });
 
+  it("carries what a declaration said about a post onto the survivor's copy of it", async () => {
+    // The duplicate's copy is the one a declaration created; the survivor's
+    // is the register's, with an entry of its own from another declaration.
+    const entry = (asOf: string) => ({
+      url: "https://bip.example.pl/oswiadczenie.pdf",
+      as_of: asOf,
+      kind: "annual",
+      band: "employer",
+      role: "prezes zarządu",
+      roleId: "prezes",
+      by: "readers",
+      readers: 2,
+      at: "2026-11-20T12:00:00.000Z",
+    });
+    const post = {
+      target: "firma",
+      type: "employed",
+      name: "Prezes",
+      start_date: "2020-01-01",
+    };
+    stored["edges/e-dup"] = {
+      ...post,
+      source: "dup",
+      as_of: "2025",
+      declared: { "beef-p1:employer:0": entry("2025") },
+    };
+    stored["edges/e-surv"] = {
+      ...post,
+      source: "surv",
+      published: true,
+      declared: { "f00d-p1:employer:0": entry("2024") },
+    };
+
+    const result = await handler({} as never);
+
+    expect(result.plan.counts).toMatchObject({ collapsed: 1 });
+    // A field update, with no as_of: a register edge stays one.
+    expect(wrote("edges/e-surv")).toEqual({
+      declared: {
+        "f00d-p1:employer:0": entry("2024"),
+        "beef-p1:employer:0": entry("2025"),
+      },
+    });
+    expect(wrote("edges/e-dup")).toMatchObject({
+      deleted: true,
+      declared: { "beef-p1:employer:0": entry("2025") },
+    });
+    // No revision of either holds what was read.
+    for (const call of mockBatchSet.mock.calls) {
+      if (String(call[0]).startsWith("revisions/")) {
+        expect(call[1]).not.toHaveProperty("data.declared");
+        expect(call[1]).not.toHaveProperty("data.as_of");
+      }
+    }
+  });
+
   it("keeps a candidacy the survivor appears to state already, and reports it", async () => {
     // `identicalMeansSame: false` for `election`: the office, the gmina TERYT
     // and the run-off round are destroyed before the ingest sees them, so two

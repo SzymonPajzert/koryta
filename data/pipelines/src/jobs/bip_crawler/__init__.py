@@ -22,7 +22,16 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from jobs.bip_crawler import found, robots_exceptions
+from jobs.bip_crawler import (
+    found,
+    inspect,
+    reset,
+    robots_exceptions,
+    sent,
+    signers,
+    state,
+    walk,
+)
 from jobs.bip_crawler.coordinator import BipCoordinator, CoordinatorOptions
 from jobs.bip_crawler.identity import Agents
 from jobs.bip_crawler.people import run_people_mode, server_of
@@ -30,7 +39,7 @@ from scrapers.bip.registry import hosts_from_entries, parse_subjects_xml
 from scrapers.common.fetch import use_ca_bundle
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import BipQueue
-from stores.bip_bundles import LocalBundleStore, rewrap_part
+from stores.bip_bundles import LocalBundleStore, in_use, rewrap_part
 from stores.bip_queue import PostgresBipQueue
 from stores.bip_registry import download_subjects_xml
 from stores.tls import ca_bundle
@@ -106,16 +115,18 @@ def ingest_registry(
 
 
 @contextlib.contextmanager
-def single_crawler(root: Path) -> Iterator[None]:
-    """Hold ``root`` for this run: the startup repair re-wraps every ``.part``
-    bundle there, which is only safe when no other crawler writes to it."""
+def single_crawler(root: Path, refusal: str = "") -> Iterator[None]:
+    """Hold ``root`` for this run: no other crawl writes there while the
+    startup repair re-wraps the ``.part`` bundles no process holds (`in_use`).
+    ``refusal`` is what to say when another run holds it."""
     root.mkdir(parents=True, exist_ok=True)
     with (root / ".crawl.lock").open("w") as handle:
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise SystemExit(
-                f"another koryta_scrape_bip is using {root}; "
+                refusal
+                or f"another koryta_scrape_bip is using {root}; "
                 "give this run its own --out"
             ) from None
         yield
@@ -148,19 +159,20 @@ def _crawl(args: argparse.Namespace) -> int:
     if not args.no_repair:
         # A SIGKILL/crash leaves .part bundles behind (SIGTERM flushes them).
         # Re-wrap them before crawling so their bytes are kept, not re-fetched.
-        # Single-instance assumption: at startup no crawler is writing to this
-        # --out, so every .part is stale and can be re-wrapped.
+        # Walks and imports may write theirs under the same --out meanwhile:
+        # a .part a running process holds is left to it (`in_use`).
         counts = repair_parts(
             bip_queue,
             root,
             older_than_minutes=0,
             keep_missing=False,
         )
-        if counts["repaired"] or counts["empty"] or counts["failed"]:
+        if any(counts[k] for k in ("repaired", "empty", "failed", "in_use")):
             print(
                 f"startup repair: rewrapped {counts['repaired']}, "
                 f"empty/removed {counts['empty']}, failed {counts['failed']}; "
-                f"pruned {counts['pruned']} doc rows",
+                f"pruned {counts['pruned']} doc rows; "
+                f"left {counts['in_use']} another process still writes",
                 flush=True,
             )
     store = LocalBundleStore(root)
@@ -202,6 +214,15 @@ def _crawl(args: argparse.Namespace) -> int:
     return EXIT_TRY_LATER if coordinator.timed_out else 0
 
 
+def _modified_before(part: Path, cutoff: float) -> bool:
+    """Whether ``part`` was last written before ``cutoff``; a bundle closed
+    and renamed since it was listed is not."""
+    try:
+        return part.stat().st_mtime <= cutoff
+    except FileNotFoundError:
+        return False
+
+
 def repair_parts(
     bip_queue: BipQueue,
     root: Path,
@@ -209,10 +230,19 @@ def repair_parts(
     older_than_minutes: int,
     keep_missing: bool,
 ) -> dict[str, int]:
-    """Re-wrap `.part` bundles left by a killed run; return per-outcome counts."""
+    """Re-wrap `.part` bundles left by a killed run; return per-outcome counts.
+    A bundle a running process still writes is left alone (`in_use`)."""
     cutoff = time.time() - older_than_minutes * 60
-    parts = sorted(p for p in root.rglob("*.part") if p.stat().st_mtime <= cutoff)
-    counts = {"parts": len(parts), "repaired": 0, "empty": 0, "failed": 0, "pruned": 0}
+    old = sorted(p for p in root.rglob("*.part") if _modified_before(p, cutoff))
+    parts = [p for p in old if not in_use(p)]
+    counts = {
+        "parts": len(parts),
+        "repaired": 0,
+        "empty": 0,
+        "failed": 0,
+        "pruned": 0,
+        "in_use": len(old) - len(parts),
+    }
     if not parts:
         return counts
     total = sum(p.stat().st_size for p in parts)
@@ -269,7 +299,8 @@ def cmd_repair(args: argparse.Namespace) -> int:
     print(
         f"rewrapped {counts['repaired']}, empty/removed {counts['empty']}, "
         f"failed {counts['failed']}; pruned {counts['pruned']} doc rows "
-        f"whose member was truncated"
+        f"whose member was truncated; left {counts['in_use']} another process "
+        f"still writes"
     )
     return 0
 
@@ -295,6 +326,374 @@ def cmd_stats(args: argparse.Namespace) -> int:
         f"{rates['bytes'] / 1e9:.2f} GB"
     )
     return 0
+
+
+def add_selection_args(group: argparse._ActionsContainer) -> None:
+    """The flags that pick the candidacies a people-mode run searches
+    (`people.selected`): `crawl --people-of-interest` and `plan`."""
+    group.add_argument(
+        "--poi-max-priority",
+        type=int,
+        default=None,
+        help="only candidacies up to this priority: 0 a draft page without a birth "
+        "date, 1 a draft with one, 2 a person not on the site yet, 3 a published page",
+    )
+    group.add_argument(
+        "--poi-limit", type=int, default=None, help="at most this many candidacies"
+    )
+    group.add_argument(
+        "--poi-refresh",
+        action="store_true",
+        help="search found and not-found ones again",
+    )
+    group.add_argument(
+        "--poi-retry",
+        default="unreachable,error,timeout,no_seed,throttled",
+        help="not_found reasons to search again (comma-separated; 'unconfirmed' for "
+        "those only unnamed files were found for); default unreachable,error,timeout,"
+        "no_seed,throttled",
+    )
+    group.add_argument(
+        "--poi-retry-before",
+        type=_utc_time,
+        default=None,
+        help="with --poi-retry, only the candidacies last searched before this time "
+        "(ISO 8601, UTC unless it says): those an older walk settled, e.g. "
+        "2026-10-30T05:43Z",
+    )
+    group.add_argument(
+        "--poi-units",
+        type=_units,
+        default=None,
+        help="only these units' candidacies: TERYT codes, comma-separated, or "
+        "@FILE with one a line",
+    )
+
+
+def add_walk_args(group: argparse._ActionsContainer) -> None:
+    """The flags that shape a unit's walk (`people.people_search`): `crawl
+    --people-of-interest` and `walk`."""
+    group.add_argument(
+        "--unit-pages",
+        type=int,
+        default=150,
+        help="pages a unit's walk reads at least (default 150)",
+    )
+    group.add_argument(
+        "--pages-per-candidacy",
+        type=int,
+        default=15,
+        help="pages a unit's walk reads for each of its candidacies, between "
+        "--unit-pages and --max-unit-pages (default 15)",
+    )
+    group.add_argument(
+        "--max-unit-pages",
+        type=int,
+        default=1000,
+        help="pages a unit's walk reads at most (default 1000)",
+    )
+    group.add_argument(
+        "--max-unit-minutes",
+        type=float,
+        default=30,
+        help="a unit's walk stops after this many minutes, its candidacies left "
+        "not_found:budget (default 30; 0 for no limit)",
+    )
+    group.add_argument(
+        "--max-per-host",
+        type=int,
+        default=1,
+        help="units searched at once on one start host (default 1: they share "
+        "its rate)",
+    )
+    group.add_argument(
+        "--max-per-server",
+        type=int,
+        default=2,
+        help="units searched at once on one server, the address their start hosts "
+        "resolve to (default 2: a hosting platform serves dozens of BIPs)",
+    )
+    group.add_argument(
+        "--known-urls",
+        default=None,
+        help="newline-delimited JSON of known URLs ({url, category}, e.g. the blind "
+        "crawl's BipUrlsClassified): declaration-like ones seed each unit's walk",
+    )
+    group.add_argument(
+        "--no-render",
+        action="store_true",
+        help="read JavaScript-drawn pages as their HTML instead of rendering them "
+        "in headless Chromium (needs the render dependency group)",
+    )
+    group.add_argument(
+        "--render-workers",
+        type=int,
+        default=2,
+        help="headless browsers rendering at once (default 2)",
+    )
+    group.add_argument(
+        "--no-sitemaps",
+        action="store_true",
+        help="do not read the BIPs' sitemaps for declaration pages before walking",
+    )
+    group.add_argument(
+        "--per-person",
+        type=int,
+        default=3,
+        help="files downloaded per candidacy (default 3)",
+    )
+
+
+_LIST_HELP = (
+    "read the people of interest from this file (a saved copy of the night's "
+    "jsonl) instead of restoring the shared cache's newest into the checkout, "
+    "which walks side by side would each write over the others'"
+)
+
+
+def _crawl_out() -> Path:
+    """The people mode's folder, as run_chunk.sh finds it."""
+    return Path(
+        os.environ.get("BIP_CRAWL_OUT", Path.home() / ".cache/koryta/bip-people-crawl")
+    )
+
+
+def add_reset_parser(sub: argparse._SubParsersAction) -> None:
+    """`reset` (`reset.py`): send candidacies back to pending."""
+    reset_cmd = sub.add_parser(
+        "reset",
+        help="make candidacies pending again for the next chunk: delete their "
+        "bip_poi and bip_poi_docs rows, each first written to --backup",
+    )
+    reset_cmd.add_argument(
+        "keys",
+        type=_units,
+        help="candidacy keys, comma-separated, or @FILE with one a line",
+    )
+    reset_cmd.add_argument(
+        "--backup",
+        type=Path,
+        default=None,
+        help="a new JSON file every deleted row is written to, on disk before "
+        "anything is deleted; required unless --dry-run",
+    )
+    reset_cmd.add_argument(
+        "--dry-run", action="store_true", help="count the rows; delete nothing"
+    )
+    reset_cmd.add_argument(
+        "--out",
+        type=Path,
+        default=_crawl_out(),
+        help="the crawl's folder: reset refuses while a crawl holds its .crawl.lock "
+        "(default $BIP_CRAWL_OUT or ~/.cache/koryta/bip-people-crawl)",
+    )
+    reset_cmd.set_defaults(func=reset.cmd_reset)
+
+
+def add_sent_parser(sub: argparse._SubParsersAction) -> None:
+    """`sent` (`sent.py`): what the site got from candidacies' stored files."""
+    sent_cmd = sub.add_parser(
+        "sent",
+        help="list the extracts the declarations upload sent of the files stored "
+        "for these candidacies, to withdraw before a reset; writes nothing",
+    )
+    sent_cmd.add_argument(
+        "keys",
+        type=_units,
+        help="candidacy keys, comma-separated, or @FILE with one a line",
+    )
+    sent_cmd.add_argument(
+        "--csv", type=Path, default=None, help="also write the extracts here"
+    )
+    sent_cmd.set_defaults(func=sent.cmd_sent)
+
+
+def add_exception_args(group: argparse._ActionsContainer) -> None:
+    """The identity and robots.txt exceptions a `walk` or a `page` tries for
+    itself alone (`walk.access`), before one goes in identity.py or
+    robots_exceptions.py; Szymon's rules of 11-01 and 11-02 say which may."""
+    group.add_argument(
+        "--as-browser",
+        action="append",
+        default=None,
+        metavar="HOST|IP",
+        help="ask this host, or every host on this server address, as a browser "
+        "(identity.BROWSER_AGENT), as an entry in identity.py would (again for "
+        "several): only a BIP that keeps public declarations from the crawler's "
+        "own User-Agent (11-01); never to get past a bot check such as "
+        "Cloudflare's challenge",
+    )
+    group.add_argument(
+        "--pass-robots",
+        action="append",
+        default=None,
+        metavar="HOST",
+        help="let any page of this host past its robots.txt, as an entry in "
+        "robots_exceptions.SITES would (again for several): only a BIP whose "
+        "robots.txt admits search engines alone or no crawler at all (11-02, b)",
+    )
+    group.add_argument(
+        "--pass-robots-files",
+        action="append",
+        default=None,
+        metavar="HOST",
+        help="let this host's file links past its robots.txt, as an entry in "
+        "robots_exceptions.FILES would (again for several): only where "
+        "robots.txt forbids the files its open pages link (11-02, a)",
+    )
+
+
+def add_walk_parsers(sub: argparse._SubParsersAction) -> None:
+    """`walk` and `plan` (`walk.py`): try the people mode on a few units, and
+    size a chunk, without touching what the crawl keeps; `page` and `files`
+    (`inspect.py`): one page as a walk reads it, and the files a walk kept."""
+    # Beside the crawl's own files, as run_chunk.sh finds them.
+    crawl_out = _crawl_out()
+    walk_cmd = sub.add_parser(
+        "walk",
+        help="search a few units as a chunk would and keep nothing: shows what a "
+        "change finds before a chunk takes the unit",
+    )
+    walk_cmd.add_argument(
+        "units",
+        type=_units,
+        help="TERYT codes, comma-separated, or @FILE with one a line",
+    )
+    walk_cmd.add_argument(
+        "--person",
+        default=None,
+        help="only the candidacies whose name holds this (case and diacritics ignored)",
+    )
+    walk_cmd.add_argument(
+        "--keys",
+        type=_units,
+        default=None,
+        help="only these candidacy keys, comma-separated, or @FILE with one a line",
+    )
+    walk_cmd.add_argument(
+        "--start",
+        default=None,
+        help="walk the one unit from this address instead, as a unit_starts.csv "
+        "row with it as bip_url would",
+    )
+    walk_cmd.add_argument(
+        "--declarations",
+        action="append",
+        default=None,
+        help="the one unit's declarations page, as that row's declarations_url "
+        "(again for several)",
+    )
+    walk_cmd.add_argument(
+        "--json", type=Path, default=None, help="also write the whole report here"
+    )
+    walk_cmd.add_argument("--list", type=Path, default=None, help=_LIST_HELP)
+    walk_cmd.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="keep the downloaded files here (default: a scratch folder, deleted); "
+        "with --json, `files` opens them",
+    )
+    walk_cmd.add_argument(
+        "--trace",
+        action="store_true",
+        help="print a line for each page read (its number, depth, whether a "
+        "declarations link led there, the candidates it gave, the declaration "
+        "pages so far) and each answer that kept something from the walk: "
+        "robots.txt, a refusal, 'not now', an error status",
+    )
+    add_exception_args(walk_cmd)
+    walk_cmd.add_argument(
+        "--stacks",
+        type=float,
+        default=0,
+        help="print every thread's stack every this many seconds, for a walk "
+        "that never ends",
+    )
+    walk_cmd.add_argument("--workers", type=int, default=4, help="units at once")
+    walk_cmd.add_argument(
+        "--rate", type=float, default=1.0, help="seconds between hits on one host"
+    )
+    walk_cmd.add_argument(
+        "--xml-cache", type=Path, default=crawl_out / "registry" / "subjects.xml"
+    )
+    walk_cmd.add_argument(
+        "--ca-bundle", type=Path, default=crawl_out / "tls" / "ca-bundle.pem"
+    )
+    add_walk_args(walk_cmd)
+    walk_cmd.set_defaults(func=walk.cmd_walk)
+
+    plan = sub.add_parser(
+        "plan",
+        help="say what crawl --people-of-interest with these flags would search; "
+        "reads the crawl's Postgres, writes nothing",
+    )
+    add_selection_args(plan)
+    plan.add_argument("--list", type=Path, default=None, help=_LIST_HELP)
+    plan.add_argument(
+        "--top", type=int, default=15, help="units listed, most candidacies first"
+    )
+    plan.set_defaults(func=walk.cmd_plan)
+
+    page = sub.add_parser(
+        "page",
+        help="read one page as a unit's walk would: its links, what each scores, "
+        "and what it credits the unit's candidacies with",
+    )
+    page.add_argument("url", help="the page's address")
+    page.add_argument(
+        "--unit", required=True, help="the unit (TERYT) whose candidacies it seeks"
+    )
+    page.add_argument(
+        "--person",
+        default=None,
+        help="only the candidacies whose name holds this (case and diacritics ignored)",
+    )
+    page.add_argument(
+        "--led",
+        action="store_true",
+        help="as a page a link saying declarations led to (the walk's 'led')",
+    )
+    page.add_argument(
+        "--render",
+        action="store_true",
+        help="draw the page in headless Chromium when the walk would",
+    )
+    page.add_argument(
+        "--grep", default=None, help="only the links whose words or address match"
+    )
+    page.add_argument("--list", type=Path, default=None, help=_LIST_HELP)
+    page.add_argument(
+        "--ca-bundle", type=Path, default=crawl_out / "tls" / "ca-bundle.pem"
+    )
+    add_exception_args(page)
+    page.set_defaults(func=inspect.cmd_page)
+
+    files = sub.add_parser(
+        "files",
+        help="open the files a walk kept (walk --out DIR --json REPORT): their "
+        "pages and whose declaration each says it is",
+    )
+    files.add_argument("report", type=Path, help="the walk's --json")
+    files.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="where the walk kept them (default: the report's --out)",
+    )
+    files.add_argument(
+        "--to",
+        type=Path,
+        default=None,
+        help="where to put each file and a picture of a scan's top (default: "
+        "OUT/files)",
+    )
+    files.add_argument(
+        "--person",
+        default=None,
+        help="only the candidacies whose name holds this (case and diacritics ignored)",
+    )
+    files.set_defaults(func=inspect.cmd_files)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -350,112 +749,8 @@ def build_parser() -> argparse.ArgumentParser:
     people.add_argument(
         "--people-of-interest", action="store_true", help="run the people mode"
     )
-    people.add_argument(
-        "--poi-max-priority",
-        type=int,
-        default=None,
-        help="only candidacies up to this priority: 0 a draft page without a birth "
-        "date, 1 a draft with one, 2 a person not on the site yet, 3 a published page",
-    )
-    people.add_argument(
-        "--poi-limit", type=int, default=None, help="at most this many candidacies"
-    )
-    people.add_argument(
-        "--poi-refresh",
-        action="store_true",
-        help="search found and not-found ones again",
-    )
-    people.add_argument(
-        "--poi-retry",
-        default="unreachable,error,timeout,no_seed,throttled",
-        help="not_found reasons to search again (comma-separated; 'unconfirmed' for "
-        "those only unnamed files were found for); default unreachable,error,timeout,"
-        "no_seed,throttled",
-    )
-    people.add_argument(
-        "--poi-retry-before",
-        type=_utc_time,
-        default=None,
-        help="with --poi-retry, only the candidacies last searched before this time "
-        "(ISO 8601, UTC unless it says): those an older walk settled, e.g. "
-        "2026-10-30T05:43Z",
-    )
-    people.add_argument(
-        "--poi-units",
-        type=_units,
-        default=None,
-        help="only these units' candidacies: TERYT codes, comma-separated, or "
-        "@FILE with one a line",
-    )
-    people.add_argument(
-        "--unit-pages",
-        type=int,
-        default=150,
-        help="pages a unit's walk reads at least (default 150)",
-    )
-    people.add_argument(
-        "--pages-per-candidacy",
-        type=int,
-        default=15,
-        help="pages a unit's walk reads for each of its candidacies, between "
-        "--unit-pages and --max-unit-pages (default 15)",
-    )
-    people.add_argument(
-        "--max-unit-pages",
-        type=int,
-        default=1000,
-        help="pages a unit's walk reads at most (default 1000)",
-    )
-    people.add_argument(
-        "--max-unit-minutes",
-        type=float,
-        default=30,
-        help="a unit's walk stops after this many minutes, its candidacies left "
-        "not_found:budget (default 30; 0 for no limit)",
-    )
-    people.add_argument(
-        "--max-per-host",
-        type=int,
-        default=1,
-        help="units searched at once on one start host (default 1: they share "
-        "its rate)",
-    )
-    people.add_argument(
-        "--max-per-server",
-        type=int,
-        default=2,
-        help="units searched at once on one server, the address their start hosts "
-        "resolve to (default 2: a hosting platform serves dozens of BIPs)",
-    )
-    people.add_argument(
-        "--known-urls",
-        default=None,
-        help="newline-delimited JSON of known URLs ({url, category}, e.g. the blind "
-        "crawl's BipUrlsClassified): declaration-like ones seed each unit's walk",
-    )
-    people.add_argument(
-        "--no-render",
-        action="store_true",
-        help="read JavaScript-drawn pages as their HTML instead of rendering them "
-        "in headless Chromium (needs the render dependency group)",
-    )
-    people.add_argument(
-        "--render-workers",
-        type=int,
-        default=2,
-        help="headless browsers rendering at once (default 2)",
-    )
-    people.add_argument(
-        "--no-sitemaps",
-        action="store_true",
-        help="do not read the BIPs' sitemaps for declaration pages before walking",
-    )
-    people.add_argument(
-        "--per-person",
-        type=int,
-        default=3,
-        help="files downloaded per candidacy (default 3)",
-    )
+    add_selection_args(people)
+    add_walk_args(people)
     crawl.set_defaults(func=cmd_crawl)
 
     repair = sub.add_parser(
@@ -479,6 +774,12 @@ def build_parser() -> argparse.ArgumentParser:
     stats.set_defaults(func=cmd_stats)
 
     found.add_parser(sub)
+    state.add_parser(sub)
+    signers.add_parser(sub)
+
+    add_walk_parsers(sub)
+    add_reset_parser(sub)
+    add_sent_parser(sub)
     return parser
 
 

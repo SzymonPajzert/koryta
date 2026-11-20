@@ -3,9 +3,11 @@ import {
   SITE_CHANGES,
   boardCandidates,
   boardCompanies,
+  changesToStamp,
   stampPlan,
   type EdgeRow,
   type NodeRow,
+  type SiteChange,
 } from "../../scripts/migrate/stamp-site-changes";
 
 const nodes = new Map<string, NodeRow>([
@@ -94,5 +96,57 @@ describe("SITE_CHANGES", () => {
       expect(Number.isNaN(Date.parse(change.at))).toBe(false);
       expect(Date.parse(change.at)).toBeLessThan(Date.now());
     }
+  });
+
+  it("never stamps 14:08:20 again, and still stamps the boards at 21:46:02", () => {
+    const { stamp, skip } = changesToStamp(SITE_CHANGES);
+    expect(skip.map((s) => s.id)).toEqual([
+      "canonical-and-snippets-2026-10-24",
+    ]);
+    expect(stamp.map((change) => [change.id, change.at])).toEqual([
+      ["company-boards-unpublished-holders", "2026-10-24T21:46:02Z"],
+    ]);
+  });
+});
+
+describe("changesToStamp", () => {
+  const changes: SiteChange[] = [
+    {
+      id: "live",
+      at: "2026-10-01T10:00:00Z",
+      what: "",
+      scope: "sitemap-pages",
+    },
+    { id: "pending", at: null, what: "", scope: "sitemap-pages" },
+    {
+      id: "replaced",
+      at: "2026-09-01T10:00:00Z",
+      what: "",
+      scope: "sitemap-pages",
+      supersededBy: "scripts/migrate/fix.ts",
+    },
+  ];
+
+  it("stamps the dated changes and says why it passes over the rest", () => {
+    const { stamp, skip } = changesToStamp(changes);
+    expect(stamp.map((change) => change.id)).toEqual(["live"]);
+    expect(skip).toEqual([
+      { id: "pending", why: "not live yet, no instant to stamp" },
+      {
+        id: "replaced",
+        why: "superseded by scripts/migrate/fix.ts, never stamped again",
+      },
+    ]);
+  });
+
+  it("skips a superseded change even when asked for it by name", () => {
+    expect(changesToStamp(changes, "replaced").stamp).toEqual([]);
+    expect(changesToStamp(changes, "live").stamp.map((c) => c.id)).toEqual([
+      "live",
+    ]);
+  });
+
+  it("refuses a change it does not know", () => {
+    expect(() => changesToStamp(changes, "nope")).toThrow(/No site change/);
   });
 });

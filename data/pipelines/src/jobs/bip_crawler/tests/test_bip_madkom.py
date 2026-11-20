@@ -7,7 +7,14 @@ import json
 from pathlib import Path
 
 from jobs.bip_crawler import people as people_mode
-from jobs.bip_crawler.madkom import PROBES, ROBOTS, Madkom, Route, route
+from jobs.bip_crawler.madkom import (
+    PROBES,
+    ROBOTS,
+    Madkom,
+    Route,
+    route,
+    search_base,
+)
 from jobs.bip_crawler.tests.test_people_mode_big_bips import search
 from jobs.bip_crawler.tests.test_people_mode_review import PDF, Web, row
 from scrapers.common.fetch import HttpResult
@@ -563,3 +570,85 @@ def test_a_scope_ends_at_the_offices_name() -> None:
     assert frontier.in_scope("https://bip.malopolska.pl/ugt,m,1,radni.html")
     assert frontier.in_scope("https://bip.malopolska.pl/ugt/Article/get/id,1.html")
     assert not frontier.in_scope("https://bip.malopolska.pl/ugtomice,m,1,radni.html")
+
+
+#: Tarnów's "Baza osób": 998 people, 100 a page, a search box ("cs-s").
+SEARCHABLE = {
+    "total": 150,
+    "offset": 0,
+    "articles": [article("101", "Ewa Lis")],
+    "menuPath": PATH,
+    "searchFields": [{"id": "context-s", "type": "textfield", "name": "cs-s"}],
+}
+
+
+def test_a_long_searchable_list_says_so_and_its_search_asks_the_api() -> None:
+    assert route("https://bip.m.pl/ugx,m,11,radni.html?form-cs-s=barwac") == Route(
+        "ugx", "m", "11", search="barwac"
+    )
+    searched = {
+        "total": 1,
+        "offset": 0,
+        "articles": [article("103", "Barwacz Grażyna")],
+    }
+    madkom, web = probed(
+        office(**{API + f"menu/11/articles?{LIST}": js(SEARCHABLE)})
+        | {API + f"menu/11/articles?{LIST}&form-cs-s=barwac": js(searched)}
+    )
+    page = madkom.page("https://bip.m.pl/ugx,m,11,radni.html")
+    assert isinstance(page, HttpResult)
+    assert search_base(page.content) == "https://bip.m.pl/ugx,m,11,radni.html"
+    found = links(madkom.page("https://bip.m.pl/ugx,m,11,radni.html?form-cs-s=barwac"))
+    assert found["https://bip.m.pl/ugx,a,103,barwacz-grażyna.html"] == "Barwacz Grażyna"
+    assert web.calls[-1] == API + f"menu/11/articles?{LIST}&form-cs-s=barwac"
+    # A search's own answer, and a list that fits one page, offer no search.
+    page = madkom.page("https://bip.m.pl/ugx,m,11,radni.html?form-cs-s=barwac")
+    assert isinstance(page, HttpResult) and search_base(page.content) == ""
+    short = office(**{API + f"menu/11/articles?{LIST}": js(SEARCHABLE | {"total": 1})})
+    page = probed(short)[0].page("https://bip.m.pl/ugx,m,11,radni.html")
+    assert isinstance(page, HttpResult) and search_base(page.content) == ""
+
+
+def test_the_walk_searches_a_long_list_for_whom_it_seeks(tmp_path: Path) -> None:
+    searched = {
+        "total": 1,
+        "offset": 0,
+        "articles": [article("103", "Barwacz Grażyna")],
+    }
+    sites = office(
+        **{
+            API + f"menu/11/articles?{LIST}": js(SEARCHABLE),
+            API + f"menu/11/articles?{LIST}&form-cs-s=barwacz": js(searched),
+            API + "articles/103": js(
+                {
+                    "title": "Barwacz Grażyna",
+                    "attachments": [
+                        {
+                            "id": 601,
+                            "name": "Grażyna Barwacz - wg stanu na 31.12.2025 r.",
+                            "extension": "pdf",
+                            "downloadable": True,
+                            "deleted": False,
+                        }
+                    ],
+                    "mainMenuPath": [
+                        {"id": "11", "parentId": "1", "name": "Baza osób"},
+                        {"id": "1", "parentId": None, "name": "Menu podmiotowe"},
+                    ],
+                }
+            ),
+            API + "files/601": (200, "application/pdf", PDF + b"601"),
+        }
+    )
+    sites["https://bip.m.pl/ugx"] = (200, "text/html", SHELL)
+    _, store, web = search(
+        tmp_path,
+        sites,
+        [row("b", "u1", "Grażyna", "Barwacz")],
+        scopes={"u1": "bip.m.pl/ugx"},
+        sitemaps=False,
+    )
+    assert store.outcomes["b"].status == "found"
+    assert {d.url for d in store.person_docs("b") if d.status == "ok"} == {
+        "https://bip.m.pl/api/files/601"
+    }

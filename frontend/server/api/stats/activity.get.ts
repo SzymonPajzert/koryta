@@ -9,13 +9,19 @@ import {
 } from "~~/server/utils/contributors";
 import { mergeRollups, mergeTruncated } from "~~/server/utils/activityRollup";
 import { loadActivityRollups } from "~~/server/utils/activityWindow";
-import type { ActivityAggregate } from "~~/server/utils/activityStats";
+import type {
+  ActivityAggregate,
+  ContributorAggregate,
+} from "~~/server/utils/activityStats";
 import {
   activityRanges,
   defaultActivityRange,
+  rankingKinds,
+  rankingNames,
   type ActivityCounts,
   type ActivityKind,
   type ActivityRange,
+  type RankingName,
 } from "~~/shared/activity";
 import { maskedContributorName } from "~~/shared/profile";
 
@@ -34,9 +40,9 @@ const queryValidator = z.object({
     .default(defaultActivityRange),
 });
 
-/** How many contributors the leaderboard resolves names for. Well past the
+/** How many contributors each ranking resolves names for. Well past the
  * number of people who have ever been active in a week, and it keeps the
- * response — and the auth lookups behind it — bounded either way. */
+ * response - and the auth lookups behind it - bounded either way. */
 const LEADERBOARD_SIZE = 25;
 
 export type ActivityContributor = {
@@ -64,8 +70,20 @@ export type ActivityContributor = {
    * the name over it. */
   photoURL: string | null;
   counts: ActivityCounts;
+  /** Their count of the ranking's kinds (`rankingKinds`). */
   total: number;
   lastActiveAt: string;
+};
+
+/** One ranking: the people with any of its kinds in the window, best first. */
+export type ActivityRanking = {
+  /** How many people that is. */
+  count: number;
+  /** The top of them, named as far as the caller is allowed to see. */
+  rows: ActivityContributor[];
+  /** Where the caller stands, even when that is outside `rows`. Null for a
+   * visitor who is signed out or did none of these kinds in the window. */
+  self: { rank: number; total: number } | null;
 };
 
 export type ActivityStats = {
@@ -89,14 +107,10 @@ export type ActivityStats = {
   automatic: number;
   /** Distinct people who did anything in the window. */
   contributorCount: number;
-  /** Ranked contributors, named as far as the caller is allowed to see. */
-  contributors: ActivityContributor[];
-  /** How many of the ranked rows carry a real name, so the page can say what
-   * turning the setting on would change without counting rows itself. */
-  namedCount: number;
-  /** Where the caller stands, even when that is outside the ranked slice.
-   * Null for a visitor who is signed out or did nothing in the window. */
-  self: { rank: number; total: number; counts: ActivityCounts } | null;
+  /** Who changed the data, and who read crops on /oswiadczenia, ranked
+   * apart: in one ranking the readers filled the top 25 (decision on
+   * 2026-11-19). */
+  rankings: Record<RankingName, ActivityRanking>;
   /** Kinds whose scan hit its cap, so their counts are a lower bound. */
   truncated: ActivityKind[];
 };
@@ -125,7 +139,6 @@ export default defineEventHandler(async (event): Promise<ActivityStats> => {
   const isAdmin = caller?.admin === true;
 
   const windowed = await cachedWindow(days);
-  const ranked = windowed.aggregate.contributors;
 
   if (caller) {
     // The cached body is shared and says nothing about who asked for it; this
@@ -133,18 +146,25 @@ export default defineEventHandler(async (event): Promise<ActivityStats> => {
     setResponseHeader(event, "Cache-Control", "private, no-store");
   }
 
-  const contributors = ranked
-    .slice(0, LEADERBOARD_SIZE)
-    .map((contributor, index) =>
-      present(contributor, index, windowed, {
-        isAdmin,
-        callerUid: caller?.uid ?? null,
-      }),
-    );
-
-  const selfIndex = caller
-    ? ranked.findIndex((contributor) => contributor.uid === caller.uid)
-    : -1;
+  const ranking = (name: RankingName): ActivityRanking => {
+    const ranked = windowed.ranked[name];
+    const selfIndex = caller
+      ? ranked.findIndex((contributor) => contributor.uid === caller.uid)
+      : -1;
+    return {
+      count: ranked.length,
+      rows: ranked.slice(0, LEADERBOARD_SIZE).map((contributor, index) =>
+        present(contributor, index, windowed, {
+          isAdmin,
+          callerUid: caller?.uid ?? null,
+        }),
+      ),
+      self:
+        selfIndex >= 0
+          ? { rank: selfIndex + 1, total: ranked[selfIndex]!.total }
+          : null,
+    };
+  };
 
   return {
     window: windowed.window,
@@ -152,17 +172,11 @@ export default defineEventHandler(async (event): Promise<ActivityStats> => {
     totals: windowed.aggregate.totals,
     total: windowed.aggregate.total,
     daily: windowed.aggregate.daily,
-    contributorCount: ranked.length,
-    contributors,
-    namedCount: contributors.filter((row) => row.named).length,
-    self:
-      selfIndex >= 0
-        ? {
-            rank: selfIndex + 1,
-            total: ranked[selfIndex]!.total,
-            counts: ranked[selfIndex]!.counts,
-          }
-        : null,
+    contributorCount: windowed.aggregate.contributors.length,
+    rankings: {
+      changes: ranking("changes"),
+      readings: ranking("readings"),
+    },
     truncated: windowed.truncated,
     automatic: windowed.aggregate.automatic,
   };
@@ -171,17 +185,35 @@ export default defineEventHandler(async (event): Promise<ActivityStats> => {
 type WindowedActivity = {
   window: { since: string; until: string; days: number };
   aggregate: ActivityAggregate;
+  /** Each ranking's people, best first, `total` their count of its kinds. */
+  ranked: Record<RankingName, ContributorAggregate[]>;
   truncated: ActivityKind[];
-  /** Display data for the ranked slice, from the auth service. Server side
-   * only — `present` decides which fields of it any given caller may see. */
+  /** Display data for the ranked slices, from the auth service. Server side
+   * only - `present` decides which fields of it any given caller may see. */
   identities: Record<string, ContributorIdentity>;
   /** Which of the ranked contributors agreed to be named in public. */
   public: Record<string, boolean>;
 };
 
+/** The people with any of `name`'s kinds, by their count of them, then uid
+ * so equal counts keep a stable order. */
+function rankBy(
+  contributors: ContributorAggregate[],
+  name: RankingName,
+): ContributorAggregate[] {
+  const kinds: readonly ActivityKind[] = rankingKinds[name];
+  return contributors
+    .map((contributor) => ({
+      ...contributor,
+      total: kinds.reduce((sum, kind) => sum + contributor.counts[kind], 0),
+    }))
+    .filter((contributor) => contributor.total > 0)
+    .sort((a, b) => b.total - a.total || (a.uid < b.uid ? -1 : 1));
+}
+
 /** One ranked contributor as this caller may see them. */
 function present(
-  contributor: ActivityAggregate["contributors"][number],
+  contributor: ContributorAggregate,
   index: number,
   windowed: WindowedActivity,
   caller: { isAdmin: boolean; callerUid: string | null },
@@ -236,18 +268,26 @@ const cachedWindow = defineCachedFunction(
     const { window, spanned, rollups } = await loadActivityRollups(db, days);
 
     const aggregate = mergeRollups(spanned, rollups);
-    const ranked = aggregate.contributors.slice(0, LEADERBOARD_SIZE);
-    const [identities, publicProfiles] = await Promise.all([
-      identify(ranked.map((c) => c.uid)),
-      readPublicProfiles(
-        db,
-        ranked.map((c) => c.uid),
+    const ranked = Object.fromEntries(
+      rankingNames.map((name) => [name, rankBy(aggregate.contributors, name)]),
+    ) as Record<RankingName, ContributorAggregate[]>;
+    // Everybody either ranking shows, once each.
+    const shown = [
+      ...new Set(
+        rankingNames.flatMap((name) =>
+          ranked[name].slice(0, LEADERBOARD_SIZE).map((c) => c.uid),
+        ),
       ),
+    ];
+    const [identities, publicProfiles] = await Promise.all([
+      identify(shown),
+      readPublicProfiles(db, shown),
     ]);
 
     return {
       window,
       aggregate,
+      ranked,
       truncated: mergeTruncated(rollups),
       identities,
       public: publicProfiles,

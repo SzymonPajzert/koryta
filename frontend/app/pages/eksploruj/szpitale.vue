@@ -307,7 +307,7 @@ import {
 } from "~/utils/chartTheme";
 
 useSeoMeta({
-  title: "Rady nadzorcze szpitali publicznych - koryta.pl",
+  title: "Rady nadzorcze szpitali publicznych",
   description:
     "Kto zajmuje płatne miejsca w radach nadzorczych szpitali publicznych, w podziale na partie. Rady społeczne, w których zasiada się bez wynagrodzenia, są policzone osobno.",
 });

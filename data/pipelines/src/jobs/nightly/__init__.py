@@ -1,6 +1,6 @@
 """The whole night on the koryta-nightly VM, one step after another.
 
-    koryta_nightly                    # what data/nightly/night.sh runs at 04:30
+    koryta_nightly                    # what data/nightly/night.sh runs at 02:30
     koryta_nightly --dry-run          # every step's command; runs nothing
     koryta_nightly --only people      # one step; repeatable
     koryta_nightly --skip krs_odpis   # all but this one; repeatable
@@ -16,11 +16,12 @@
     koryta_nightly --register-backlog 2000
                                       # the register's backlog too, not only
                                       # the day's new registrations
+    koryta_nightly --company-dry-run  # count the companies' changes; send none
 
 The steps, in order (`STEPS`):
 
     compress    the compressed mirror of rejestr.io and api-krs.ms.gov.pl
-    export      wait for tonight's 04:00 Firestore export to finish; the people
+    export      wait for tonight's 02:00 Firestore export to finish; the people
                 are compared with it, so it has to be tonight's
     krs_free    koryta_scrape_krs_free: the bulletin, then api-krs
     krs_register
@@ -35,9 +36,10 @@ The steps, in order (`STEPS`):
                 --odpis-max in all
     krs_paid    koryta_scrape_krs_paid --scope fallback: rejestr.io for what the
                 free sources cannot give - the people somebody marked
-                interesting, and the companies whose odpis did not come - at
-                most --paid-max-calls a day; before the reprocess, so what it
-                buys reaches tonight's people, who send those pages first
+                interesting, by rejestr.io's own count of their connections,
+                and the companies whose odpis did not come - at most
+                --paid-max-calls a day; before the reprocess, so what it buys
+                reaches tonight's people, who send those pages first
     rebuild_held
                 `koryta <Name> --refresh <Name>`, one at a time, for each
                 pipeline the reprocess holds whose code has changed since
@@ -66,9 +68,26 @@ The steps, in order (`STEPS`):
                 sends them; and with --fill-rejestrio-current, more of the
                 people with a rejestr.io entry when that comes to fewer than
                 --max-uploads
+    company_updates
+                koryta_company_import: what tonight's data changes on the
+                pages of the companies the export has - sectors, register
+                fields, owners and founders, whether the public owns one -
+                at most --max-company-uploads (200), those turning public
+                first; never a public company made private, and the names
+                the site shows kept, but --max-company-renames (0)
     scores      koryta_score_import: every scoring model rebuilt over the
                 day's newest export and the pages the people step has just
                 created, and its votes reconciled with the site's
+    declarations
+                koryta_bip_declarations send-facts: the newest facts part
+                predator wrote after a crawl chunk, a cut or an upload, with
+                tonight's list, to the site, which counts the declarations in
+                people from them
+    compute_nodes
+                koryta_uploader --type computeNodes on autopush.koryta.pl:
+                the site recounts every page's stats - what the lists filter
+                and sort by, and the line the search box draws under a
+                person - over everything the night sent
     tidy        old export shards and day-named outputs off the disk
 
 Every step but `export` and `tidy` is a process of its own - the jobs and the
@@ -98,7 +117,25 @@ night; only the steps that depend on it are held:
   up - skipped, not held, when they may not, so that a held night still names
   the people as what it held - and holds nothing back itself: the people go
   up whatever it did, and the uploader still creates on the way a company it
-  could not.
+  could not. `company_updates` the same: after the people, which it neither
+  waits for nor holds, as nothing it sends is anything they read.
+
+`declarations` holds nothing back, and nothing holds it: the facts are
+predator's, the list is the newest there is, and the site counts with its pages
+as they are, so a held night still moves the count. No part yet, or no answer
+from the site - a 404 included, before the site has the endpoint - is partial
+(75), and the next night sends again. A refusal, or the site's own error (500)
+again after a wait, fails it: a bug in the count shows on the night.
+
+`compute_nodes` holds nothing back, and nothing holds it: the site recounts
+what it holds, so a held night still brings the counts and the search lines up
+to the day's edits. It asks autopush and never koryta.pl, which share the
+database (decision on 2026-11-18): autopush runs main's code on 4000 MiB,
+koryta.pl older code on 1 GiB, whose recount writes `stats` without the search
+line and so takes it off every person. The robot signs in as for its uploads:
+the site lets the datascience group recount as well as an admin. A refusal,
+or no answer within the 300 s the site gives a request, fails the step, and
+the counts stay as the last recount left them.
 
 `companies` plans tonight's people as the people step plans them - one argv
 for both (`people_argv`), the same outputs on disk, nothing sent in between -
@@ -126,8 +163,12 @@ came into the graph after its last register entry is not named by the
 bulletin until its next one, so `--changed-since` alone does not ask for it;
 and `krs_paid` buys a company only once its free odpis was asked for and did
 not come, so one in the queue that nothing asks for is neither fetched nor
-bought - 960 of the queue's 1,024 on 2026-10-15, 493 of them private. The
-private ones outside the queue wait behind `--odpis-missing all`. The service
+bought - 960 of the queue's 1,024 on 2026-10-15, 493 of them private. Then
+come the companies the site has a page for and the pipeline calls private,
+most likely public first (`--odpis-missing site`): nothing else reads them,
+and a public owner only their odpis names stays hidden - 529 had no odpis of
+any kind on 2026-11-19. The rest of the private ones wait behind
+`--odpis-missing all`. The service
 slows down after about 1,000 documents a run; `--odpis-max` caps the step,
 queue, gap and all.
 
@@ -153,7 +194,7 @@ rebuild wrote. A rebuild that fails or runs out of time puts the copy back that
 was on disk before it, records nothing - so the next night tries again - and
 leaves the night's state alone: the step is partial, the people go up.
 
-The night starts at 04:30 Warsaw, after the export and after midnight UTC, so
+The night starts at 02:30 Warsaw, after the export and after midnight UTC, so
 the compressor - which archives up to yesterday in UTC - takes the whole
 previous day even as the first step (`data/compressor`).
 
@@ -319,11 +360,11 @@ ASIDE = ".held"
 #: a night with one export they read the same again, in about a minute.
 SCORES_REFRESH = ("KorytaPeople", "KorytaVotes", "KorytaFacts", "CompanyScores")
 
-#: `--odpis-missing`: which graph companies with no odpis pełny on file the
-#: odpis step asks about after the bulletin's - the public ones (the
-#: default), all of them, or none.
+#: `--odpis-missing`: which companies with no odpis pełny on file the odpis
+#: step asks about after the bulletin's - the graph's public ones, then the
+#: site's private ones (site, the default), then all the graph's, or none.
 ODPIS_MISSING_NONE = "none"
-ODPIS_MISSING = ("public", "all", ODPIS_MISSING_NONE)
+ODPIS_MISSING = ("public", "site", "all", ODPIS_MISSING_NONE)
 
 #: Minutes the register step leaves itself inside its time limit: it stops
 #: asking, writes what it read and reports, rather than be stopped mid-read -
@@ -333,6 +374,10 @@ REGISTER_MARGIN = 5
 #: The secret the paid step reads its rejestr.io key from, unless
 #: KORYTA_REJESTR_SECRET names another; an empty one switches the step off.
 REJESTR_SECRET = "rejestr-io-key"
+
+#: Where the recount step asks: main's code, with the memory it needs, never
+#: koryta.pl (see the module doc).
+RECOUNT_ENDPOINT = "https://autopush.koryta.pl"
 
 COMPRESSED_HOSTS = ("rejestr.io", "api-krs.ms.gov.pl")
 COMPRESSED_BUCKET = "koryta-pl-compressed"
@@ -352,8 +397,8 @@ CACHED_EXPORT = re.compile(r"^hostname=koryta\.pl\.date=(\d{4}-\d{2}-\d{2})T")
 #: The hour, Warsaw time, of the site's daily export (`scheduledFirestoreExport`
 #: in frontend/functions/src/index.ts). Each one from 2026-09-29 to 10-10 is
 #: stamped within the minute after it, and was done two to four minutes after
-#: its stamp: 10-09's, the slowest, at 04:04:10.
-EXPORT_HOUR = 4
+#: its stamp: 10-09's, the slowest, 4 min 10 s after the hour.
+EXPORT_HOUR = 2
 
 # Step states, as the summary and the log say them.
 SUCCEEDED = "succeeded"
@@ -484,7 +529,16 @@ STEPS = (
     # company: 16 that night.
     Step("companies", "firmy", 20),
     Step("people", "osoby", 60),
+    # Two minutes to build and compare on predator over the 2026-11-11 export,
+    # and the hand uploads' pace: 290 companies in 3 minutes on 2026-10-29.
+    Step("company_updates", "zmiany firm", 30),
     Step("scores", "oceny", 30),
+    # The list, PESEL's tables and one request, which the site answers once it
+    # has counted: two tries at most, which end inside this limit
+    # (`jobs.bip_declarations.FACTS_BACKOFF_S`).
+    Step("declarations", "oświadczenia", 15),
+    # One request, which the site cuts off at 300 s.
+    Step("compute_nodes", "statystyki", 10),
     Step("tidy", "porządki", 5, always=True),
 )
 STEP_NAMES = tuple(step.name for step in STEPS)
@@ -882,7 +936,7 @@ def export_refusal(
     with an older one, `--only-changed` sends again what the last night's run
     put up - no-ops, but counted as changes - and `--scope not-on-koryta`
     creates again the pages it created. That is a hand run between midnight
-    and four, or any run on a day the export failed. The night checks the
+    and two, or any run on a day the export failed. The night checks the
     same at its level (`Night.step_export`); a run asked for on a page in the
     afternoon reads the morning's export, or one taken by hand since.
 
@@ -895,7 +949,7 @@ def export_refusal(
     (`--export-max-age`) - and stands in for both: the newest has to be that
     one or a newer, and of `day` or a day before, whose export the frames
     named `day` read when it has none of its own. Without it, a night forced
-    at three after an export taken by hand at eleven - or one whose 04:00
+    at one after an export taken by hand at eleven - or one whose 02:00
     export failed after such a hand export - would run its invariants
     against that export and then have its people step refuse the same one.
     """
@@ -1089,7 +1143,9 @@ class Night:
             return "wstrzymane: brak kopii bazy"
         if step.name in ("tests", "outputs") and not self.came_through("reprocess"):
             return "wstrzymane: potoki się nie przeliczyły"
-        if step.name == "companies" and (held := self.why_not_upload()):
+        if step.name in ("companies", "company_updates") and (
+            held := self.why_not_upload()
+        ):
             # Skipped, not held: what the night held is the people.
             return f"pominięte - osoby {held}"
         if step.name in ("people", "scores"):
@@ -1467,7 +1523,7 @@ class Night:
         ]
         if self.summary.export_fresh:
             # The export the export step took, which the job compares with in
-            # place of its own rule - today's, taken at 04:00 or later - so
+            # place of its own rule - today's, taken at 02:00 or later - so
             # that one the night's window lets in is never refused by the job.
             argv += ["--export", self.summary.export]
         if self.args.people_dry_run:
@@ -1490,6 +1546,35 @@ class Night:
     def step_people(self, step: Step) -> tuple[str, str, int | None]:
         return self.judge_job(*self.process(step, self.people_argv(step)))
 
+    def company_argv(self, step: Step) -> list[str]:
+        """The company import as the company_updates step runs it, in
+        `step`'s time, over the export the export step took."""
+        argv = [
+            bin_path("koryta_company_import"),
+            *self.company_limits(),
+            "--max-minutes",
+            f"{self.minutes_for(step):.0f}",
+        ]
+        if self.summary.export_fresh:
+            argv += ["--export", self.summary.export]
+        return argv
+
+    def company_limits(self) -> list[str]:
+        """The company import's caps, and --dry-run, as the night was given
+        them."""
+        argv = [
+            "--max-uploads",
+            str(self.args.max_company_uploads),
+            "--max-renames",
+            str(self.args.max_company_renames),
+        ]
+        if self.args.company_dry_run:
+            argv.append("--dry-run")
+        return argv
+
+    def step_company_updates(self, step: Step) -> tuple[str, str, int | None]:
+        return self.judge_job(*self.process(step, self.company_argv(step)))
+
     def step_scores(self, step: Step) -> tuple[str, str, int | None]:
         # The models are rebuilt over the newest export of the day; the rest
         # of what they read is the reprocess's, on disk, and the pages the
@@ -1501,6 +1586,21 @@ class Night:
         ]
         for name in SCORES_REFRESH:
             argv += ["--refresh", name]
+        return self.judge_job(*self.process(step, argv))
+
+    def step_declarations(self, step: Step) -> tuple[str, str, int | None]:
+        argv = [bin_path("koryta_bip_declarations"), "send-facts"]
+        return self.judge_job(*self.process(step, argv))
+
+    def step_compute_nodes(self, step: Step) -> tuple[str, str, int | None]:
+        argv = [
+            bin_path("koryta_uploader"),
+            "--type",
+            "computeNodes",
+            "--endpoint",
+            RECOUNT_ENDPOINT,
+            "--submit",
+        ]
         return self.judge_job(*self.process(step, argv))
 
     def step_compress(self, step: Step) -> tuple[str, str, int | None]:
@@ -1575,8 +1675,18 @@ class Night:
             "companies": f"{people} --companies-only: the companies the people "
             "step's people name that the export has no page for, created first",
             "people": people,
+            "company_updates": "koryta_company_import "
+            + " ".join(self.company_limits())
+            + (" --export <the export step's>" if self.needs("export") else "")
+            + ": what tonight's data changes on the companies the site has, "
+            "those turning public first; none made private",
             "scores": "koryta_score_import: every scoring model, tonight's new "
             "pages included",
+            "declarations": "koryta_bip_declarations send-facts: predator's newest "
+            "facts part, with tonight's list, to the site, which counts the "
+            "declarations in people",
+            "compute_nodes": "koryta_uploader --type computeNodes --endpoint "
+            f"{RECOUNT_ENDPOINT} --submit: the site recounts every page's stats",
             "compress": "compressor -incremental -hostname "
             + " / ".join(COMPRESSED_HOSTS),
             "tidy": f"remove export shards and day-named outputs older than "
@@ -1818,6 +1928,30 @@ def parser() -> argparse.ArgumentParser:
         "public post that is not new, past --max-rejestrio-current.",
     )
     parser.add_argument(
+        "--max-company-uploads",
+        type=positive_int,
+        default=200,
+        help="Companies whose page the night changes at most, the ones turning "
+        "public first; the rest wait for the next night. Default: "
+        "%(default)s, so a night that goes wrong changes no more published "
+        "pages than that (decision on 2026-11-17).",
+    )
+    parser.add_argument(
+        "--max-company-renames",
+        type=positive_int,
+        default=0,
+        help="Companies the night renames at most, as the register spells the "
+        "name; past it the page keeps the name it shows. Default: "
+        "%(default)s: of the 3 renames waiting on 2026-11-11, 2 were the "
+        "pipelines' slips.",
+    )
+    parser.add_argument(
+        "--company-dry-run",
+        action="store_true",
+        help="Build and count what the night would change on the companies the "
+        "site has; send none of it.",
+    )
+    parser.add_argument(
         "--krs-minutes",
         type=positive_int,
         default=60,
@@ -1852,10 +1986,11 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--odpis-missing",
         choices=ODPIS_MISSING,
-        default="public",
+        default="site",
         help="After the companies the bulletin named, the odpis step asks for "
         "the graph's public companies with no odpis pełny on file (public), "
-        "the private ones after them too (all), or neither (none). "
+        "then the site's companies the pipeline calls private (site), then "
+        "every other private one (all), or none of them (none). "
         "Default: %(default)s.",
     )
     parser.add_argument(
@@ -1877,7 +2012,7 @@ def parser() -> argparse.ArgumentParser:
         type=clock,
         help="Warsaw time (HH:MM) after which no step but compress and tidy "
         "starts, and a running one is stopped. night.sh gives the scheduled "
-        "night 08:30, as the instance schedule stops the VM at 09:00; a hand "
+        "night 06:30, as the instance schedule stops the VM at 07:00; a hand "
         "run has no deadline unless given one.",
     )
     parser.add_argument(

@@ -17,8 +17,9 @@
           data-testid="publish-auto-approve"
         >
           Ta strona nie ma zatwierdzonej rewizji, więc opublikujemy jej
-          najnowszą wersję, z {{ autoApproveDate }}. Żeby pokazać inną,
-          zatwierdź ją najpierw na
+          najnowszą wersję,
+          {{ autoApproveProposal ? "propozycję zmiany" : "" }} z
+          {{ autoApproveDate }}. Żeby pokazać inną, zatwierdź ją najpierw na
           <NuxtLink :to="`/admin/rewizje/${nodeId}`">liście rewizji</NuxtLink>.
         </v-alert>
 
@@ -60,7 +61,7 @@
           >
             <div class="place-clash__head">
               <v-icon :icon="mdiAlertOutline" size="small" />
-              <span>Wybory {{ electionLabel(clash) }} - dwa miejsca naraz</span>
+              <span>{{ electionLabel(clash) }} - dwa miejsca naraz</span>
               <v-icon
                 :icon="mdiInformationOutline"
                 size="x-small"
@@ -97,12 +98,33 @@
                 <v-list-item-title>
                   {{ relation.otherName || relation.otherId }}
                 </v-list-item-title>
+                <!-- The office too: one election groups the runs of all its
+                     offices, so two in one place differ by it alone. -->
                 <v-list-item-subtitle>
+                  <template v-if="relation.position">
+                    {{ relation.position }} ·
+                  </template>
+                  <!-- Its party, which the import has put on the page: the
+                       one thing a namesake's run makes the page say. -->
+                  <template v-if="relation.parties.length">
+                    {{ relation.parties.join(", ") }} ·
+                  </template>
                   {{ placeHint(clash, relation.otherId) }}
                   <span v-if="relation.published"> · już opublikowana</span>
                 </v-list-item-subtitle>
               </v-list-item>
             </v-list>
+            <p
+              v-if="clashParties(clash).length > 0"
+              class="place-clash__parties text-body-2"
+              :data-testid="`publish-clash-parties-${clashKey(clash)}`"
+            >
+              {{ partiesWarning(clashParties(clash)) }} Jeśli to imiennik, usuń
+              {{ clashParties(clash).length === 1 ? "ją" : "je" }} na
+              <NuxtLink :to="`/entity/person/${nodeId}`" target="_blank"
+                >stronie osoby</NuxtLink
+              >.
+            </p>
           </section>
 
           <div class="d-flex align-center mb-2">
@@ -186,8 +208,9 @@
             :key="clashKey(clash)"
             class="d-block"
           >
-            Po publikacji strona pokaże tę osobę w dwóch miejscach w wyborach
-            {{ electionLabel(clash) }}: {{ placeNames(clash) }}.
+            Po publikacji strona pokaże tę osobę w dwóch miejscach naraz ({{
+              electionLabel(clash)
+            }}): {{ placeNames(clash) }}.
           </span>
           Odznacz kandydaturę, która do niej nie należy.
         </v-alert>
@@ -234,7 +257,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   mdiAlertOutline,
   mdiEyeOffOutline,
@@ -242,12 +265,17 @@ import {
 } from "@mdi/js";
 import { authRequest } from "~/composables/auth";
 import { edgeTypeLabels, relationsPlural } from "~/composables/edges";
+import { electionName } from "~~/shared/electionDays";
+import { isAutomatedUid } from "~~/shared/stats";
 import {
   latestPublishableRevision,
   normalizeUpdateTime,
 } from "~~/shared/revisions";
 import {
+  partiesOnlyFrom,
   placeClashes,
+  placesAgree,
+  regionTeryt,
   yearsInPlace,
   type Candidacy,
   type PlaceClash,
@@ -281,11 +309,22 @@ const open = computed({
 });
 
 const relations = ref<NodeRelation[]>([]);
+/** The page's parties as stored, which publishing it shows when it already
+ * has an approved version. */
+const nodeParties = ref<string[]>([]);
+/** The parties of the version publishing approves, when the page has no
+ * approved one: what goes live is that version, not the page as stored. A
+ * namesake's party taken off through „Zaproponuj zmianę” on the person page
+ * is a proposal, the newest version, so it is read here. */
+const versionParties = ref<string[] | null>(null);
 /** When the page has nothing approved: the date of the version publishing will
  * approve on the reviewer's behalf. Worked out here rather than passed in, so
  * that every screen offering this dialog says it - the badge on a person's own
  * page has no revision list of its own to consult. */
 const autoApproveDate = ref<string | null>(null);
+/** Whether that version is a person's proposal rather than the import's: the
+ * publication approves it on the reviewer's behalf, unread. */
+const autoApproveProposal = ref(false);
 const selected = ref<string[]>([]);
 const pending = ref(false);
 const saving = ref(false);
@@ -301,13 +340,6 @@ const candidates = computed(() =>
   relations.value.filter((relation) => !relation.published),
 );
 
-/** The ones that may actually go live. The rest are shown, greyed, so the
- * reviewer can see *why* a relation is not on offer rather than wondering
- * where it went. */
-const selectableIds = computed(() =>
-  candidates.value.filter((r) => r.publishable).map((r) => r.id),
-);
-
 /** A relation as the two-places rule reads it: one of this page's own
  * candidacies, which run from the person to the place. */
 function candidacyOf(relation: NodeRelation): Candidacy | undefined {
@@ -319,6 +351,7 @@ function candidacyOf(relation: NodeRelation): Candidacy | undefined {
     regionId: relation.otherId,
     startDate: relation.startDate,
     position: relation.position,
+    byElection: relation.byElection,
   };
 }
 
@@ -356,6 +389,99 @@ const clashesAfterPublish = computed(() =>
   ),
 );
 
+/** Whether a candidacy is live or ticked: one the reviewer stands behind. */
+function vouched(relation: NodeRelation): boolean {
+  return relation.published || selected.value.includes(relation.id);
+}
+
+/** The places of a clash the reviewer did not pick: its unticked rows, in a
+ * clash where another row is ticked or live. A namesake usually stood there
+ * more than once, and his other runs there give the page his party as well. */
+const placesLeftOut = computed(() =>
+  clashes.value
+    .filter((clash) => clash.rows.some(vouched))
+    .flatMap((clash) => clash.rows.filter((relation) => !vouched(relation)))
+    .map((relation) => regionTeryt(relation.otherId))
+    .filter((teryt): teryt is string => !!teryt),
+);
+
+/** Whether a candidacy is in doubt: a run of a clash left unticked, or an
+ * unticked run in a place left out of one that no candidacy the reviewer
+ * stands behind shares. */
+function doubted(relation: NodeRelation): boolean {
+  if (!candidacyOf(relation) || vouched(relation)) return false;
+  if (clashOf.value.has(relation.id)) return true;
+  const teryt = regionTeryt(relation.otherId);
+  if (!teryt) return false;
+  return (
+    placesLeftOut.value.some((place) => placesAgree(teryt, place)) &&
+    !relations.value.some((other) => {
+      const there = vouched(other) && candidacyOf(other);
+      const place = there ? regionTeryt(other.otherId) : null;
+      return !!place && placesAgree(teryt, place);
+    })
+  );
+}
+
+/** The page's parties that only candidacies in doubt give it: what a
+ * namesake's runs would make the published page say. Ticking a run takes its
+ * party off the list, as the reviewer has then vouched for it. */
+const doubtfulParties = computed(() =>
+  partiesOnlyFrom(
+    versionParties.value ?? nodeParties.value,
+    relations.value,
+    (relation) => (candidacyOf(relation) ? relation.parties : undefined),
+    doubted,
+  ),
+);
+
+/** The doubtful parties each block names, each party under one block only:
+ * the first, newest one whose runs give it, or whose places left out hold a
+ * run that does. */
+const partiesByClash = computed(() => {
+  const byClash = new Map<string, string[]>();
+  for (const party of doubtfulParties.value) {
+    const givers = relations.value.filter(
+      (relation) => doubted(relation) && relation.parties.includes(party),
+    );
+    const clash =
+      clashes.value.find((block) =>
+        block.rows.some((row) =>
+          givers.some((giver) => {
+            if (giver.id === row.id) return true;
+            const a = regionTeryt(giver.otherId);
+            const b = regionTeryt(row.otherId);
+            return !vouched(row) && !!a && !!b && placesAgree(a, b);
+          }),
+        ),
+      ) ?? clashes.value[0];
+    if (!clash) continue;
+    const key = clashKey(clash);
+    byClash.set(key, [...(byClash.get(key) ?? []), party]);
+  }
+  return byClash;
+});
+
+function clashParties(clash: PlaceClash<NodeRelation>): string[] {
+  return partiesByClash.value.get(clashKey(clash)) ?? [];
+}
+
+/** „Tylko niezaznaczona kandydatura daje partię: PiS.” The name after a
+ * colon, as „Inne” is one too. */
+function partiesWarning(parties: string[]): string {
+  const runs = relations.value.filter(
+    (relation) =>
+      doubted(relation) &&
+      relation.parties.some((party) => parties.includes(party)),
+  ).length;
+  const who =
+    runs === 1
+      ? "Tylko niezaznaczona kandydatura daje"
+      : "Tylko niezaznaczone kandydatury dają";
+  const what = parties.length === 1 ? "partię" : "partie";
+  return `${who} ${what}: ${polishList(parties)}.`;
+}
+
 /** The rows of the main list: everything but the clashing candidacies, which
  * have blocks of their own above it. */
 const listed = computed(() =>
@@ -372,10 +498,20 @@ const listedSelectedCount = computed(
       .length,
 );
 
-/** What „Zaznacz wszystkie" ticks: everything that may go live but the
- * candidacies of a clash, which the reviewer has to pick one by one. */
+/** What „Zaznacz wszystkie" ticks: everything that may go live - the rest
+ * are shown, greyed, so the reviewer can see why a relation is not on offer -
+ * but the candidacies of a clash, which the reviewer has to pick one by one,
+ * and the runs in doubt beside them (`doubted`): ticked in bulk, a namesake's
+ * other runs would be vouched for unseen, and his party with them. */
 const bulkIds = computed(() =>
-  selectableIds.value.filter((id) => !clashOf.value.has(id)),
+  candidates.value
+    .filter(
+      (relation) =>
+        relation.publishable &&
+        !clashOf.value.has(relation.id) &&
+        !doubted(relation),
+    )
+    .map((relation) => relation.id),
 );
 
 const allSelected = computed(
@@ -411,11 +547,13 @@ function relationLabel(relation: NodeRelation): string {
 }
 
 function clashKey(clash: PlaceClash<NodeRelation>): string {
-  return `${clash.year}-${clash.position ?? ""}`;
+  return clash.election;
 }
 
+/** „Samorządowe 2024”: the election, whatever office each of its runs was
+ * for. */
 function electionLabel(clash: PlaceClash<NodeRelation>): string {
-  return clash.position ? `${clash.year} · ${clash.position}` : clash.year;
+  return electionName(clash.election) ?? clash.year;
 }
 
 /** The years, besides the clash's own, in which the person stood in this
@@ -470,6 +608,8 @@ async function load() {
   relationsFailed.value = null;
   selected.value = [];
   autoApproveDate.value = null;
+  autoApproveProposal.value = false;
+  versionParties.value = null;
   // Not fatal either, and separately awaited for that reason: which version is
   // about to go live is worth saying, but not worth refusing to publish over.
   void loadAutoApprove();
@@ -479,11 +619,13 @@ async function load() {
       query: { nodeId: props.nodeId },
     });
     relations.value = data.relations;
+    nodeParties.value = data.nodeParties;
   } catch (error) {
     // Not fatal: publishing the page on its own is still the thing the admin
     // came here to do, so the dialog degrades to that rather than closing.
     console.error("Failed to load relations", error);
     relations.value = [];
+    nodeParties.value = [];
     loadError.value = true;
   } finally {
     pending.value = false;
@@ -501,10 +643,25 @@ async function loadAutoApprove() {
       method: "GET",
       query: { nodeId: props.nodeId },
     });
-    if (data.approvedRevisionId) return;
-    const revision = latestPublishableRevision(data.revisions);
-    if (!revision) return;
-    autoApproveDate.value = revisionDate(revision.update_time);
+    const revision = data.approvedRevisionId
+      ? null
+      : latestPublishableRevision(data.revisions);
+    autoApproveDate.value = revision
+      ? revisionDate(revision.update_time)
+      : null;
+    autoApproveProposal.value =
+      !!revision &&
+      revision.update_automatic !== true &&
+      !isAutomatedUid(
+        typeof revision.update_user === "string" ? revision.update_user : null,
+      );
+    const parties = (revision?.data as { parties?: unknown } | undefined)
+      ?.parties;
+    versionParties.value = revision
+      ? Array.isArray(parties)
+        ? parties.filter((party): party is string => typeof party === "string")
+        : []
+      : null;
   } catch (error) {
     // The publication itself will still say what it did, so a failure here
     // costs a sentence rather than the action.
@@ -518,6 +675,15 @@ watch(
     if (isOpen) load();
   },
 );
+
+/** Back from the person page's „Zaproponuj zmianę” in another tab: the
+ * version publishing approves, and its parties, may be another now. The
+ * ticks stay. */
+function onFocus() {
+  if (open.value && !pending.value) void loadAutoApprove();
+}
+onMounted(() => window.addEventListener("focus", onFocus));
+onBeforeUnmount(() => window.removeEventListener("focus", onFocus));
 
 /** The node first, then its relations - publishing an edge is refused while
  * either of its pages is still a draft, and this node is one of them. */
@@ -599,5 +765,19 @@ function errorMessage(error: unknown): string {
 
 .place-clash :deep(.v-list) {
   padding-left: 4px !important;
+}
+
+/* Office, party and the place hint: on a phone the hint, which tells the
+   person's run from the namesake's, would go under the ellipsis. */
+.place-clash :deep(.v-list-item-subtitle) {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.place-clash__parties {
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  color: rgb(var(--v-theme-ink-warning));
+  margin: 0;
+  padding: 8px 12px 8px 20px;
 }
 </style>

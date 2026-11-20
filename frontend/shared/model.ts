@@ -100,6 +100,35 @@ type NodeEdgeStats = {
   elections?: string[];
 };
 
+/** The line the search box draws under a person, as stored (see
+ * shared/searchLine.ts, which works it out). Declared here rather than there
+ * because functions/src links this file and not that one. */
+export type SearchLine = {
+  /** The town the person is active in („Mielec”), or where no town can be
+   * named, the region („powiat sztumski”, „podlaskie”). */
+  where?: string;
+  /** The office won, or the company: „Rada miasta”, „TAURON DYSTRYBUCJA”. */
+  what?: string;
+  /** The year of the election, or when a post ended: „2024”, „do 2025”. */
+  when?: string;
+  /** The far ends of the ties the line names, by id: the tie it is about,
+   * and the one its town came from. Not shown; what the search checks the
+   * person's current ties against. */
+  ties?: string[];
+  /** On a line about a run, the election as the edge stats file it:
+   * „local-2024:won” for a seat won, „local-2024” for a run. */
+  election?: string;
+};
+
+/** The lines stored on a person, one per kind of reader: over the published
+ * ties, over every tie, and over the posts an unpublished person's teaser
+ * page may show. A scope with nothing to say is absent. */
+export type StoredSearchLines = {
+  approved?: SearchLine;
+  all?: SearchLine;
+  teaser?: SearchLine;
+};
+
 export interface NodeStats {
   isApproved: boolean;
   notesCount: number;
@@ -164,6 +193,11 @@ export interface NodeStats {
    * Firestore filter does not match a document lacking the field, so such a
    * person is left out of the counts rather than counted as untierable. */
   queueTier?: number;
+  /** The line the search box draws under a person, per kind of reader - see
+   * shared/searchLine.ts. Written only by /api/stats/computeNodes, and absent
+   * on a person it has not reached since, whom the box then shows without
+   * one. */
+  searchLine?: StoredSearchLines;
 }
 
 export type VoteCategory =
@@ -221,7 +255,103 @@ export interface Edge extends PageBase<EdgeType> {
   elected?: boolean;
   term?: string;
   by_election?: boolean;
+  /** On a candidacy: what the candidate declared about their own party, as
+   * PKW wrote it, and the site's parties it names. Written by the ingest
+   * alone; see `restated` in server/utils/edges.ts. */
+  party_member?: string;
+  member_parties?: string[];
+  /** On a candidacy: who PKW says backed it, as PKW wrote it, and the site's
+   * parties it names. */
+  supported_by?: string;
+  backing_parties?: string[];
+  /** On an `owns` edge: the source set the target up rather than holding
+   * shares in it. A foundation or an association has no shareholders, so its
+   * founder is who stands behind it; the company page lists it under
+   * „Właściciele” and says it is the founder. Written by the company ingest
+   * from the pipelines' list of public founders. */
+  founder?: boolean;
+  /** On an employment: what asset declarations say about the post, one entry
+   * per row readers agreed on, keyed `<sha256>-p<page>:<band>:<row>` (the
+   * declaration's date page, the band of the form, the row). Owned by the
+   * document, like `stats`: it is in INTERNAL_FIELDS
+   * (server/utils/revisions.ts), so no revision carries, restores or hands it
+   * out, and it is written as a field update. Pages get the fields
+   * `publicDeclared` keeps (shared/declaredPosts.ts). */
+  declared?: Record<string, DeclaredPost>;
+  /** Only on an employment a declaration created: the latest `as_of` among
+   * its `declared` entries. Owned by the document, as `declared` is. */
+  as_of?: string;
 }
+
+/** What kind of declaration an entry comes from: one filed every year, on
+ * taking up a post, on leaving it, or another. */
+export type DeclarationKind = "annual" | "start" | "end" | "other";
+
+/** One declaration's word on one post, from one band of its form. Written
+ * only with `role`, `roleId` and `as_of`: apply parks an agreed row without
+ * a settled chip or „Stan na”, or with „Inne”, on „Do ustalenia” instead
+ * (`entryGap` in shared/declarationEmployment.ts). */
+export type DeclaredPost = {
+  /** The file on BIP when it was read. The key's sha256 outlives a moved url. */
+  url: string;
+  /** „Według stanu na dzień”, as readers agreed: YYYY-MM-DD, or YYYY read as
+   * 31 December. */
+  as_of: string;
+  /** `annual` for 31 December or a bare year, else the kind readers agreed
+   * on; null when they did not. */
+  kind: DeclarationKind | null;
+  /** Where the form names the post: the employer line (with the title read
+   * beside it), section VII or section VIII. */
+  band: "employer" | "vii" | "viii";
+  /** The role readers picked, as its Polish label and its stable id. A
+   * register edge keeps its own `name` beside it. */
+  role: string;
+  roleId: string;
+  /** „Od” and „do” as readers agreed, in the relation date format. Kept
+   * beside the edge's own dates, never written over them. */
+  start?: string;
+  end?: string;
+  /** The key of an entry from an earlier file with the same `as_of` that
+   * this one replaced: only the latest file for a period counts. */
+  replaces?: string;
+  /** How it settled, how many readers agreed, and when the automation wrote
+   * it (ISO 8601, UTC). Never sent to a page. */
+  by: "readers" | "admin";
+  readers: number;
+  at: string;
+  /** The declarant's own income from this post in this declaration. Stored
+   * only: no page shows income until the decision on pay is made. */
+  income?: DeclaredIncome[];
+};
+
+/** One own amount from section VII or VIII, tied to a post by readers. */
+export type DeclaredIncome = {
+  /** Grosze: 12345678 is 123 456,78 zł. Null when the amount as written does
+   * not parse; `raw` then keeps it for an admin. */
+  amount: number | null;
+  raw?: string;
+  /** The line marks the amount as approximate („ok.”). */
+  approx?: true;
+  /** ISO 4217, "PLN" almost always. */
+  currency: string;
+  /** The period it covers, YYYY-MM-DD each. */
+  from: string;
+  to: string;
+  /** As the line words it; null when it says nothing. */
+  measure: "przychod" | "dochod" | null;
+  gross: "brutto" | "netto" | null;
+  /** A job's pay, a seat's pay, a contract, or diety (on an election edge
+   * only). */
+  kind: "pay" | "board" | "contract" | "dieta";
+  /** The reading row it came from (`<sha256>-p<page>:viii:3`) and its part:
+   * where a line gives a total and its parts, each is stored and a sum takes
+   * the total or the parts, never both. */
+  line: string;
+  part: number;
+  partRole: "single" | "total" | "part";
+  /** One amount covering two posts, stored on both and counted once. */
+  shared?: true;
+};
 
 export type ElectionPosition =
   | "Samorząd"

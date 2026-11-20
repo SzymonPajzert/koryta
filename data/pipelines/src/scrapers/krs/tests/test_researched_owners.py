@@ -1,4 +1,4 @@
-"""Owners found by hand, and `CompaniesKRS.add_researched_owners`."""
+"""Owners and founders found by hand, and how `CompaniesKRS` applies them."""
 
 import csv
 import re
@@ -7,10 +7,11 @@ from pathlib import Path
 import pandas as pd
 
 from entities.company import Company as KrsCompany
-from entities.company import Owner
+from entities.company import Owner, Source
+from scrapers.krs.data import PUBLIC_FOUNDER
 from scrapers.krs.list import CompaniesKRS
-from scrapers.krs.researched_owners import RESEARCHED_OWNERS
-from scrapers.map.jst import JstIndex
+from scrapers.krs.researched_owners import PUBLIC_FOUNDERS, RESEARCHED_OWNERS
+from scrapers.map.jst import SKARB_PANSTWA, JstIndex
 
 POSTDATA = "0000117218"
 POCZTA = "0000334972"
@@ -19,6 +20,11 @@ CZH = "0000075706"
 EUROTERMINAL = "0000353127"
 OSTROLEKA = "0000061837"
 ENERGA_WYTWARZANIE = "0000512140"
+FUNDACJA_ARP = "0000765394"
+ARP = "0000037957"
+PROGRESS_AND_BUSINESS = "0000155141"
+PB_INCUBATOR = "0000191741"
+EXPECTED = Path(__file__).parents[3] / "tests/pipelines/expected_public_companies.csv"
 
 
 def bielsko_biala() -> JstIndex:
@@ -63,10 +69,7 @@ def test_a_researched_company_keeps_no_known_gap():
     enforced once the reason goes. Read here, at review time, rather than by
     the night over the pipeline's output.
     """
-    expected = (
-        Path(__file__).parents[3] / "tests/pipelines/expected_public_companies.csv"
-    )
-    with expected.open(newline="", encoding="utf-8") as file:
+    with EXPECTED.open(newline="", encoding="utf-8") as file:
         gaps = {
             row["krs"]: row["known_gap"]
             for row in csv.DictReader(file)
@@ -75,7 +78,7 @@ def test_a_researched_company_keeps_no_known_gap():
 
     assert not gaps, (
         f"{len(gaps)} companies with researched owners carry a known_gap in "
-        f"{expected.name}, but the pipeline marks each of them public, so the "
+        f"{EXPECTED.name}, but the pipeline marks each of them public, so the "
         f"row passes and fails the night as a strict expected failure. Take the "
         f"gap off (krs, task): {sorted(gaps.items())}"
     )
@@ -142,3 +145,135 @@ def test_the_flag_carries_down_to_what_the_company_owns():
     p.propagate_is_public(public, p.build_parent_to_children())
 
     assert p.companies[EUROTERMINAL].is_public
+
+
+def test_every_founded_body_names_its_source_and_a_founder():
+    for krs, founded in PUBLIC_FOUNDERS.items():
+        assert re.fullmatch(r"\d{10}", krs), krs
+        assert founded.source.startswith(("https://", "http://")), krs
+        assert founded.founders, krs
+        for founder in founded.founders:
+            assert founder.krs is None or re.fullmatch(r"\d{10}", founder.krs), krs
+    assert not PUBLIC_FOUNDERS.keys() & RESEARCHED_OWNERS.keys()
+
+
+def test_the_expected_file_lists_exactly_the_founded_bodies():
+    """Each `rule_public_founder` row is a body here, and each body has a row.
+
+    The row is what the night holds the pipeline to; a body added here without
+    one is never checked, and a row without a body fails the night.
+    """
+    with EXPECTED.open(newline="", encoding="utf-8") as file:
+        rows = {
+            row["krs"]
+            for row in csv.DictReader(file)
+            if row["basis"] == "rule_public_founder"
+        }
+
+    assert rows == PUBLIC_FOUNDERS.keys()
+
+
+def test_a_founded_body_is_public_without_an_owner():
+    # A founder is not a shareholder: Fundacja ARP is marked, and ARP is not
+    # drawn as its owner even when the crawl describes both.
+    p = pipeline(FUNDACJA_ARP, ARP)
+
+    p.add_public_founders()
+
+    assert p.companies[FUNDACJA_ARP].is_public
+    assert p.companies[FUNDACJA_ARP].parents == []
+    assert p.companies[ARP].children == []
+    assert p.company_sources[FUNDACJA_ARP] == {
+        Source("hardcoded", reason=PUBLIC_FOUNDER)
+    }
+
+
+def test_a_body_public_already_gains_no_founder_source():
+    p = pipeline(FUNDACJA_ARP)
+    p.companies[FUNDACJA_ARP].is_public = True
+
+    p.add_public_founders()
+
+    assert FUNDACJA_ARP not in p.company_sources
+
+
+def test_a_founded_body_carries_the_flag_to_what_it_owns():
+    # Progress and Business holds P&B Incubator.
+    p = pipeline(PROGRESS_AND_BUSINESS, PB_INCUBATOR)
+    p.add_relation(PROGRESS_AND_BUSINESS, PB_INCUBATOR)
+
+    p.add_public_founders()
+    public = p.compute_public_krss({})
+    p.propagate_is_public(public, p.build_parent_to_children())
+
+    assert p.companies[PB_INCUBATOR].is_public
+
+
+def krakow() -> JstIndex:
+    rows = [
+        ("12", None, None, None, "MAŁOPOLSKIE"),
+        ("12", "61", None, None, "Kraków"),
+        ("12", "61", "01", "1", "Kraków"),
+    ]
+    return JstIndex.from_terc(
+        pd.DataFrame(rows, columns=["WOJ", "POW", "GMI", "RODZ", "NAZWA"])
+    )
+
+
+ZOO_KRAKOW = "0000064452"
+CBOS = "0000070275"
+FUNDACJA_UG = "0000045713"
+
+
+def founded_in_krakow(*krss: str) -> CompaniesKRS:
+    p = CompaniesKRS()
+    p.jst_index = krakow()
+    for krs in krss:
+        p.add_company(KrsCompany(krs=krs, teryt_code="1261"))
+    return p
+
+
+def test_a_founder_is_recorded_apart_from_the_owners():
+    p = pipeline(FUNDACJA_ARP, ARP)
+
+    p.add_public_founders()
+
+    assert p.companies[FUNDACJA_ARP].founded_by == [Owner(krs=ARP, teryt=None)]
+    assert p.companies[FUNDACJA_ARP].parents == []
+
+
+def test_a_gmina_founder_is_resolved_by_name():
+    p = founded_in_krakow(ZOO_KRAKOW)
+
+    p.add_public_founders()
+
+    assert p.companies[ZOO_KRAKOW].founded_by == [Owner(krs=None, teryt="1261011")]
+
+
+def test_the_treasury_as_founder_keeps_its_sentinel():
+    # The payload splits it out into `founder_skarb_panstwa`, as it does an
+    # owner's.
+    p = founded_in_krakow(CBOS)
+
+    p.add_public_founders()
+
+    assert p.companies[CBOS].founded_by == [Owner(krs=None, teryt=SKARB_PANSTWA)]
+
+
+def test_a_founder_with_neither_a_krs_number_nor_a_territory_is_left_out():
+    # Uniwersytet Gdański: on record in the table, with nothing to link to.
+    p = founded_in_krakow(FUNDACJA_UG)
+
+    p.add_public_founders()
+
+    assert p.companies[FUNDACJA_UG].is_public
+    assert p.companies[FUNDACJA_UG].founded_by == []
+
+
+def test_founding_twice_records_each_founder_once():
+    p = founded_in_krakow(ZOO_KRAKOW)
+
+    p.add_public_founders()
+    p.add_public_founders()
+
+    assert len(p.companies[ZOO_KRAKOW].founded_by) == 1

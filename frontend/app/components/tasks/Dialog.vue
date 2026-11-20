@@ -94,6 +94,80 @@
             </v-btn-toggle>
           </div>
         </div>
+        <!-- A decision's answers, each under a letter; the star marks the
+             one to recommend. -->
+        <div
+          v-if="form.kind === 'decision'"
+          class="mb-4"
+          data-task-options-editor
+        >
+          <v-text-field
+            v-model="form.question"
+            label="Pytanie"
+            placeholder="Jak oznaczać noc z ostrzeżeniami?"
+            variant="outlined"
+            density="comfortable"
+            :counter="300"
+            data-task-question-field
+          />
+          <div class="text-caption text-medium-emphasis mb-1">Opcje</div>
+          <div
+            v-for="(option, index) in form.options"
+            :key="option.key"
+            class="d-flex align-center ga-2 mb-2"
+          >
+            <span class="task-dialog__key">{{ option.key }}</span>
+            <v-text-field
+              v-model="option.title"
+              :placeholder="index === 0 ? 'Zostaw jak jest' : undefined"
+              density="compact"
+              variant="outlined"
+              hide-details
+              :data-task-option-title="option.key"
+            />
+            <v-btn
+              icon
+              size="small"
+              variant="text"
+              :color="form.recommended === option.key ? 'ink-sage' : undefined"
+              :title="
+                form.recommended === option.key
+                  ? 'Polecana - kliknij, żeby odznaczyć'
+                  : 'Oznacz jako polecaną'
+              "
+              :aria-pressed="form.recommended === option.key"
+              @click="
+                form.recommended =
+                  form.recommended === option.key ? null : option.key
+              "
+            >
+              <v-icon
+                :icon="
+                  form.recommended === option.key ? mdiStar : mdiStarOutline
+                "
+              />
+            </v-btn>
+            <v-btn
+              icon
+              size="small"
+              variant="text"
+              title="Usuń opcję"
+              @click="form.options.splice(index, 1)"
+            >
+              <v-icon :icon="mdiClose" />
+            </v-btn>
+          </div>
+          <v-btn
+            size="small"
+            variant="text"
+            :prepend-icon="mdiPlus"
+            :disabled="form.options.length >= 8"
+            data-task-option-add
+            @click="addOption"
+          >
+            Dodaj opcję
+          </v-btn>
+        </div>
         <v-autocomplete
           v-model="form.dependsOn"
           :items="candidates"
@@ -132,12 +206,17 @@
         />
         <v-combobox
           v-model="form.branches"
-          label="Gałęzie"
+          :label="form.kind === 'merge' ? 'Gałąź do scalenia' : 'Gałęzie'"
+          :hint="
+            form.kind === 'merge' ? 'Nazwa gałęzi na GitHubie.' : undefined
+          "
+          :persistent-hint="form.kind === 'merge'"
           multiple
           chips
           closable-chips
           variant="outlined"
           density="comfortable"
+          data-task-branches
         />
       </v-card-text>
       <v-card-actions>
@@ -146,7 +225,7 @@
         <v-btn
           color="ink-sage"
           variant="flat"
-          :disabled="!form.title.trim()"
+          :disabled="!form.title.trim() || missingBranch"
           :loading="saving"
           data-task-save
           @click="save"
@@ -160,6 +239,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
+import { mdiClose, mdiPlus, mdiStar, mdiStarOutline } from "@mdi/js";
 import {
   taskChoices,
   taskKindConfig,
@@ -173,6 +253,7 @@ import {
   type Task,
   type TaskCreate,
   type TaskKind,
+  type TaskOption,
   type TaskPatch,
   type TaskWho,
 } from "~~/shared/tasks";
@@ -202,6 +283,9 @@ const empty = () => ({
   tags: [] as string[],
   links: [] as string[],
   branches: [] as string[],
+  question: "",
+  options: [] as TaskOption[],
+  recommended: null as string | null,
 });
 
 const form = reactive(empty());
@@ -224,14 +308,46 @@ watch(open, (isOpen) => {
           tags: [...task.tags],
           links: [...task.links],
           branches: [...task.branches],
+          question: task.question ?? "",
+          options: (task.options ?? []).map((o) => ({ ...o })),
+          recommended: task.recommended ?? null,
         }
       : empty(),
   );
 });
 
+/** A merge is of a branch: without one there is nothing to check main for. */
+const missingBranch = computed(
+  () => form.kind === "merge" && trimmed(form.branches).length === 0,
+);
+
+/** The next letter no option has: keys stay put when one is taken away, so
+ * a pick already made keeps meaning the same answer. */
+function addOption() {
+  const taken = new Set(form.options.map((o) => o.key));
+  const key = [..."ABCDEFGH"].find((letter) => !taken.has(letter));
+  if (key) form.options.push({ key, title: "" });
+}
+
 const candidates = computed(() =>
   taskChoices(props.tasks.filter((t) => t.id !== props.task?.id)),
 );
+
+/** The options with words in them, and the recommendation if it is one of
+ * them. Only a decision has either. */
+function decisionFields(): Pick<
+  TaskCreate,
+  "question" | "options" | "recommended"
+> {
+  if (form.kind !== "decision") {
+    return { question: "", options: [], recommended: undefined };
+  }
+  const options = form.options
+    .map((o) => ({ key: o.key, title: o.title.trim() }))
+    .filter((o) => o.title);
+  const recommended = options.find((o) => o.key === form.recommended)?.key;
+  return { question: form.question.trim(), options, recommended };
+}
 
 const trimmed = (values: string[]) => [
   ...new Set(values.map((v) => v.trim()).filter(Boolean)),
@@ -249,6 +365,7 @@ async function save() {
     tags: trimmed(form.tags),
     links: trimmed(form.links),
     branches: trimmed(form.branches),
+    ...decisionFields(),
   };
   try {
     if (!props.task) {
@@ -264,3 +381,18 @@ async function save() {
   }
 }
 </script>
+
+<style scoped>
+.task-dialog__key {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: rgb(var(--v-theme-ink-neutral));
+  background: rgb(var(--v-theme-surface-muted));
+}
+</style>

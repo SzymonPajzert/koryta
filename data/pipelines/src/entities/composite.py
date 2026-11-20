@@ -46,6 +46,17 @@ class Election:
     # selected `candidacy_success` into the elections struct; it stopped here,
     # because nothing read it off the row.
     elected: bool | None = None
+    # What the candidate declared about their own party, as PKW wrote it
+    # („członek partii politycznej: Prawo i Sprawiedliwość”, „nie należy do
+    # partii politycznej”), and the site's parties it names. None for an
+    # election whose file does not ask, which is most local ones.
+    party_member: str | None = None
+    member_parties: list[str] | None = None
+    # Who PKW says backed the candidacy („popierana przez partię polityczną:
+    # Prawo i Sprawiedliwość”, an association), and the site's parties it
+    # names. Recorded on any list, a voters' committee's included.
+    supported_by: str | None = None
+    backing_parties: list[str] | None = None
 
 
 @dataclass

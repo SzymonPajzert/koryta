@@ -36,7 +36,7 @@ test("kolejka-strona-osoby", NOWE, async ({ page }, testInfo) => {
     .locator("tbody tr .text-primary")
     .first()
     .textContent();
-  await expect(person.locator("h2").first()).toHaveText(name!.trim());
+  await expect(person.locator("h1")).toHaveText(name!.trim());
 
   await readyForFullPage(page);
   await page.mouse.move(0, 0);

@@ -124,8 +124,22 @@
           :entity="entity"
           :type="type"
           :extra-locations="searchLocations"
+          :backed="backedParties"
           @published="refreshNode()"
           @voted="emit('voted')"
+        />
+        <!-- Above the history the reader came for, the one ask on the page,
+             to a reader who is not signed in: under it, few readers ever
+             reached it (decided 2026-11-17). Straight under the header, not
+             inside the relations below, so it takes only the header's own
+             space above it (decided 2026-11-18). A signed-in contributor knows
+             the way to /oswiadczenia and has the app bar's „Działaj z nami”.
+             Mounted once Firebase has said nobody is signed in, not before:
+             mounting is what joins the half-and-half split
+             (PERSON_ASK_EXPERIMENT), and an account restored a moment later
+             must not be counted in it. -->
+        <PersonReadingAsk
+          v-if="entity?.type === 'person' && authReady && !user"
         />
 
         <div class="mt-4">
@@ -484,11 +498,13 @@ import type {
 import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import { predecessorsByEdge } from "~/utils/succession";
 import { employmentTowns } from "~/utils/companyLocation";
+import { backingYears, partiesOnlyBacked } from "~/utils/partyStatements";
 import CommentsSection from "@/components/comment/CommentsSection.vue";
 import FormAddRelationDialog from "~/components/form/AddRelationDialog.vue";
 import type { edgeTypeExt } from "~/composables/useEdgeTypes";
 import type { PersonTeaser } from "~~/shared/personTeaser";
 import { useDisplay } from "vuetify";
+import { useIsCurrentUserLoaded } from "vuefire";
 
 definePageMeta({
   affineLink: "0Jk7aUVzpBbKpnGw-NNqZ",
@@ -514,6 +530,9 @@ const type = props.type;
 const route = useRoute();
 
 const { user } = useAuthState();
+/** Whether Firebase has restored, or ruled out, a signed-in reader. Until it
+ * has, `user` is null for everybody, the signed in included. */
+const authReady = useIsCurrentUserLoaded();
 const router = useRouter();
 
 const { smAndDown } = useDisplay();
@@ -685,6 +704,18 @@ const searchLocations = computed(() => [
   ...electionLocations.value,
   ...employmentTowns(edges.value),
 ]);
+
+/** The person's parties that only a backing PKW recorded ties them to, with
+ * its years: the header draws those apart from the rest. */
+const backedParties = computed(() => {
+  // The person's own candidacies run from them to a region: `targets`.
+  const candidacies = targets.value.filter((e) => e.type === "election");
+  const backed: Record<string, string[]> = {};
+  for (const party of partiesOnlyBacked(candidacies)) {
+    backed[party] = backingYears(candidacies, party);
+  }
+  return backed;
+});
 
 const owners = computed(() => {
   return sources.value.filter((e) => e.type === "owns");

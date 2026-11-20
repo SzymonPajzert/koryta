@@ -4,13 +4,9 @@ from scrapers.stores import Context, Pipeline
 
 class PeopleKorytaMerged(Pipeline):
     filename = "people_koryta_merged"
-    # Ids, which `PeopleMerged` joins on as text. `rejestrio_id` survives a
-    # restore from the shared cache today only because the 852 pages with no
-    # register link store an empty one, and "" is not a number: if every page
-    # were linked, the restore would re-infer the column as integers, and
-    # DuckDB would refuse the merge's `list_contains(kpw.rejestrio_id,
-    # ko.rejestrio_id)` - a list of text against a number. `birth_date` is
-    # compared as text too, and most pages store none.
+    # Kept as text, as `PeopleMerged` compares them: restored from the shared
+    # cache, `rejestrio_id` could otherwise come back as integers, and
+    # `list_contains` refuses a number against the KRS side's text ids.
     dtype = {"rejestrio_id": str, "koryta_id": str, "birth_date": str}
     koryta_pipeline: KorytaPeople
 
@@ -18,54 +14,34 @@ class PeopleKorytaMerged(Pipeline):
         con = ctx.con
 
         koryta_data = self.koryta_pipeline.read_or_process(ctx)
+        # A `KorytaPeople` backup from before 2026-10-10 lacks `birth_date`,
+        # one from before 2026-09-22 `merged_into`.
         if "birth_date" not in koryta_data.columns:
-            # A `KorytaPeople` built before 2026-10-10, restored from the
-            # shared cache: no page's date, so no name match is refused on one.
             koryta_data = koryta_data.assign(birth_date=None)
+        if "merged_into" not in koryta_data.columns:
+            koryta_data = koryta_data.assign(merged_into=None)
 
         con.execute(
             """
             CREATE OR REPLACE TABLE koryta_people AS
-            -- Most pages store no birth date - 1,833 of the 10,907 on
-            -- 2026-10-10 do - so this cannot be a base to join the other
-            -- sources on the way `krs_people` is. It is joined onto them
-            -- afterwards, to answer one question: which page is this person
-            -- already on?
+            -- Which page a person is already on. Joined onto the other
+            -- sources afterwards rather than used as their base, since most
+            -- pages store no birth date.
             --
-            -- `rejestrio_id` is the answer wherever the page has one, and 8,359
-            -- of the 9,227 person pages do. Pulled out of the stored url rather
-            -- than compared as a url, because that is the shape `krs_people`
-            -- carries it in - a bare id in a list - and comparing
-            -- `https://rejestr.io/osoby/383093` against `383093` matches
-            -- nothing. The trailing slug some links carry
-            -- (`/osoby/2479295/marta-twardowska-krol`, typed by hand into the
-            -- admin form) is dropped with it.
-            --
-            -- The names are for the 868 pages with no register link, and are
-            -- deliberately kept as two readings rather than one. The old
-            -- `last_name` here was everything after the first word, so "Andrzej
-            -- Marcin Golimont" gave "marcin golimont" and matched no KRS person
-            -- at all - and a page named with a middle name is exactly the case
-            -- this has to catch. `tail_name` keeps that reading, because it is
-            -- the right one for a double surname written with a space
-            -- ("Malgorzata Pietrzak Sikorska"), which the register stores whole
-            -- in `last_name`.
-            --
-            -- The birth date is for the same pages: a name is what namesakes
-            -- share, and a page that stores the day its person was born is not
-            -- a register entry born on another (`koryta_candidates`). A full
-            -- date or a bare year; anything else is no date, and refuses
-            -- nothing.
+            -- `rejestrio_id` is the bare entry id from the page's link, as
+            -- `krs_people` carries it, without any trailing slug. Names and
+            -- the birth date serve pages with no link. `last_name` is the
+            -- last word, so a middle name does not hide it; `tail_name` is
+            -- everything after the first word, for a double surname written
+            -- with a space. A full date or a bare year refuses a namesake
+            -- born on another day (`koryta_candidates`); anything else is no
+            -- date.
             SELECT DISTINCT
                 lower(regexp_extract(full_name, '^(\\S+)', 1)) as first_name,
                 lower(regexp_extract(full_name, '(\\S+)$', 1)) as last_name,
                 lower(trim(regexp_replace(full_name, '^(\\S+)', ''))) as tail_name,
-                -- Coalesced, because a page with no link at all stores NULL
-                -- and `regexp_extract` passes that straight through - and in
-                -- SQL both `NULL = ''` and `NULL != ''` are NULL, so such a
-                -- page would satisfy neither side of the join's OR and vanish
-                -- from it entirely. That is the 868 people the name fallback
-                -- exists for, so they are exactly the ones it would lose.
+                -- '' rather than NULL for a page with no link: the join tests
+                -- `= ''` and `!= ''`, and NULL passes neither.
                 coalesce(regexp_extract(rejestrIo, 'osoby/([0-9]+)', 1), '')
                     as rejestrio_id,
                 id as koryta_id,
@@ -75,8 +51,31 @@ class PeopleKorytaMerged(Pipeline):
                     '^([0-9]{4}(-[0-9]{2}-[0-9]{2})?)$',
                     1
                 ), '') as birth_date
-            FROM koryta_data
+            FROM koryta_data page
+            -- A page merged into another (a tombstone) is left out where its
+            -- survivor links the same entry, since `koryta_match` refuses an
+            -- entry two pages link, and where it links none, so its name
+            -- cannot make name matches ambiguous. Otherwise (two entries
+            -- merged, or a link edited away) it is its entry's only page and
+            -- stays: without it the name tier could give that entry to a
+            -- namesake. On a person page `deleted` comes only with
+            -- `merged_into`.
             WHERE full_name IS NOT NULL
+                AND (
+                    merged_into IS NULL
+                    OR (
+                        regexp_extract(page.rejestrIo, 'osoby/([0-9]+)', 1) != ''
+                        AND NOT EXISTS (
+                            SELECT 1 FROM koryta_data survivor
+                            WHERE survivor.id = page.merged_into
+                                AND regexp_extract(
+                                    survivor.rejestrIo, 'osoby/([0-9]+)', 1
+                                ) = regexp_extract(
+                                    page.rejestrIo, 'osoby/([0-9]+)', 1
+                                )
+                        )
+                    )
+                )
             """
         )
 

@@ -1,7 +1,7 @@
 """Utility data classes and functions for data processing."""
 
 from dataclasses import dataclass
-from urllib.parse import parse_qsl, unquote, urlencode, urlparse
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse
 
 
 @dataclass
@@ -87,6 +87,12 @@ def parse_query(query: str) -> list[tuple[str, str]]:
 def format_query(pairs: list[tuple[str, str]]) -> str:
     """Encode key/value pairs back into a query string."""
     return urlencode(pairs)
+
+
+def encode_whole(query: str) -> str:
+    """A query percent-encoded once more, its "=" and "&" too, as one string:
+    ZETO Lublin's e-zeto BIPs answer a list's further pages only so."""
+    return quote(query, safe="")
 
 
 def decode_url(url: str) -> str:

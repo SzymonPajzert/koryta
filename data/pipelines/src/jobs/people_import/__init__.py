@@ -167,14 +167,14 @@ by one ("wysyłanie"), at the uploader's pace.
 
 Before it builds anything it finds the export the payloads will be compared
 with - who has a page, and what each page holds (`SNAPSHOT`) - and refuses,
-as failed, unless the newest finished export was taken today at 04:00 Warsaw
+as failed, unless the newest finished export was taken today at 02:00 Warsaw
 time or later. Compared with an older one, `--only-changed` sends again what
 the last night's run put up, and `--scope not-on-koryta` creates again the
 pages it created. The night says which export its own export step took
 (`--export`), and its run takes that one, or a newer, in place of the rule,
 so the two never judge one export differently. A frame of the export on disk
 that is not built from the one compared with - cached under today's name
-between midnight and four, from the export before; or the morning's, after
+between midnight and two, from the export before; or the morning's, after
 an export taken by hand later in the day - is rebuilt, whatever `--refresh`
 says (`PeopleImport.check_export`).
 
@@ -341,7 +341,7 @@ CREATING = (NEW_HIRE, ODPIS_ONLY_CURRENT, REJESTRIO_CURRENT, DECLARED, NEW)
 #: and read none of them.
 #:
 #: `KorytaPeople` is named after the day, which does not make a backup under
-#: today's name today's export: a run before the 04:00 export would build it
+#: today's name today's export: a run before the 02:00 export would build it
 #: from the one before and upload it under today's name - which is why such a
 #: run is refused before it builds (`export_refusal`).
 #:
@@ -2021,7 +2021,7 @@ def parser() -> argparse.ArgumentParser:
         type=iso_day,
         help="The day (YYYY-MM-DD) of the export --on-koryta and --only-changed "
         "compare against. Default: today. The run is refused unless the newest "
-        "finished export is of that day, taken at 04:00 today or later.",
+        "finished export is of that day, taken at 02:00 today or later.",
     )
     parser.add_argument(
         "--export",
@@ -2030,7 +2030,7 @@ def parser() -> argparse.ArgumentParser:
         help="An export already taken as fresh enough, as its folder is stamped "
         "(2026-10-10T02:00:59.242Z) - the night passes the one its export step "
         "took. The run compares with it, or a newer one, in place of the rule "
-        "that the newest is today's, taken at 04:00 or later.",
+        "that the newest is today's, taken at 02:00 or later.",
     )
     parser.add_argument(
         "--refresh",

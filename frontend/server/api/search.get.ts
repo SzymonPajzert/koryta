@@ -16,6 +16,7 @@ import {
   searchTokens,
   townChunk,
 } from "~~/shared/search";
+import { hitLine, type SearchLineNode } from "~~/shared/searchLine";
 
 const queryValidator = z.object({
   q: z.string().optional().default(""),
@@ -31,6 +32,9 @@ type node = {
   revision_id?: unknown;
   /** The KRS number the query was, on a hit found by it rather than by name. */
   matchedKrs?: string;
+  /** A person's, for the line under their name (`hitLine`). */
+  parties?: unknown;
+  stats?: SearchLineNode["stats"];
 };
 
 /** How far down the anchor's hit list a multi-word query reads.
@@ -166,8 +170,9 @@ export default editorFreshCachedEventHandler(async (event) => {
       // asks them to sign in: with a teaser of the name and the latest post
       // where an import wrote the page or a reviewer approved it
       // (`/api/nodes/[id]/teaser`), with the sign-in card alone where somebody
-      // added it by hand. Either way the box gives away the name and nothing
-      // else.
+      // added it by hand. Either way the box gives away the name, and under it
+      // that same latest post where the teaser shows one (`hitLine`) - nothing
+      // the page itself would not.
       //
       // Not `importedOrReviewed`, which the teaser asks before it shows a
       // post: in front of the box it hid every page added by hand, the people
@@ -230,6 +235,9 @@ export default editorFreshCachedEventHandler(async (event) => {
     // listed its people.
     const query: Record<string, string> = {};
     if (node.teryt) query.teryt = node.teryt;
+    // So the box can tell two people of one name apart, from the document the
+    // passes above have already read (`shared/searchLine.ts`).
+    const line = hitLine(node, includeDrafts);
 
     return {
       id: node.id,
@@ -242,6 +250,7 @@ export default editorFreshCachedEventHandler(async (event) => {
       // So the search box keeps the hit: its own filter matches what was
       // typed against the name, and no name holds the number.
       ...(node.matchedKrs ? { krsNumber: node.matchedKrs } : {}),
+      ...(line ? { line } : {}),
     };
   });
 });

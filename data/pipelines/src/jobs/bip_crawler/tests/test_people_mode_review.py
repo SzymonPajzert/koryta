@@ -185,6 +185,22 @@ def test_pages_in_cp1250_are_read(tmp_path):
     assert store.outcomes["w"].status == "found"
 
 
+def test_a_utf8_page_with_a_stray_cp1250_byte_stays_utf8() -> None:
+    # Gmina Sanok (11-05): one cp1250 "ź" in a UTF-8 page, and UnicodeDammit
+    # read the whole page as mac_latin2: "OŇõwiadczenia".
+    head = '<html><head><meta charset="utf-8"><title>Oświadczenia majątkowe'
+    page = (
+        head + "</title></head><body><a href='/menu'>Przejdź do menu</a></body></html>"
+    )
+    raw = page.encode("utf-8").replace("ź".encode(), "ź".encode("cp1250"))
+    title, links = extract_link_contexts(raw, "https://u1.pl", "text/html")
+    assert title == "Oświadczenia majątkowe"
+    assert links[0].anchor == "Przejdź do menu"  # the stray byte read as cp1250
+    # A page that says UTF-8 and is cp1250 throughout is still read as cp1250.
+    title, _ = extract_link_contexts(page.encode("cp1250"), "https://u1.pl", "")
+    assert title == "Oświadczenia majątkowe"
+
+
 def test_files_without_extension_are_not_walked_and_come_down_once(tmp_path):
     files = "".join(
         f'<a href="/api/files/{n}">Oświadczenie majątkowe radnego {n}</a>'

@@ -14,6 +14,7 @@ import nodes from "./nodes.json";
 import edges from "./edges.json";
 import revisions from "./revisions.json";
 import extractions from "./extractions.json";
+import { SEEDED_DECLARATION_PEOPLE as declarationPeople } from "./declarationPeople";
 
 const projectId =
   process.env.USE_PROD_PROJECT === "true" ? "koryta-pl" : "demo-koryta-pl";
@@ -288,6 +289,14 @@ async function seedDatabase() {
     db.collection("users").doc("test-user"),
     { newsletter: { callsToAction: false, recentPeople: false } },
     { merge: true },
+  );
+
+  // The declarations job's nightly count in people, which the home explorer's
+  // third panel, /oswiadczenia/postep and /admin/oswiadczenia read. Invented
+  // numbers that add up the way the real ones must (`declarationPeopleSchema`).
+  batch.set(
+    db.collection("stats").doc("declaration_people"),
+    declarationPeople,
   );
 
   await batch.commit();

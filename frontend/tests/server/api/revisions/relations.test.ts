@@ -277,6 +277,22 @@ describe("api/revisions/relations", () => {
     });
   });
 
+  it("says when a candidacy was in a by-election", async () => {
+    // A contest of its own, which the two-places warning leaves out.
+    addEdge("by", {
+      target: "teryt0261",
+      start_date: "2016-01-01",
+      by_election: true,
+    });
+    addEdge("general", { target: "teryt0261", start_date: "2018-01-01" });
+
+    const result = await call();
+
+    expect(
+      Object.fromEntries(result.relations.map((r) => [r.id, r.byElection])),
+    ).toEqual({ by: true, general: false });
+  });
+
   it("counts only revisions stored as pending as waiting", async () => {
     // Written before review existed: no status, and nothing points at it, so
     // it reads „Oczekuje” - but nobody is waiting on it.

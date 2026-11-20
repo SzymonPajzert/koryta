@@ -71,6 +71,8 @@ export const skippedChangeFields = new Set([
   "needs_split",
   "nameChunksLower",
   "content_changed_at",
+  "declared",
+  "as_of",
 ]);
 
 /** How each proposable field reads in Polish.
@@ -122,6 +124,11 @@ export const revisionFieldLabels: Record<string, string> = {
   elected: "wybrany",
   term: "kadencja",
   by_election: "wybory uzupełniające",
+  // PKW's statements on a candidacy, which only the ingest writes
+  party_member: "członkostwo (PKW)",
+  member_parties: "partie członkostwa",
+  supported_by: "poparcie (PKW)",
+  backing_parties: "partie popierające",
 };
 
 export function revisionFieldLabel(field: string): string {

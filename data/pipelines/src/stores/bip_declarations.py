@@ -1,7 +1,7 @@
 """What the declarations job cut and sent, beside the people mode's tables.
 
 The job (`jobs.bip_declarations`) reads the people mode's ``bip_poi``,
-``bip_poi_docs``, ``bip_units`` and ``bip_docs``, and keeps three tables of its
+``bip_poi_docs``, ``bip_units`` and ``bip_docs``, and keeps four tables of its
 own in the same database, created on first use like theirs. Who the
 candidacies are, whether they have a page and their priority come from the
 night's list, which the job reads each run and hands the store
@@ -11,26 +11,33 @@ night's list, which the job reads each run and hands the store
   which version of the cutter, so a new version cuts everything again;
 - ``bip_decl_crops``: one row per page that had the date's line - the crops as
   PNG bytes and what was read on it;
+- ``bip_decl_bands``: one row per band of such a page and version of the
+  employment cut - its header, its employer's line, sections VII and VIII as
+  PNG strips, their written lines and what OCR read in them;
 - ``bip_decl_sent``: one row per record sent to the site - a hash of what was
   sent and the site's answer, so a run sends only what is new or changed.
 
-The crops are pictures of named people's birth dates, so they stay in this
-database on the machine that cut them, and go nowhere but the site's ingest.
+The crops and bands are pictures of named people's declarations, so they stay
+in this database on the machine that cut them, and go nowhere but the site's
+ingest.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import (
     BipDeclarationStore,
+    DeclarationBandRow,
     DeclarationCropRow,
     DeclarationCutRow,
     DeclarationFile,
     DeclarationLink,
+    DeclarationPages,
+    DeclarationStrip,
     PersonRow,
     SentRow,
     with_outcomes,
@@ -74,6 +81,30 @@ CREATE TABLE IF NOT EXISTS bip_decl_sent (
   run_id  text NOT NULL DEFAULT '',
   sent_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (kind, id)
+);
+CREATE TABLE IF NOT EXISTS bip_decl_bands (
+  sha256        text    NOT NULL,
+  page          int     NOT NULL,
+  band          text    NOT NULL,
+  version       int     NOT NULL,
+  status        text    NOT NULL,
+  widen         int     NOT NULL DEFAULT 0,
+  dpi           int     NOT NULL DEFAULT 0,
+  width         int     NOT NULL DEFAULT 0,
+  strips        jsonb   NOT NULL DEFAULT '[]',
+  pngs          bytea[],
+  lines         jsonb   NOT NULL DEFAULT '[]',
+  ocr_text      text    NOT NULL DEFAULT '',
+  score         real    NOT NULL DEFAULT 0,
+  typed         boolean NOT NULL DEFAULT false,
+  source        text    NOT NULL DEFAULT '',
+  dnia          text    NOT NULL DEFAULT '',
+  dnia_score    real    NOT NULL DEFAULT 0,
+  stan_na       text    NOT NULL DEFAULT '',
+  stan_na_score real    NOT NULL DEFAULT 0,
+  notes         text    NOT NULL DEFAULT '',
+  cut_at        timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (sha256, page, band, version)
 )
 """
 
@@ -81,10 +112,108 @@ _CROP_COLUMNS = (
     "sha256, page, rotation, sort, birth_date, score, name, declaration_year, "
     "date_png_hash, name_png_hash, notes"
 )
+#: The band's columns but its pictures, which `pngs` holds in its strips' order.
+_BAND_COLUMNS = (
+    "sha256, page, band, version, status, widen, dpi, width, strips, lines, "
+    "ocr_text, score, typed, source, dnia, dnia_score, stan_na, stan_na_score, notes"
+)
 
 
 def png_hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest() if data else ""
+
+
+def band_with_hashes(band: DeclarationBandRow) -> DeclarationBandRow:
+    """The band with its strips' hashes filled in."""
+    strips = tuple(
+        DeclarationStrip(s.page, s.top, s.bottom, s.png, png_hash(s.png))
+        for s in band.strips
+    )
+    return DeclarationBandRow(**{**band.__dict__, "strips": strips})
+
+
+def _band_values(band: DeclarationBandRow) -> tuple:
+    strips = [
+        {"page": s.page, "top": s.top, "bottom": s.bottom, "hash": s.png_hash}
+        for s in band.strips
+    ]
+    return (
+        band.sha256,
+        band.page,
+        band.band,
+        band.version,
+        band.status,
+        band.widen,
+        band.dpi,
+        band.width,
+        json.dumps(strips),
+        json.dumps([list(line) for line in band.lines]),
+        band.ocr_text,
+        band.score,
+        band.typed,
+        band.source,
+        band.dnia,
+        band.dnia_score,
+        band.stan_na,
+        band.stan_na_score,
+        band.notes,
+        [s.png for s in band.strips],
+    )
+
+
+def _band(row: tuple, pngs: list[bytes] | None = None) -> DeclarationBandRow:
+    sha, page, band, version, status, widen, dpi, width, strips, lines = row[:10]
+    text, score, typed, source, dnia, dnia_score, stan, stan_score, notes = row[10:]
+    if isinstance(strips, str):
+        strips = json.loads(strips)
+    if isinstance(lines, str):
+        lines = json.loads(lines)
+    pictures = list(pngs or [])
+    return DeclarationBandRow(
+        sha,
+        int(page),
+        band,
+        int(version),
+        status,
+        int(widen),
+        int(dpi),
+        int(width),
+        tuple(
+            DeclarationStrip(
+                int(s["page"]),
+                int(s["top"]),
+                int(s["bottom"]),
+                bytes(pictures[k]) if k < len(pictures) else b"",
+                s["hash"],
+            )
+            for k, s in enumerate(strips)
+        ),
+        tuple((int(a), int(b), int(c)) for a, b, c in lines),
+        text,
+        float(score),
+        bool(typed),
+        source,
+        dnia,
+        float(dnia_score),
+        stan,
+        float(stan_score),
+        notes,
+    )
+
+
+def _wanted(
+    sha: str,
+    page: int,
+    banded: set[tuple[str, int]],
+    items: Collection[str] | None,
+    again: Collection[str],
+) -> bool:
+    """A date page whose bands are due: not cut at this version, or asked
+    for again; one of `items` when given."""
+    item = f"{sha}-p{page}"
+    if items is not None and item not in items:
+        return False
+    return (sha, page) not in banded or item in again
 
 
 def with_hashes(crop: DeclarationCropRow) -> DeclarationCropRow:
@@ -122,12 +251,17 @@ def _crop(
 
 
 class PostgresBipDeclarationStore(BipDeclarationStore):
-    def __init__(self, pg: PostgresClient, people: Iterable[PersonRow] = ()) -> None:
+    def __init__(
+        self, pg: PostgresClient, people: Iterable[PersonRow] = (), *, create=True
+    ) -> None:
         """`people`: the night's list (`people_list.read_list`), for the cut's
-        order and the upload's candidacies; `status` needs none."""
+        order and the upload's candidacies; `status` needs none.
+        `create=False` takes the tables as they are and runs no DDL: for a
+        run that only reads (`facts-part`), beside a cut or a crawl."""
         self.pg = pg
         self.people = {p.key: p for p in people}
-        self.ensure_schema()
+        if create:
+            self.ensure_schema()
 
     def ensure_schema(self) -> None:
         for statement in _SCHEMA.split(";"):
@@ -146,6 +280,12 @@ class PostgresBipDeclarationStore(BipDeclarationStore):
             """,
             (version,),
         )
+        return list(self._listed(rows).values())[:limit]
+
+    def _listed(self, rows: Iterable[tuple]) -> dict[str, DeclarationFile]:
+        """The files of candidacies on the list, in the cut's order: people on
+        the site first, then by priority. `rows`: sha256, host, url, bundle,
+        filename, candidacy key, whether the link named the person."""
         files: dict[str, tuple[str, str, str, str, str]] = {}
         linked: dict[str, list[tuple[PersonRow, bool]]] = {}
         for sha, host, url, bundle, filename, key, named in rows:
@@ -171,10 +311,10 @@ class PostgresBipDeclarationStore(BipDeclarationStore):
                 sha,
             )
 
-        due = sorted(files, key=order)
-        if limit is not None:
-            due = due[:limit]
-        return [DeclarationFile(*files[sha], council(sha)) for sha in due]
+        return {
+            sha: DeclarationFile(*files[sha], council(sha))
+            for sha in sorted(files, key=order)
+        }
 
     def record_cut(
         self, cut: DeclarationCutRow, crops: list[DeclarationCropRow]
@@ -311,6 +451,76 @@ class PostgresBipDeclarationStore(BipDeclarationStore):
                     (row.kind, row.id, row.digest, row.result, row.reason, run_id),
                 )
 
+    def pages_to_band(
+        self,
+        version: int,
+        limit: int | None,
+        items: Collection[str] | None = None,
+        again: Collection[str] = (),
+    ) -> list[DeclarationPages]:
+        rows = self.pg.fetchall(
+            """
+            SELECT d.sha256, d.host, d.url, d.bundle, d.filename, p.key, p.named,
+                   c.page, c.rotation
+              FROM bip_decl_crops c
+              JOIN bip_poi_docs p ON p.sha256 = c.sha256
+              JOIN bip_docs d ON d.sha256 = c.sha256
+             WHERE p.status = 'ok'
+            """
+        )
+        banded = {
+            (sha, int(page))
+            for sha, page in self.pg.fetchall(
+                "SELECT DISTINCT sha256, page FROM bip_decl_bands WHERE version = %s",
+                (version,),
+            )
+        }
+        pages: dict[str, set[tuple[int, int]]] = {}
+        starts: dict[str, set[int]] = {}
+        for row in rows:
+            sha, page, rotation = row[0], int(row[7]), int(row[8])
+            starts.setdefault(sha, set()).add(page)
+            if _wanted(sha, page, banded, items, again):
+                pages.setdefault(sha, set()).add((page, rotation))
+        files = self._listed(row[:7] for row in rows if row[0] in pages)
+        due = [
+            DeclarationPages(f, tuple(sorted(pages[s])), tuple(sorted(starts[s])))
+            for s, f in files.items()
+        ]
+        return due[:limit]
+
+    def record_bands(
+        self, sha256: str, page: int, version: int, bands: list[DeclarationBandRow]
+    ) -> None:
+        with self.pg.transaction() as cur:
+            cur.execute(
+                "DELETE FROM bip_decl_bands"
+                " WHERE sha256 = %s AND page = %s AND version = %s",
+                (sha256, page, version),
+            )
+            for band in map(band_with_hashes, bands):
+                cur.execute(
+                    f"""
+                    INSERT INTO bip_decl_bands ({_BAND_COLUMNS}, pngs)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb,
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::bytea[])
+                    """,
+                    _band_values(band),
+                )
+
+    def bands(
+        self, version: int, with_images: bool = False
+    ) -> list[DeclarationBandRow]:
+        images = ", pngs" if with_images else ""
+        rows = self.pg.fetchall(
+            f"SELECT {_BAND_COLUMNS}{images} FROM bip_decl_bands"
+            " WHERE version = %s ORDER BY sha256, page, band",
+            (version,),
+        )
+        if with_images:
+            return [_band(row[:19], row[19]) for row in rows]
+        return [_band(row) for row in rows]
+
 
 class MemoryBipDeclarationStore(BipDeclarationStore):
     """The same in memory, with the people mode's rows handed in: for tests."""
@@ -329,6 +539,7 @@ class MemoryBipDeclarationStore(BipDeclarationStore):
         self.cut_rows: dict[str, DeclarationCutRow] = {}
         self.crop_rows: dict[tuple[str, int], DeclarationCropRow] = {}
         self.sent_rows: dict[tuple[str, str], SentRow] = {}
+        self.band_rows: dict[tuple[str, int, str, int], DeclarationBandRow] = {}
 
     def ensure_schema(self) -> None:
         return None
@@ -401,3 +612,66 @@ class MemoryBipDeclarationStore(BipDeclarationStore):
     def record_sent(self, rows: list[SentRow], run_id: str) -> None:
         for row in rows:
             self.sent_rows[(row.kind, row.id)] = row
+
+    def pages_to_band(
+        self,
+        version: int,
+        limit: int | None,
+        items: Collection[str] | None = None,
+        again: Collection[str] = (),
+    ) -> list[DeclarationPages]:
+        banded = {(sha, page) for sha, page, _, v in self.band_rows if v == version}
+        pages: dict[str, set[tuple[int, int]]] = {}
+        starts: dict[str, set[int]] = {}
+        for (sha, page), crop in self.crop_rows.items():
+            starts.setdefault(sha, set()).add(page)
+            if sha in self.files and _wanted(sha, page, banded, items, again):
+                pages.setdefault(sha, set()).add((page, crop.rotation))
+        on_site = {p.key for p in self.people if p.person.get("koryta_ids")}
+        priority = {p.key: p.priority for p in self.people}
+        keys: dict[str, list[str]] = {}
+        for link in self.link_rows:
+            keys.setdefault(link.sha256, []).append(link.key)
+
+        def order(sha: str) -> tuple[bool, int, str]:
+            mine = keys.get(sha, [])
+            return (
+                not any(k in on_site for k in mine),
+                min((priority.get(k, 9) for k in mine), default=9),
+                sha,
+            )
+
+        return [
+            DeclarationPages(
+                self.files[sha], tuple(sorted(pages[sha])), tuple(sorted(starts[sha]))
+            )
+            for sha in sorted(pages, key=order)[:limit]
+        ]
+
+    def record_bands(
+        self, sha256: str, page: int, version: int, bands: list[DeclarationBandRow]
+    ) -> None:
+        for key in [k for k in self.band_rows if k[:2] == (sha256, page)]:
+            if key[3] == version:
+                del self.band_rows[key]
+        for band in map(band_with_hashes, bands):
+            self.band_rows[(band.sha256, band.page, band.band, band.version)] = band
+
+    def bands(
+        self, version: int, with_images: bool = False
+    ) -> list[DeclarationBandRow]:
+        rows = [self.band_rows[k] for k in sorted(self.band_rows) if k[3] == version]
+        if with_images:
+            return rows
+        return [
+            DeclarationBandRow(
+                **{
+                    **row.__dict__,
+                    "strips": tuple(
+                        DeclarationStrip(s.page, s.top, s.bottom, b"", s.png_hash)
+                        for s in row.strips
+                    ),
+                }
+            )
+            for row in rows
+        ]

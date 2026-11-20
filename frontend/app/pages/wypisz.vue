@@ -90,7 +90,7 @@ import { SUBSCRIBER_PREFIX } from "~~/shared/newsletterSignup";
  * would take readers off the list for having received the mail at all. The
  * link's token is the whole authorisation, so nobody has to sign in. */
 useHead({
-  title: "Wypisz się - koryta.pl",
+  title: "Wypisz się",
   meta: [{ name: "robots", content: "noindex" }],
 });
 

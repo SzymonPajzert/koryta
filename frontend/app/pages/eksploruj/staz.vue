@@ -134,7 +134,7 @@ const ENDPOINT = "/api/edges/serviceMilestones";
 const FIRST_PAGE_KEY = "service-milestones";
 
 useSeoMeta({
-  title: "Okrągły staż w instytucjach publicznych - koryta.pl",
+  title: "Okrągły staż w instytucjach publicznych",
   description:
     "Komu łączny staż we wszystkich instytucjach publicznych wypada równo - 10, 15, 24 lata - w tym miesiącu wstecz albo naprzód.",
 });

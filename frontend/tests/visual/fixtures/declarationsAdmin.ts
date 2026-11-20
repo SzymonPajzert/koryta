@@ -1,10 +1,13 @@
 import { readFileSync } from "node:fs";
+import type { NodeRelations } from "../../../server/api/edges/byNode.get";
 import type { NodeMentions } from "../../../server/api/nodes/[id]/mentions.get";
 import {
   DAILY_AUTO_PUBLISH_LIMIT,
+  RULED_OUT,
   type DeclarationOverview,
   type DeclarationPublicationRow,
   type DeclarationReviewRow,
+  type HeldCropRow,
   type LocalOffice,
   type PersonDeclarations,
   type PublicationHoldReason,
@@ -311,60 +314,277 @@ function differentRows(n: number): DeclarationReviewRow[] {
   });
 }
 
-/** DERIVED: why the 11 held pages are held. */
+/** REAL, on 2026-11-18: why the 249 pages that wait for an admin are held. */
 const HELD_BY: { reason: PublicationHoldReason; count: number }[] = [
-  { reason: "pending_proposal", count: 4 },
-  { reason: "kept_hidden", count: 3 },
-  { reason: "two_pages", count: 2 },
-  { reason: "name_differs", count: 1 },
-  { reason: "ambiguous_candidacy", count: 1 },
+  { reason: "two_places", count: 154 },
+  { reason: "pending_proposal", count: 30 },
+  { reason: "ambiguous_candidacy", count: 28 },
+  { reason: "conflicting_reading", count: 26 },
+  { reason: "no_candidacy_on_page", count: 9 },
+  { reason: "admin_decision", count: 1 },
+  { reason: "kept_hidden", count: 1 },
 ];
+const HELD_TOTAL = HELD_BY.reduce((sum, { count }) => sum + count, 0);
 
+/** REAL, on 2026-11-18: what the 315 pages with no paid public post are held
+ * for, which is not always that. */
+const NO_POST_BY: { reason: PublicationHoldReason; count: number }[] = [
+  { reason: RULED_OUT, count: 280 },
+  { reason: "two_places", count: 15 },
+  { reason: "conflicting_reading", count: 7 },
+  { reason: "ambiguous_candidacy", count: 6 },
+  { reason: "kept_hidden", count: 3 },
+  { reason: "pending_proposal", count: 3 },
+  { reason: "admin_decision", count: 1 },
+];
+/** DERIVED: three an admin has declined, which production has none of yet. */
+const DECLINED_REASONS: PublicationHoldReason[] = [
+  "two_places",
+  "conflicting_reading",
+  "ambiguous_candidacy",
+];
+const NO_POST_TOTAL = NO_POST_BY.reduce((sum, { count }) => sum + count, 0);
+const SET_ASIDE_TOTAL = NO_POST_TOTAL + DECLINED_REASONS.length;
+
+function heldRow(
+  reason: PublicationHoldReason,
+  i: number,
+  hours: number,
+): DeclarationPublicationRow {
+  const place = unitAt(i + 5);
+  return {
+    personId: fakeId(800 + i),
+    name: fakeName(800 + i),
+    status: "held",
+    reason,
+    pagePublic: false,
+    paidPost: true,
+    at: hoursAgo(hours),
+    unit: place.unit,
+    documentUrl: documentUrl(place.year, 800 + i),
+    edges: { published: 0, held: 1 + (i % 4) },
+    pressed: false,
+  };
+}
+
+/** The held rows the newest first, the reasons mixed as a day's uploads mix
+ * them rather than one after another. */
 function heldRows(): DeclarationPublicationRow[] {
-  return HELD_BY.flatMap(({ reason, count }) =>
+  const rows = HELD_BY.flatMap(({ reason, count }) =>
     Array<PublicationHoldReason>(count).fill(reason),
-  ).map((reason, i) => {
-    const place = unitAt(i + 5);
-    return {
-      personId: fakeId(800 + i),
-      name: fakeName(800 + i),
-      status: "held",
-      reason,
-      pagePublic: false,
-      at: hoursAgo(2.5 + i * 6.1),
-      unit: place.unit,
-      documentUrl: documentUrl(place.year, 800 + i),
-      edges: { published: 0, held: 1 + (i % 4) },
-      pressed: false,
-    };
+  )
+    .map((reason, i) => heldRow(reason, i, 2.5 + ((i * 41) % HELD_TOTAL) * 1.3))
+    .sort((a, b) => b.at.localeCompare(a.at));
+  // REAL: four rows of 2026-11-06 were published by hand while they waited.
+  // One of them here, to close.
+  const byHand = rows.find((row) => row.reason === "no_candidacy_on_page")!;
+  byHand.pagePublic = true;
+  return rows;
+}
+
+/** The rule's rows and the admin's, the newest first: an admin's no is the
+ * freshest thing here, and it is what the section shows first. */
+function setAsideRows(): DeclarationPublicationRow[] {
+  // Ids of their own: the held rows' run up to 1048, and a person is on one
+  // list only.
+  const declined = DECLINED_REASONS.map(
+    (reason, i): DeclarationPublicationRow => ({
+      ...heldRow(reason, 200 + i, 1 + i * 4.5),
+      personId: fakeId(3000 + i),
+      status: "declined",
+    }),
+  );
+  const noPost = NO_POST_BY.flatMap(({ reason, count }) =>
+    Array<PublicationHoldReason>(count).fill(reason),
+  ).map((reason, i): DeclarationPublicationRow => ({
+    ...heldRow(reason, 300 + i, 14 + ((i * 41) % NO_POST_TOTAL) * 1.1),
+    personId: fakeId(3100 + i),
+    paidPost: false,
+  }));
+  return [...declined, ...noPost].sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** `GET /api/declarations/publications/<id>/crops`: the crop that gives a page
+ * held for a conflicting reading another day, for any row. */
+export function heldCrops(row: DeclarationPublicationRow): HeldCropRow[] {
+  const [crop] = differentRows(1);
+  return [
+    {
+      ...crop!,
+      decidable: true,
+      unit: row.unit,
+      documentUrl: row.documentUrl,
+      people: crop!.people.map((person) => ({
+        ...person,
+        id: row.personId,
+        name: row.name,
+        published: row.pagePublic,
+      })),
+    },
+  ];
+}
+
+/** The same, when the crop is a namesake's: settled on the date of another
+ * page it names, so it is not this page's to decide. */
+export function heldCropsOfAnother(
+  row: DeclarationPublicationRow,
+): HeldCropRow[] {
+  const [crop] = heldCrops(row);
+  return [
+    {
+      ...crop!,
+      decidable: false,
+      people: [
+        ...crop!.people,
+        {
+          id: fakeId(4000),
+          name: "Jan Imiennikowski",
+          published: true,
+          birthDate: crop!.agreed,
+        },
+      ],
+    },
+  ];
+}
+
+/** `GET /api/revisions/byNode` of a page with nothing approved whose newest
+ * version is a person's proposal, newer than the import's. */
+export function proposalRevisions(name: string) {
+  return {
+    approvedRevisionId: null,
+    revisions: [
+      {
+        id: "fxrevimport",
+        data: { name },
+        update_time: "2026-08-20T07:10:00Z",
+        update_automatic: true,
+        update_user: "pipeline",
+      },
+      {
+        id: "fxrevproposal",
+        status: "pending",
+        data: { name },
+        update_time: "2026-08-27T16:42:00Z",
+        update_user: "fxreader",
+      },
+    ],
+  };
+}
+
+/** `GET /api/edges/byNode` of a page held for standing in two places: the two
+ * runs of one election, the person's other run in one of the places, and a
+ * job. What „Opublikuj ręcznie” opens on. */
+export function heldRelations(personId: string): NodeRelations {
+  const relation = {
+    direction: "outgoing",
+    otherPublished: true,
+    published: false,
+    revisionToApprove: null,
+    hasPendingRevision: true,
+    publishable: true,
+  } as const;
+  const candidacy = (
+    id: string,
+    otherId: string,
+    otherName: string,
+    startDate: string,
+    party: string,
+  ) => ({
+    ...relation,
+    id,
+    type: "election" as const,
+    name: "kandydatura",
+    otherId,
+    otherName,
+    startDate,
+    position: "Rada powiatu",
+    parties: [party],
   });
+  return {
+    // The import's union: PO from the person's own runs, PiS from the
+    // namesake's in the other place.
+    nodeParties: ["PO", "PiS"],
+    relations: [
+      candidacy(
+        `${personId}-run1`,
+        "teryt1465",
+        "Powiat grójecki",
+        "2024-04-07",
+        "PO",
+      ),
+      candidacy(
+        `${personId}-run2`,
+        "teryt0217",
+        "Powiat strzeliński",
+        "2024-04-07",
+        "PiS",
+      ),
+      candidacy(
+        `${personId}-run3`,
+        "teryt1465",
+        "Powiat grójecki",
+        "2018-10-21",
+        "PO",
+      ),
+      {
+        ...relation,
+        id: `${personId}-job`,
+        type: "employed",
+        name: "Zarząd",
+        otherId: "fxcompany",
+        otherName: "Przedsiębiorstwo Wodociągów Przykładowych sp. z o.o.",
+        startDate: "2021-03-01",
+        position: null,
+        parties: [],
+      },
+    ],
+  } as NodeRelations;
 }
 
 /** DERIVED: the seven pages the automation published today, by the frozen
- * noon in Warsaw, newest first; `daysBack` moves them to an earlier day. */
+ * noon in Warsaw, and one an admin published by hand while it was held, which
+ * closed its hold; newest first. `daysBack` moves them to an earlier day. */
 function recentRows(daysBack = 0): DeclarationPublicationRow[] {
   const times = ["06:15", "07:15", "07:40", "08:26", "09:02", "09:31", "09:48"];
-  return times
-    .map((time, i) => {
-      const place = unitAt(i * 3 + 1);
-      const at = new Date(
-        Date.parse(`${TODAY}T${time}:00.000Z`) - daysBack * 86_400_000,
-      ).toISOString();
-      return {
-        personId: fakeId(900 + i),
-        name: fakeName(900 + i),
-        status: "published" as const,
-        reason: null,
-        pagePublic: true,
-        at,
-        unit: place.unit,
-        documentUrl: documentUrl(place.year, 900 + i),
-        edges: { published: 1 + (i % 3), held: i % 4 === 3 ? 1 : 0 },
-        pressed: false,
-      };
-    })
-    .sort((a, b) => b.at.localeCompare(a.at));
+  const atTime = (time: string) =>
+    new Date(
+      Date.parse(`${TODAY}T${time}:00.000Z`) - daysBack * 86_400_000,
+    ).toISOString();
+  const automatic = times.map((time, i) => {
+    const place = unitAt(i * 3 + 1);
+    return {
+      // Past the held rows' ids, which run up to 1048.
+      personId: fakeId(2900 + i),
+      name: fakeName(900 + i),
+      status: "published" as const,
+      reason: null,
+      pagePublic: true,
+      at: atTime(time),
+      unit: place.unit,
+      documentUrl: documentUrl(place.year, 900 + i),
+      edges: { published: 1 + (i % 3), held: i % 4 === 3 ? 1 : 0 },
+      pressed: false,
+    };
+  });
+  const place = unitAt(23);
+  const byHand: DeclarationPublicationRow = {
+    personId: BY_HAND,
+    name: fakeName(907),
+    status: "published",
+    reason: null,
+    pagePublic: true,
+    at: atTime("09:55"),
+    unit: place.unit,
+    documentUrl: documentUrl(place.year, 907),
+    edges: { published: 1, held: 0 },
+    pressed: false,
+    byHand: true,
+  };
+  return [...automatic, byHand].sort((a, b) => b.at.localeCompare(a.at));
 }
+
+/** The page of the recent list an admin published by hand. */
+export const BY_HAND = fakeId(2907);
 
 // ---------------------------------------------------------------------------
 // The overview
@@ -388,7 +608,10 @@ function recentRows(daysBack = 0): DeclarationPublicationRow[] {
  *     1,530 winners' drafts), 116 the same (22 of them already public), 20
  *     different
  *   publications: 74 published over 11 days at no more than 10 a day, 7 of
- *     them today; 9 queued; 11 held
+ *     them today; 9 queued
+ * REAL, on 2026-11-18, for the lists an admin works through
+ *   249 held with a paid post, by reason; 315 with none, with 3 declined
+ *   beside them
  */
 export const declarationOverview: DeclarationOverview = {
   at: hoursAgo(5 / 60),
@@ -439,7 +662,8 @@ export const declarationOverview: DeclarationOverview = {
   publications: {
     queued: 9,
     published: 74,
-    held: 11,
+    held: HELD_TOTAL,
+    setAside: SET_ASIDE_TOTAL,
     today: 7,
     heldBy: HELD_BY,
   },
@@ -447,6 +671,7 @@ export const declarationOverview: DeclarationOverview = {
     disputed: disputedRows(14),
     different: differentRows(20),
     held: heldRows(),
+    setAside: setAsideRows(),
     recent: recentRows(),
   },
   runs: [
@@ -510,8 +735,15 @@ export const declarationOverviewEmpty: DeclarationOverview = {
     days: days(TODAY, 30).map((day) => ({ day, answers: 0, settled: 0 })),
   },
   pages: { same: 0, different: 0, noDate: 0, confirmed: 0 },
-  publications: { queued: 0, published: 0, held: 0, today: 0, heldBy: [] },
-  lists: { disputed: [], different: [], held: [], recent: [] },
+  publications: {
+    queued: 0,
+    published: 0,
+    held: 0,
+    setAside: 0,
+    today: 0,
+    heldBy: [],
+  },
+  lists: { disputed: [], different: [], held: [], setAside: [], recent: [] },
   runs: [],
 };
 

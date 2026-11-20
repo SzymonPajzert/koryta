@@ -73,6 +73,600 @@ export const QA_ITEMS: QaItem[] = [
     fixes: ["a4osK51MCaYodiebX6Fg"],
   },
   {
+    id: "kolejka-imie-prowadzi-do-strony-osoby",
+    title: "Imię w kolejce prowadzi na stronę osoby",
+    description:
+      "W /eksploruj/nowe imię i nazwisko w wierszu tabeli jest linkiem do strony osoby. Po powrocie przyciskiem Wstecz kolejka pokazuje tę samą osobę.",
+    steps: [
+      "Zaloguj się, otwórz /eksploruj/nowe i kliknij imię i nazwisko w wierszu tabeli: otwiera się strona tej osoby.",
+      "Kliknij Wstecz w przeglądarce: w kolejce jest ta sama osoba.",
+    ],
+    link: "/eksploruj/nowe",
+    area: "contributor",
+    fixes: ["INTrv78UrTpxi1P8tC2R"],
+  },
+  {
+    id: "profil-twoje-interakcje",
+    title: "„Twoje interakcje” na /profil: propozycje zmian i głosy",
+    description:
+      "Karta „Twoje propozycje zmian” to teraz „Twoje interakcje”: obok propozycji są Twoje ostatnie głosy, każdy z osobą i głosem słowami skali. Chip „Głosy” zostawia same głosy.",
+    steps: [
+      "Zaloguj się, zagłosuj na kogoś w /eksploruj/nowe i wejdź na /profil: w „Twoje interakcje” ta osoba jest na górze, z głosem, np. „+3 Koryciarz”.",
+      "Kliknij chip „Głosy”: zostają same głosy. Drugie kliknięcie wraca do wszystkiego.",
+      "Kliknij wiersz z głosem: otwiera się strona tej osoby.",
+    ],
+    link: "/profil",
+    area: "contributor",
+  },
+  {
+    id: "eksploruj-nowe-osoba-w-adresie",
+    title: "Kolejka pamięta w adresie, kogo pokazuje",
+    description:
+      "Adres /eksploruj/nowe ma identyfikator pokazanej osoby. „Następna osoba” dodaje wpis w historii przeglądarki, więc Wstecz wraca do poprzedniej osoby, a odświeżenie strony albo link otwierają tę samą.",
+    steps: [
+      "Zaloguj się i otwórz /eksploruj/nowe: w adresie pojawia się ?osoba= z identyfikatorem osoby z tabeli.",
+      "Kliknij „Następna osoba”, a potem Wstecz w przeglądarce: wraca poprzednia osoba, w tabeli i na stronie pod nią.",
+      "Odśwież stronę: zostaje ta sama osoba.",
+    ],
+    link: "/eksploruj/nowe",
+    area: "contributor",
+  },
+  {
+    id: "wynik-modeli-to-szansa-publikacji",
+    title: "Wynik modeli to szansa publikacji",
+    description:
+      "Część wyniku od modeli to teraz szansa, że sprawdzenie osoby skończy się publikacją: 5 od 90%, 4 od 75%, 3 od 50%, 2 od 15%. Pozostałe modele zostają w „Skąd ten wynik” jako powody. Działa po nocnym przeliczeniu.",
+    steps: [
+      "Otwórz link i kliknij wynik osoby: pierwsza na liście jest „Szansa publikacji” z przedziałem, a pod listą „Do wyniku liczy się szansa publikacji”.",
+    ],
+    link: "/eksploruj/tabela?visibility=private&hideVoted=no_votes&sortBy=latestEmploymentStart&sortDesc=true&minVotes=4",
+    area: "contributor",
+  },
+  {
+    id: "model-posada-w-miejscu-kandydowania",
+    title: "Model: posada w miejscu kandydowania",
+    description:
+      "Osoba z posadą w spółce z powiatu, w którym kandydowała (przy Sejmie, Senacie i sejmiku z województwa), dostaje od modeli co najmniej 4, a z najnowszymi takimi posadami 5. Oceny pojawią się po nocnym przeliczeniu.",
+    steps: [
+      "Otwórz link: tabela pokazuje osoby z oceną od 4. Kliknij ocenę osoby, która kandydowała tam, gdzie pracuje: w „Skąd ten wynik” jest „Posada w miejscu kandydowania”.",
+    ],
+    link: "/eksploruj/tabela?visibility=private&hideVoted=no_votes&sortBy=latestEmploymentStart&sortDesc=true&minVotes=4",
+    area: "contributor",
+  },
+  {
+    id: "kategoria-w-likwidacji",
+    title: "Spółki w likwidacji i w upadłości w filtrze kategorii",
+    description:
+      "Za „Skarb Państwa” na liście kategorii są „W likwidacji” i „W upadłości”: spółki, którym rejestr dopisał to do nazwy. Spółka ma je obok sektora i właściciela, a wykres „Branże” ich nie liczy. Spółki dostają je z nocnymi aktualizacjami spółek.",
+    steps: [
+      "Otwórz tabelę, kliknij „Filtry” i w „Typ podmiotu” wybierz „W likwidacji”: w tabeli są osoby ze spółek w likwidacji, np. Telewizji Polskiej. To samo z „W upadłości”.",
+      "Otwórz stronę Telewizji Polskiej: pod nazwą jest „W likwidacji”, a kliknięcie otwiera tabelę z tym filtrem.",
+    ],
+    link: "/eksploruj/tabela?category=w-likwidacji",
+    area: "public",
+  },
+  {
+    id: "pasek-tabeli-na-telefonie",
+    title: "Wybrane filtry tabeli czytelne na telefonie",
+    description:
+      "Na telefonie wybrane filtry mają własny wiersz pod „Filtry”, zamiast ściskać się do samych ikon. „Udostępnij” jest obok tytułu.",
+    steps: [
+      "Na telefonie otwórz tabelę i wybierz dwa filtry: oba są czytelne w wierszu pod „Filtry”, a liczba osób i sortowanie stoją obok „Filtry”.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "public",
+  },
+  {
+    id: "oswiadczenia-na-stronie-szkicu",
+    title: "Oświadczenia majątkowe na stronie nieopublikowanej osoby",
+    description:
+      "Zalogowani widzą pod danymi nieopublikowanej osoby ramkę z jej oświadczeniami majątkowymi z BIP: czy wycinek czeka na czytelników, czy strona czeka na publikację albo czemu jest wstrzymana, sam wycinek i link do całego oświadczenia. Gdy wycinka nie ma, ramka wymienia wygrane od 2014 roku wybory samorządowe, co przy każdych znalazło zadanie w BIP, i ma pole na link do oświadczenia znalezionego ręcznie.",
+    steps: [
+      "Zaloguj się i otwórz stronę nieopublikowanej osoby, która wygrała wybory samorządowe: pod datą urodzenia jest ramka z wycinkiem albo z wygranymi wyborami.",
+      "Przy wycinku kliknij „Pokaż wszystkie”: są pozostałe oświadczenia tej osoby, także te, z których nie wycięto daty.",
+      "Przy osobie bez wycinka wklej link do jej oświadczenia i kliknij „Dodaj”: link pojawia się w ramce jako dodany dziś przez Ciebie.",
+      "Jako admin na stronie wstrzymanej osoby pod stanem jest też podpowiedź, co zrobić.",
+      "Kliknij pierwszą linię ramki: ramka się zwija. Wróć na tę stronę: dalej jest zwinięta, a na innych stronach rozwinięta.",
+      "Opublikowana osoba nie ma tej ramki.",
+    ],
+    area: "contributor",
+  },
+  {
+    id: "stanowiska-trzecia-zakladka",
+    title: "„Stanowiska” jako trzecia zakładka na głównej",
+    description:
+      "Wykres stanowisk jest ostatnią zakładką i strona główna nie otwiera się już na nim. Połowa czytelników widzi na start mapę, połowa oświadczenia.",
+    steps: [
+      "Otwórz / w oknie prywatnym: zakładki to „Mapa”, „Oświadczenia”, „Stanowiska”, a otwarta jest mapa albo oświadczenia.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
+    id: "staz-liczony-raz-dziennie",
+    title: "Okrągłe staże liczone raz dziennie",
+    description:
+      "Karty okrągłego stażu liczą się raz na dobę zamiast co godzinę, co obniża koszt bazy. Osoba opublikowana dziś trafi na nie jutro, a zdjęta ze strony znika w ciągu godziny.",
+    steps: [
+      "Wejdź na /eksploruj/staz: są karty i liczby przy „Nadchodzące” i „Minione”. Na stronie głównej w „Co nowego” są karty stażu.",
+    ],
+    link: "/eksploruj/staz",
+    area: "public",
+  },
+  {
+    id: "linia-postepu-pod-licznikiem",
+    title: "Linia postępu na dole licznika na /oswiadczenia",
+    description:
+      "Licznik na /oswiadczenia kończy się cienką linią: ile osób już odczytano, ile czeka, a na końcu odczytanych Twoje odczyty. Liczby pokazuje po najechaniu albo dotknięciu.",
+    steps: [
+      "Odczytaj wycinek na /oswiadczenia: licznik kończy się linią.",
+      "Najedź na nią albo dotknij jej na telefonie: pod nią są osoby gotowe i czekające oraz Twoje odczyty.",
+    ],
+    link: "/oswiadczenia",
+    area: "public",
+  },
+  {
+    id: "odczyty-oswiadczen-w-statystykach",
+    title: "Skany z /oswiadczenia w statystykach, osobno od zmian",
+    description:
+      "Statystyki liczą teraz skany oświadczeń odczytane na /oswiadczenia, osobno od zmian w danych: mają swój kafelek, swój pasek pod wykresem dni i zakładkę „Skany” w rankingu, otwieraną jako pierwszą. Liczą się skany zalogowanych, bez pominiętych; skany bez konta dochodzą, gdy przejmie je konto. Podsumowanie miesiąca na /aktywnosc liczy działania, skany razem ze zmianami.",
+    steps: [
+      "Zaloguj się i odczytaj kilka wycinków na /oswiadczenia, jeden pomiń.",
+      "Na /eksploruj/statystyki ranking otwiera się na „Skany”: jesteś tam z liczbą odczytów bez pominiętego. „Zmiany” to ranking ocen, propozycji, źródeł i publikacji.",
+      "Pod wykresem „Co się działo w bazie” skany mają swój pasek z własną skalą. Kafelek „Odczyt oświadczenia” prowadzi na /oswiadczenia.",
+      "Na /oswiadczenia/znalezione pod liczbą znalezionych osób jest link do statystyk.",
+      "Bez logowania odczytaj wycinek w innej przeglądarce: liczby się nie zmieniają. Zaloguj się tam: odczyt dochodzi do dzisiejszego dnia.",
+    ],
+    link: "/eksploruj/statystyki",
+    area: "public",
+  },
+  {
+    id: "strona-eksploruj",
+    title: "Strona /eksploruj ze wszystkimi sposobami przeglądania",
+    description:
+      "/eksploruj zbiera w kartach tabelę, nowe osoby, okrągły staż, rady szpitali, statystyki, wykresy, tematy i źródła. W stopce zastąpiła „Rady szpitali” i „Okrągły staż”, a stopka ma teraz kolumny „Na stronie” i „O projekcie”.",
+    steps: [
+      "W stopce, pod „Na stronie”, kliknij „Eksploruj”. „O nas”, „Kontakt” i „Działaj z nami” są w kolumnie obok, nad „Informacjami prawnymi”.",
+      "Kliknij kilka kart: każda prowadzi na swoją stronę, a liczby na kartach są pogrupowane („10 348 osób”).",
+    ],
+    link: "/eksploruj",
+    area: "public",
+  },
+  {
+    id: "linki-do-statystyk",
+    title: "Linki do statystyk",
+    description:
+      "Na /eksploruj/statystyki prowadzą teraz stopka, liczby na stronie głównej i /o-nas. Z góry /pomoc zniknęły liczba sprawdzonych osób i notka o koncie.",
+    steps: [
+      "Na stronie głównej obok „Sprawdziliśmy już” kliknij „Statystyki”.",
+      "W stopce, pod „Na stronie”, kliknij „Statystyki”.",
+      "Na /o-nas, przy „Koryta.pl to przede wszystkim społeczność”, kliknij „Zobacz, kto tworzy koryta.pl”.",
+      "Na /pomoc pod tytułem jest tylko jeden akapit, a zaraz pod nim „Możesz sprawdzać osoby”.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
+    id: "zadania-merge-decyzje-akcje-u-gory",
+    title: "Zadania: merge z gałęzią, decyzje z przyciskami odpowiedzi",
+    description:
+      "Merge prowadzi gałąź i pokazuje, ile z niej jest na main. Decyzja ma pytanie i odpowiedzi do kliknięcia; po wyborze jest w toku w „Podjęte decyzje”, a zamyka się sama, gdy zamknięte jest wszystko, co z niej wynika. Status, priorytet, „Na mapie”, Edytuj i Kopiuj są u góry otwartego zadania. Stronę widzi tylko właściciel serwisu.",
+    steps: [
+      "Na /admin/zadania kliknij chip „Merge” i otwórz zadanie: na górze jest gałąź z linkami „Zmiany” i „GitHub”.",
+      "Kliknij chip „Decyzje”, otwórz decyzję z odpowiedziami i wybierz jedną: decyzja przechodzi do „Podjęte decyzje”, a zadania, które na nią czekały, mogą ruszać.",
+      "W otwartym zadaniu kliknij „Na mapie”: mapa otwiera się z tym zadaniem pośrodku.",
+    ],
+    link: "/admin/zadania",
+    area: "admin",
+  },
+  {
+    id: "oswiadczenie-z-data-administratora",
+    title: "Oświadczenie na stronie także z datą ustaloną przez administratora",
+    description:
+      "Strona opublikowana ręcznie, gdy datę z oświadczenia ustalił administrator, pokazuje teraz notkę z oświadczeniem. Automat nadal na takiej dacie nie publikuje.",
+    steps: [
+      "Na /admin/oswiadczenia wybierz powód „datę ustalił administrator” i rozwiń osobę. Jeśli data się zgadza, kliknij „Opublikuj ręcznie” i opublikuj.",
+      "Otwórz stronę osoby: pod danymi jest „Data urodzenia zgadza się z oświadczeniem majątkowym”.",
+    ],
+    link: "/admin/oswiadczenia",
+    area: "admin",
+  },
+  {
+    id: "okno-publikacji-propozycja-zmiany",
+    title: "Okno publikacji mówi, gdy pokaże czyjąś propozycję zmiany",
+    description:
+      "Strona bez zatwierdzonej wersji wychodzi w najnowszej. Gdy to czyjaś propozycja zmiany, a nie wersja z importu, okno publikacji teraz to mówi.",
+    steps: [
+      "Na /admin/oswiadczenia wybierz powód „czeka propozycja zmiany od osoby” i kliknij „Opublikuj ręcznie” w kilku wierszach. Ramka u góry okna mówi, którą wersję pokaże, czasem „propozycję zmiany z …”. Zamknij okno bez publikacji.",
+    ],
+    link: "/admin/oswiadczenia",
+    area: "admin",
+  },
+  {
+    id: "partia-imiennika-w-oknie-publikacji",
+    title: "Okno publikacji pokazuje partię kandydatury w dwóch miejscach",
+    description:
+      "Przy kandydaturach w dwóch miejscach naraz okno publikacji podaje partię każdej z nich i ostrzega, gdy partię na stronie daje tylko niezaznaczona kandydatura. Publikacja pokazałaby ją na stronie.",
+    steps: [
+      "Na /admin/oswiadczenia rozwiń osobę wstrzymaną za „kandydatura w dwóch miejscach naraz” i kliknij „Opublikuj ręcznie”.",
+      "Przy kandydaturach w bloku „dwa miejsca naraz” są ich partie. Zaznacz kandydaturę z miejsca oświadczenia: pod blokiem może być „Tylko niezaznaczona kandydatura daje partię: …” z linkiem do strony osoby.",
+      "Kliknij „Zaznacz wszystkie”: kandydatury z miejsca imiennika zostają niezaznaczone, a ostrzeżenie zostaje. Zamknij okno bez publikacji.",
+    ],
+    link: "/admin/oswiadczenia",
+    area: "admin",
+  },
+  {
+    id: "wstrzymane-publikacje-decyzje",
+    title:
+      "Wstrzymane publikacje: opublikuj ręcznie, sprawdź ponownie albo odłóż",
+    description:
+      "Sekcja „Wstrzymane publikacje” na /admin/oswiadczenia pokazuje wszystkie wstrzymane osoby, nie 20 najnowszych, z filtrem powodu, a wiersze mają przyciski decyzji. Osoby bez płatnego stanowiska i odłożone są w nowej sekcji „Nie do publikacji”. Strona opublikowana ręcznie znika z listy i pokazuje oświadczenie.",
+    steps: [
+      "Wejdź na /admin/oswiadczenia. Przy „Wstrzymane publikacje” jest liczba wszystkich wstrzymanych i pole „Powód”. Wybierz powód: lista się zawęża.",
+      "Rozwiń wiersz z powodem „kandydatura w dwóch miejscach naraz”, osoby, którą i tak trzeba opublikować, i kliknij „Opublikuj ręcznie”: otwiera się okno publikacji tej osoby. Zaznacz kandydaturę z miejsca oświadczenia. Jeśli okno ostrzega o partii imiennika, usuń ją na stronie osoby („Zaproponuj zmianę”) i wróć do okna. Opublikuj: wiersz od razu znika, a strona osoby jest publiczna i ma notkę z oświadczeniem.",
+      "Kliknij „Sprawdź ponownie” w innym wierszu: komunikat mówi, czy strona wyszła, czy nadal jest wstrzymana i dlaczego.",
+      "Kliknij „Nie publikuj”: osoba od razu przechodzi na górę sekcji „Nie do publikacji”. Kliknij tam „Przywróć”: wraca na górę wstrzymanych.",
+      "Rozwiń wiersz w „Nie do publikacji” z powodem „brak płatnego stanowiska”: ma tylko „Opublikuj ręcznie”.",
+    ],
+    link: "/admin/oswiadczenia",
+    area: "admin",
+  },
+  {
+    id: "dwa-miejsca-wedlug-wyborow",
+    title: "„Dwa miejsca” także przy różnych urzędach w jednych wyborach",
+    description:
+      "Okno publikacji i znaczek „dwa miejsca” nie łączyły różnych urzędów, więc rada gminy obok sejmiku w innym województwie wyglądała na zwykłe wiersze, choć automat wstrzymuje za to stronę. Teraz liczą się wybory, jak w automacie.",
+    steps: [
+      "Na /admin/oswiadczenia rozwiń osobę wstrzymaną za „kandydatura w dwóch miejscach naraz”, otwórz „Strona osoby” i kliknij „Opublikuj”.",
+      "Jej kandydatury z tych wyborów są w bloku nad listą, np. „Samorządowe 2024 - dwa miejsca naraz”, a „Zaznacz wszystkie” ich nie zaznacza. Zamknij okno bez publikacji.",
+      "Na stronie osoby oba wiersze mają znaczek „dwa miejsca”.",
+    ],
+    link: "/admin/oswiadczenia",
+    area: "admin",
+  },
+  {
+    id: "mapa-w-kolorach-partii",
+    title: "Mapa na stronie głównej w kolorach partii",
+    description:
+      "Powiat ma kolor partii, którą ma najwięcej jego osób, tym ciemniejszy, im większy jej udział. Nad mapą każda partia ma swoją mapę udziału. Kolory partii pojawiają się po nocnym przeliczeniu, wcześniej mapa pokazuje liczbę osób w sześciu odcieniach czerwieni.",
+    steps: [
+      "Otwórz stronę główną: powiaty są pomarańczowe (PO), granatowe (PiS) i zielone (PSL), a nie jednakowo różowe.",
+      "Kliknij „PiS” nad mapą: mapa i legenda pod nią pokazują udział PiS w każdym powiecie.",
+      "Najedź na powiat: dostaje obrys, a podpowiedź wymienia osoby z każdej partii.",
+      "Kliknij powiat: zostaje obrysowany, a obok jest lista jego osób. Kliknij go drugi raz albo ✕ na liście: zaznaczenie znika.",
+      "Na telefonie przesuń rząd partii w bok.",
+    ],
+    link: "/?widok=mapa",
+    area: "public",
+  },
+  {
+    id: "wyszukiwarka-linia-pod-osoba",
+    title: "Linijka pod osobą w wyszukiwarce",
+    description:
+      "Pod każdą osobą jest linijka: miasto, partia, stanowisko. Imienników da się odróżnić.",
+    steps: [
+      "Wpisz „robert wó”. Każdy Robert Wójcik ma inną linijkę, np. „Mielec · PiS · Rada miasta 2024”.",
+      "Wyloguj się i wpisz to samo. Pod osobą bez strony jest tylko jej ostatnie stanowisko, bez partii.",
+    ],
+    area: "public",
+  },
+  {
+    id: "inne-dla-kandydatow-z-posada",
+    title: "Kandydaci z płatną posadą mają co najmniej „Inne”",
+    description:
+      "Opublikowana osoba z kandydowaniem i płatną posadą w publicznej spółce ma partię. Gdy jej komitet, np. KWW, nie wskazuje żadnej z naszych, jest to szare „Inne”.",
+    steps: [
+      "Otwórz /osoba/anna-jedynak-rykala-grMjlEK8eMtkDGiXmr04: w danych osoby jest szary znaczek „Inne”.",
+    ],
+    link: "/osoba/anna-jedynak-rykala-grMjlEK8eMtkDGiXmr04",
+    area: "public",
+  },
+  {
+    id: "sama-rada-spoleczna-ponizej-progu-kolejki",
+    title: "Osoby tylko z radą społeczną poniżej progu kolejki",
+    description:
+      "Osoba, której jedynym publicznym stanowiskiem jest miejsce w radzie społecznej szpitala, dostaje od modeli najwyżej 2, czyli mniej niż próg kolejki.",
+    steps: [
+      "Rano otwórz /eksploruj/nowe i wybierz „Najwyżej oceniane”: osoby, które w historii mają tylko „Rada Społeczna”, mają ocenę 2 albo niższą.",
+    ],
+    link: "/eksploruj/nowe?order=votes",
+    area: "contributor",
+  },
+  {
+    id: "start-kampania-w-plausible",
+    title: "Wejścia przez koryta.pl/start widać w Plausible",
+    description:
+      "Wejścia przez koryta.pl/start mają w Plausible kampanię „start”. Źródło (Instagram, Facebook, wykop) zostaje.",
+    steps: ["Wejdź na koryta.pl/start: adres ma ?utm_campaign=start."],
+    link: "/start",
+    area: "admin",
+  },
+  {
+    id: "aktywnosc-zmiany-na-stronie",
+    title: "Aktywność mówi też, co zmieniło się na stronie",
+    description:
+      "Każda nowa wersja koryta.pl jest na /aktywnosc pod dniem, w którym weszła, z tytułami jej wpisów z /qa.",
+    steps: [
+      "Otwórz /aktywnosc. Pod dniem ostatniej wersji ma być linijka „Nowa wersja strony” z tytułami wpisów z /qa. Kliknij tytuł: ma pokazać opis i dwa linki.",
+      "Kliknij filtr „koryta.pl” nad listą. Mają zostać same nowe wersje strony, po dniach.",
+    ],
+    link: "/aktywnosc",
+    area: "contributor",
+  },
+  {
+    id: "mniej-miejsca-pod-danymi-osoby",
+    title: "Mniej pustego miejsca pod danymi osoby",
+    description:
+      "Pod danymi osoby było za dużo pustego miejsca. Historia zaczyna się teraz wyżej, a ramka z prośbą o skany jest niższa i stoi tuż pod danymi.",
+    steps: [
+      "Otwórz stronę osoby: „Historia powiązań” jest bliżej daty urodzenia.",
+      "Wyloguj się i otwórz stronę osoby w kilku nowych kartach: ramka „Strony jak ta powstały dzięki czytelnikom” stoi tuż pod danymi osoby.",
+    ],
+    area: "public",
+  },
+  {
+    id: "oswiadczenia-jeden-wycinek-na-osobe",
+    title: "Na /oswiadczenia jeden wycinek na osobę",
+    description:
+      "Kolejka daje każdej osobie jeden wycinek naraz, a wycinki osób już sprawdzonych idą na koniec. Te same odczyty sprawdzają więcej osób.",
+    steps: [
+      "Odczytaj kilka wycinków z rzędu: po każdym zapisie przychodzi następny.",
+    ],
+    link: "/oswiadczenia",
+    area: "public",
+  },
+  {
+    id: "polityka-prywatnosci-zapytania-wyszukiwarki",
+    title: "Polityka prywatności o zapytaniach z wyszukiwarki",
+    description:
+      "Polityka mówi teraz, że zapisujemy, czego czytelnicy szukają, i że trzymamy to 180 dni.",
+    steps: [
+      "Otwórz politykę prywatności: w punkcie 2, pod „W celach analitycznych i statystycznych”, jest akapit o treści zapytań, w punkcie 3 o 180 dniach i Plausible, a na dole data 17 listopada 2026r.",
+    ],
+    link: "/plik/polityka_prywatnosci",
+    area: "public",
+  },
+  {
+    id: "procesy-odpisy-krokiem-nocy",
+    title: "Procesy: odpisy pełne jako krok nocy",
+    description:
+      "Wiersz „Odpisy pełne z wyszukiwarki KRS” mówił, że chodzą ręcznie i bez pory, choć pobiera je noc. Teraz ma porę nocy i wymaga uwagi, gdy noc ich nie pobierze.",
+    steps: [
+      "Otwórz /admin/procesy: przy „Odpisy pełne z wyszukiwarki KRS” jest „następne:” z 04:30.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
+    id: "procesy-kroki-nocy-w-harmonogramie",
+    title: "Procesy: „Import firm” i „Oceny modeli” w „Według harmonogramu”",
+    description:
+      "Oba uruchamia noc, a stały w „Na żądanie”. Kroki nocy bez własnej godziny mają w wierszu „co noc” zamiast „jeszcze bez harmonogramu”.",
+    steps: [
+      "Otwórz /admin/procesy: „Import firm” i „Oceny modeli” są w „Według harmonogramu”, obok „Import osób na stronę”, i jak on mają po prawej „co noc”.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
+    id: "poparcie-pkw-na-kandydaturach",
+    title: "Poparcie i członkostwo z PKW na kandydaturach",
+    description:
+      "Przed komitetem kandydatury: partia, która według PKW poparła kandydata (ramka z paskiem w kolorze partii) albo nazwa organizacji, i partia, do której kandydat należał, gdy lista jej nie wymienia. Partia znana tylko z poparcia ma tę samą ramkę w nagłówku osoby. Dane PKW dochodzą z kolejnymi nocami.",
+    steps: [
+      "Na stronie Barbary Ewy Kamińskiej kandydatura na prezydenta Opola w 2018 ma PO i PSL w ramce. Najedź na PSL: ma pokazać słowa PKW. W nagłówku PSL ma stać po PO, w ramce.",
+      "Na stronie Jacka Orycha kandydatury z 2018 i 2024 mają mieć „poparcie Mareckie Stowarzyszenie Gospodarcze”.",
+    ],
+    link: "/osoba/9Wp0FozK4aiokVSnizop",
+    area: "public",
+  },
+  {
+    id: "duplikaty-pod-paskiem-oswiadczen",
+    title: "„Duplikaty” zamiast „osobno imiennicy” pod paskiem oświadczeń",
+    description:
+      "Pod paskiem osób w zakładce „Oświadczenia” na głównej, na /oswiadczenia/postep i na /admin/oswiadczenia jest teraz „duplikaty:” z liczbą.",
+    steps: [
+      "Otwórz /oswiadczenia/postep: pod paskiem jest „duplikaty:” z liczbą, nie „osobno imiennicy:”.",
+    ],
+    link: "/oswiadczenia/postep",
+    area: "public",
+  },
+  {
+    id: "postep-oswiadczen-na-biezaco",
+    title: "Postęp oświadczeń na bieżąco",
+    description:
+      "Liczby w zakładce „Oświadczenia” na głównej i na /oswiadczenia/postep strona liczy co noc, a w ciągu dnia przesuwa osobę, gdy ktoś zostanie opublikowany albo odczyt się rozstrzygnie.",
+    steps: [
+      "Rano otwórz /oswiadczenia/postep i zapamiętaj liczbę opublikowanych.",
+      "Wieczorem odśwież: jeśli w ciągu dnia ktoś został opublikowany z oświadczenia, liczba jest większa, a dzisiejszy słupek urósł.",
+    ],
+    link: "/oswiadczenia/postep",
+    area: "public",
+  },
+  {
+    id: "prosba-o-odczyt-skanow-na-stronie-osoby",
+    title: "Na stronie osoby prośba o odczytanie kilku skanów oświadczeń",
+    description:
+      "Nad „Historią powiązań” połowa niezalogowanych czytelników widzi, ile osób strona opublikowała automatycznie w ostatnich 30 dniach, i przycisk „Odczytaj skany” do /oswiadczenia. Druga połowa jej nie widzi, żeby porównać, czy ramka nie zniechęca do reszty strony.",
+    steps: [
+      "Wyloguj się i otwórz stronę dowolnej osoby w kilku nowych kartach: mniej więcej w co drugiej nad „Historią powiązań” jest ramka z liczbą, „Strony jak ta powstały dzięki czytelnikom” i przyciskiem „Odczytaj skany”, w pozostałych jej nie ma. W jednej karcie zostaje to samo.",
+      "Kliknij „Odczytaj skany”: otwiera się /oswiadczenia.",
+      "Zaloguj się: ramki nie ma.",
+    ],
+    area: "public",
+  },
+  {
+    id: "lista-wszystkich-osob-zdejmuje-filtry",
+    title: "„Lista wszystkich osób” zdejmuje filtry tabeli",
+    description:
+      "Na przefiltrowanej tabeli ta pozycja wyszukiwarki zostawiała filtry, więc nic się nie zmieniało, nawet przy „Brak danych”. Teraz tabela pokazuje wszystkich, tak jak po wejściu z innej strony.",
+    steps: [
+      "Na /eksploruj/tabela?party=PiS wybierz w wyszukiwarce „Lista wszystkich osób”: filtr partii ma zniknąć, a tabela ma pokazać wszystkich.",
+    ],
+    link: "/eksploruj/tabela?party=PiS",
+    area: "public",
+  },
+  {
+    id: "wyszukiwarka-pusta-po-wyborze",
+    title: "Wyszukiwarka jest pusta po wybraniu wyniku",
+    description:
+      "Wybrana pozycja zostawała w polu wyszukiwania, więc kolejne nazwisko trafiało w jej środek, na przykład „Lista wszystkich ospaób”. Teraz po każdym wyborze pole jest puste i można od razu szukać dalej.",
+    steps: [
+      "Na /eksploruj/tabela wybierz w wyszukiwarce „Lista wszystkich osób”: pole ma być puste. Wpisz nazwisko: ma trafić do pustego pola, a wyszukiwarka ma znaleźć osobę.",
+    ],
+    link: "/eksploruj/tabela",
+    area: "public",
+  },
+  {
+    id: "stanowiska-chmurka-w-kolejnosci-linii",
+    title: "Chmurka wykresu „Stanowiska” w kolejności linii",
+    description:
+      "Wiersze chmurki szły w stałej kolejności, więc „Pozostałe województwa” były na dole, choć ich linia jest najwyżej. Teraz idą tak jak linie w danym miesiącu, od najwyższej.",
+    steps: [
+      "Otwórz /?widok=stanowiska, wybierz „Województwa” i najedź na ostatni miesiąc: pierwszy wiersz to „Pozostałe województwa”.",
+      "Przy „Partie” najedź na listopad 2026, a potem na czerwiec 2021: PO i PiS zamieniają się miejscami, tak jak ich linie.",
+    ],
+    link: "/?widok=stanowiska",
+    area: "public",
+  },
+  {
+    id: "wykres-stanowisk-szybki-po-zalogowaniu",
+    title: "Wykres na głównej szybki także po zalogowaniu",
+    description:
+      "Po zalogowaniu wykres „Zmiany na stanowiskach” ładuje się tak samo szybko jak bez logowania i pokazuje te same liczby.",
+    steps: [
+      "Zaloguj się i otwórz /?widok=stanowiska: wykres pojawia się tak szybko jak w oknie prywatnym.",
+    ],
+    link: "/?widok=stanowiska",
+    area: "contributor",
+  },
+  {
+    id: "brak-polaczenia-w-panelu-admina",
+    title:
+      "Panel admina bez sieci: „Brak połączenia z siecią” zamiast błędu 500",
+    description:
+      "Strona admina otwarta bez połączenia z Firebase, gdy logowanie trzeba było odświeżyć, pokazywała „500 Coś poszło nie tak”. Teraz pokazuje „Brak połączenia z siecią” i przycisk „Odśwież stronę”.",
+    steps: [
+      "Zamknij koryta.pl na ponad godzinę. Potem w nowej karcie otwórz DevTools, zablokuj securetoken.googleapis.com i wejdź na /admin: jest „408 Brak połączenia z siecią”.",
+      "Odblokuj adres i kliknij „Odśwież stronę”: otwiera się panel.",
+    ],
+    link: "/admin",
+    area: "admin",
+  },
+  {
+    id: "link-do-zakladki-na-glownej",
+    title: "Link do zakładki na głównej",
+    description:
+      "Adres strony głównej mówi, która zakładka jest otwarta. Link otwiera tę zakładkę zamiast losowej.",
+    steps: [
+      "Otwórz /?widok=stanowiska: zawsze otwiera się „Stanowiska”. Tak samo /?widok=oswiadczenia i /?widok=mapa.",
+      "Kliknij zakładkę na głównej: adres kończy się na ?widok= z jej nazwą.",
+    ],
+    link: "/?widok=stanowiska",
+    area: "public",
+  },
+  {
+    id: "noc-wysyla-zmiany-firm",
+    title: "Noc sama wysyła zmiany firm, które strona już ma",
+    description:
+      "Nowy publiczny właściciel albo fundator, branże czy forma prawna szły dotąd na stronę firmy tylko ręcznie. Teraz wysyła je noc, po osobach. Zmian nazw i firm, które stałyby się prywatne, nie wysyła.",
+    steps: [
+      "Rano po nocy otwórz /admin/procesy i rozwiń „Import firm”: drugie uruchomienie z nocy ma liczniki „w paczce” i „zaktualizowanych”, a wstrzymane firmy i nazwy w ostrzeżeniach.",
+      "Otwórz stronę Fundacji Agencji Rozwoju Przemysłu: we „Właścicielach” jest Agencja Rozwoju Przemysłu z dopiskiem „Fundator”.",
+    ],
+    link: "/admin/procesy",
+    area: "admin",
+  },
+  {
+    id: "jedna-nazwa-w-tytule-obrazek-podgladu",
+    title: "Jedno „Koryta.pl” w tytule karty, obrazek w podglądzie linku",
+    description:
+      "Tytuł karty kończy się jednym „| Koryta.pl”. Link do /o-nas, /pomoc czy /eksploruj/szpitale ma w podglądzie obrazek serwisu.",
+    steps: [
+      "Otwórz /o-nas i /eksploruj/szpitale: karta to „O nas | Koryta.pl” i „Rady nadzorcze szpitali publicznych | Koryta.pl”.",
+      "Wklej https://koryta.pl/pomoc na Facebooku lub Slacku: podgląd ma obrazek serwisu.",
+    ],
+    link: "/o-nas",
+    area: "public",
+  },
+  {
+    id: "statystyki-kafelki",
+    title: "Statystyki: trzy kafelki pod tytułem",
+    description:
+      "Linki do oświadczeń, rad szpitali i „Pomóż sprawdzać” wyglądają tak samo: kafelek z ikoną, nazwą i jednym zdaniem.",
+    steps: [
+      "Otwórz /eksploruj/statystyki: pod opisem są trzy kafelki, „Pomóż sprawdzać” ostatni. Każdy prowadzi na swoją stronę.",
+    ],
+    link: "/eksploruj/statystyki",
+    area: "public",
+  },
+  {
+    id: "mapa-strony-bez-daty-24-pazdziernika-1408",
+    title: "Mapa strony nie podaje już jednej daty dla tysięcy stron",
+    description:
+      "24 października skrypt dat przypisał każdej stronie w /sitemap.xml tę samą chwilę, 14:08:20, choć opisy zmieniły się o 15:20 i tylko na części stron. " +
+      "Po poprawce (skrypt correct-10-24-stamp) każda z nich ma datę tego, co naprawdę się na niej zmieniło, a ponowne przeliczenie dat już tej chwili nie przywraca.",
+    steps: [
+      "Po uruchomieniu poprawki i wygaśnięciu cache mapy (do siedmiu godzin, krócej po wdrożeniu) otwórz /sitemap.xml, a jeśli jest spisem kilku map, każdą z nich, i wyszukaj „2026-10-24T14:08:20”: nie ma żadnego wyniku.",
+      "Artykuł dodany przed 24 października i od tamtej pory niezmieniany ma datę sprzed tego dnia: 24 października nic się na nim nie zmieniło.",
+    ],
+    link: "/sitemap.xml",
+    area: "admin",
+  },
+  {
+    id: "postep-oswiadczen-w-osobach",
+    title:
+      "Ilu samorządowców sprawdziły oświadczenia: zakładka na głównej i strona /oswiadczenia/postep",
+    description:
+      "Na stronie głównej obok „Mapa” i „Stanowiska” (dawniej „Wykres”) jest zakładka „Oświadczenia”: ilu samorządowców z płatną posadą opublikowaliśmy dzięki oświadczeniom, ilu jest w toku, ilu bez oświadczenia, i osobno imienników. Prowadzi do /oswiadczenia/postep z pełnymi liczbami i do pierwszego wpisu na blogu. Która zakładka otwiera się pierwsza, zależy od losowania na sesję (po równo dla trzech). Blog jest w menu i w stopce, a /admin/oswiadczenia ma nad wykresem oświadczeń kolorowy pasek osób.",
+    steps: [
+      "Otwórz stronę główną w kilku nowych kartach: raz otwiera się „Mapa”, raz „Stanowiska”, raz „Oświadczenia”. Kliknij „Oświadczenia”: nagłówek „Oświadczenia majątkowe” i dwa zdania, co sprawdzamy, liczba opublikowanych, pasek, „osobno imiennicy” i słupki dzień po dniu.",
+      "W zakładce kliknij „Pełne dane”: /oswiadczenia/postep z sekcjami „W toku”, „Bez oświadczenia” i „Imiennicy”. „Dowiedz się więcej” prowadzi do wpisu na blogu.",
+      "W menu na górze i w stopce jest „Blog”, a na /eksploruj/statystyki kafelek „Oświadczenia majątkowe”.",
+      "Jako admin otwórz /admin/oswiadczenia: nad „Oświadczenia według stanu” jest pasek osób w tych samych kolorach.",
+    ],
+    link: "/oswiadczenia/postep",
+    area: "public",
+  },
+  {
+    id: "bez-liczby-osob-przy-wlascicielach",
+    title: "Bez liczby w nawiasie przy właścicielach i spółkach zależnych",
+    description:
+      "Listy „Właściciele” i „Spółki zależne” nie pokazują już liczby w nawiasie po nazwie. Ta liczba nie mówiła, ile osób ma instytucja, tylko ile ich było w grupie na tej jednej stronie, więc przy wszystkich fundatorach Polskiej Fundacji Narodowej stało to samo „(11)”. Wiersze idą teraz alfabetycznie.",
+    steps: [
+      "Wejdź na stronę dowolnej spółki z właścicielami albo spółkami zależnymi, na przykład PKP SKM: przy nazwach nie ma liczby w nawiasie, a wiersze idą alfabetycznie.",
+    ],
+    link: "/instytucja/pkp-szybka-kolej-miejska-w-trojmiescie-gdynia-ZBcdQ9tUxVyv0o1mnpLH",
+    area: "public",
+  },
+  {
+    id: "ocr-zgodny-ze-strona-bez-czytelnikow",
+    title:
+      "Data odczytana przez OCR i zgodna ze stroną publikuje osobę bez czytelników",
+    description:
+      "Gdy program wyraźnie odczyta datę urodzenia z oświadczenia, a strona osoby ma tę samą datę, wycinek nie idzie do czytelników, tylko osoba trafia do kolejki publikacji. Czytelnicy dostają resztę.",
+    steps: [
+      "Po następnym wgraniu wycinków otwórz /admin/oswiadczenia: kolejka publikacji rośnie, choć nikt nie czytał nowych wycinków.",
+    ],
+    link: "/admin/oswiadczenia",
+    area: "admin",
+  },
+  {
+    id: "fundator-wsrod-wlascicieli",
+    title:
+      "Fundator fundacji wśród jej właścicieli, a fundacja wśród spółek zależnych fundatora",
+    description:
+      "Fundacja albo stowarzyszenie, które założyła instytucja publiczna (spółka skarbu państwa, gmina, sam skarb państwa), jest teraz instytucją publiczną. Na stronie fundacji jej fundator stoi we „Właścicielach”, z dopiskiem „Fundator” w drugiej linii (albo „Założyciel”, gdy to nie fundacja). Na stronie fundatora fundacja stoi w „Spółkach zależnych” z dopiskiem „założona”. Na telefonie listy właścicieli i spółek zależnych nie mają już ikon po lewej, żeby zmieściło się więcej nazwy.",
+    steps: [
+      "Po wgraniu firm wejdź na stronę Fundacji Agencji Rozwoju Przemysłu: ma oznaczenie „Instytucja publiczna”, a we „Właścicielach” Agencję Rozwoju Przemysłu z dopiskiem „Fundator”.",
+      "Wejdź na stronę Związku Pracodawców Polska Miedź: KGHM jest tam z dopiskiem „Założyciel”.",
+      "Wejdź na stronę Totalizatora Sportowego: w „Spółkach zależnych” są Fundacja LOTTO i Fundacja Totalizatora Sportowego z dopiskiem „założona”.",
+      "Na telefonie (albo w oknie węższym niż 600 px) listy „Właściciele” i „Spółki zależne” nie mają ikon po lewej. Na komputerze ikony zostają.",
+    ],
+    link: "/instytucja/fundacja-agencji-rozwoju-przemyslu-warszawa-Esw3DSdEyca7AM6VmPWo",
+    area: "public",
+  },
+  {
     id: "mapa-strony-osobno-dla-kazdego-typu",
     title:
       "Mapa strony ma osobny plik dla osób, instytucji, artykułów i reszty",
@@ -94,9 +688,9 @@ export const QA_ITEMS: QaItem[] = [
     description:
       "Strona sama publikuje osobę z odczytanego oświadczenia tylko wtedy, gdy ma na stronie pracę albo funkcję w firmie, o której wiadomo, że należy do sektora publicznego, i za którą ktoś płaci. Sama kandydatura nie wystarcza: oświadczenie składa każdy radny. Z tego samego powodu czytelnicy dostają teraz do odczytania najpierw wycinki tych osób, które taką posadę mają.",
     steps: [
-      "Wejdź na /admin/oswiadczenia i rozwiń listę wstrzymanych: osoby bez takiej posady mają powód „brak płatnego stanowiska w instytucji publicznej”, w bursztynowym kolorze, bo posada może być tylko niezapisana.",
-      "Rozwiń taki wiersz: notatka mówi, co zrobić, jeśli posada jednak jest (dodać ją i opublikować stronę ręcznie).",
-      "Naciśnij „Opublikuj z kolejki”: taka osoba nie wychodzi, zostaje na liście wstrzymanych.",
+      "Wejdź na /admin/oswiadczenia i rozwiń sekcję „Nie do publikacji”: osoby bez takiej posady mają powód „brak płatnego stanowiska”.",
+      "Rozwiń taki wiersz: notatka mówi, że po dodaniu posady osoba wróci do wstrzymanych, a „Opublikuj ręcznie” publikuje ją od razu.",
+      "Naciśnij „Opublikuj z kolejki”: taka osoba nie wychodzi, zostaje w „Nie do publikacji”.",
       "Otwórz stronę takiej osoby i opublikuj ją ręcznie: to działa jak dotąd, automat nikomu nie blokuje publikacji.",
     ],
     link: "/admin/oswiadczenia",
@@ -456,7 +1050,7 @@ export const QA_ITEMS: QaItem[] = [
       "Data ostatniej zmiany w /sitemap.xml ruszała się tylko wtedy, gdy ktoś zmienił samą stronę albo opublikowane powiązanie. " +
       "Teraz rusza się też, gdy zmiana całej witryny dotarła do strony (poprawione adresy i opisy z 24 października, obecny skład spółek z osobami bez opublikowanej strony), i gdy w obecnym składzie spółki ktoś dochodzi, odchodzi albo zmienia funkcję - także osoba bez opublikowanej strony.",
     steps: [
-      "Po przeliczeniu dat (skrypt stamp-site-changes) otwórz /sitemap.xml: strony osób, artykułów i spółek mają datę nie starszą niż 24 października 2026.",
+      "Po przeliczeniu dat (skrypty stamp-site-changes i correct-10-24-stamp) otwórz /sitemap.xml, a jeśli jest spisem kilku map, mapę instytucji: spółki, których obecny skład wymienia osobę bez opublikowanej strony, mają datę nie starszą niż 24 października 2026, 21:46. Strony, do których zmiany z 24 października nie dotarły, zachowują wcześniejszą datę.",
       "Po wdrożeniu funkcji dodaj w spółce nowe zatrudnienie osoby bez opublikowanej strony: po kilku minutach data przy tej spółce jest dzisiejsza (w samej mapie po wygaśnięciu jej cache, do sześciu godzin).",
     ],
     link: "/sitemap.xml",

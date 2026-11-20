@@ -123,6 +123,28 @@
         class="tasks-page__goal"
         data-task-goal-filter
       />
+      <!-- What kind of thing waits, and how many of each: the list a pick
+           narrows to. Open tasks only, counted under the other filters. -->
+      <v-chip-group
+        v-if="kindChips.length > 0"
+        v-model="kind"
+        selected-class="text-ink-info"
+        class="tasks-page__kinds"
+        data-task-kind-filter
+      >
+        <v-chip
+          v-for="chip in kindChips"
+          :key="chip.value"
+          :value="chip.value"
+          size="small"
+          filter
+          :prepend-icon="taskKindConfig[chip.kind].icon"
+          :data-task-kind="chip.kind"
+        >
+          {{ chip.title }}
+          <span class="tasks-page__count">{{ chip.count }}</span>
+        </v-chip>
+      </v-chip-group>
       <v-btn-toggle
         v-if="view === 'lista'"
         v-model="order"
@@ -212,6 +234,7 @@
               @edit="openDialog(task)"
               @select="goTo"
               @show-goal="showGoal"
+              @show-on-map="showOnMap"
               @connect="(a, b) => connect(a, b)"
               @disconnect="(a, b) => disconnect(a, b)"
             />
@@ -295,6 +318,7 @@
             :state="states.get(selectedTask.id)!"
             :tasks="tasks"
             :saving="saving[selectedTask.id]"
+            compact
             @update="(patch) => update(selectedTask!.id, patch)"
             @edit="openDialog(selectedTask)"
             @select="select"
@@ -362,6 +386,7 @@ import {
   taskAnchor,
   type Task,
   type TaskCreate,
+  type TaskKind,
   type TaskPatch,
   type TaskPriority,
   type TaskSection,
@@ -375,7 +400,7 @@ definePageMeta({
   fullWidth: true,
 });
 
-useHead({ title: "Zadania (Admin) - koryta.pl" });
+useHead({ title: "Zadania (Admin)" });
 
 const route = useRoute();
 const router = useRouter();
@@ -430,6 +455,32 @@ const priority = computed<PriorityFilter | null>({
 });
 /** The task the map is focused on, from a card's button. */
 const focus = stringFilter("skupienie");
+/** Only one kind of task: decisions, merges, ... */
+const KIND_FILTERS = {
+  decyzja: "decision",
+  scalenie: "merge",
+  operacja: "action",
+  zadanie: "task",
+  pomysl: "idea",
+  cel: "goal",
+} as const satisfies Record<string, TaskKind>;
+type KindFilter = keyof typeof KIND_FILTERS;
+const KIND_TITLES: Record<TaskKind, string> = {
+  decision: "Decyzje",
+  merge: "Merge",
+  action: "Operacje",
+  task: "Zadania",
+  idea: "Pomysły",
+  goal: "Cele",
+};
+const kindParam = stringFilter("rodzaj");
+const kind = computed<KindFilter | null>({
+  get: () =>
+    kindParam.value && kindParam.value in KIND_FILTERS
+      ? (kindParam.value as KindFilter)
+      : null,
+  set: (value) => (kindParam.value = value),
+});
 type Order = "najstarsze" | "najnowsze";
 const orderParam = choiceFilter<Order>("kolejnosc", "najstarsze");
 const order = computed<Order>({
@@ -456,8 +507,11 @@ const goalGroup = computed(() =>
     : null,
 );
 
-const matches = (task: Task) => {
+const matches = (task: Task, { anyKind = false } = {}) => {
   if (goalGroup.value && !goalGroup.value.has(task.id)) return false;
+  if (!anyKind && kind.value && task.kind !== KIND_FILTERS[kind.value]) {
+    return false;
+  }
   if (who.value === "ty" && task.who !== "owner") return false;
   if (who.value === "agent" && task.who !== "agent") return false;
   if (tag.value && !task.tags.includes(tag.value)) return false;
@@ -476,9 +530,26 @@ const matches = (task: Task) => {
   return words.every((word) => haystack.includes(word));
 };
 
+/** The kinds with open tasks under the other filters, decisions first. */
+const kindChips = computed(() => {
+  const counts = new Map<TaskKind, number>();
+  for (const task of tasks.value) {
+    if (isClosed(task) || !matches(task, { anyKind: true })) continue;
+    counts.set(task.kind, (counts.get(task.kind) ?? 0) + 1);
+  }
+  return (Object.keys(KIND_FILTERS) as KindFilter[]).flatMap((value) => {
+    const of = KIND_FILTERS[value];
+    const count = counts.get(of) ?? 0;
+    return count > 0 || kind.value === value
+      ? [{ value, kind: of, title: KIND_TITLES[of], count }]
+      : [];
+  });
+});
+
 const filtering = computed(
   () =>
     who.value !== "wszyscy" ||
+    !!kind.value ||
     !!tag.value ||
     !!goal.value ||
     !!priority.value ||
@@ -491,19 +562,31 @@ const showGoal = (id: string) => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
+/** From a row's „Na mapie”: the map, with the task picked and centred.
+ * The filters stay, and a task they hide is shown by `focusTarget`. */
+async function showOnMap(id: string) {
+  const hash = `#${taskAnchor(id)}`;
+  // A row opened from a link has the hash already, and an unchanged hash
+  // does not call `focusTarget` by itself.
+  const same = route.hash === hash;
+  await router.replace({ query: { ...route.query, widok: "mapa" }, hash });
+  if (same) await focusTarget();
+}
+
 const showClosedList = ref(false);
 const SECTION_ORDER: TaskSection[] = [
   "goals",
   "mine",
   "agents",
   "blocked",
+  "decided",
   "ideas",
   "parked",
   "closed",
 ];
 const shownSections = computed(() =>
   SECTION_ORDER.map((key) => {
-    const items = sections.value[key].filter(matches);
+    const items = sections.value[key].filter((task) => matches(task));
     // The closed list is newest first either way: by when it was closed.
     if (order.value === "najnowsze" && key !== "closed") {
       items.sort(compareNewest);
@@ -533,6 +616,7 @@ const LEGEND: TaskSection[] = [
   "mine",
   "agents",
   "blocked",
+  "decided",
   "ideas",
   "parked",
 ];
@@ -733,14 +817,26 @@ onMounted(async () => {
 }
 
 /* The panel scrolls on its own; what can be done with the task stays at its
- * bottom edge, however long the task is. */
-.tasks-page__panel :deep(.task-details__footer) {
+ * top edge, however far down the task is read. */
+.tasks-page__panel :deep(.task-details__actions) {
   position: sticky;
-  bottom: 0;
-  /* Over the panel's own padding, so nothing scrolls by under it. */
-  margin-bottom: -16px;
-  padding-bottom: 16px;
+  /* Over the panel's own padding, so nothing scrolls by above it. */
+  top: -16px;
+  z-index: 2;
+  padding-top: 8px;
   background: rgb(var(--v-theme-surface));
+}
+
+/* The kinds take what the line leaves, the order beside them. */
+.tasks-page__kinds {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tasks-page__count {
+  margin-inline-start: 6px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
 }
 
 .tasks-page__legend {
@@ -779,7 +875,7 @@ onMounted(async () => {
     max-height: none;
   }
 
-  .tasks-page__panel :deep(.task-details__footer) {
+  .tasks-page__panel :deep(.task-details__actions) {
     position: static;
   }
 }

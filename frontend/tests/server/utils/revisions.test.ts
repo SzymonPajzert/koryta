@@ -47,6 +47,19 @@ const mockDb = {
   batch: vi.fn().mockReturnValue(mockBatch),
 } as unknown as Firestore;
 
+/** One entry of `Edge.declared`, as the declarations automation writes it. */
+const declaredEntry = {
+  url: "https://bip.example.pl/oswiadczenie.pdf",
+  as_of: "2024",
+  kind: "annual",
+  band: "employer",
+  role: "dyrektor",
+  roleId: "dyrektor",
+  by: "readers",
+  readers: 2,
+  at: "2026-11-20T12:00:00.000Z",
+};
+
 describe("sanitizeFirestoreData", () => {
   it("keeps a top-level array field an array", () => {
     // The whole point: `parties` is queried with array-contains-any, which
@@ -607,6 +620,47 @@ describe("applyRevision", () => {
     );
     expect(written.deleted).toBe(true);
   });
+
+  it("keeps what a declaration said about a post when an older proposal is approved", async () => {
+    // A contributor proposed a correction to the post; the automation then
+    // wrote what a declaration says about it. Approving the proposal writes
+    // its snapshot over the edge, and the snapshot never held the entry.
+    batch = { set: vi.fn(), update: vi.fn(), commit: vi.fn() };
+    const post = { type: "employed", source: "p1", target: "c1" };
+    const targetRef = {
+      id: "edge-1",
+      parent: { id: "edges" },
+      get: vi.fn().mockResolvedValue({
+        data: () => ({
+          ...post,
+          name: "dyrektor",
+          as_of: "2024",
+          declared: { "f00d-p1:employer:0": declaredEntry },
+        }),
+      }),
+    };
+    const db = {
+      collection: vi.fn(() => ({ doc: vi.fn(() => targetRef) })),
+      batch: vi.fn(() => batch),
+    } as unknown as Firestore;
+
+    await applyRevision(
+      db,
+      revisionRef,
+      {
+        node_id: "edge-1",
+        collection: "edges",
+        data: { ...post, name: "dyrektor", start_date: "2019-11-21" },
+      } as never,
+      user,
+    );
+
+    expect(batch.set.mock.calls[0]![1]).toMatchObject({
+      start_date: "2019-11-21",
+      as_of: "2024",
+      declared: { "f00d-p1:employer:0": declaredEntry },
+    });
+  });
 });
 
 describe("withoutInternalFields", () => {
@@ -621,6 +675,20 @@ describe("withoutInternalFields", () => {
         visibility: true,
       }),
     ).toEqual({ type: "election", committee: "KW PiS" });
+  });
+
+  it("leaves what declarations say about a post out of any revision of it", () => {
+    // Every edge write builds its revision from this, and revisions are open
+    // to any signed in reader: who read an entry, and later what it pays,
+    // stay on the edge.
+    expect(
+      withoutInternalFields({
+        type: "employed",
+        name: "dyrektor",
+        as_of: "2024",
+        declared: { "f00d-p1:employer:0": declaredEntry },
+      }),
+    ).toEqual({ type: "employed", name: "dyrektor" });
   });
 });
 
@@ -890,6 +958,22 @@ describe("holdsRevision", () => {
           stats: { votes: 2 },
         },
         candidacy,
+      ),
+    ).toBe(true);
+  });
+
+  it("holds the revision a declared post was written from", () => {
+    // What makes it approvable: `approveWaitingEdge` puts a waiting edge live
+    // only where it holds its newest revision, and none states the entries.
+    const post = { source: "p", target: "c", type: "employed" };
+    expect(
+      holdsRevision(
+        {
+          ...post,
+          as_of: "2024",
+          declared: { "f00d-p1:employer:0": declaredEntry },
+        },
+        post,
       ),
     ).toBe(true);
   });

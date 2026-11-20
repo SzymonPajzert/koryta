@@ -24,10 +24,19 @@ link-bip-birth-dates-to-people).
 
 Site pages with no register link are not here: without a KRS match they are
 out of scope (Szymon, 10-29), and a match brings them in through PeopleMerged.
+
+``public_post`` is the site's question of whether a page is one it would publish
+from its declaration at all (`frontend/server/utils/publicPosts.ts`): a paid
+post, current or ended, at a company the site calls public. Asked here, off the
+same export the night reads the site from, so that the declarations upload can
+leave out the crops of the people the site would not put up anyway
+(`koryta_bip_declarations upload --public-post`).
 """
 
 import argparse
 import hashlib
+import re
+import unicodedata
 from functools import cache
 
 import duckdb
@@ -36,7 +45,8 @@ import pandas as pd
 from analysis.people import PeopleMerged
 from entities.bip import BipPersonOfInterest
 from scrapers.bip.units import Terc, terc_index
-from scrapers.koryta.download import KorytaPeople
+from scrapers.koryta.download import KorytaEdges, KorytaNodes, KorytaPeople
+from scrapers.krs.columns import flag
 from scrapers.map.teryt import read_terc
 from scrapers.pkw.process import PeoplePKW
 from scrapers.stores import Context, Pipeline
@@ -78,6 +88,8 @@ class BipPeopleOfInterest(Pipeline[BipPersonOfInterest]):
     people: PeopleMerged
     pkw: PeoplePKW
     koryta: KorytaPeople
+    nodes: KorytaNodes
+    edges: KorytaEdges
 
     @property
     def output_class(self):
@@ -91,6 +103,9 @@ class BipPeopleOfInterest(Pipeline[BipPersonOfInterest]):
             self.koryta.read_or_process(ctx),
             since=_args().bip_poi_since,
             terc=terc_index(read_terc(ctx)),
+            public_posts=pages_with_a_public_post(
+                self.nodes.read_or_process(ctx), self.edges.read_or_process(ctx)
+            ),
         )
 
 
@@ -102,8 +117,13 @@ def people_of_interest(
     *,
     since: int = DEFAULT_SINCE,
     terc: Terc | None = None,
+    public_posts: set[str] | None = None,
 ) -> pd.DataFrame:
-    """One row per won local candidacy since ``since`` of a ``PeopleMerged`` person."""
+    """One row per won local candidacy since ``since`` of a ``PeopleMerged`` person.
+
+    ``public_posts`` are the pages with a public post on them
+    (`pages_with_a_public_post`); without it every row's ``public_post`` is None,
+    not asked."""
     if "office" not in person_pkw.columns:
         # Built before PeoplePKW had the office: every local candidacy would
         # look like every other in its town, so refuse rather than guess.
@@ -253,6 +273,10 @@ def people_of_interest(
             rows.published, rows.on_site, rows.page_has_birth_date
         )
     ]
+    rows["public_post"] = [
+        None if public_posts is None else any(k in public_posts for k in kids)
+        for kids in rows.koryta_ids
+    ]
     rows["key"] = [
         candidacy_key(t, o, y, f, m, last, b)
         for t, o, y, f, m, last, b in zip(
@@ -272,6 +296,42 @@ def people_of_interest(
     return rows[[f for f in BipPersonOfInterest.__dataclass_fields__]].reset_index(
         drop=True
     )
+
+
+#: `frontend/shared/companyBodies.ts`: the supervisory bodies nobody is paid to
+#: sit on.
+UNPAID_BODIES = frozenset({"rada-spoleczna"})
+#: `namesASupervisorySeat`: a role naming a seat on the supervisory organ.
+SUPERVISORY_SEAT = re.compile(r"\brad\w*\s+(nadzorcz|spolecz)\w*")
+
+
+def _fold(text: str) -> str:
+    """Lowercased, without diacritics, ł as l: the site's `fold`."""
+    stripped = "".join(
+        c for c in unicodedata.normalize("NFD", text) if not unicodedata.combining(c)
+    )
+    return stripped.replace("ł", "l").replace("Ł", "L").lower()
+
+
+def names_a_supervisory_seat(role: object) -> bool:
+    return isinstance(role, str) and bool(SUPERVISORY_SEAT.search(_fold(role)))
+
+
+def pages_with_a_public_post(nodes: pd.DataFrame, edges: pd.DataFrame) -> set[str]:
+    """The pages with a paid post, current or ended, at a public company: the
+    site's `pagesWithAPublicPost` and `isPublicEmployment`, off the export.
+
+    `isPublic` true and nothing weaker; a removed edge does not count, a draft
+    one does, and so does a company still in draft. A seat on an organ nobody is
+    paid to sit on (a hospital's rada społeczna) is not a post.
+    """
+    places = nodes[flag(nodes["isPublic"])]
+    unpaid = set(places.loc[places["supervisoryBody"].isin(UNPAID_BODIES), "id"])
+    public = set(places["id"])
+    live = edges[~flag(edges["deleted"])] if "deleted" in edges else edges
+    jobs = live[(live["type"] == "employed") & live["target"].isin(public)]
+    seat = jobs["target"].isin(unpaid) & jobs["name"].map(names_a_supervisory_seat)
+    return {str(source) for source in jobs.loc[~seat, "source"]}
 
 
 def unit_level(teryt: str) -> str:

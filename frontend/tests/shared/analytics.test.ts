@@ -51,8 +51,10 @@ describe("the goal vocabulary", () => {
     // the dashboard by hand, and the moment this list is tedious to set up,
     // somebody has spelled a dimension into a name that belongs in a property.
     // Moved from under 30 to 30 for the two mail-prompt goals: being asked and
-    // answering are two events, not one with a dimension in its name.
-    expect(ALL_GOALS.length).toBeLessThanOrEqual(30);
+    // answering are two events, not one with a dimension in its name. To 50
+    // (decision on 2026-11-18): adding a goal in the dashboard is quick, so
+    // this only has to catch a dimension spelled into names.
+    expect(ALL_GOALS.length).toBeLessThanOrEqual(50);
   });
 
   it("marks exactly the goals that fire without a reader doing anything", () => {

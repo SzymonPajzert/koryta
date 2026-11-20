@@ -127,12 +127,12 @@ describe("/api/stats/activity", () => {
 
     expect(result.identified).toBe(false);
     expect(result.contributorCount).toBe(2);
-    expect(result.contributors.map((c) => c.name)).toEqual([
+    expect(result.rankings.changes.rows.map((c) => c.name)).toEqual([
       "A•••••",
       "B•••••",
     ]);
-    expect(result.namedCount).toBe(0);
-    expect(result.self).toBeNull();
+    expect(result.rankings.changes.rows.filter((c) => c.named)).toEqual([]);
+    expect(result.rankings.changes.self).toBeNull();
     expect(result.totals.vote).toBe(3);
     expect(result.total).toBe(4);
   });
@@ -142,9 +142,15 @@ describe("/api/stats/activity", () => {
 
     const result = await call();
 
-    expect(result.contributors.every((c) => c.uid === null)).toBe(true);
-    expect(result.contributors.every((c) => c.email === null)).toBe(true);
-    expect(result.contributors.every((c) => c.photoURL === null)).toBe(true);
+    expect(result.rankings.changes.rows.every((c) => c.uid === null)).toBe(
+      true,
+    );
+    expect(result.rankings.changes.rows.every((c) => c.email === null)).toBe(
+      true,
+    );
+    expect(result.rankings.changes.rows.every((c) => c.photoURL === null)).toBe(
+      true,
+    );
 
     // The whole body, not just the fields checked above - a leak that arrives
     // under some other key is still a leak.
@@ -167,18 +173,18 @@ describe("/api/stats/activity", () => {
 
     const result = await call();
 
-    expect(result.contributors[0]).toMatchObject({
+    expect(result.rankings.changes.rows[0]).toMatchObject({
       name: "Anna Nowak",
       named: true,
       uid: null,
       email: null,
       photoURL: "https://example.com/anna.png",
     });
-    expect(result.contributors[1]).toMatchObject({
+    expect(result.rankings.changes.rows[1]).toMatchObject({
       name: "B•••••",
       named: false,
     });
-    expect(result.namedCount).toBe(1);
+    expect(result.rankings.changes.rows.filter((c) => c.named)).toHaveLength(1);
   });
 
   it("still withholds a name that was never turned on", async () => {
@@ -188,7 +194,10 @@ describe("/api/stats/activity", () => {
 
     const result = await call();
 
-    expect(result.contributors.map((c) => c.named)).toEqual([false, false]);
+    expect(result.rankings.changes.rows.map((c) => c.named)).toEqual([
+      false,
+      false,
+    ]);
   });
 
   it("shows a signed-in reader their own row and where they stand", async () => {
@@ -197,21 +206,17 @@ describe("/api/stats/activity", () => {
     const result = await call();
 
     // Their own name is not a disclosure to them, whatever the setting says.
-    expect(result.contributors[1]).toMatchObject({
+    expect(result.rankings.changes.rows[1]).toMatchObject({
       name: "Bartosz Lis",
       named: true,
       isSelf: true,
     });
     // ...and it stays hidden from everyone else on the same page.
-    expect(result.contributors[0]).toMatchObject({
+    expect(result.rankings.changes.rows[0]).toMatchObject({
       name: "A•••••",
       isSelf: false,
     });
-    expect(result.self).toEqual({
-      rank: 2,
-      total: 1,
-      counts: expect.objectContaining({ vote: 1 }),
-    });
+    expect(result.rankings.changes.self).toEqual({ rank: 2, total: 1 });
   });
 
   it("tells a reader whether anybody else sees the name on their own row", async () => {
@@ -221,18 +226,18 @@ describe("/api/stats/activity", () => {
 
     const hidden = await call();
 
-    expect(hidden.contributors[1]).toMatchObject({
+    expect(hidden.rankings.changes.rows[1]).toMatchObject({
       named: true,
       isSelf: true,
       publicName: false,
     });
     // Only on their own row: it is an answer about them.
-    expect(hidden.contributors[0]).not.toHaveProperty("publicName");
+    expect(hidden.rankings.changes.rows[0]).not.toHaveProperty("publicName");
 
     userDocs.set("quiet", { publicProfile: true });
     const shown = await call();
 
-    expect(shown.contributors[1]).toMatchObject({ publicName: true });
+    expect(shown.rankings.changes.rows[1]).toMatchObject({ publicName: true });
   });
 
   it("does not tell a signed-out reader about anybody's setting", async () => {
@@ -242,7 +247,9 @@ describe("/api/stats/activity", () => {
     const result = await call();
 
     expect(
-      result.contributors.some((contributor) => "publicName" in contributor),
+      result.rankings.changes.rows.some(
+        (contributor) => "publicName" in contributor,
+      ),
     ).toBe(false);
   });
 
@@ -251,14 +258,18 @@ describe("/api/stats/activity", () => {
 
     const result = await call();
 
-    expect(result.contributors.every((c) => c.uid === null)).toBe(true);
+    expect(result.rankings.changes.rows.every((c) => c.uid === null)).toBe(
+      true,
+    );
     expect(result.identified).toBe(false);
   });
 
   it("places a reader who did nothing nowhere", async () => {
     mockGetUser.mockResolvedValue({ uid: "newcomer" });
 
-    expect((await call()).self).toBeNull();
+    const result = await call();
+    expect(result.rankings.changes.self).toBeNull();
+    expect(result.rankings.readings.self).toBeNull();
   });
 
   it("ranks, names and identifies every contributor for an admin", async () => {
@@ -267,8 +278,11 @@ describe("/api/stats/activity", () => {
     const result = await call();
 
     expect(result.identified).toBe(true);
-    expect(result.contributors.map((c) => c.uid)).toEqual(["busy", "quiet"]);
-    expect(result.contributors[0]).toMatchObject({
+    expect(result.rankings.changes.rows.map((c) => c.uid)).toEqual([
+      "busy",
+      "quiet",
+    ]);
+    expect(result.rankings.changes.rows[0]).toMatchObject({
       name: "Anna Nowak",
       email: "anna@example.com",
       total: 3,
@@ -283,8 +297,11 @@ describe("/api/stats/activity", () => {
     const result = await call();
 
     // The work happened even if the account is gone.
-    expect(result.contributors[0]).toMatchObject({ uid: "busy", total: 3 });
-    expect(result.contributors[0]!.name).toBe("Uczestnik #1");
+    expect(result.rankings.changes.rows[0]).toMatchObject({
+      uid: "busy",
+      total: 3,
+    });
+    expect(result.rankings.changes.rows[0]!.name).toBe("Uczestnik #1");
   });
 
   it("marks a signed-in caller's response uncacheable, since it names them", async () => {
@@ -358,6 +375,63 @@ describe("/api/stats/activity", () => {
     });
 
     expect((await call()).truncated.sort()).toEqual(["revision", "vote"]);
+  });
+
+  it("ranks the readings on /oswiadczenia apart from the changes", async () => {
+    mockGetUser.mockResolvedValue({ uid: "admin-1", admin: true });
+    mockCollect.mockResolvedValue({
+      events: [
+        { uid: "busy", kind: "vote", at: today },
+        { uid: "busy", kind: "reading", at: today },
+        { uid: "reader", kind: "reading", at: today },
+        { uid: "reader", kind: "reading", at: today },
+        { uid: "reader", kind: "reading", at: today },
+      ],
+      truncated: [],
+    });
+    mockGetUsers.mockResolvedValue({
+      users: [
+        { uid: "busy", displayName: "Anna Nowak", email: "a@example.com" },
+        { uid: "reader", displayName: "Celina Wrona", email: "c@example.com" },
+      ],
+      notFound: [],
+    });
+
+    const result = await call();
+
+    // In one ranking the reader's three readings would outrank the vote.
+    expect(result.rankings.changes.rows.map((c) => [c.uid, c.total])).toEqual([
+      ["busy", 1],
+    ]);
+    expect(result.rankings.changes.count).toBe(1);
+    expect(result.rankings.readings.rows.map((c) => [c.uid, c.total])).toEqual([
+      ["reader", 3],
+      ["busy", 1],
+    ]);
+    expect(result.rankings.readings.count).toBe(2);
+    // Named in the ranking that shows them, whichever it is.
+    expect(result.rankings.readings.rows[0]!.name).toBe("Celina Wrona");
+    // Everybody who did anything, readers included.
+    expect(result.contributorCount).toBe(2);
+  });
+
+  it("places a reader in each ranking by that ranking's own count", async () => {
+    mockGetUser.mockResolvedValue({ uid: "quiet" });
+    mockCollect.mockResolvedValue({
+      events: [
+        { uid: "busy", kind: "vote", at: today },
+        { uid: "busy", kind: "vote", at: today },
+        { uid: "quiet", kind: "revision", at: today },
+        { uid: "quiet", kind: "reading", at: today },
+        { uid: "quiet", kind: "reading", at: today },
+      ],
+      truncated: [],
+    });
+
+    const result = await call();
+
+    expect(result.rankings.changes.self).toEqual({ rank: 2, total: 1 });
+    expect(result.rankings.readings.self).toEqual({ rank: 1, total: 2 });
   });
 
   it("sends what the declarations' automation published apart, in no total and no row", async () => {

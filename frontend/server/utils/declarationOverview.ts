@@ -9,7 +9,7 @@ import { pageIsPublic } from "~~/shared/model";
 import {
   candidacyStatuses,
   extractStatuses,
-  publicationHoldReasons,
+  publicationSetAside,
   settledBy,
   type DeclarationOverview,
   type DeclarationPublicationRow,
@@ -18,6 +18,7 @@ import {
   type PublicationHoldReason,
   type SettledBy,
 } from "~~/shared/declarations";
+import { pagesWithAPublicPost } from "./publicPosts";
 
 /** Why a search found nothing, in the crawler's words
  * (jobs/bip_crawler/people.py). Counted one by one so an unknown code still
@@ -69,8 +70,62 @@ async function byReason(
     .sort((a, b) => b.count - a.count);
 }
 
+/** The overview but for the lists an admin works through, and the counts
+ * read off them. */
+export type OverviewTotals = Omit<
+  DeclarationOverview,
+  "lists" | "publications"
+> & {
+  publications: Omit<
+    DeclarationOverview["publications"],
+    "held" | "setAside" | "heldBy"
+  >;
+};
+
+/** Everything /admin/oswiadczenia shows, read now. overview.get.ts caches the
+ * counts (`countTotals`) and reads the lists (`reviewLists`) on every request,
+ * the way this puts them together. */
+export async function countEverything(
+  db: Firestore,
+  dailyLimit: number,
+  now: Date,
+): Promise<DeclarationOverview> {
+  const [totals, lists] = await Promise.all([
+    countTotals(db, dailyLimit, now),
+    reviewLists(db),
+  ]);
+  return withLists(totals, lists, now);
+}
+
+/** The overview from its counts and the lists read at `at`. What waits is
+ * read off the pages, row by row, so it is the lists that say: every hold is
+ * listed. */
+export function withLists(
+  totals: OverviewTotals,
+  lists: DeclarationOverview["lists"],
+  at: Date,
+): DeclarationOverview {
+  // Somebody published since the counts were taken has left the held lists
+  // already: counted as published too, so the chain adds up meanwhile.
+  const since = lists.recent.filter((row) => row.at > totals.at).length;
+  return {
+    ...totals,
+    at: at.toISOString(),
+    publications: {
+      ...totals.publications,
+      published: totals.publications.published + since,
+      held: lists.held.length,
+      setAside: lists.setAside.length,
+      heldBy: countByReason(lists.held),
+    },
+    lists,
+  };
+}
+
 /**
- * Everything /admin/oswiadczenia shows (see /api/declarations/overview).
+ * The counts of the overview: everything but the lists. Most of its reads are
+ * here (every candidacy's pages, a month of answers), so this is the part
+ * overview.get.ts caches.
  *
  * Counts are Firestore aggregations, billed a read per thousand entries; only
  * the distinct pages and the last month's answers are read document by
@@ -81,11 +136,11 @@ async function byReason(
  * without a vote, given without an account or by one nobody confirmed, has
  * no say in what settles, and a browser's reader id is no reader to count.
  */
-export async function countEverything(
+export async function countTotals(
   db: Firestore,
   dailyLimit: number,
   now: Date,
-): Promise<DeclarationOverview> {
+): Promise<OverviewTotals> {
   const candidacies = db.collection("declarationCandidacies");
   const extracts = db.collection("declarationExtracts");
   const answers = db.collection("declarationAnswers");
@@ -101,7 +156,6 @@ export async function countEverything(
     answerTotal,
     pageCounts,
     publicationCounts,
-    heldBy,
     todayDoc,
   ] = await Promise.all([
     count(candidacies),
@@ -127,16 +181,6 @@ export async function countEverything(
         (status) => count(publications.where("status", "==", status)),
       ),
     ),
-    Promise.all(
-      publicationHoldReasons.map(async (reason) => ({
-        reason,
-        count: await count(
-          publications
-            .where("status", "==", "held")
-            .where("reason", "==", reason),
-        ),
-      })),
-    ),
     db.collection("declarationPublishLimits").doc(today).get(),
   ]);
 
@@ -150,7 +194,7 @@ export async function countEverything(
     >;
   const byStatus = statusCount(candidacyStatuses, candidacyByStatus);
 
-  const [notFound, failed, people, days, lists, runs] = await Promise.all([
+  const [notFound, failed, people, days, runs] = await Promise.all([
     byReason(
       candidacies.where("status", "==", "not_found"),
       NOT_FOUND_REASONS,
@@ -163,7 +207,6 @@ export async function countEverything(
     ),
     distinctPages(db),
     readingDays(db, since, now),
-    reviewLists(db),
     recentRuns(db),
   ]);
 
@@ -191,17 +234,12 @@ export async function countEverything(
       // A page being published right now is still the queue's: a pass cut
       // short leaves it there until the next one.
       queued: (publicationCounts[0] ?? 0) + (publicationCounts[4] ?? 0),
-      // Every page that went up, the automation's and an admin's press's.
+      // Every page that went up: the automation's, an admin's press's and
+      // an admin's by hand.
       published: publicationCounts[1] ?? 0,
-      held: publicationCounts[2] ?? 0,
       // The automation's slots: a press takes none.
       today: (todayDoc.get("count") as number | undefined) ?? 0,
-      heldBy: heldBy.filter((row) => row.count > 0) as {
-        reason: PublicationHoldReason;
-        count: number;
-      }[],
     },
-    lists,
     runs,
   };
 }
@@ -281,9 +319,11 @@ type PersonFacts = {
   name: string;
   published: boolean;
   birthDate: string | null;
+  /** Merged into another page or removed: a record left on it is nobody's. */
+  gone: boolean;
 };
 
-async function peopleById(
+export async function peopleById(
   db: Firestore,
   ids: readonly string[],
 ): Promise<Map<string, PersonFacts>> {
@@ -302,6 +342,8 @@ async function peopleById(
           name: String(snapshot.get("name") ?? snapshot.id),
           published: pageIsPublic(snapshot.data() ?? {}),
           birthDate: (snapshot.get("birthDate") as string | undefined) || null,
+          gone:
+            snapshot.get("deleted") === true || !!snapshot.get("merged_into"),
         },
       ]),
   );
@@ -320,7 +362,7 @@ function settledByOf(value: unknown): SettledBy | null {
     : null;
 }
 
-function reviewRow(
+export function reviewRow(
   doc: DocumentSnapshot,
   people: Map<string, PersonFacts>,
 ): DeclarationReviewRow {
@@ -347,28 +389,53 @@ function reviewRow(
       ? {
           birthDate: data.machine.birthDate ?? null,
           confidence: data.machine.confidence ?? null,
+          method: data.machine.method ?? null,
         }
       : null,
-    people: ((data.personIds as string[] | undefined) ?? [])
-      .map((id) => people.get(id))
-      .filter((person): person is PersonFacts => !!person),
+    people: ((data.personIds as string[] | undefined) ?? []).flatMap((id) => {
+      const person = people.get(id);
+      return person
+        ? [
+            {
+              id: person.id,
+              name: person.name,
+              published: person.published,
+              birthDate: person.birthDate,
+            },
+          ]
+        : [];
+    }),
     updatedAt: isoOf(data.updatedAt),
   };
 }
 
+/** `paid` is for a held page: the pages with a paid public post on them. A
+ * held record an admin declined is a row of its own status. Its time is when
+ * it came to the state it is listed in. */
 function publicationRow(
   doc: DocumentSnapshot,
   people: Map<string, PersonFacts>,
+  paid?: ReadonlySet<string>,
 ): DeclarationPublicationRow {
   const data = doc.data() ?? {};
   const first = Array.isArray(data.declarations) ? data.declarations[0] : {};
+  const declined = data.status === "held" && !!data.declinedAt;
   return {
     personId: doc.id,
     name: people.get(doc.id)?.name ?? doc.id,
-    status: data.status,
+    status: declined ? "declined" : data.status,
     reason: (data.reason as PublicationHoldReason | undefined) ?? null,
     pagePublic: people.get(doc.id)?.published ?? false,
-    at: isoOf(data.publishedAt ?? data.heldAt ?? data.queuedAt),
+    ...(paid ? { paidPost: paid.has(doc.id) } : {}),
+    at: isoOf(
+      declined
+        ? data.declinedAt
+        : data.status === "held"
+          ? (data.heldAt ?? data.queuedAt)
+          : data.status === "published"
+            ? data.publishedAt
+            : data.queuedAt,
+    ),
     unit: String(first?.unit ?? ""),
     documentUrl: String(first?.url ?? ""),
     edges: {
@@ -378,10 +445,32 @@ function publicationRow(
       held: Array.isArray(data.edges?.held) ? data.edges.held.length : 0,
     },
     pressed: typeof data.pressedBy === "string" && data.pressedBy !== "",
+    ...(data.handPublished ? { byHand: true } : {}),
   };
 }
 
-async function reviewLists(
+/** What the rows are held for, most first. */
+function countByReason(
+  rows: readonly DeclarationPublicationRow[],
+): DeclarationOverview["publications"]["heldBy"] {
+  const counts = new Map<PublicationHoldReason, number>();
+  for (const { reason } of rows) {
+    if (reason) counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/** Millis of a stored instant, 0 where there is none. */
+function millisOf(value: unknown): number {
+  const iso = isoOf(value);
+  return iso ? Date.parse(iso) : 0;
+}
+
+/** The lists an admin works through, read whole: what is disputed, what
+ * another date contradicts, every hold, and the latest publications. */
+export async function reviewLists(
   db: Firestore,
 ): Promise<DeclarationOverview["lists"]> {
   const extracts = db.collection("declarationExtracts");
@@ -397,27 +486,49 @@ async function reviewLists(
       .orderBy("updatedAt", "desc")
       .limit(LIST_SIZE)
       .get(),
-    publications
-      .where("status", "==", "held")
-      .orderBy("queuedAt", "desc")
-      .limit(LIST_SIZE)
-      .get(),
+    // Every hold, declined ones included: these are what an admin works
+    // through, and a cut would leave people out of both lists and their
+    // counts. One equality, which no composite index has to serve.
+    publications.where("status", "==", "held").get(),
     publications
       .where("status", "==", "published")
       .orderBy("publishedAt", "desc")
       .limit(LIST_SIZE)
       .get(),
   ]);
-  const people = await peopleById(db, [
-    ...[...disputed.docs, ...different.docs].flatMap(
-      (doc) => (doc.get("personIds") as string[] | undefined) ?? [],
+  const [people, paid] = await Promise.all([
+    peopleById(db, [
+      ...[...disputed.docs, ...different.docs].flatMap(
+        (doc) => (doc.get("personIds") as string[] | undefined) ?? [],
+      ),
+      ...[...held.docs, ...recent.docs].map((doc) => doc.id),
+    ]),
+    pagesWithAPublicPost(
+      db,
+      held.docs.map((doc) => doc.id),
     ),
-    ...[...held.docs, ...recent.docs].map((doc) => doc.id),
   ]);
+  // The order a page first waited in, newest first: a recheck that holds a
+  // page again leaves it where it was. A page merged away or removed is
+  // nobody's to decide.
+  const rows = held.docs
+    .filter((doc) => people.get(doc.id)?.gone !== true)
+    .sort((a, b) => millisOf(b.get("queuedAt")) - millisOf(a.get("queuedAt")))
+    .map((doc) => publicationRow(doc, people, paid));
+  const declined = rows
+    .filter((row) => row.status === "declined")
+    .sort((a, b) => b.at.localeCompare(a.at));
   return {
     disputed: disputed.docs.map((doc) => reviewRow(doc, people)),
     different: different.docs.map((doc) => reviewRow(doc, people)),
-    held: held.docs.map((doc) => publicationRow(doc, people)),
+    held: rows.filter((row) => !publicationSetAside(row)),
+    // An admin's no first, the newest at the top, where it is taken back.
+    setAside: [
+      ...declined,
+      ...rows.filter(
+        (row) => row.status !== "declined" && publicationSetAside(row),
+      ),
+    ],
     recent: recent.docs.map((doc) => publicationRow(doc, people)),
   };
 }

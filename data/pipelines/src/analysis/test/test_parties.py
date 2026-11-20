@@ -6,7 +6,7 @@ import pytest
 from analysis.payloads.person import (
     _extract_elections,
     in_two_places,
-    parties_from_committees,
+    parties_from_candidacies,
     party_of_candidacy,
     unmapped_committees,
 )
@@ -184,7 +184,7 @@ def test_an_inne_candidacy_carries_inne_on_its_edge_and_is_vouched_for():
 
 def test_a_person_who_also_stood_for_a_named_party_keeps_it():
     """„Inne” goes beside PiS rather than instead of it - and after it."""
-    assert parties_from_committees(
+    assert parties_from_candidacies(
         [
             candidacy("KOMITET WYBORCZY AKCJA WYBORCZA SOLIDARNOŚĆ"),
             candidacy("KOMITET WYBORCZY PRAWO I SPRAWIEDLIWOŚĆ"),
@@ -196,7 +196,7 @@ def test_inne_comes_after_every_named_party():
     """The site draws a person's chips in this order, and by name alone „Inne”
     would lead ahead of Konfederacja, PO, PSL, PiS and SLD. The named parties
     keep the order by name they always had."""
-    assert parties_from_committees(
+    assert parties_from_candidacies(
         [
             candidacy("KW LIGA POLSKICH RODZIN"),
             candidacy("KOMITET WYBORCZY SOJUSZ LEWICY DEMOKRATYCZNEJ"),
@@ -253,7 +253,7 @@ def test_a_candidacy_with_no_committee_gets_no_party():
 
 
 def test_a_person_is_every_party_they_stood_for():
-    assert parties_from_committees(
+    assert parties_from_candidacies(
         [
             candidacy("KOMITET WYBORCZY PRAWO I SPRAWIEDLIWOŚĆ"),
             candidacy("KOMITET WYBORCZY WYBORCÓW WSPÓLNY KALISZ"),
@@ -283,7 +283,7 @@ def test_a_candidacy_in_two_places_at_once_names_no_party():
     update to a live page, before a reviewer has looked, so the SLD of the
     Miechów run cannot go into it.
     """
-    assert parties_from_committees(
+    assert parties_from_candidacies(
         [
             placed(SLD, "2010", "1208"),
             placed("KWW BEZPARTYJNY BLOK SAMORZĄDOWY", "2010", "3206"),
@@ -295,7 +295,7 @@ def test_a_candidacy_in_two_places_at_once_names_no_party():
 def test_both_halves_of_a_clash_name_no_party():
     """Nothing says which of the two is the person's, so neither speaks."""
     assert (
-        parties_from_committees(
+        parties_from_candidacies(
             [placed(SLD, "2010", "1208"), placed(PSL, "2010", "3206")]
         )
         == []
@@ -304,13 +304,13 @@ def test_both_halves_of_a_clash_name_no_party():
 
 def test_a_sejmik_and_a_council_in_one_region_are_one_place():
     """The sejmik is filed under the województwo, which the powiat starts with."""
-    assert parties_from_committees(
+    assert parties_from_candidacies(
         [placed(PIS, "2010", "32"), placed(PSL, "2010", "3206")]
     ) == ["PSL", "PiS"]
 
 
 def test_two_places_in_different_elections_are_a_career():
-    assert parties_from_committees(
+    assert parties_from_candidacies(
         [
             placed(SLD, "2010", "1208"),
             placed(PSL, "2014", "3206"),
@@ -327,7 +327,7 @@ def test_a_candidacy_with_no_place_is_in_no_second_place():
     It clashes with nothing, even in a year two of the person's other
     candidacies clash in, and its party stands.
     """
-    assert parties_from_committees(
+    assert parties_from_candidacies(
         [
             placed(PIS, "2014", None, kind="Parlament Europejski"),
             placed(SLD, "2014", "1208"),
@@ -369,7 +369,7 @@ def test_the_payload_reads_places_as_the_split_does():
 
     assert in_two_places(elections) == {0, 1, 2}
     assert in_two_places(elections[:2]) == set()
-    assert parties_from_committees(elections[:2]) == ["PSL", "PiS"]
+    assert parties_from_candidacies(elections[:2]) == ["PSL", "PiS"]
 
 
 def test_an_unambiguous_committee_names_the_candidacys_party():
@@ -379,7 +379,7 @@ def test_an_unambiguous_committee_names_the_candidacys_party():
 def test_a_joint_list_names_no_single_party_on_the_edge():
     """The person is both parties; the candidacy is neither on its own.
 
-    `parties_from_committees` still gives them both on the node - it is only
+    `parties_from_candidacies` still gives them both on the node - it is only
     the edge's one `party` field that has nowhere to put a coalition.
     """
     committee = (
@@ -387,7 +387,7 @@ def test_a_joint_list_names_no_single_party_on_the_edge():
         " - POLSKIE STRONNICTWO LUDOWE"
     )
     assert party_of_candidacy(committee) is None
-    assert parties_from_committees([candidacy(committee)]) == ["PSL", "Polska 2050"]
+    assert parties_from_candidacies([candidacy(committee)]) == ["PSL", "Polska 2050"]
 
 
 def test_an_unrecognised_committee_names_no_party():
@@ -403,3 +403,85 @@ def test_the_unrecognised_committees_are_the_ones_worth_reporting():
             candidacy(None),
         ]
     ) == ["KOMITET WYBORCZY WYBORCÓW WSPÓLNY KALISZ"]
+
+
+KWW = "KWW TOMASZA HAPUNOWICZA ZGODA I ROZWÓJ"
+
+
+def stated(
+    committee: str | None,
+    member: list[str] | None = None,
+    backing: list[str] | None = None,
+    year: str = "2024",
+    teryt: str | None = "1464",
+) -> Election:
+    return Election(
+        election_type="Rada miasta",
+        committee=committee,
+        election_year=year,
+        teryt=teryt,
+        member_parties=member,
+        backing_parties=backing,
+    )
+
+
+def test_a_party_backing_a_voters_committee_candidate_counts():
+    """Agnieszka Kiljańczyk, Siedlce 2024: a voters' committee's list, which
+    names no party, and PKW's „popierana przez partię polityczną: Prawo i
+    Sprawiedliwość”. Szymon, 2026-11-11: a backing counts as an affiliation."""
+    assert parties_from_candidacies([stated(KWW, backing=["PiS"])]) == ["PiS"]
+
+
+def test_a_declared_membership_counts():
+    assert parties_from_candidacies([stated(KWW, member=["PO"])]) == ["PO"]
+
+
+def test_statements_add_to_the_committees_parties():
+    assert parties_from_candidacies(
+        [stated(PSL, member=["PSL"]), stated(KWW, backing=["Polska 2050"], year="2018")]
+    ) == ["PSL", "Polska 2050"]
+
+
+def test_a_candidacy_in_two_places_says_nothing_of_its_backing_either():
+    """The clash rule speaks for the statements as for the committee: nothing
+    says which of the two runs is the person's."""
+    assert (
+        parties_from_candidacies(
+            [
+                stated(KWW, backing=["PiS"], year="2010", teryt="1208"),
+                stated(KWW, member=["SLD"], year="2010", teryt="3206"),
+            ]
+        )
+        == []
+    )
+
+
+def test_the_payload_reads_the_statements_off_the_candidacy():
+    row = pd.Series(
+        {
+            "elections": [
+                {
+                    "party": KWW,
+                    "election_year": "2024",
+                    "election_type": "samorządu",
+                    "teryt_candidacy_powiat": "1464",
+                    "candidacy_success": "FALSE",
+                    "office": "Rada miasta",
+                    "party_member": None,
+                    "supported_by": "popierana przez partię polityczną: "
+                    "Prawo i Sprawiedliwość",
+                }
+            ]
+        }
+    )
+
+    (election,) = _extract_elections(row)
+    assert election.supported_by == (
+        "popierana przez partię polityczną: Prawo i Sprawiedliwość"
+    )
+    assert election.backing_parties == ["PiS"]
+    assert election.party_member is None
+    assert election.member_parties is None
+    # The committee stays what it was: no party of its own.
+    assert election.party is None
+    assert election.party_from_committee is False

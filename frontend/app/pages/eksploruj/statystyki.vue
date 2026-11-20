@@ -1,25 +1,30 @@
 <template>
   <div class="pa-4">
-    <div class="d-flex align-start flex-wrap ga-4 mb-6">
-      <div class="flex-grow-1">
-        <h1 class="text-h4 mb-1">Statystyki</h1>
-        <p class="text-body-2 text-medium-emphasis mb-0">
-          Kto się tym zajmuje i co ostatnio zrobił, a niżej — ile jest w bazie i
-          ile z tego ktoś już sprawdził.
-        </p>
-      </div>
-      <v-btn to="/eksploruj/szpitale" variant="tonal">
-        Rady nadzorcze szpitali
-      </v-btn>
-      <v-btn
-        to="/eksploruj/nowe"
-        color="primary"
-        variant="tonal"
-        :prepend-icon="mdiArrowRight"
-      >
-        Pomóż sprawdzać
-      </v-btn>
+    <div class="mb-6">
+      <h1 class="text-h4 mb-1">Statystyki</h1>
+      <p class="text-body-2 text-medium-emphasis mb-0">
+        Kto się tym zajmuje i co ostatnio zrobił, a niżej — ile jest w bazie i
+        ile z tego ktoś już sprawdził.
+      </p>
     </div>
+
+    <!-- The ways on from here, drawn as one kind of thing: the two pages that
+         count something of their own, then the queue that needs hands. -->
+    <nav class="stats-tiles mb-8" aria-label="Dalej">
+      <NuxtLink
+        v-for="tile in tiles"
+        :key="tile.to"
+        :to="tile.to"
+        class="k-card stats-tile"
+      >
+        <v-icon :icon="tile.icon" size="24" class="stats-tile__icon" />
+        <span class="stats-tile__text">
+          <span class="stats-tile__title">{{ tile.title }}</span>
+          <span class="stats-tile__say">{{ tile.say }}</span>
+        </span>
+        <v-icon :icon="mdiArrowRight" size="20" class="stats-tile__arrow" />
+      </NuxtLink>
+    </nav>
 
     <!-- ------------------------------------------------------------------ -->
     <!-- Who did what comes first. The inventory below it is the same numbers
@@ -68,10 +73,8 @@
 
     <StatsContributorTable
       class="mb-4"
-      :contributors="activity?.contributors ?? []"
+      :rankings="activity?.rankings ?? null"
       :identified="activity?.identified ?? false"
-      :contributor-count="activity?.contributorCount ?? 0"
-      :self="activity?.self ?? null"
       :signed-in="!!user"
       :profile-public="profilePublic"
       :window-days="days"
@@ -266,20 +269,30 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { mdiArrowRight } from "@mdi/js";
+import {
+  mdiAccountCheckOutline,
+  mdiArrowRight,
+  mdiFileDocumentCheckOutline,
+  mdiHospitalBuilding,
+} from "@mdi/js";
 import {
   activityKinds,
   activityKindLabels,
   activityKindDescriptions,
   activityRanges,
   defaultActivityRange,
+  totalChanges,
   type ActivityRange,
 } from "~~/shared/activity";
 import type { DatabaseStats } from "~~/server/api/stats/database.get";
 import type { ActivityStats } from "~~/server/api/stats/activity.get";
 import { publicProfileEnabled } from "~~/shared/profile";
 import { authRequest, useAuthState } from "~/composables/auth";
-import { polishCounting, polishNumber } from "~/composables/polish";
+import {
+  polishCounting,
+  polishCountingGenitive,
+  polishNumber,
+} from "~/composables/polish";
 import { foldAutomaticPublications } from "~/utils/activityAutomatic";
 import {
   activityColors,
@@ -290,7 +303,29 @@ import {
   status as statusColors,
 } from "~/utils/chartTheme";
 
-useHead({ title: "Statystyki - koryta.pl" });
+useHead({ title: "Statystyki" });
+
+/** One look for all three, the queue last (decision on 2026-11-17). */
+const tiles = [
+  {
+    to: "/oswiadczenia/postep",
+    icon: mdiFileDocumentCheckOutline,
+    title: "Oświadczenia majątkowe",
+    say: "Sprawdzanie samorządowców",
+  },
+  {
+    to: "/eksploruj/szpitale",
+    icon: mdiHospitalBuilding,
+    title: "Rady nadzorcze szpitali",
+    say: "Kto w nich zasiada, z jakich partii",
+  },
+  {
+    to: "/eksploruj/nowe",
+    icon: mdiAccountCheckOutline,
+    title: "Pomóż sprawdzać",
+    say: "Oceń nowe osoby",
+  },
+];
 
 const { isAdmin, user, userConfig } = useAuthState();
 
@@ -470,19 +505,23 @@ const AUTOMATIC_TOOLTIP =
   "Wliczamy też strony, które serwis opublikował sam: czytelnicy odczytali z oświadczenia majątkowego tę samą datę urodzenia, która jest na stronie osoby. Nie są niczyją zmianą, więc nie liczą się do rankingu.";
 
 /** The tiles and the timeline count the automation's publications in
- * „Opublikowane osoby”; the ranking, which reads the response's own
- * contributors, never does. */
+ * „Opublikowane osoby”; the rankings, which read the response's own,
+ * never do. */
 const folded = computed(() =>
   activity.value ? foldAutomaticPublications(activity.value) : null,
 );
 
 /** One tile per interaction kind — the direct answer to "jakie zmiany", in the
- * same colours the timeline stacks them in. Under „Opublikowane osoby”, how
- * many of them the automation published, where it published any. */
+ * same colours the timeline draws them in. Under „Opublikowane osoby”, how
+ * many of them the automation published, where it published any. The kinds
+ * that change the data as shares of the changes; readings, apart from them as
+ * on the chart and in the ranking, with how many people read. */
 const activityTiles = computed(() => {
   const stats = folded.value;
   const automatic = activity.value?.automatic ?? 0;
   if (!stats) return [];
+  const changes = totalChanges(stats.totals);
+  const readers = activity.value?.rankings.readings.count ?? 0;
   return activityKinds.map((kind) => {
     const byAutomation = kind === "publication" && automatic > 0;
     return {
@@ -490,11 +529,15 @@ const activityTiles = computed(() => {
       value: stats.totals[kind],
       hint: byAutomation
         ? `w tym ${polishNumber(automatic)} automatycznie`
-        : formatPercent(stats.totals[kind], stats.total),
+        : kind === "reading"
+          ? `od ${polishCountingGenitive(readers, "osoby", "osób")}`
+          : formatPercent(stats.totals[kind], changes),
       tooltip: byAutomation
         ? `${activityKindDescriptions[kind]} ${AUTOMATIC_TOOLTIP}`
         : activityKindDescriptions[kind],
       color: activityColors[kind],
+      // The one kind with a page of its own where anybody can add to it.
+      to: kind === "reading" ? "/oswiadczenia" : undefined,
     };
   });
 });
@@ -509,6 +552,60 @@ const truncatedMessage = computed(() => {
 </script>
 
 <style scoped>
+/* Three columns on a computer, one on a phone. */
+.stats-tiles {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+}
+
+.stats-tile {
+  align-items: center;
+  color: rgb(var(--v-theme-ink-strong));
+  display: flex;
+  gap: 14px;
+  min-height: 64px;
+  padding: 12px 16px;
+  text-decoration: none;
+}
+
+.stats-tile:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-ink-info));
+  outline-offset: 2px;
+}
+
+.stats-tile__icon {
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+.stats-tile__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stats-tile__title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.stats-tile__say {
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.stats-tile__arrow {
+  color: rgba(var(--v-theme-on-surface), 0.5);
+  transition: transform 0.16s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.stats-tile:hover .stats-tile__arrow {
+  transform: translateX(2px);
+}
+
 .stats-hero {
   /* The one hero figure on the page. Same sans as everything else, and
      proportional figures — tabular-nums makes a big number look loose. */

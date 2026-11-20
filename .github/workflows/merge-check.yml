@@ -1,0 +1,66 @@
+name: Merge check
+
+# Writes to every open merge task on the owner's task list how much of its
+# branch is on main, and closes the ones whose whole branch is
+# (frontend/scripts/ops/merge-check.ts). Decision on 2026-11-19: a GitHub
+# Action on every push to main.
+#
+# It writes the task list as ops-writer, which the CI account may impersonate
+# (granted 2026-11-19); ops-writer reaches the agent-tasks database alone.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print what it would write, write nothing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# One at a time: each run reads the whole list in a transaction anyway, and
+# the newest main is the one worth checking.
+concurrency:
+  group: merge-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # for Workload Identity Federation
+    steps:
+      # Every branch under refs/remotes/origin/, with full history.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      # The script needs zod and tsx, not the Nuxt build `nuxt prepare` does.
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --ignore-scripts
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_PIPELINES_SERVICE_ACCOUNT }}
+
+      - name: Check main and write the merge tasks
+        working-directory: frontend
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
+        run: npx --no-install tsx scripts/ops/merge-check.ts --repo .. $DRY_RUN

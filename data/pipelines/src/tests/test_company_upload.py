@@ -195,3 +195,46 @@ def test_a_payload_that_states_its_owners_keeps_its_treasury_flag():
         },
     )
     assert sent(instance)["owner_skarb_panstwa"] is True
+
+
+def test_founders_are_split_when_the_payload_has_none():
+    """The `Companies` shape for a foundation: `founded_by`, and no `founders`.
+
+    Named apart from the payload's `founders` on purpose: this shape is sent to
+    the ingest whole, where `founders` must be a list of KRS numbers, and a list
+    of `{krs, teryt}` there would have the company rejected.
+    """
+    instance = uploader()
+    instance.submit_company(
+        "0000765394",
+        {
+            "krs": "0000765394",
+            "name": "FUNDACJA AGENCJI ROZWOJU PRZEMYSŁU (Warszawa)",
+            "founded_by": [
+                {"krs": "0000037957", "teryt": None},
+                {"krs": None, "teryt": "1261011"},
+                {"krs": None, "teryt": "SKARB PANSTWA"},
+            ],
+        },
+    )
+    payload = sent(instance)
+    assert payload["founders"] == ["0000037957"]
+    assert payload["founder_teryts"] == ["1261011"]
+    assert payload["founder_skarb_panstwa"] is True
+
+
+def test_founders_already_worked_out_by_the_pipeline_are_kept():
+    instance = uploader()
+    instance.submit_company(
+        "0000765394",
+        {
+            "krs": "0000765394",
+            "name": "FUNDACJA AGENCJI ROZWOJU PRZEMYSŁU (Warszawa)",
+            "founders": ["0000037957"],
+            "founder_teryts": [],
+            "founder_skarb_panstwa": False,
+        },
+    )
+    payload = sent(instance)
+    assert payload["founders"] == ["0000037957"]
+    assert payload["founder_skarb_panstwa"] is False

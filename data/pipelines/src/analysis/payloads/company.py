@@ -7,7 +7,7 @@ import pandas as pd
 
 from analysis.interesting import Companies
 from analysis.payloads.site import SiteSnapshot
-from entities.company import display_name, on_the_treasury_list
+from entities.company import Owner, display_name, on_the_treasury_list
 from entities.company_bodies import supervisory_body
 from entities.company_categories import categories_for
 from scrapers.koryta.download import KorytaCompanies
@@ -73,6 +73,41 @@ def add_is_public(payload: dict, row: dict) -> None:
         payload["is_public"] = True
     elif read_an_odpis(row):
         payload["is_public"] = False
+
+
+def split_owners(entries: object) -> tuple[list[str], list[str], bool]:
+    """Owners as the ingest takes them: KRS numbers, TERYT codes, the Treasury.
+
+    A company by its KRS number, a gmina, powiat or województwo by the TERYT
+    code its name resolved to, and the Treasury, which rides in on `teryt` as
+    `SKARB_PANSTWA` but is no territory, as a flag the ingest resolves to the
+    site's own „Skarb Państwa” node. Read off an output, so the list may come
+    back as an array and its entries as dicts.
+
+    Here rather than in `entities.company`, beside `Owner`: it needs the
+    `SKARB_PANSTWA` sentinel from `scrapers.map.jst`, and the layers contract in
+    pyproject.toml keeps `entities` from importing `scrapers`. `uploader`, which
+    sits outside the contract, imports it from here.
+    """
+    krss: list[str] = []
+    teryts: list[str] = []
+    skarb_panstwa = False
+    if hasattr(entries, "tolist"):  # a numpy array, off a frame
+        entries = entries.tolist()
+    if not isinstance(entries, list):
+        return krss, teryts, skarb_panstwa
+    for entry in entries:
+        if isinstance(entry, Owner):
+            entry = {"krs": entry.krs, "teryt": entry.teryt}
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("krs"):
+            krss.append(str(entry["krs"]).zfill(10))
+        elif entry.get("teryt") == SKARB_PANSTWA:
+            skarb_panstwa = True
+        elif entry.get("teryt"):
+            teryts.append(str(entry["teryt"]))
+    return krss, teryts, skarb_panstwa
 
 
 def wiki_categories(row: dict) -> list[str]:
@@ -208,6 +243,61 @@ class CompaniesPayloads(Pipeline):
         return changed
 
     def process(self, ctx: Context):
+        payloads = self.build(ctx)
+        if self.args.only_changed:
+            payloads = self.only_changed(ctx, payloads)
+
+        # Counted and printed because the failure mode here is silence: when
+        # `Companies` dropped `parents`, every payload came out with two empty
+        # lists and the run reported nothing wrong. A zero on either of these is
+        # worth noticing - the register names a company owner for 837 of the
+        # companies on the site and a JST owner for 1,354. Counted over what is
+        # left after `--only-changed`, so the line describes what is emitted.
+        with_teryt = sum(1 for p in payloads if p.get("teryt_code"))
+        with_owners = sum(1 for p in payloads if p["owners"])
+        with_jst = sum(1 for p in payloads if p["owner_teryts"])
+        with_skarb = sum(1 for p in payloads if p["owner_skarb_panstwa"])
+        with_wikipedia = sum(1 for p in payloads if p.get("wikipedia"))
+        with_founder = sum(
+            1
+            for p in payloads
+            if p["founders"] or p["founder_teryts"] or p["founder_skarb_panstwa"]
+        )
+        print(
+            f"Emitting {len(payloads)} company payloads "
+            f"({with_teryt} with a TERYT code, {with_owners} with a company "
+            f"owner, {with_jst} with a JST owner, {with_skarb} owned by the "
+            f"Treasury, {with_founder} with a public founder, {with_wikipedia} "
+            f"with a Wikipedia article)"
+        )
+        if not payloads:
+            return pd.DataFrame(
+                columns=[
+                    "krs",
+                    "name",
+                    "activity",
+                    "categories",
+                    "supervisory_body",
+                    "is_public",
+                    "owners",
+                    "owner_teryts",
+                    "owner_skarb_panstwa",
+                    "founders",
+                    "founder_teryts",
+                    "founder_skarb_panstwa",
+                    "teryt_code",
+                    "legal_form",
+                    "supervisory_organ",
+                    "wikipedia",
+                ]
+            )
+        return pd.DataFrame.from_records(payloads)
+
+    def build(self, ctx: Context) -> list[dict]:
+        """A payload for every company the site has a page for, whatever it
+        would change: `process` before `--only-changed`. The night's company
+        import (`jobs.company_import`) calls it too, and judges what each
+        payload would write itself."""
         # TODO this should be a field and dependency
         submitted_df = KorytaCompanies(self.args.koryta_date).read_or_process(ctx)
         submitted_krs = {
@@ -227,6 +317,8 @@ class CompaniesPayloads(Pipeline):
                 continue
 
             name = row.get("name")
+            # Before the town goes after it: the status is read off its end.
+            register_name = name if isinstance(name, str) else None
             if not isinstance(name, str) or not name:
                 name = krs
             else:
@@ -246,21 +338,14 @@ class CompaniesPayloads(Pipeline):
             # ownership edge was ever written for a company already on the site
             # - which is why 3,927 of 4,024 of them had exactly one `owns` edge
             # and it was the seat.
-            owners, owner_teryts = [], []
             # The Treasury rides in on `teryt` because it has no KRS, but it is
             # not a territory and the ingest must not look it up as one - see
-            # `company_from_api_krs`. Split out here into a flag the ingest
-            # resolves to the site's own "Skarb Panstwa" node.
-            skarb_panstwa = False
-            for parent in row.get("parents") or []:
-                if not isinstance(parent, dict):
-                    continue
-                if parent.get("krs"):
-                    owners.append(str(parent["krs"]).zfill(10))
-                elif parent.get("teryt") == SKARB_PANSTWA:
-                    skarb_panstwa = True
-                elif parent.get("teryt"):
-                    owner_teryts.append(str(parent["teryt"]))
+            # `company_from_api_krs`. Split out into a flag the ingest resolves
+            # to the site's own "Skarb Panstwa" node.
+            owners, owner_teryts, skarb_panstwa = split_owners(row.get("parents"))
+            founders, founder_teryts, founder_skarb_panstwa = split_owners(
+                row.get("founded_by")
+            )
 
             payload = {
                 "krs": krs,
@@ -272,11 +357,18 @@ class CompaniesPayloads(Pipeline):
                     form,
                     wiki_categories(row),
                     treasury=on_the_treasury_list(row.get("treasury_share")),
+                    name=register_name,
                 ),
                 "supervisory_body": supervisory_body(form),
                 "owners": owners,
                 "owner_teryts": owner_teryts,
                 "owner_skarb_panstwa": skarb_panstwa,
+                # Who set it up, where a public body did, split the same way.
+                # The ingest draws these as ownership edges marked `founder`,
+                # which the site lists under „Właściciele” as the founder.
+                "founders": founders,
+                "founder_teryts": founder_teryts,
+                "founder_skarb_panstwa": founder_skarb_panstwa,
             }
             add_is_public(payload, row)
             add_register_fields(payload, form, row.get("supervisory_organ"))
@@ -287,43 +379,4 @@ class CompaniesPayloads(Pipeline):
                 payload["teryt_code"] = teryt_code.strip()
 
             payloads.append(payload)
-
-        if self.args.only_changed:
-            payloads = self.only_changed(ctx, payloads)
-
-        # Counted and printed because the failure mode here is silence: when
-        # `Companies` dropped `parents`, every payload came out with two empty
-        # lists and the run reported nothing wrong. A zero on either of these is
-        # worth noticing - the register names a company owner for 837 of the
-        # companies on the site and a JST owner for 1,354. Counted over what is
-        # left after `--only-changed`, so the line describes what is emitted.
-        with_teryt = sum(1 for p in payloads if p.get("teryt_code"))
-        with_owners = sum(1 for p in payloads if p["owners"])
-        with_jst = sum(1 for p in payloads if p["owner_teryts"])
-        with_skarb = sum(1 for p in payloads if p["owner_skarb_panstwa"])
-        with_wikipedia = sum(1 for p in payloads if p.get("wikipedia"))
-        print(
-            f"Emitting {len(payloads)} company payloads "
-            f"({with_teryt} with a TERYT code, {with_owners} with a company "
-            f"owner, {with_jst} with a JST owner, {with_skarb} owned by the "
-            f"Treasury, {with_wikipedia} with a Wikipedia article)"
-        )
-        if not payloads:
-            return pd.DataFrame(
-                columns=[
-                    "krs",
-                    "name",
-                    "activity",
-                    "categories",
-                    "supervisory_body",
-                    "is_public",
-                    "owners",
-                    "owner_teryts",
-                    "owner_skarb_panstwa",
-                    "teryt_code",
-                    "legal_form",
-                    "supervisory_organ",
-                    "wikipedia",
-                ]
-            )
-        return pd.DataFrame.from_records(payloads)
+        return payloads

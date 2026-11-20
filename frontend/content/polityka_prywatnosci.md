@@ -36,6 +36,10 @@ Jakie dane? Adres IP, dane o przeglądarce, systemie operacyjnym, przybliżona l
 
 Cel: Lepsze zrozumienie, w jaki sposób użytkownicy korzystają z naszego Serwisu, co pozwala nam go ulepszać.
 
+Jakie dane? Także treść zapytań wpisywanych w wyszukiwarkę Serwisu - bez danych pozwalających ustalić, kto szukał, poza informacją, czy osoba szukająca była zalogowana.
+
+Cel: Ustalenie, kogo czytelnicy szukają i nie znajdują, aby uzupełniać bazę.
+
 Podstawa prawna: Prawnie uzasadniony interes Administratora (art. 6 ust. 1 lit. f RODO), polegający na prowadzeniu analiz aktywności użytkowników.
 
 ## 3. Jak długo przechowujemy Twoje dane?
@@ -45,6 +49,8 @@ Dane przetwarzane na podstawie Twojej zgody (adres e-mail dla Newslettera) przec
 Adres e-mail używany do wiadomości dla zespołu przetwarzamy, dopóki masz uprawnienia administratora Serwisu albo do wniesienia przez Ciebie sprzeciwu.
 
 Dane analityczne przechowujemy przez okres niezbędny do realizacji celów, w jakich zostały zebrane.
+
+Zapytania wpisane w wyszukiwarkę przechowujemy na naszych serwerach przez 180 dni. Zapytania osób niezalogowanych trafiają też do dostawcy narzędzia analitycznego, Plausible Insights OÜ (Estonia, UE), i są przechowywane razem z pozostałymi statystykami Serwisu.
 
 ## 4. Kto jest odbiorcą Twoich danych?
 
@@ -94,4 +100,4 @@ Podanie przez Ciebie adresu e-mail jest w pełni dobrowolne, ale niezbędne do t
 
 Zastrzegamy sobie prawo do wprowadzania zmian w Polityce Prywatności. Aktualna wersja Polityki Prywatności będzie zawsze dostępna na stronie Serwisu.
 
-Data ostatniej aktualizacji: 24 października 2026r.
+Data ostatniej aktualizacji: 17 listopada 2026r.

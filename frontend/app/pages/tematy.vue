@@ -1,7 +1,9 @@
 <template>
   <div>
     <v-card class="mb-4">
-      <v-card-title class="text-h5 font-weight-bold">Tematy</v-card-title>
+      <v-card-title tag="h1" class="text-h5 font-weight-bold">
+        Tematy
+      </v-card-title>
       <v-card-text>
         Sprawy, które śledzimy przez wiele artykułów naraz. Każdy temat pokazuje
         graf osób i instytucji powiązanych przez te artykuły.

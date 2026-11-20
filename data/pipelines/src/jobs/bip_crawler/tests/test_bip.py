@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tarfile
 from concurrent.futures import Future
 from dataclasses import replace
 from pathlib import Path
@@ -19,7 +20,7 @@ from scrapers.common.fetch import HttpResult
 from scrapers.common.links import extract_link_pairs, extract_links
 from scrapers.common.ratelimit import HostTokenBucket
 from scrapers.stores import BipQueue, DocRow, HostRow, UrlRow
-from stores.bip_bundles import LocalBundleStore, rewrap_part
+from stores.bip_bundles import LocalBundleStore, in_use, rewrap_part
 
 REGISTRY_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <resultset>
@@ -88,6 +89,9 @@ def test_document_url_patterns() -> None:
         "https://eurzad.finn.pl/pzzywiec/server/pobierz_rejestry_zalacznik/1235645"
     )
     assert not is_document_url("https://bip.x.pl/oswiadczenie-majatkowe/1/kowalski")
+    assert is_document_url("https://bip.powiatsztumski.pl/1541.html?file=10170")
+    assert not is_document_url("https://bip.powiatsztumski.pl/1541.html")
+    assert not is_document_url("https://bip.x.pl/strona.html?file=10170")
 
 
 def test_url_helpers() -> None:
@@ -257,8 +261,65 @@ def test_repair_parts_rewraps_stale_bundles(tmp_path: Path) -> None:
         cast("BipQueue", frontier), out, older_than_minutes=0, keep_missing=True
     )
 
-    assert counts == {"parts": 2, "repaired": 2, "empty": 0, "failed": 0, "pruned": 0}
+    assert counts == {
+        "parts": 2,
+        "repaired": 2,
+        "empty": 0,
+        "failed": 0,
+        "pruned": 0,
+        "in_use": 0,
+    }
     assert list(out.rglob("*.part")) == []
+
+
+def _add_one(store: LocalBundleStore, host: str) -> DocRow:
+    row, _ = store.add(
+        host=host,
+        crawl_id="c1",
+        url=f"https://{host}/1",
+        data=f"declaration of {host}".encode(),
+        content_type="application/pdf",
+        filename="1.pdf",
+        chain=[],
+    )
+    return row
+
+
+def test_a_bundle_being_written_is_in_use_until_closed(tmp_path: Path) -> None:
+    store = LocalBundleStore(tmp_path / "out")
+    row = _add_one(store, "bip.a.pl")
+    part = Path(f"{tmp_path / 'out' / row.bundle}.part")
+
+    assert in_use(part)
+    store.flush()
+    assert not part.exists()
+    assert not in_use(part)  # gone: closed and renamed, nothing to repair
+
+
+def test_repair_parts_leaves_a_bundle_a_running_walk_still_writes(
+    tmp_path: Path,
+) -> None:
+    """A crawl's startup repair re-wrapped two running walks' bundles under
+    its --out, and each walk crashed renaming its .part on close (11-18)."""
+    out = tmp_path / "out"
+    killed = LocalBundleStore(out)
+    stale = out / _add_one(killed, "bip.dead.pl").bundle
+    killed.flush()
+    tail_cut = stale.read_bytes()[:-16]  # what a kill leaves
+    stale.unlink()
+    Path(f"{stale}.part").write_bytes(tail_cut)
+    walk = LocalBundleStore(out / "rounds" / "walk")
+    live = out / "rounds" / "walk" / _add_one(walk, "bip.live.pl").bundle
+
+    counts = repair_parts(
+        cast("BipQueue", FakeFrontier([])), out, older_than_minutes=0, keep_missing=True
+    )
+
+    assert (counts["repaired"], counts["in_use"]) == (1, 1)
+    assert stale.exists()
+    walk.flush()  # renamed its .part on close as if nothing had happened
+    with tarfile.open(live, "r:gz") as tar:
+        assert tar.getnames() == ["bip.live.pl/1.pdf", "index.txt"]
 
 
 # -- coordinator -------------------------------------------------------------

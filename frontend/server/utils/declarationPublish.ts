@@ -3,9 +3,11 @@
  * for.
  *
  * Once readers agree on the birth date a crop shows (`recordAnswer`), or the
- * job read a typed one with high confidence at upload, the reading meets the
- * pages for the first time - nothing on the BIP side ever carries a date the
- * site knows. Each page the crop's candidacies name is one of:
+ * job's own reading settles it at upload (`machineSettles`: a typed date read
+ * with high confidence, or an OCR date that is already a page's birth date),
+ * the reading meets the pages for the first time - nothing on the BIP side
+ * ever carries a date the site knows. Each page the crop's candidacies name
+ * is one of:
  *
  * - without a birth date: recorded, nothing else. The pipeline's join proposes
  *   one from the register where the two agree; that is a reviewer's call.
@@ -38,10 +40,17 @@
  * import may be writing pages, and a page a stale write of one took off the
  * site again is found and put back (`restoreReverted`).
  */
-import type { DocumentData, Firestore } from "firebase-admin/firestore";
+import type {
+  DocumentData,
+  DocumentReference,
+  DocumentSnapshot,
+  Firestore,
+  WriteBatch,
+} from "firebase-admin/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { AuditEntry } from "~~/shared/audit";
 import { isoDay, warsawDate, warsawHour } from "~~/shared/dates";
+import { pagesTouched } from "~~/shared/declarationPeople";
 import {
   DECLARATION_ACTOR,
   nameFitsPage,
@@ -53,13 +62,14 @@ import {
   type PublicationEdgeHold,
   type PublicationHoldReason,
   type PublicationStatus,
+  type RecheckResult,
   type SweepResult,
 } from "~~/shared/declarations";
-import { candidacyElection } from "~~/shared/electionDays";
 import { registerEntry } from "~~/shared/identifiers";
 import { CONTENT_CHANGED_AT } from "~~/shared/lastmod";
 import type { Edge, Note, NoteSource, Revision } from "~~/shared/model";
 import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
+import { partyFloor, showsCandidacyAndPaidPost } from "~~/shared/partyFloor";
 import {
   latestPublishableRevision,
   normalizeUpdateTime,
@@ -67,6 +77,10 @@ import {
 import { isAutomatedUid, isPublicEmployment } from "~~/shared/stats";
 import { placeClashes } from "~~/shared/twoPlaces";
 import { recordAudit } from "./audit";
+import {
+  openEmploymentQuietly,
+  placeEmploymentAgain,
+} from "./declarationEmployment";
 import {
   EXTRACTS,
   PUBLICATIONS,
@@ -86,7 +100,14 @@ import {
 import { unnamedLocal } from "./edges";
 import { peopleImportRunning } from "./jobs";
 import { resolveMergedNode } from "./merge";
-import { applyRevision, holdsRevision, nodeRevisions } from "./revisions";
+import { requeueQuietly } from "./readingQueue";
+import {
+  applyRevision,
+  createRevisionTransaction,
+  holdsRevision,
+  nodeRevisions,
+  withoutInternalFields,
+} from "./revisions";
 
 /** How long a page may stay `publishing` before the next pass takes it up
  * again. Publishing one takes seconds; longer means the pass that claimed it
@@ -150,6 +171,17 @@ export type StoredPublication = {
   /** When a sweep found the page a draft again after this automation had put
    * it up, and nobody on record had taken it down. */
   revertedAt?: Timestamp;
+  /** Who said the page will not be published, and when (`declinePublication`).
+   * Gone again once it is put back. */
+  declinedBy?: string;
+  declinedAt?: Timestamp;
+  /** The hold a publication by hand closed (`closeHoldOnPublication`): who
+   * published the page, when, and what it was held for. */
+  handPublished?: {
+    uid: string;
+    at: Timestamp;
+    held: PublicationHoldReason | null;
+  };
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 };
@@ -232,11 +264,25 @@ async function peopleImportBusy(now: Date): Promise<boolean> {
  * record at all: it is up already, the admin's date links nothing on it, and
  * a hold would sit on the admin's list of held pages asking for nothing. A
  * page born on another day is flagged as for any reading.
+ *
+ * Then the readings of the declaration's posts, which wait for a comparison
+ * that names one page, are opened or closed by what this one found
+ * (`openEmploymentOf`).
  */
 export async function matchPages(
   db: Firestore,
   extractId: string,
   now: Date = new Date(),
+): Promise<MatchResult> {
+  const result = await comparePages(db, extractId, now);
+  await openEmploymentQuietly(db, extractId, now);
+  return result;
+}
+
+async function comparePages(
+  db: Firestore,
+  extractId: string,
+  now: Date,
 ): Promise<MatchResult> {
   const extractRef = db.collection(EXTRACTS).doc(extractId);
   const extract = (await extractRef.get()).data();
@@ -517,8 +563,12 @@ async function recordPublication(
  *
  * Published and publishing stay what they are: the page is up, or going up.
  * A hold outlasts a later match - it is a doubt nobody has settled - unless
- * the page has become public since, which settles it. Two pages with the
- * crop's date hold the page whatever it was waiting for; on a page being
+ * the page has become public since, which settles it, and takes an admin's
+ * no along. An admin's no (`declinedAt`) outlasts every other match, with the
+ * reason it was held for: another crop with the page's date is no answer to
+ * it, nor is a reading that would take over an admin's-date hold. Two pages
+ * with the crop's date hold the page whatever it was waiting for; on a page
+ * being
  * published that is left as the reason for the pass that holds its slot,
  * which holds the page and gives the slot back (`publishPage`): taking the
  * status from under it here would strand the slot.
@@ -540,9 +590,12 @@ function nextPublication(
     declaration: LinkedDeclaration;
     now: Date;
   },
-): Partial<StoredPublication> | null {
+): DocumentData | null {
+  const declined = existing?.status === "held" && !!existing.declinedAt;
   const adminHold =
-    existing?.status === "held" && existing.reason === "admin_decision";
+    existing?.status === "held" &&
+    existing.reason === "admin_decision" &&
+    !declined;
   if (args.byAdmin && existing && !adminHold) return null;
   const before = adminHold && !args.byAdmin ? undefined : existing;
   const was = before?.status;
@@ -590,6 +643,10 @@ function nextPublication(
       ? { queuedAt: at }
       : {}),
     ...(status === "held" && was !== "held" ? { heldAt: at } : {}),
+    // A page that went public answers the admin's no as well.
+    ...(declined && status !== "held"
+      ? { declinedAt: FieldValue.delete(), declinedBy: FieldValue.delete() }
+      : {}),
   };
 }
 
@@ -791,6 +848,19 @@ async function claimPublication(
     }
     if (publication?.status !== "queued") return null;
 
+    // An admin's no is never queued by this release, but an older one hands
+    // an admin's-date hold to the next readers' crop with the page's date,
+    // declined or not. Such a page goes back to its hold, still declined.
+    if (publication.declinedAt) {
+      tx.update(ref, {
+        status: "held",
+        reason: publication.reason ?? "admin_decision",
+        heldAt: at,
+        updatedAt: at,
+      });
+      return null;
+    }
+
     // A page can come back to the queue with an earlier claim's terms still
     // on its record, so each claim clears the other kind's.
     if (pressedBy) {
@@ -875,6 +945,160 @@ async function publicPages(
 }
 
 // ---------------------------------------------------------------------------
+// A held page, looked at again
+// ---------------------------------------------------------------------------
+
+/**
+ * An admin's „Sprawdź ponownie” on /admin/oswiadczenia: the one way a hold is
+ * asked again. Nothing else reads a held page, since a hold outlasts a later
+ * match (`nextPublication`), so without it a page stays held after whatever
+ * held it has gone - a crop withdrawn, a post added, a page split.
+ *
+ * The page goes through `publishPage` the way an admin's press takes it up,
+ * past the daily limit and in no slot, and the night window and a running
+ * import stop it as they stop every pass: nothing is claimed then, and the
+ * page stays as it was. A page that passes goes up with its relations. One
+ * that does not is held again, for what stops it now, which can be another
+ * reason than the one the admin looked at. A page found public already is
+ * `confirmed`, which is how a hold left behind by a publication nobody closed
+ * leaves the list - except one held for two pages, which is asked whether
+ * another live page still has its date first: a public page is never checked
+ * by `publishPage`, and confirming it would link a declaration that may be
+ * the other page's.
+ *
+ * A pass that fails before the page went up puts the hold back as it was,
+ * rather than leaving the page `publishing` with no reason; one that fails
+ * after it leaves the claim for the next pass to finish.
+ *
+ * Throws a 404 for a page with no record and a 409 for one that is not held,
+ * that an admin declined, or that only a person can publish (`claimHeld`).
+ */
+export async function recheckPublication(
+  db: Firestore,
+  pageId: string,
+  pressedBy: string,
+  now: Date = new Date(),
+): Promise<RecheckResult> {
+  if (inPeopleImportWindow(now)) {
+    return { outcome: "skipped", skipped: "night" };
+  }
+  if (await peopleImportBusy(now)) {
+    return { outcome: "skipped", skipped: "import" };
+  }
+  const { claim, reason } = await claimHeld(db, pageId, now, pressedBy);
+  let outcome: PublishOutcome;
+  try {
+    outcome =
+      reason === "two_pages" && (await stillTwoPages(db, pageId))
+        ? held("two_pages")
+        : await publishPage(db, pageId, now);
+  } catch (error) {
+    // Back on hold as it was, unless the page went up before the failure:
+    // then the claim stays, and the next pass finishes the relations on its
+    // terms, as it does for a press cut short.
+    const page = await db
+      .collection("nodes")
+      .doc(pageId)
+      .get()
+      .then(
+        (snapshot) => snapshot.data(),
+        () => undefined,
+      );
+    if (reason && page && !pageIsPublic(page)) {
+      await releaseClaim(
+        db,
+        pageId,
+        claim,
+        { status: "held", reason },
+        now,
+      ).catch(() => {});
+    }
+    throw error;
+  }
+  if (outcome.status === "published") return { outcome: "published" };
+  await releaseClaim(db, pageId, claim, outcome, now);
+  return outcome.status === "held"
+    ? { outcome: "held", reason: outcome.reason }
+    : { outcome: "confirmed" };
+}
+
+/** Whether another live page is born on the day of the page's settled crops,
+ * which is what a `two_pages` hold waits on. */
+async function stillTwoPages(db: Firestore, pageId: string): Promise<boolean> {
+  const [publication, page] = await db.getAll(
+    db.collection(PUBLICATIONS).doc(pageId),
+    db.collection("nodes").doc(pageId),
+  );
+  const born = birthDateOf(page?.data());
+  const matching = (
+    await agreedExtracts(db, asStrings(publication?.get("extractIds")))
+  ).filter((extract) => agreedDay(extract) === born);
+  return matching.length > 0 && anotherPageBornThatDay(db, pageId, matching);
+}
+
+/** Claims a held page for the admin who asked, the way a press claims a queued
+ * one, and says what it was held for. The reason goes with it: `pageCheck`
+ * takes a `two_pages` on the record at its word, and this is the one claim
+ * that asks it again.
+ *
+ * A draft held on an admin's date is refused: `agreedExtracts` leaves such a
+ * crop out, so the page would come back as no longer matching. So is a page an
+ * admin declined, until it is put back. */
+async function claimHeld(
+  db: Firestore,
+  pageId: string,
+  now: Date,
+  pressedBy: string,
+): Promise<{ claim: Claim; reason: PublicationHoldReason | null }> {
+  const ref = db.collection(PUBLICATIONS).doc(pageId);
+  const nodeRef = db.collection("nodes").doc(pageId);
+  return db.runTransaction(async (tx) => {
+    const publication = (await tx.get(ref)).data() as
+      StoredPublication | undefined;
+    if (!publication) {
+      throw createError({
+        statusCode: 404,
+        message: "Nie ma takiej publikacji.",
+      });
+    }
+    if (publication.status !== "held") {
+      throw createError({
+        statusCode: 409,
+        message: "Ta publikacja nie jest już wstrzymana.",
+      });
+    }
+    if (publication.declinedAt) {
+      throw createError({
+        statusCode: 409,
+        message: "Ta osoba jest odłożona: najpierw ją przywróć.",
+      });
+    }
+    if (
+      publication.reason === "admin_decision" &&
+      !pageIsPublic((await tx.get(nodeRef)).data() ?? {})
+    ) {
+      throw createError({
+        statusCode: 409,
+        message: "Datę ustalił administrator: tę stronę publikuje się ręcznie.",
+      });
+    }
+    const at = Timestamp.fromDate(now);
+    tx.update(ref, {
+      status: "publishing",
+      reason: null,
+      claimedAt: at,
+      pressedBy,
+      day: FieldValue.delete(),
+      updatedAt: at,
+    });
+    return {
+      claim: { day: null, claimedAt: at },
+      reason: publication.reason ?? null,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Publishing one page
 // ---------------------------------------------------------------------------
 
@@ -930,6 +1154,8 @@ async function publicPages(
  * Then the page goes up the way /api/nodes/publish puts it up: the import's
  * newest revision approved first, where the page has none approved or an
  * older one, in a commit of its own, then `published` with the audit row.
+ * That commit also files „Inne” on a page that would go up naming no party
+ * beside its candidacy and paid post (`partyFloor` in shared/partyFloor.ts).
  * `stats.isApproved` is left to the trigger in functions/src/nodes.ts, which
  * sets it on every change of visibility, as it does for that endpoint. The
  * relations follow in batches: the chosen candidacies as a reviewer's publish
@@ -1124,6 +1350,7 @@ export async function publishPage(
   });
 
   let approvedRevision: string | null = null;
+  let floored = false;
   if (!resumed) {
     // Its own commit, before the one below, as in /api/nodes/publish: the
     // worst a failure in between leaves is a page approved and still hidden,
@@ -1140,6 +1367,16 @@ export async function publishPage(
       approvedRevision = approve.id;
     }
     const batch = db.batch();
+    // What the page shows once this pass is through.
+    const shown = [
+      ...elections.filter(({ data }) => pageIsPublic(data)),
+      ...candidaciesToPublish,
+      ...jobs.filter(({ data }) => pageIsPublic(data)),
+      ...jobsToPublish,
+    ].map(({ data }) => ({ ...data, published: true }));
+    floored =
+      partyFloor(page) !== null &&
+      (await fileOtherParty(db, batch, nodeRef, shown, companyNodes));
     batch.update(nodeRef, {
       published: true,
       [CONTENT_CHANGED_AT]: now.toISOString(),
@@ -1204,7 +1441,7 @@ export async function publishPage(
   );
   console.info(
     `[declarations] published ${pageId} with ${published.length} relation(s), ` +
-      `${heldEdges.length} held`,
+      `${heldEdges.length} held${floored ? ", party Inne" : ""}`,
   );
   return { status: "published", approvedRevision, edges: edgesRecord };
 }
@@ -1285,9 +1522,8 @@ async function pageCheck(
       !nameFitsPage(extract.agreedName, String(page.name ?? "")),
   );
   if (misnamed) return { reason: "name_differs" };
-  if (await anotherReading(db, pageId, birthDateOf(page))) {
-    return { reason: "conflicting_reading" };
-  }
+  const other = await readingsOfAnotherDay(db, pageId, birthDateOf(page));
+  if (other.length > 0) return { reason: "conflicting_reading" };
   return {
     approve: approvedRevisionId(page.revision_id) === newest.id ? null : newest,
   };
@@ -1363,17 +1599,19 @@ async function anotherPageBornThatDay(
   return false;
 }
 
-/** Whether a settled crop the page is named on, or that this automation
- * flagged on it, was read as a date the page does not have. A declaration of
- * the same person that disagrees is a doubt the matching one does not settle,
- * and the note the automation filed about it is still waiting for somebody.
- * The flagged ones are read again rather than counted, so a page whose date a
- * reviewer has since corrected to the reading is not held for it. */
-async function anotherReading(
+/** The settled crops the page is named on, or that this automation flagged on
+ * it, that were read as a date the page does not have: what
+ * `conflicting_reading` holds a page for, and what /admin/oswiadczenia shows on
+ * its row. A declaration of the same person that disagrees is a doubt the
+ * matching one does not settle, and the note the automation filed about it is
+ * still waiting for somebody. The flagged ones are read again rather than
+ * counted, so a page whose date a reviewer has since corrected to the reading
+ * is not held for it. */
+export async function readingsOfAnotherDay(
   db: Firestore,
   pageId: string,
   born: string,
-): Promise<boolean> {
+): Promise<DocumentSnapshot[]> {
   const [note, named] = await Promise.all([
     db.collection("notes").doc(`${pageId}_${DECLARATION_ACTOR}`).get(),
     db
@@ -1382,8 +1620,8 @@ async function anotherReading(
       .limit(READINGS_PER_PAGE)
       .get(),
   ]);
-  const crops = new Map<string, DocumentData>(
-    named.docs.map((doc) => [doc.id, doc.data()]),
+  const crops = new Map<string, DocumentSnapshot>(
+    named.docs.map((doc) => [doc.id, doc]),
   );
   const flagged = unique(
     ((note.data() as Note | undefined)?.sources ?? [])
@@ -1395,12 +1633,11 @@ async function anotherReading(
       ...flagged.map((id) => db.collection(EXTRACTS).doc(id)),
     );
     for (const snapshot of snapshots) {
-      const data = snapshot.data();
-      if (data) crops.set(snapshot.id, data);
+      if (snapshot.data()) crops.set(snapshot.id, snapshot);
     }
   }
-  return [...crops.values()].some((crop) => {
-    const day = agreedDay(crop);
+  return [...crops.values()].filter((crop) => {
+    const day = agreedDay(crop.data());
     return day !== null && day !== born;
   });
 }
@@ -1454,12 +1691,14 @@ function oldestFirst(a: StoredRevision, b: StoredRevision): number {
 }
 
 /** The crops still settled on a full date, of those named. One an admin has
- * settled since it was recorded is left out: an admin's date is no match the
- * automation acts on (`matchPages`), so a page whose crop an admin corrected
- * to the page's date is held as no longer matching, not published on it. */
+ * settled since it was recorded is left out unless `byAdmin` says otherwise:
+ * an admin's date is no match the automation acts on (`matchPages`), so a
+ * page whose crop an admin corrected to the page's date is held as no longer
+ * matching, not published on it. */
 async function agreedExtracts(
   db: Firestore,
   ids: readonly string[],
+  { byAdmin = false }: { byAdmin?: boolean } = {},
 ): Promise<DocumentData[]> {
   if (ids.length === 0) return [];
   const snapshots = await db.getAll(
@@ -1469,15 +1708,18 @@ async function agreedExtracts(
     .map((snapshot) => snapshot.data())
     .filter(
       (data): data is DocumentData =>
-        agreedDay(data) !== null && !settledByAdmin(data),
+        agreedDay(data) !== null && (byAdmin || !settledByAdmin(data)),
     );
 }
 
 /**
  * The declarations a page's record may show on the page
  * (/api/nodes/<id>/declarations): those of its crops that still confirm the
- * page's birth date as it stands, settled on that very day by readers or by
- * the job and never by an admin (`agreedExtracts`), each file once.
+ * page's birth date as it stands, settled on that very day, each file once.
+ *
+ * An admin's date counts here, though the automation publishes nothing on it
+ * (`agreedExtracts`): a page somebody published, or whose date an admin
+ * settled, shows its declaration all the same (decision on 2026-11-18).
  *
  * The record lists the crops that matched when it was written, and nothing
  * takes one off it: since then a reviewer may have corrected the page's
@@ -1492,7 +1734,9 @@ export async function confirmedDeclarations(
 ): Promise<LinkedDeclaration[]> {
   const born = birthDateOf(page);
   if (!born) return [];
-  const crops = await agreedExtracts(db, asStrings(record?.extractIds));
+  const crops = await agreedExtracts(db, asStrings(record?.extractIds), {
+    byAdmin: true,
+  });
   return crops
     .filter((crop) => agreedDay(crop) === born)
     .reduce<LinkedDeclaration[]>(
@@ -1620,27 +1864,47 @@ function writtenByPerson(revision: Revision): boolean {
 
 /** The ids of the candidacies among `rows` that put the person in two places
  * in one election - grouped by the election, the way the night counts them,
- * so a European run beside a local one in 2024 is two contests. */
-function clashingCandidacies(
+ * so a European run beside a local one in 2024 is two contests. Grouped by
+ * `placeClashes`, as the publish dialog and the person page group them. */
+export function clashingCandidacies(
   pageId: string,
   rows: readonly StoredEdge[],
 ): Set<string> {
-  const clashes = placeClashes(rows, ({ data }) => {
-    const election = candidacyElection(
-      data.start_date,
-      data.position,
-      data.by_election,
-    );
-    return election
-      ? {
-          personId: pageId,
-          regionId: data.target,
-          startDate: data.start_date,
-          position: election,
-        }
-      : undefined;
-  });
+  const clashes = placeClashes(rows, ({ data }) => ({
+    personId: pageId,
+    regionId: data.target,
+    startDate: data.start_date,
+    position: data.position,
+    byElection: data.by_election,
+  }));
   return new Set(clashes.flatMap((clash) => clash.rows.map((row) => row.id)));
+}
+
+/** Files „Inne” in `batch` on a page that goes up naming no party while it
+ * shows a candidacy and a paid public post (`partyFloor`). Whether it did.
+ * The page is read again, for what the approval just before wrote on it. */
+async function fileOtherParty(
+  db: Firestore,
+  batch: WriteBatch,
+  nodeRef: DocumentReference,
+  shown: readonly Edge[],
+  companies: ReadonlyMap<string, DocumentData>,
+): Promise<boolean> {
+  if (!showsCandidacyAndPaidPost(shown, (id) => companies.get(id))) {
+    return false;
+  }
+  const stored = (await nodeRef.get()).data();
+  const parties = stored ? partyFloor(stored) : null;
+  if (!stored || !parties) return false;
+  createRevisionTransaction(
+    db,
+    batch,
+    actor,
+    nodeRef,
+    { ...withoutInternalFields(stored), parties },
+    { automatic: true, approve: true, stored },
+  );
+  return true;
 }
 
 /** Puts the relations up, `EDGE_PUBLISH_CHUNK` a commit. The ids that went
@@ -1776,9 +2040,20 @@ export async function restoreReverted(
 // After an answer, an upload, and on the job's schedule
 // ---------------------------------------------------------------------------
 
-/** Compares the crops just settled with their pages, then takes up the queue
- * once. What both the answer that settles a crop and the upload of crops that
- * come settled do. */
+/** The pages a comparison that wrote something reached: their people's
+ * other crops have a new place in the readers' queue (`requeueCrops`). */
+function pagesNewlyReached(matched: readonly MatchResult[]): string[] {
+  return unique(
+    matched
+      .filter((match) => match.changed)
+      .flatMap((match) => Object.keys(match.outcomes)),
+  );
+}
+
+/** Compares the crops just settled with their pages, moves the other crops
+ * of the people they reached to their new place in the readers' queue, then
+ * takes up the publication queue once. What both the answer that settles a
+ * crop and the upload of crops that come settled do. */
 export async function matchAndDrain(
   db: Firestore,
   extractIds: readonly string[],
@@ -1787,8 +2062,13 @@ export async function matchAndDrain(
   options: { maxPages?: number } = {},
 ): Promise<{ matched: MatchResult[]; drain: DrainResult }> {
   const matched: MatchResult[] = [];
-  for (const id of unique(extractIds)) {
-    matched.push(await matchPages(db, id, now));
+  try {
+    for (const id of unique(extractIds)) {
+      matched.push(await matchPages(db, id, now));
+    }
+  } finally {
+    // Even when a comparison fails: those before it reached their people.
+    await requeueQuietly(db, pagesNewlyReached(matched));
   }
   return { matched, drain: await drainPublications(db, now, limit, options) };
 }
@@ -1799,18 +2079,27 @@ export async function matchAndDrain(
  * comparison failed, or a crop an upload named more pages for - and those
  * marked to be compared again (`pageRecheck`), which left a page without a
  * birth date or with another one, in case the nightly import or a reviewer
- * has changed that since. Then it puts back what a stale write took down
- * (`restoreReverted`) and takes up the queue.
+ * has changed that since. The other crops of the people a comparison reached
+ * move to their new place in the readers' queue. Then it puts back what a
+ * stale write took down (`restoreReverted`) and takes up the publication
+ * queue.
  *
  * The ones compared again go least recently compared first: a crop compared
  * to no effect is stamped and goes to the back, so each sweep reaches others.
+ *
+ * And it places again the readings of declarations' posts that a
+ * comparison's own placing missed (`placeEmploymentAgain`), starting from
+ * `random()` in their order.
+ *
+ * Says which pages it compared, put back or took up (`touched`), for the
+ * people count to move them.
  */
 export async function sweepDeclarations(
   db: Firestore,
   now: Date,
   limit: number,
-  options: { batch?: number } = {},
-): Promise<SweepResult> {
+  options: { batch?: number; random?: () => number } = {},
+): Promise<SweepResult & { touched: string[] }> {
   const size = options.batch ?? SWEEP_BATCH;
   const extracts = db.collection(EXTRACTS);
   const [unmatched, recheck] = await Promise.all([
@@ -1829,26 +2118,42 @@ export async function sweepDeclarations(
   ]);
 
   let changed = 0;
-  for (const doc of unmatched.docs) {
-    if ((await matchPages(db, doc.id, now)).changed) changed += 1;
-  }
-  for (const doc of recheck.docs) {
-    if ((await matchPages(db, doc.id, now)).changed) {
-      changed += 1;
-    } else {
-      await extracts
-        .doc(doc.id)
-        .update({ pageCheckedAt: Timestamp.fromDate(now) });
+  const matched: MatchResult[] = [];
+  try {
+    for (const doc of unmatched.docs) {
+      const match = await matchPages(db, doc.id, now);
+      matched.push(match);
+      if (match.changed) changed += 1;
     }
+    for (const doc of recheck.docs) {
+      const match = await matchPages(db, doc.id, now);
+      matched.push(match);
+      if (match.changed) {
+        changed += 1;
+      } else {
+        await extracts
+          .doc(doc.id)
+          .update({ pageCheckedAt: Timestamp.fromDate(now) });
+      }
+    }
+  } finally {
+    // Even when a comparison fails: those before it reached their people.
+    await requeueQuietly(db, pagesNewlyReached(matched));
   }
+  const placed = await placeEmploymentAgain(db, now, {
+    limit: size,
+    start: (options.random ?? Math.random)(),
+  });
 
   const reverted = await restoreReverted(db, now);
   const drain = await drainPublications(db, now, limit);
   return {
     checked: unmatched.size + recheck.size,
     changed,
+    placed,
     reverted,
     drain,
+    touched: pagesTouched({ matched, drain, reverted }),
   };
 }
 

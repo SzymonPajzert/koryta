@@ -561,4 +561,98 @@ describe("/api/search", () => {
     await searchSignedIn("Kowalski");
     expect(mockLimit).toHaveBeenCalledWith(20);
   });
+
+  describe("the line under a person", () => {
+    /** Robert Wójcik with every scope of his line stored by computeNodes,
+     * and edge stats that still hold every tie the lines name unless
+     * `approvedTargets` says otherwise. */
+    const wojcik = (
+      extra: Record<string, unknown> = {},
+      approvedTargets = ["teryt1811", "mzbm"],
+    ) =>
+      doc("radny", "Robert Wójcik", {
+        parties: ["PiS", "Inne"],
+        stats: {
+          searchLine: {
+            approved: {
+              where: "Mielec",
+              what: "Rada miasta",
+              when: "2024",
+              ties: ["teryt1811", "mzbm"],
+              election: "local-2024:won",
+            },
+            all: { where: "Rzeszów", what: "AGROHURT", ties: ["agrohurt"] },
+            teaser: {
+              where: "Jelenia Góra",
+              what: "„WODNIK”",
+              when: "do 2025",
+              ties: ["wodnik"],
+            },
+          },
+          edges: {
+            approved: {
+              targetNodeIds: approvedTargets,
+              elections: ["local-2024", "local-2024:won"],
+            },
+            all: {
+              targetNodeIds: ["teryt1811", "mzbm", "agrohurt", "wodnik"],
+              elections: ["local-2024", "local-2024:won"],
+            },
+          },
+        },
+        ...extra,
+      });
+
+    it("sends a published person's line off the document the passes read", async () => {
+      respondWith({ "robert wójcik": [wojcik()] });
+
+      const [hit] = await search("Robert Wójcik");
+
+      expect(hit!.line).toEqual({
+        where: "Mielec",
+        what: "Rada miasta",
+        when: "2024",
+        parties: ["PiS"],
+      });
+      // The three passes of a two-word query and nothing more: the line costs
+      // no read of its own.
+      expect(mockGet).toHaveBeenCalledTimes(3);
+    });
+
+    it("tells a logged out reader of a draft only what its teaser shows", async () => {
+      respondWith({ "robert wójcik": [wojcik({ published: false })] });
+
+      const [hit] = await search("Robert Wójcik");
+      expect(hit!.line).toEqual({
+        where: "Jelenia Góra",
+        what: "„WODNIK”",
+        when: "do 2025",
+      });
+
+      vi.clearAllMocks();
+      respondWith({ "robert wójcik": [wojcik({ published: false })] });
+      const [signedIn] = await searchSignedIn("Robert Wójcik");
+      expect(signedIn!.line).toEqual({ where: "Rzeszów", what: "AGROHURT" });
+    });
+
+    it("drops a stored line whose tie the person has lost since", async () => {
+      // The run the line names is gone from the edge stats, which the sweeper
+      // keeps current: a namesake's run taken off the page.
+      respondWith({ "robert wójcik": [wojcik({}, ["mzbm"])] });
+
+      const [hit] = await search("Robert Wójcik");
+
+      expect(hit!.line).toEqual({ parties: ["PiS"] });
+    });
+
+    it("sends no line with a company", async () => {
+      respondWith({
+        energa: [doc("e1", "ENERGA", { type: "place", parties: ["PiS"] })],
+      });
+
+      const [hit] = await search("Energa");
+
+      expect(hit).not.toHaveProperty("line");
+    });
+  });
 });

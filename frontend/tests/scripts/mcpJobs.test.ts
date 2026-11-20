@@ -20,7 +20,7 @@ import {
   type JobRun,
 } from "../../shared/jobs";
 
-/** 09:00 in Warsaw: the night started at 04:30 and is over. */
+/** 09:00 in Warsaw: the night is over. */
 const NOW = new Date("2026-10-10T07:00:00.000Z");
 
 /** A run document as the REST API hands it back: times to the microsecond. */
@@ -160,7 +160,7 @@ describe("jobsStatus: every job", () => {
       "newest run night-1: partial (schedule), held steps back, started 2026-10-10 04:30, took 2 h 18 min, progress 13/13 kroków, stop reason: outputs: partial - 8 nie przechodzi, 2 errors",
     );
     expect(text).toContain(
-      "- krs_scrape_free · late · Nie wystartował o 04:30. · newest run free-1: succeeded (schedule), started 2026-10-09 04:32",
+      "- krs_scrape_free · late · Nie wystartował o 02:30. · newest run free-1: succeeded (schedule), started 2026-10-09 04:32",
     );
     expect(text).toContain(
       "- people_import · running · Trwa od 06:40 - wysyłka. · newest run people-1: running (schedule), started 2026-10-10 06:40, going for 2 h 20 min, last heard from 5 min ago, phase wysyłka, progress 40/100 osób",
@@ -272,7 +272,7 @@ describe("jobsStatus: one job", () => {
   it("refuses a job nobody knows, and names the ones there are", async () => {
     const { reports } = memoryReports([]);
     await expect(jobsStatus(reports, { job: "nope" }, NOW)).rejects.toThrow(
-      /There is no job nope: .* The jobs: capture_extraction, company_import/,
+      /There is no job nope: .* The jobs: capture_extraction, extraction_import/,
     );
   });
 });

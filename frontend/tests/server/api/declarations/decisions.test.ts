@@ -27,12 +27,16 @@ const mocks = vi.hoisted(() => {
     setHeader,
     clear,
     requireAdmin: vi.fn(),
+    getUser: vi.fn(),
     decideExtract: vi.fn(),
     cropImages: vi.fn(),
     linkedOnAPage: vi.fn(),
     matchAndDrain: vi.fn(),
     drainPublications: vi.fn(),
     readBody: vi.fn(),
+    restage: vi.fn(),
+    restageCrops: vi.fn(),
+    requeue: vi.fn(),
   };
 });
 
@@ -47,6 +51,7 @@ vi.mock("firebase-admin/app", () => ({ getApp: () => ({}) }));
 vi.mock("../../../../server/utils/auth", async (original) => ({
   ...(await original<typeof import("../../../../server/utils/auth")>()),
   requireAdmin: mocks.requireAdmin,
+  getUser: mocks.getUser,
 }));
 vi.mock("../../../../server/utils/declarationDecisions", async (original) => ({
   ...(await original<
@@ -59,6 +64,17 @@ vi.mock("../../../../server/utils/declarationDecisions", async (original) => ({
 vi.mock("../../../../server/utils/declarationPublish", () => ({
   matchAndDrain: mocks.matchAndDrain,
   drainPublications: mocks.drainPublications,
+}));
+// Which pages each decision hands the people count, which
+// tests/server/utils/declarationPeopleCount.test.ts runs.
+vi.mock("../../../../server/utils/declarationPeopleCount", () => ({
+  restageDeclarationPeople: mocks.restage,
+  restageCropPeople: mocks.restageCrops,
+}));
+// Which crop's people get their place in the readers' queue back, which
+// tests/server/utils/declarationPublish.test.ts runs.
+vi.mock("../../../../server/utils/readingQueue", () => ({
+  requeueCropPeople: mocks.requeue,
 }));
 
 const ID = `${"a".repeat(64)}-p0`;
@@ -98,6 +114,7 @@ beforeEach(() => {
   mocks.state.id = ID;
   mocks.state.body = {};
   mocks.requireAdmin.mockResolvedValue({ uid: "admin-uid", admin: true });
+  mocks.getUser.mockResolvedValue({ uid: "reader-uid", admin: false });
   mocks.decideExtract.mockImplementation(
     async (_db, args: { decision: { verdict: string; value?: string } }) => ({
       id: ID,
@@ -120,7 +137,7 @@ beforeEach(() => {
 });
 
 describe("api/declarations/[id]/images", () => {
-  it("answers an admin with the crop, never to be cached", async () => {
+  it("answers a signed-in reader with the crop, never to be cached", async () => {
     const crop = { date: "data:image/png;base64,AAAA", name: null };
     mocks.cropImages.mockResolvedValue(crop);
 
@@ -129,10 +146,12 @@ describe("api/declarations/[id]/images", () => {
     expect(headers()["Cache-Control"]).toBe("private, no-store");
   });
 
-  it("reads nothing for somebody who is not an admin", async () => {
-    mocks.requireAdmin.mockRejectedValue(refused());
+  it("reads nothing for somebody who is not signed in", async () => {
+    mocks.getUser.mockRejectedValue(
+      Object.assign(new Error("Proszę się zalogować."), { statusCode: 401 }),
+    );
 
-    expect((await failure(images(event))).statusCode).toBe(403);
+    expect((await failure(images(event))).statusCode).toBe(401);
     expect(mocks.cropImages).not.toHaveBeenCalled();
   });
 
@@ -177,6 +196,8 @@ describe("api/declarations/[id]/settle", () => {
     expect(mocks.clear).not.toHaveBeenCalledWith("nitro:handlers");
     expect(mocks.linkedOnAPage).toHaveBeenCalledWith(expect.anything(), ID);
     expect(headers()["Cache-Control"]).toBe("private, no-store");
+    // Its people's other crops take their place in the readers' queue.
+    expect(mocks.requeue).toHaveBeenCalledWith(expect.anything(), ID);
   });
 
   it("drops the cached pages when a public page linked the crop", async () => {
@@ -259,6 +280,49 @@ describe("api/declarations/[id]/settle", () => {
     quiet.mockRestore();
   });
 
+  it("moves the crop's people, and those the pass took up, in the people count", async () => {
+    mocks.state.body = { verdict: "date", value: "1966-05-21" };
+    mocks.matchAndDrain.mockResolvedValue({
+      matched: [{ outcomes: { fx0001: "queued" } }],
+      drain: { published: ["fx0001", "fx0003"] },
+    });
+    await settle(event);
+    expect(mocks.restageCrops).toHaveBeenCalledWith(
+      expect.anything(),
+      [ID],
+      ["fx0001", "fx0003"],
+    );
+
+    mocks.restageCrops.mockClear();
+    mocks.state.body = { verdict: "unreadable" };
+    await settle(event);
+    expect(mocks.restageCrops).toHaveBeenCalledWith(
+      expect.anything(),
+      [ID],
+      [],
+    );
+  });
+
+  it("keeps the decision when the people count cannot be moved", async () => {
+    // The real re-staging, on a database with nothing to read.
+    const { restageCropPeople } = await vi.importActual<
+      typeof import("../../../../server/utils/declarationPeopleCount")
+    >("../../../../server/utils/declarationPeopleCount");
+    mocks.restageCrops.mockImplementationOnce(restageCropPeople);
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.state.body = { verdict: "unreadable" };
+
+    await expect(settle(event)).resolves.toMatchObject({
+      status: "unreadable",
+    });
+    expect(quiet).toHaveBeenCalledWith(
+      expect.stringContaining(ID),
+      expect.any(Error),
+    );
+    expect(mocks.clear).toHaveBeenCalledWith(OVERVIEW);
+    quiet.mockRestore();
+  });
+
   it("drops the cached pages when the comparison published somebody", async () => {
     mocks.state.body = { verdict: "date", value: "1966-05-21" };
     mocks.matchAndDrain.mockResolvedValue({
@@ -289,6 +353,10 @@ describe("api/declarations/[id]/withdraw", () => {
     expect(mocks.clear).toHaveBeenCalledWith(OVERVIEW);
     expect(mocks.clear).not.toHaveBeenCalledWith("nitro:handlers");
     expect(headers()["Cache-Control"]).toBe("private, no-store");
+    // Its people move in the people count, and their other crops take their
+    // place in the readers' queue again: this may have been the only reading.
+    expect(mocks.restageCrops).toHaveBeenCalledWith(expect.anything(), [ID]);
+    expect(mocks.requeue).toHaveBeenCalledWith(expect.anything(), ID);
   });
 
   it("drops the cached pages when a public page linked the crop", async () => {
@@ -331,5 +399,7 @@ describe("api/declarations/publish-queued", () => {
     await publishQueued(event);
     expect(mocks.clear).toHaveBeenCalledWith(OVERVIEW);
     expect(mocks.clear).not.toHaveBeenCalledWith("nitro:handlers");
+    // The page it held moves in the people count.
+    expect(mocks.restage).toHaveBeenCalledWith(expect.anything(), ["fx0002"]);
   });
 });

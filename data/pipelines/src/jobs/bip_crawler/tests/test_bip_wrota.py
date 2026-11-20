@@ -216,6 +216,53 @@ def test_a_staff_list_offers_its_people_by_first_name_alone() -> None:
         assert len(documents) == opened, (trail, name)
 
 
+def test_a_councils_document_is_opened_in_a_list_of_the_whole_offices() -> None:
+    # Włodawa (11-13): "2021 rok" under "STAROSTWO POWIATOWE" holds the
+    # council's document beside the board's and the staff's, no row naming
+    # anybody, each councillor a file on the council's.
+    sites = {
+        f"{HOST}/index.php?id=274": list_page(
+            274, "2021 rok", "STAROSTWO POWIATOWE", "Oświadczenia majątkowe"
+        ),
+        ajax(274): rows(
+            ("1636688", "Oświadczenia majątkowe Radnych Powiatu", "2021-05-19"),
+            (
+                "1636690",
+                "Oświadczenia majątkowe Członków Zarządu Powiatu we Włodawie, "
+                "Sekretarza Powiatu, Skarbnika Powiat",
+                "2021-05-19",
+            ),
+            (
+                "1636691",
+                "Oświadczenia kierowników jednostek organizacyjnych powiatu",
+                "2021-05-19",
+            ),
+        ),
+        page(274, "1636688"): detail(
+            274,
+            ("1.Piotr_Gorgol.pdf", "Piotr Gorgol"),
+            ("2.Wieslaw_Holaczuk.pdf", "Wiesław Holaczuk"),
+            ("12.Tadeusz_Sawicki.pdf", "Tadeusz Sawicki"),
+        ),
+    }
+    site = Site(sites)
+    holaczuk = Seeker.of("h", "Wiesław", "Holaczuk")
+    (document,) = Wrota(site.get).documents(
+        listing(sites, 274),
+        [holaczuk],
+        office_terms(["Rada powiatu"]),
+        frozenset(),
+        3,
+        Counter(),
+    )
+    assert document.url == page(274, "1636688")
+    assert [u for u in site.calls if "document_id" in u] == [document.url]
+    found = candidates(document.url, document.title, list(document.links), [holaczuk])
+    assert [(c.key, c.url.rsplit("/", 1)[1], c.first_name) for c in found] == [
+        ("h", "2.Wieslaw_Holaczuk.pdf", True)
+    ]
+
+
 def test_a_persons_documents_are_counted_across_the_walks_lists() -> None:
     # Milejów lists a councillor's documents a year a list.
     sites: dict = {}

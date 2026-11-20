@@ -8,9 +8,13 @@ import ErrorPage from "../../app/error.vue";
 
 const vuetify = createVuetify({ components, directives });
 
-// mockNuxtImport is hoisted above the module body, so the spy has to be too.
-const { clearError } = vi.hoisted(() => ({ clearError: vi.fn() }));
+// mockNuxtImport is hoisted above the module body, so the spies have to be too.
+const { clearError, reloadNuxtApp } = vi.hoisted(() => ({
+  clearError: vi.fn(),
+  reloadNuxtApp: vi.fn(),
+}));
 mockNuxtImport("clearError", () => clearError);
+mockNuxtImport("reloadNuxtApp", () => reloadNuxtApp);
 mockNuxtImport("useSeoMeta", () => vi.fn());
 
 const mountError = (statusCode: number, message = "boom") =>
@@ -51,6 +55,32 @@ describe("ErrorPage", () => {
     expect(wrapper.text()).toContain("500");
     expect(wrapper.text()).toContain("Coś poszło nie tak");
     expect(wrapper.html()).toContain('to="/pomoc"');
+  });
+
+  // An admin page's guard that could not reach Firebase on the page's first
+  // load (`abortWithoutNetwork`). Nuxt would have said the page did not
+  // exist; the generic message would have blamed the server.
+  it("says there is no connection for a page that could not check the reader", () => {
+    const wrapper = mountError(408);
+
+    expect(wrapper.text()).toContain("Brak połączenia z siecią");
+    expect(wrapper.text()).toContain("Sprawdź połączenie i odśwież stronę.");
+    expect(wrapper.text()).not.toContain("Po naszej stronie wystąpił błąd");
+    // The reader's connection is nothing to report to us.
+    expect(wrapper.html()).not.toContain('to="/pomoc"');
+  });
+
+  it("reloads the page first, and goes home second, when there is no connection", async () => {
+    const wrapper = mountError(408);
+    const [reload, home] = wrapper.findAll("button");
+
+    expect(reload!.text()).toBe("Odśwież stronę");
+    await reload!.trigger("click");
+    expect(reloadNuxtApp).toHaveBeenCalledWith({ force: true });
+
+    expect(home!.text()).toBe("Wróć na stronę główną");
+    await home!.trigger("click");
+    expect(clearError).toHaveBeenCalledWith({ redirect: "/" });
   });
 
   it("clears the error state when going home", async () => {

@@ -7,8 +7,8 @@ import type {
   EdgeType,
   Region,
 } from "../model";
-import { DiGraph } from "digraph-js";
 import { personNode, companyNode, regionNode } from "./nodes";
+import { publicDeclared } from "../declaredPosts";
 
 export interface GraphLayout {
   edges: Edge[];
@@ -27,14 +27,26 @@ export function getNodeGroups(
   companies: Record<string, Company>,
   regions: Record<string, Region>,
 ) {
-  const placeConnection = new DiGraph();
-  placeConnection.addVertices(
-    ...Object.keys(nodesNoStats).flatMap((key) => [
-      // Corresponds to TraverseState
-      { id: key + SPLIT + "active", adjacentTo: [], body: {} },
-      { id: key + SPLIT + "dead_end", adjacentTo: [], body: {} },
-    ]),
-  );
+  // Two states per node, as TraverseState, each with the states it leads to.
+  // Maps and sets, where digraph-js copied every vertex id to add one and
+  // checked each visit against an array: quadratic in the nodes, and 46 s of
+  // /api/stats/computeNodes on the 2026-11-18 export.
+  const adjacent = new Map<string, string[]>();
+  const linked = new Map<string, Set<string>>();
+  for (const key of Object.keys(nodesNoStats)) {
+    adjacent.set(key + SPLIT + "active", []);
+    adjacent.set(key + SPLIT + "dead_end", []);
+  }
+  // As DiGraph.addEdge: no loop, no second copy, and both ends known.
+  const addEdge = (from: string, to: string) => {
+    const next = adjacent.get(from);
+    if (from === to || !next || !adjacent.has(to)) return;
+    let seen = linked.get(from);
+    if (!seen) linked.set(from, (seen = new Set()));
+    if (seen.has(to)) return;
+    seen.add(to);
+    next.push(to);
+  };
 
   edges.forEach((edge: Edge) => {
     if (!edge.traverse) {
@@ -43,24 +55,43 @@ export function getNodeGroups(
     // If the edge should spread the node group, either map it to active node or dead_end
     // Only active states have out-edges.
     if (edge.traverse.forward) {
-      placeConnection.addEdge({
-        from: edge.source + SPLIT + "active",
-        to: edge.target + SPLIT + edge.traverse.forward,
-      });
+      addEdge(
+        edge.source + SPLIT + "active",
+        edge.target + SPLIT + edge.traverse.forward,
+      );
     }
     if (edge.traverse.backward) {
-      placeConnection.addEdge({
-        from: edge.target + SPLIT + "active",
-        to: edge.source + SPLIT + edge.traverse.backward,
-      });
+      addEdge(
+        edge.target + SPLIT + "active",
+        edge.source + SPLIT + edge.traverse.backward,
+      );
     }
   });
 
+  /** Every state reachable from `root`, each once, depth first in the order
+   * the edges were added - and `root` itself only where a cycle leads back to
+   * it - in the order DiGraph.getDeepChildren gave them. */
+  const deepChildren = (root: string): string[] => {
+    const reached: string[] = [];
+    const visited = new Set<string>();
+    const stack = [...(adjacent.get(root) ?? [])].reverse();
+    while (stack.length > 0) {
+      const state = stack.pop()!;
+      if (visited.has(state)) continue;
+      visited.add(state);
+      reached.push(state);
+      if (state === root) continue;
+      const next = adjacent.get(state)!;
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (!visited.has(next[i]!)) stack.push(next[i]!);
+      }
+    }
+    return reached;
+  };
+
   const entries = Object.entries({ ...companies, ...regions, ...people }).map(
     ([placeID, place]) => {
-      const children = [
-        ...placeConnection.getDeepChildren(placeID + SPLIT + "active"),
-      ]
+      const children = deepChildren(placeID + SPLIT + "active")
         // Remove node state from the ID.
         .map((extendedID) => extendedID.split(SPLIT)[0])
         .filter((id) => {
@@ -190,11 +221,13 @@ const edgeTraverse: Record<EdgeType, TraversePolicy> = {
 
 export function getEdges(edgesFromDB: DBEdge[]) {
   return edgesFromDB.map((edge: DBEdge) => {
+    const declared = publicDeclared(edge.declared);
     const result: Edge = {
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      label: edge.name ?? edgeLabel[edge.type],
+      // A founder's `owns` edge says who set the body up, not who holds it.
+      label: edge.name ?? (edge.founder ? "fundator" : edgeLabel[edge.type]),
       type: edge.type,
       traverse: edgeTraverse[edge.type],
       content: edge.content,
@@ -209,6 +242,22 @@ export function getEdges(edgesFromDB: DBEdge[]) {
       by_election: edge.by_election,
       start_date: edge.start_date,
       end_date: edge.end_date,
+      // Copied only where set, like nothing above: every other edge would
+      // otherwise carry `founder: undefined` into each graph response.
+      ...(edge.founder ? { founder: true } : {}),
+      // PKW's statements, on the few candidacies that have them, the same way.
+      ...(edge.party_member ? { party_member: edge.party_member } : {}),
+      ...(edge.member_parties?.length
+        ? { member_parties: edge.member_parties }
+        : {}),
+      ...(edge.supported_by ? { supported_by: edge.supported_by } : {}),
+      ...(edge.backing_parties?.length
+        ? { backing_parties: edge.backing_parties }
+        : {}),
+      // What declarations say about a post, only the part a page reads: who
+      // read an entry and what it pays stay on the edge.
+      ...(edge.as_of ? { as_of: edge.as_of } : {}),
+      ...(declared ? { declared } : {}),
     };
     return result;
   });

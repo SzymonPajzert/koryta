@@ -96,8 +96,10 @@
       </v-col>
     </v-row>
   </HomeSection>
+  <!-- With the night's people count, the explorer's third panel: how far
+       the declarations got, beside the map and the chart. -->
   <HomeSection>
-    <HomeExplorer />
+    <HomeExplorer :people="peopleProgress" />
   </HomeSection>
   <!-- No `v-row`/`v-col` around it: the call to action is a card of its own
        now rather than centred loose text, and the old nest stacked five
@@ -123,8 +125,28 @@
 import { mdiChevronRight } from "@mdi/js";
 import { trackGoal } from "~/composables/analytics";
 import { SOCIAL_CARD } from "~/composables/entitySeo";
+import { HOME_PANEL_SLUGS, panelNamedBy } from "~/composables/homeExplorer";
+import type { DeclarationPeople } from "~~/shared/declarations";
+
+// The night's count of the declarations in people. Absent before the job's
+// first snapshot, and then the explorer keeps its two panels.
+const { data: peopleData } = await useFetch<{
+  people: DeclarationPeople | null;
+}>("/api/declarations/people", { key: "declarations-people" });
+const peopleProgress = computed(() => peopleData.value?.people ?? null);
+
+// A link to one panel keeps naming it when shared: Facebook takes og:url as the
+// post's link, so without `?widok=` its readers would get a random panel. The
+// canonical stays `/`, so search still sees one home page.
+const linkedPanel = panelNamedBy(useRoute().query.widok);
+// The site's url, like the canonical; the request's origin if it is unset,
+// rather than a home page that fails to render.
+const siteUrl = useSiteConfig().url || useRequestURL().origin;
 
 useSeoMeta({
+  ogUrl: linkedPanel
+    ? `${siteUrl.replace(/\/$/, "")}/?widok=${HOME_PANEL_SLUGS[linkedPanel]}`
+    : undefined,
   title: "Największy, niezależny agregator koryciarstwa",
   description:
     "Jesteśmy największym, ogólnopolskim, niezależnym agregatorem koryciarstwa. Sprawdź którymi stanowiskami w publicznych spółkach podzielili się politycy.",

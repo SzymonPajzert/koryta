@@ -2,6 +2,7 @@ import { test, expect } from "./test";
 import { expectFitsThePhone } from "./phoneWidth";
 import { pageTag } from "./pageTags";
 import { readyForFullPage } from "./fullPage";
+import { openInApp } from "./openInApp";
 import type { BlogPostSummary } from "../../shared/blog";
 
 /** /blog, drawn from a fixed list rather than from content/blog.
@@ -35,29 +36,10 @@ const posts: BlogPostSummary[] = [
   },
 ];
 
-type MountPoint = Element & {
-  __vue_app__?: {
-    config: {
-      globalProperties: {
-        $router: { push: (to: string) => Promise<unknown> };
-      };
-    };
-  };
-};
-
 test("blog", { tag: pageTag("blog/index") }, async ({ page }, testInfo) => {
   await page.route("**/api/blog", (route) => route.fulfill({ json: posts }));
 
-  await page.goto("/o-nas");
-  await page.waitForFunction(
-    () =>
-      !!(document.querySelector("#__nuxt") as MountPoint | null)?.__vue_app__,
-  );
-  await page.evaluate(async () => {
-    const root = document.querySelector("#__nuxt") as MountPoint;
-    await root.__vue_app__!.config.globalProperties.$router.push("/blog");
-  });
-  await page.waitForURL("**/blog");
+  await openInApp(page, "/blog");
   await page.getByText(posts[0]!.title).waitFor();
 
   await readyForFullPage(page);

@@ -67,13 +67,6 @@ test.describe(
       // Off the card: the mouse is left where the login button was, and a
       // button under it would be photographed in its hover state.
       await page.mouse.move(0, 0);
-      // On a phone the card is taller than the window, so the shot scrolls and
-      // the fixed app bar lands across its first row, the feedback launcher
-      // across its last. Neither is part of the card: hidden, as in
-      // ./home-cta.spec.ts, rather than masked into magenta blocks.
-      await page.addStyleTag({
-        content: ".v-app-bar, .feedback-fab { visibility: hidden !important; }",
-      });
       await page.evaluate(() => document.fonts.ready);
       await expect(card).toHaveScreenshot("instytucja-komisja-rewizyjna.png");
 

@@ -14,8 +14,10 @@ from entities.company_categories import (
     KOLEJE,
     OBRONNOSC,
     SPZOZ,
+    STATUSES,
     categories_for,
     matches_pkd,
+    wound_up,
 )
 
 
@@ -639,6 +641,72 @@ class TestMainCodeRules(unittest.TestCase):
         )
 
 
+class TestWaterPairWithoutAWaterUtility(unittest.TestCase):
+    """Companies that file 36.00 and 37.00 together and supply nobody's water.
+
+    The pair places a company whose main code is elsewhere, because a gmina
+    utility files water and sewage as one licence. A plant with its own intake
+    and effluent works files the pair as well, and so does an estate running
+    the mains inside its fence, so `WODOCIAGI.exclude` names them. Each list
+    is the node's `activity` up to the pair.
+    """
+
+    def assertNotWater(self, krs, activity):
+        # The exclusion is what keeps it out: under a KRS nobody named, the
+        # same codes read as a water utility's.
+        self.assertIn("wodociagi", categories_for("0000999999", activity))
+        self.assertNotIn("wodociagi", categories_for(krs, activity))
+
+    def test_the_treasury_list_s_steelworks_refinery_and_market(self):
+        # Found 2026-10-27 checking Prokuratoria's list against the site: all
+        # three were filed under `wodociagi` and the Treasury, nothing else.
+        # KRS 0000109444, Huta Kosciuszko (Chorzow), 38 codes
+        huta = (
+            "24.10.Z 25.11.Z 25.12.Z 25.62.Z 27.11.Z 33.11.Z 33.12.Z 33.14.Z "
+            "33.20.Z 35.12.Z 35.13.Z 35.14.Z 35.22.Z 35.30.Z 36.00.Z 37.00.Z"
+        ).split()
+        # KRS 0000069432, Rafineria Nafty Glimar (Strzyzow), 36 codes
+        glimar = (
+            "19.20.Z 20.14.Z 20.11.Z 20.41.Z 20.42.Z 20.59.Z 47.30.Z 46.71.Z "
+            "46.75.Z 52.10.A 22.22.Z 35.11.Z 35.12.Z 35.13.Z 35.30.Z 36.00.Z "
+            "37.00.Z"
+        ).split()
+        # KRS 0000047934, Lubelski Rynek Hurtowy (Elizowka), 10 codes
+        market = ["68.20.Z", "77.31.Z", "46.31.Z", "36.00.Z", "37.00.Z"]
+        for krs, activity in (
+            ("0000109444", huta),
+            ("0000069432", glimar),
+            ("0000047934", market),
+        ):
+            with self.subTest(krs=krs):
+                self.assertNotWater(krs, activity)
+                self.assertEqual(
+                    categories_for(krs, activity, treasury=True), ["skarb-panstwa"]
+                )
+
+    def test_a_works_filed_by_the_pair_alone_is_left_in_no_sector(self):
+        # KRS 0000051491, Fabryka Lozysk Tocznych - Krasnik: bearings, the
+        # pair 6th and 7th of 10, and `wodociagi` was all the site filed it
+        # under. Its article names no sector either, so the answer is none.
+        flt = "28.15.Z 25.73.Z 28.41.Z 33.12.Z 35.13.Z 36.00.Z 37.00.Z".split()
+        self.assertNotWater("0000051491", flt)
+        wiki = ["Polskie przedsiębiorstwa przemysłu metalowego", "Producenci łożysk"]
+        self.assertEqual(categories_for("0000051491", flt, wiki_categories=wiki), [])
+
+    def test_a_generator_keeps_its_own_sector(self):
+        # KRS 0000973325, ARP Energia: the pair 5th and 6th of 10
+        arp = ["35.11.Z", "35.12.Z", "35.13.Z", "35.14.Z", "36.00.Z", "37.00.Z"]
+        self.assertNotWater("0000973325", arp)
+        self.assertEqual(categories_for("0000973325", arp), ["energetyka"])
+
+    def test_a_waste_company_outside_any_gmina_keeps_its_own_sector(self):
+        # KRS 0000191663, Ekotar (Tarnow), held by Grupa Azoty companies: the
+        # pair 5th and 6th of 60
+        ekotar = ["38.32.Z", "23.64.Z", "42.21.Z", "43.99.Z", "36.00.Z", "37.00.Z"]
+        self.assertNotWater("0000191663", ekotar)
+        self.assertEqual(categories_for("0000191663", ekotar), ["odpady"])
+
+
 class TestWikipediaCategories(unittest.TestCase):
     """The categories of a company's Polish article, where the register is silent.
 
@@ -757,5 +825,81 @@ class TestSkarbPanstwa(unittest.TestCase):
             ["skarb-panstwa"],
         )
 
-    def test_the_treasury_comes_last_among_the_values_the_site_offers(self):
-        self.assertEqual(CATEGORY_VALUES[-1], "skarb-panstwa")
+    def test_the_treasury_comes_after_the_sectors_and_before_the_statuses(self):
+        self.assertEqual(
+            CATEGORY_VALUES[-3:], ("skarb-panstwa", "w-likwidacji", "w-upadlosci")
+        )
+
+
+class TestStatuses(unittest.TestCase):
+    """Decision on 2026-11-20: a company being wound up, as the register's name
+    says, as a category to filter by beside its sector and owner - liquidation
+    and bankruptcy apart."""
+
+    def test_a_company_in_liquidation_keeps_its_sector_and_owner_before_it(self):
+        # KRS 0000019193, PKP S.A., named as if it were being wound up
+        self.assertEqual(
+            categories_for(
+                "0000019193", [], treasury=True, name="POLSKIE KOLEJE W LIKWIDACJI"
+            ),
+            ["koleje", "skarb-panstwa", "w-likwidacji"],
+        )
+
+    def test_a_company_in_no_sector_is_filed_under_its_status_alone(self):
+        self.assertEqual(
+            categories_for(
+                "0000014800", ["70.10.Z"], name="HUTA OSTROWIEC S.A. W UPADŁOŚCI"
+            ),
+            ["w-upadlosci"],
+        )
+
+    def test_the_status_does_not_keep_the_article_from_placing_a_company(self):
+        self.assertEqual(
+            categories_for(
+                "0000059307",
+                ["70.10.Z"],
+                wiki_categories=["Przedsiębiorstwa energetyczne w Polsce"],
+                name="PGE W LIKWIDACJI",
+            ),
+            ["energetyka", "w-likwidacji"],
+        )
+
+    def test_bankruptcy_in_every_spelling_is_a_bankruptcy(self):
+        # Upadłość likwidacyjna included: the court's proceeding, not the
+        # owners' liquidation.
+        for name in (
+            "HUTA SPÓŁKA AKCYJNA W UPADŁOŚCI",
+            "HUTA SPÓŁKA AKCYJNA W UPADŁOŚCI LIKWIDACYJNEJ",
+            "HUTA SPÓŁKA AKCYJNA W UPADŁOŚCI UKŁADOWEJ",
+            "HUTA SPÓŁKA AKCYJNA W UPADLOSCI",
+            "Huta spółka akcyjna w upadłości",
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(wound_up(name), ["w-upadlosci"])
+
+    def test_both_statuses_in_their_order(self):
+        for name in (
+            "X SPÓŁKA AKCYJNA W LIKWIDACJI W UPADŁOŚCI",
+            "X SPÓŁKA AKCYJNA W UPADŁOŚCI W LIKWIDACJI",
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(wound_up(name), ["w-likwidacji", "w-upadlosci"])
+
+    def test_restructuring_is_not_a_status_the_site_files(self):
+        self.assertEqual(wound_up("PKP CARGO SPÓŁKA AKCYJNA W RESTRUKTURYZACJI"), [])
+
+    def test_a_partner_being_wound_up_is_not_the_company(self):
+        self.assertEqual(
+            wound_up(
+                "TARASY OSIEDLE SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ W "
+                "LIKWIDACJI SPÓŁKA KOMANDYTOWA"
+            ),
+            [],
+        )
+
+    def test_without_a_name_there_is_no_status(self):
+        self.assertEqual(categories_for("0000019193", []), ["koleje"])
+
+    def test_the_statuses_are_values_the_site_offers(self):
+        for status in STATUSES:
+            self.assertIn(status.value, CATEGORY_VALUES)

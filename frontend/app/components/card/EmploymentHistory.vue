@@ -71,9 +71,56 @@
                rows, whose far end is a place. -->
           <PartyChip v-for="party in partiesOf(edge)" :key="party" :party />
           <PartyChip v-if="partyOf(edge)" :party="partyOf(edge)!" />
+          <!-- What PKW says of the candidate's ties beyond the list: who backed
+               the run, and a party they declared. Before the committee's name,
+               beside the list's party, because it says more than the name of a
+               voters' committee does (decision on 2026-11-17).
+               A backing party is the backing chip alone, which says what it is
+               on hover, as the list's party has no label either (decision on
+               2026-11-17). A backer that is no party keeps the word: its name
+               beside the committee's would read as one. -->
+          <span
+            v-if="pkw.get(edge)"
+            class="statements"
+            :data-testid="`edge-statements-${edge.id}`"
+          >
+            <span v-if="pkw.get(edge)!.backing" class="statement">
+              <span
+                v-if="pkw.get(edge)!.backing!.name"
+                class="statement__label"
+              >
+                poparcie
+              </span>
+              <PartyChip
+                v-for="party in pkw.get(edge)!.backing!.parties"
+                :key="party"
+                :party
+                tie="backing"
+                :note="`Poparcie kandydatury (PKW: ${pkw.get(edge)!.backing!.said})`"
+              />
+              <span
+                v-if="pkw.get(edge)!.backing!.name"
+                class="statement__name"
+                :title="`PKW: ${pkw.get(edge)!.backing!.said}`"
+              >
+                {{ pkw.get(edge)!.backing!.name }}
+              </span>
+            </span>
+            <span v-if="pkw.get(edge)!.members.length" class="statement">
+              <span class="statement__label">członek</span>
+              <PartyChip
+                v-for="party in pkw.get(edge)!.members"
+                :key="party"
+                :party
+                :note="`PKW: ${edge.party_member}`"
+              />
+            </span>
+          </span>
+          <!-- `text-break`: PKW joins coalition names with a dot and no space
+               („PLATFORMA.NOWOCZESNA”), a word a phone's column cannot hold. -->
           <span
             v-if="committeeOf(edge)"
-            class="text-caption text-medium-emphasis text-wrap"
+            class="text-caption text-medium-emphasis text-wrap text-break"
           >
             {{ committeeOf(edge) }}
           </span>
@@ -266,6 +313,7 @@ import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
 import { placeClashes, type PlaceClash } from "~~/shared/twoPlaces";
 import type { PersonSuccession } from "~~/server/api/edges/successions.get";
 import { nodeLinkUrl } from "~~/shared/slugs";
+import { backingOf, membershipOf } from "~/utils/partyStatements";
 
 /** Whoever held a seat before the spell an edge records, as the successions
  * endpoint names them, plus how many seats changed hands that day. */
@@ -374,6 +422,23 @@ const listedEdges = computed(() =>
   withoutRedundantRoleless(props.edges, employmentSpell),
 );
 
+/** What PKW says on each candidacy beyond its list: who backed it, and a
+ * party the candidate declared that the row does not already name. Only the
+ * rows where it says something. */
+const pkw = computed(() => {
+  const byRow = new Map<
+    EdgeNode,
+    { backing: ReturnType<typeof backingOf>; members: string[] }
+  >();
+  for (const edge of listedEdges.value) {
+    const said = { backing: backingOf(edge), members: membershipOf(edge) };
+    if (said.backing || said.members.length) {
+      byRow.set(edge, said);
+    }
+  }
+  return byRow;
+});
+
 /** The clash each candidacy row takes part in, where it puts its person in a
  * second place of one election - see shared/twoPlaces.ts. Over every row, the
  * published and the drafts alike: a signed in reader is handed both, and
@@ -387,6 +452,7 @@ const clashOf = computed(() => {
           regionId: edge.target,
           startDate: edge.start_date,
           position: edge.position,
+          byElection: edge.by_election,
         }
       : undefined,
   );
@@ -596,6 +662,48 @@ function predecessorOf(edge: EdgeNode): Predecessor[] {
   font-size: 0.6875rem;
   line-height: 1.6;
   padding: 0 6px;
+}
+
+/* ---- what PKW says beyond the list ---- */
+
+/* The statements as one item of the meta line, and inside it a run of text
+   rather than a row of boxes: a backer's name of eighty letters wraps word by
+   word beside its label, where a flex row put the label on a line of its
+   own. */
+.statements {
+  line-height: 1.5;
+}
+
+.statements > *,
+.statement > * {
+  vertical-align: middle;
+}
+
+.statement + .statement {
+  margin-left: 8px;
+}
+
+.statement > .chip {
+  margin-right: 4px;
+}
+
+.statement__label {
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  font-size: 0.75rem;
+}
+
+.statement > .statement__label {
+  margin-right: 4px;
+}
+
+/* PKW has written a backer as one 44-letter word
+   („PlatformaObywatelskaRzeczypospolitejPolskiej”), which a phone row has to
+   break somewhere. */
+.statement__name {
+  color: rgba(var(--v-theme-on-surface), 0.87);
+  font-size: 0.75rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 /* ---- on a phone ---- */
