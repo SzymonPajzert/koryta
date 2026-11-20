@@ -522,6 +522,14 @@ say - `scripts/ops/import-tasks.ts <file.json>` writes each task that is not
 there yet, as `ops-writer`, or into the emulator when `FIRESTORE_EMULATOR_HOST`
 is set. It never changes a task that exists.
 
+The check of main (`.github/workflows/merge-check.yml`, on every push to main)
+writes to each open task of kind `merge` how much of its branches is on main,
+and closes the ones whose every branch is. The CI account
+(`GCP_PIPELINES_SERVICE_ACCOUNT`) holds the same Token Creator binding on
+`ops-writer` as `dev-workflow` above. To see what it would do, from a mirror
+of the repository (`git clone --mirror ~/koryta/.git /tmp/repo.git`):
+`npx tsx scripts/ops/merge-check.ts --repo /tmp/repo.git --dry-run`.
+
 ### How the jobs are doing
 
 The jobs report their runs to the same database (`jobRuns`, `jobs`; see
