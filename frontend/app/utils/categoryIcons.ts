@@ -3,6 +3,7 @@ import {
   mdiBus,
   mdiFlashOutline,
   mdiHospitalBuilding,
+  mdiOfficeBuildingRemoveOutline,
   mdiRadiator,
   mdiRecycle,
   mdiShieldOutline,
@@ -29,6 +30,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   sport: mdiSoccer,
   obronnosc: mdiShieldOutline,
   "skarb-panstwa": mdiBankOutline,
+  "w-likwidacji": mdiOfficeBuildingRemoveOutline,
 };
 
 /** A category's icon, or the generic tag for one this list does not know yet:

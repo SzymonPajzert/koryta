@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "kategoria-w-likwidacji",
+    title: "Spółki w likwidacji lub upadłości w filtrze kategorii",
+    description:
+      "Za „Skarb Państwa” na liście kategorii jest „W likwidacji lub upadłości”: spółki, którym rejestr dopisał to do nazwy. Spółka ma ją obok sektora i właściciela, a wykres „Branże” jej nie liczy. Spółki dostają ją z nocnymi aktualizacjami spółek.",
+    steps: [
+      "Otwórz tabelę, kliknij „Filtry” i w „Typ podmiotu” wybierz „W likwidacji lub upadłości”: w tabeli są osoby ze spółek w likwidacji, np. Telewizji Polskiej.",
+      "Otwórz stronę Telewizji Polskiej: pod nazwą jest „W likwidacji lub upadłości”, a kliknięcie otwiera tabelę z tym filtrem.",
+    ],
+    link: "/eksploruj/tabela?category=w-likwidacji",
+    area: "public",
+  },
+  {
     id: "pasek-tabeli-na-telefonie",
     title: "Wybrane filtry tabeli czytelne na telefonie",
     description:

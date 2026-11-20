@@ -6,8 +6,10 @@ import {
   categoryTitle,
   isKnownCategory,
   isOwner,
+  isRegisterFact,
   isSector,
-  withOwnersFrom,
+  isStatus,
+  withRegisterFactsFrom,
 } from "../../shared/companyCategories";
 import { companyEditSchema } from "../../shared/api";
 
@@ -36,6 +38,7 @@ describe("companyCategories", () => {
       "sport",
       "obronnosc",
       "skarb-panstwa",
+      "w-likwidacji",
     ]);
   });
 
@@ -163,11 +166,12 @@ describe("companyEditSchema.categories", () => {
 });
 
 describe("isSector", () => {
-  it("is every category but the owner one, Skarb Państwa", () => {
+  it("is every category but the owner and the status", () => {
     // Filed beside a company's sector: counted as one, a post at PGE would
     // be on the home page's „Branże” twice.
     expect(companyCategoryValues.filter((value) => !isSector(value))).toEqual([
       "skarb-panstwa",
+      "w-likwidacji",
     ]);
     expect(isSector("energetyka")).toBe(true);
     expect(isSector("hutnictwo")).toBe(false);
@@ -183,36 +187,66 @@ describe("isOwner", () => {
   });
 });
 
-describe("withOwnersFrom", () => {
+describe("isStatus", () => {
+  it("is liquidation, which bankruptcy is filed under too", () => {
+    expect(companyCategoryValues.filter(isStatus)).toEqual(["w-likwidacji"]);
+    expect(isStatus("w-restrukturyzacji")).toBe(false);
+  });
+});
+
+describe("isRegisterFact", () => {
+  it("is the owner and the status, and nothing this build does not know", () => {
+    expect(companyCategoryValues.filter(isRegisterFact)).toEqual([
+      "skarb-panstwa",
+      "w-likwidacji",
+    ]);
+    expect(isRegisterFact("hutnictwo")).toBe(false);
+  });
+});
+
+describe("withRegisterFactsFrom", () => {
   it("keeps the sectors and takes the owner from the other side", () => {
     // PGE, pinned to „Energetyka” by hand: the payload's own sectors do not
     // get past the pin, its owner does.
     expect(
-      withOwnersFrom(["energetyka"], ["cieplownictwo", "skarb-panstwa"]),
+      withRegisterFactsFrom(["energetyka"], ["cieplownictwo", "skarb-panstwa"]),
     ).toEqual(["energetyka", "skarb-panstwa"]);
   });
 
   it("drops an owner the other side does not name", () => {
     // A stake the list stops naming goes from a page somebody edited too.
     expect(
-      withOwnersFrom(["energetyka", "skarb-panstwa"], ["energetyka"]),
+      withRegisterFactsFrom(["energetyka", "skarb-panstwa"], ["energetyka"]),
     ).toEqual(["energetyka"]);
   });
 
   it("gives a company filed under no sector its owner", () => {
     // An empty pin says "none of these sectors" and nothing about the owner.
-    expect(withOwnersFrom([], ["skarb-panstwa"])).toEqual(["skarb-panstwa"]);
+    expect(withRegisterFactsFrom([], ["skarb-panstwa"])).toEqual([
+      "skarb-panstwa",
+    ]);
   });
 
   it("files the owner after the sectors, wherever it stood", () => {
     expect(
-      withOwnersFrom(["skarb-panstwa", "koleje"], ["skarb-panstwa"]),
+      withRegisterFactsFrom(["skarb-panstwa", "koleje"], ["skarb-panstwa"]),
     ).toEqual(["koleje", "skarb-panstwa"]);
+  });
+
+  it("takes the status from the other side too", () => {
+    // A hospital pinned to „Szpitale” by hand still says it is being wound up,
+    // and stops saying so when the register does.
+    expect(
+      withRegisterFactsFrom(["szpitale"], ["przychodnie", "w-likwidacji"]),
+    ).toEqual(["szpitale", "w-likwidacji"]);
+    expect(
+      withRegisterFactsFrom(["szpitale", "w-likwidacji"], ["szpitale"]),
+    ).toEqual(["szpitale"]);
   });
 
   it("keeps a value this build does not know on the sectors' side", () => {
     expect(
-      withOwnersFrom(["lotniska"], ["hutnictwo", "skarb-panstwa"]),
+      withRegisterFactsFrom(["lotniska"], ["hutnictwo", "skarb-panstwa"]),
     ).toEqual(["lotniska", "skarb-panstwa"]);
   });
 });
