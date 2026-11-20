@@ -16,6 +16,7 @@ from analysis.scores import (
     PeopleScoresFacts,
     PeopleScoresLocality,
     PeopleScoresPageRank,
+    PeopleScoresPublishable,
     PeopleScoresSuccession,
     PeopleScoresTurnover,
 )
@@ -95,6 +96,7 @@ PIPELINES = [
     PeopleScoresCoappointment,
     PeopleScoresFacts,
     PeopleScoresLocality,
+    PeopleScoresPublishable,
     PeopleScoresPageRank,
     PeopleScoresSuccession,
     PeopleScoresTurnover,
