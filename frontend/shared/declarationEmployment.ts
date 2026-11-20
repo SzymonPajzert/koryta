@@ -45,6 +45,9 @@ export const MAX_ROWS = 8;
 export const MAX_STRIPS = 12;
 /** Written lines one band holds at most. */
 export const MAX_LINES = 40;
+/** Picture bytes a band's document holds at most, its header's included: a
+ * Firestore document stays under 1 MiB. */
+export const MAX_BAND_PICTURE_BYTES = 1_000_000;
 /** Suggestions one card shows at most: the machine's and the page's own
  * posts. */
 export const MAX_SUGGESTIONS_SHOWN = 12;
@@ -624,6 +627,21 @@ export const employmentIngestSchema = z
   })
   .strict();
 export type EmploymentIngest = z.infer<typeof employmentIngestSchema>;
+
+/** Why an item was not stored: no date page has its id (an item never
+ * creates one), a picture is not a PNG within `MAX_IMAGE_BYTES`, or a band's
+ * pictures with its header's are over `MAX_BAND_PICTURE_BYTES`. */
+export type EmploymentIngestSkipReason =
+  "unknown_extract" | "bad_image" | "too_large";
+
+export type EmploymentIngestResult = {
+  status: "ok";
+  /** Bands stored for the first time; changed; sent with a new picture that
+   * was not stored because readers answered the one before; sent again as
+   * they were. */
+  bands: { created: number; updated: number; kept: number; unchanged: number };
+  skipped: { id: string; reason: EmploymentIngestSkipReason }[];
+};
 
 // ---------------------------------------------------------------------------
 // Answers
