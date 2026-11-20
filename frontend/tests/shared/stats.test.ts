@@ -6,6 +6,8 @@ import {
   computeNodeStats,
   isCurrentPost,
   isPublicEmployment,
+  pipelineContribution,
+  PUBLISH_CHANCE_MODEL,
 } from "~~/shared/stats";
 import type { Edge, VoteDocument, Note } from "~~/shared/model";
 
@@ -151,6 +153,30 @@ describe("shared/stats.ts", () => {
 
       expect(stats.interesting).toBe(3 + 2 + 5);
       expect(stats.humanVoted).toBe(true);
+    });
+
+    it("counts the publication chance instead of the best model", () => {
+      // Decision on 2026-11-20: the chance a person gets published is the
+      // pipeline's number; a 5 from another model is one of its reasons.
+      const stats = computeVoteStats([
+        pipelineVote("pipeline-pagerank", 5),
+        pipelineVote(PUBLISH_CHANCE_MODEL, 2),
+        { userUid: "aB3xYz", categoryVotes: { interesting: 1 } },
+      ] as unknown as VoteDocument[]);
+
+      expect(stats.interesting).toBe(1 + 2);
+      expect(stats.models).toEqual({
+        "pipeline-pagerank": 5,
+        [PUBLISH_CHANCE_MODEL]: 2,
+      });
+    });
+
+    it("falls back to the best model where the chance is not scored yet", () => {
+      expect(
+        pipelineContribution({ "pipeline-pagerank": 4, pipeline: 2 }),
+      ).toBe(4);
+      expect(pipelineContribution({})).toBeUndefined();
+      expect(pipelineContribution(undefined)).toBeUndefined();
     });
 
     it("records what each model said so a reader can tell them apart", () => {
