@@ -49,6 +49,7 @@ from scrapers.koryta.download import (
 )
 from scrapers.krs.censored import KRSCensoredPeople
 from scrapers.krs.coverage import PersonFeedCoverage, RejestrIOCoverage
+from scrapers.krs.labour_unions import LabourUnions
 from scrapers.krs.list import CompaniesKRS, PeopleKRS
 from scrapers.krs.odpis_attempts import KrsOdpisAttempts
 from scrapers.krs.odpis_history import KrsOdpisEntries, KrsOdpisSeats
@@ -107,6 +108,7 @@ PIPELINES = [
     KrsOdpisAttempts,
     KrsOdpisEntries,
     KrsOdpisSeats,
+    LabourUnions,
     PersonFeedCoverage,
     RejestrIOCoverage,
     RejestrIOPersonCounts,
