@@ -165,11 +165,11 @@ const scoreModelLabels: Record<string, string> = {
 /** What a band of the publication chance stands for, by the cut-offs
  * `CHANCE_BANDS` in `data/pipelines/src/analysis/scores/publishable.py`. */
 const publishChanceLabels: Record<number, string> = {
-  5: "szansa od 30%",
-  4: "szansa 10-30%",
-  3: "szansa 3-10%",
-  2: "szansa 1-3%",
-  1: "szansa poniżej 1%",
+  5: "szansa od 90%",
+  4: "szansa 75-90%",
+  3: "szansa 50-75%",
+  2: "szansa 15-50%",
+  1: "szansa poniżej 15%",
 };
 
 export function publishChanceLabel(band: number): string | undefined {

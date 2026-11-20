@@ -1,18 +1,18 @@
-"""The chance that a person's page gets published.
+"""The chance that examining a person ends in their page being published.
 
 Decision on 2026-11-20: the pipeline's part of a person's score is this chance,
-not the best of the other models, which stay on the page as the reasons. The
-other models were built to find people a reader would find interesting; what
-the queue needs is the people we will find enough on to publish, and on that
-the best of them ranked people at AUC 0.71 where a few facts about the person
-reach 0.95.
+not the best of the other models, which stay on the page as the reasons. It
+answers "will we find enough to publish this person": of the people like this
+whom somebody finished examining, the share that ended published. There is no
+time window in it (decision on 2026-11-20): an examination counts once it has
+ended, however long it took, and nobody unexamined is a negative.
 
 The facts are read off the site's own export, the same graph the publishing
 rules read: whether the person won a seat and when, whether they hold a paid
 public post, whether that post is where they stood. A logistic model weighs
-them, fitted by `scripts/fit_publish_chance.py` on the people unjudged at one
-export and published by a later one. Refit it when the publishing routes change
-pace; the weights below are its output and nothing else.
+them, fitted by `scripts/fit_publish_chance.py` on the examinations that ended
+after one export, with the facts read at that export. Refit it as more of them
+end; the weights below are its output and nothing else.
 """
 
 import dataclasses
@@ -54,31 +54,31 @@ MAX_YEARS_SINCE_STOOD = 25
 #: TERYT digits naming a powiat: as deep as a candidacy is recorded.
 POWIAT_DIGITS = 4
 
-#: Fitted on 2026-11-20 by `scripts/fit_publish_chance.py --anchor 2026-11-11
-#: --until 2026-11-20`: 19,560 people unjudged on 11-11, 820 published by 11-20,
-#: AUC 0.957 five-fold. Log-odds per unit of each feature in
-#: `PublishFacts.features`.
+#: Fitted on 2026-11-20 by `scripts/fit_publish_chance.py --anchor 2026-11-04
+#: --until 2026-11-20`: 1,251 examinations ended after 11-04, 627 of them in a
+#: publication, AUC 0.955 five-fold. Of the 183 who never stood, 2.7 % were
+#: published. Log-odds per unit of each feature in `PublishFacts.features`.
 WEIGHTS: dict[str, float] = {
-    "won_local": 1.768,
-    "won_latest_local": 0.238,
-    "paid_post": 4.225,
-    "years_since_stood": -0.182,
-    "on_a_list_or_party": 0.361,
-    "rada_spoleczna_only": -1.792,
-    "stood_where_works": 1.221,
-    "log_candidacies": -1.559,
-    "log_wins": 1.457,
+    "won_local": 0.021,
+    "won_latest_local": -0.265,
+    "paid_post": 4.838,
+    "years_since_stood": -0.169,
+    "on_a_list_or_party": -0.236,
+    "rada_spoleczna_only": -2.403,
+    "stood_where_works": 2.550,
+    "log_candidacies": -1.262,
+    "log_wins": 1.769,
 }
-INTERCEPT = -6.959
+INTERCEPT = -3.687
 
-#: The chance each band starts at (decision on 2026-11-20). On the fitting
-#: cohort 40 % of band 5 and 22 % of band 4 were published within nine days,
-#: and the two held 92 % of everybody published.
+#: The chance each band starts at (decision on 2026-11-20). On the fitting set
+#: 95 % of band 5 were published, 87 % of band 4, 69 % of band 3, 27 % of
+#: band 2 and 2 % of band 1.
 CHANCE_BANDS: tuple[tuple[float, int], ...] = (
-    (0.30, 5),
-    (0.10, 4),
-    (0.03, 3),
-    (0.01, 2),
+    (0.90, 5),
+    (0.75, 4),
+    (0.50, 3),
+    (0.15, 2),
 )
 
 

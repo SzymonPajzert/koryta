@@ -84,7 +84,7 @@ describe("VoteBreakdown", () => {
     expect(text.indexOf("Szansa publikacji")).toBeLessThan(
       text.indexOf("Sieć powiązań"),
     );
-    expect(text).toContain("szansa 1-3%");
+    expect(text).toContain("szansa 15-50%");
     // 3 total less the chance's 2, not less pagerank's 5.
     expect(text).toContain("+1");
   });
