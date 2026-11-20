@@ -2,7 +2,7 @@
 // TODO remove this and fix the typing
 
 import { z } from "zod";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldPath, getFirestore } from "firebase-admin/firestore";
 import {
   dropDraftStats,
   dropSearchIndex,
@@ -46,6 +46,9 @@ const queryValidator = z.object({
   queueTier: z.coerce.number().optional(),
   election: z.union([z.string(), z.array(z.string())]).optional(),
   electionResult: z.enum(["won", "lost"]).optional(),
+  /** One page by its id, as a row like any other: what /eksploruj/nowe asks
+   * for when its url names somebody the queue has moved past. */
+  id: z.string().min(1).optional(),
 
   // Sorting parameters
   sortBy: z.string().optional(),
@@ -132,6 +135,16 @@ export default defineEventHandler(async (event) => {
     );
     if (empty) {
       return { nodes: {}, total: 0 };
+    }
+
+    // First, so the missing-index fallback below, which moves ops into memory
+    // from the end, never trades a one-document read for the whole type.
+    const id = query.id;
+    if (id) {
+      ops.unshift({
+        applyFs: (q) => q.where(FieldPath.documentId(), "==", id),
+        applyMem: (nodes) => nodes.filter((n) => n.id === id),
+      });
     }
 
     if (!user) {

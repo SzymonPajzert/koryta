@@ -23,6 +23,9 @@ export type UseListWithStatsOptions = {
    * and a row marks the companies seated in it. Without it only the elections
    * in that region are marked. */
   companyRegions?: MaybeRefOrGetter<Record<string, PlaceRegion>>;
+  /** While false nothing is fetched, and a request still on its way is
+   * dropped. Rows already fetched stay where they are. */
+  enabled?: MaybeRefOrGetter<boolean>;
 };
 
 export async function useListWithStats(
@@ -33,7 +36,11 @@ export async function useListWithStats(
   const user = useCurrentUser();
   const isAuthReady = useIsCurrentUserLoaded();
 
-  const { data: pageData, pending } = await useAsyncData(
+  const {
+    data: pageData,
+    pending,
+    status,
+  } = await useAsyncData(
     cacheKey,
     async () => {
       if (!isAuthReady.value) {
@@ -57,6 +64,10 @@ export async function useListWithStats(
         headers["Authorization"] = `Bearer ${token}`;
       }
 
+      // The question these rows answer, held for the whole fetch: `apiQuery`
+      // can move while the request is out.
+      const asked = apiQuery.value;
+
       // 1. Fetch nodes
       const nodesRes = await $fetch<{
         nodes: Record<string, Person>;
@@ -64,7 +75,7 @@ export async function useListWithStats(
         matched?: Record<string, string[]>;
         matchedPlaces?: Record<string, string>;
       }>("/api/nodes", {
-        query: apiQuery.value,
+        query: asked,
         headers,
       });
       const nodes = Object.values(nodesRes.nodes);
@@ -112,11 +123,13 @@ export async function useListWithStats(
         matchedPlaces: nodesRes.matchedPlaces ?? {},
         // Read with the answer rather than off `apiQuery` later, which moves
         // the moment a filter does - before the rows it describes are back.
-        currentOnly: apiQuery.value.currentlyEmployed === "selected",
+        currentOnly: asked.currentlyEmployed === "selected",
+        answered: queryKey(asked),
       };
     },
     {
       watch: [apiQuery, user],
+      enabled: options.enabled ?? true,
       server: options.server ?? apiQuery.value.visibility !== "private",
       // Use cached payload only while hydrating
       // and always fetch fresh for client-side param changes.
@@ -248,5 +261,17 @@ export async function useListWithStats(
     });
   });
 
-  return { tableItems, totalItems, pending };
+  /** The query the rows on hand were fetched for, as `queryKey` spells it.
+   * Compare it with `queryKey` of the query asked now to tell rows that
+   * answer it from rows left over from the one before. */
+  const answeredQuery = computed(() => pageData.value?.answered);
+
+  return { tableItems, totalItems, pending, status, answeredQuery };
+}
+
+/** A query as one string, the same for two queries asking the same thing:
+ * keys in one order, and an unset one left out as `JSON.stringify` leaves out
+ * every `undefined`. */
+export function queryKey(query: Query): string {
+  return JSON.stringify(query, Object.keys(query).sort());
 }
