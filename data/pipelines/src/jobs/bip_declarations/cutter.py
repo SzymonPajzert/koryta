@@ -115,10 +115,11 @@ class Ocr:
         result, _ = self._engine(np.array(image.convert("RGB")), return_word_box=words)
         return list(result or [])
 
-    def lines(self, image: Image.Image) -> list[OcrLine]:
-        """Every line RapidOCR reads on the page, with its box and its words' boxes."""
+    def lines(self, image: Image.Image, with_words: bool = True) -> list[OcrLine]:
+        """Every line RapidOCR reads on the page, with its box and, unless
+        `with_words` is off, its words' boxes."""
         lines: list[OcrLine] = []
-        for entry in self._run(image, words=True):
+        for entry in self._run(image, words=with_words):
             box, text, score = entry[0], entry[1], entry[2]
             words = entry[3] if len(entry) > 3 else None
             lines.append(
@@ -144,6 +145,21 @@ class Ocr:
             (piece.width * 2, piece.height * 2), Image.Resampling.LANCZOS
         )
         return [(str(r[1]), round(float(r[2]), 3)) for r in self._run(doubled)]
+
+    def read_lines(self, piece: Image.Image) -> list[OcrLine]:
+        """What `read` reads, each box in the crop's own pixels."""
+        doubled = piece.resize(
+            (piece.width * 2, piece.height * 2), Image.Resampling.LANCZOS
+        )
+        return [
+            {
+                "box": [[round(float(x) / 2), round(float(y) / 2)] for x, y in r[0]],
+                "text": str(r[1]),
+                "score": round(float(r[2]), 3),
+                "words": None,
+            }
+            for r in self._run(doubled)
+        ]
 
     def text(self, piece: Image.Image) -> str:
         return " ".join(str(r[1]) for r in self._run(piece))
@@ -227,12 +243,14 @@ class Pages:
             self._images = _picture_pages(data, kind)
             self.count = len(self._images)
 
-    def image(self, index: int) -> Image.Image:
+    def image(self, index: int, long_side: int = LONG_SIDE) -> Image.Image:
+        """The page in grey with its long side `long_side` px. Only a PDF is
+        drawn again at another size; a picture is as `LONG_SIDE` made it."""
         if self._pdf is None:
             return self._images[index]
         page = self._pdf[index]
         width, height = page.get_size()
-        rendered = page.render(scale=LONG_SIDE / max(width, height), grayscale=True)
+        rendered = page.render(scale=long_side / max(width, height), grayscale=True)
         return rendered.to_pil().convert("L")
 
     def text(self, index: int) -> str:
@@ -243,6 +261,39 @@ class Pages:
         if _is_scan(page):
             return ""
         return str(page.get_textpage().get_text_range())
+
+    def born_digital(self, index: int) -> bool:
+        """A PDF page drawn from text, so its text layer is what the declarant
+        typed, and not turned by the PDF, so `text_in` can place it. Unlike
+        `_is_scan` it adds the pictures up: some scanners cut a page into four
+        strips, each a quarter of it."""
+        if self._pdf is None:
+            return False
+        page = self._pdf[index]
+        if page.get_rotation() % 360 or _covered(page) >= SCAN_COVER:
+            return False
+        return bool(str(page.get_textpage().get_text_range()).strip())
+
+    def text_in(self, index: int, box: Box, long_side: int = LONG_SIDE) -> str:
+        """The text layer inside a box of the page as `image` draws it at
+        `long_side`, whatever made the layer (a scanner's OCR too). Empty for
+        a picture, and for a page the PDF itself turns."""
+        if self._pdf is None:
+            return ""
+        page = self._pdf[index]
+        if page.get_rotation() % 360:
+            return ""
+        width, height = page.get_size()
+        scale = long_side / max(width, height)
+        left, _, _, top = page.get_cropbox()
+        x0, y0, x1, y1 = box
+        text = page.get_textpage().get_text_bounded(
+            left=left + x0 / scale,
+            bottom=top - y1 / scale,
+            right=left + x1 / scale,
+            top=top - y0 / scale,
+        )
+        return str(text)
 
     def close(self) -> None:
         if self._pdf is not None:
@@ -259,6 +310,19 @@ def _is_scan(page: Any) -> bool:
         if (right - left) * (top - bottom) >= SCAN_COVER * area:
             return True
     return False
+
+
+def _covered(page: Any) -> float:
+    """The share of the page its pictures cover, all of them together."""
+    import pypdfium2.raw as pdfium_c  # noqa: PLC0415 - only PDFs need it
+
+    width, height = page.get_size()
+    area = max(1.0, width * height)
+    total = 0.0
+    for obj in page.get_objects(filter=[pdfium_c.FPDF_PAGEOBJ_IMAGE], max_depth=2):
+        left, bottom, right, top = obj.get_bounds()
+        total += (right - left) * (top - bottom)
+    return min(1.0, total / area)
 
 
 def _picture_pages(data: bytes, kind: str) -> list[Image.Image]:
