@@ -66,3 +66,30 @@ test("the back button returns to the person before", async ({ page }) => {
   await page.goForward();
   await expectShowing(page, second, secondName);
 });
+
+/** What a volunteer reported on 2026-11-15: they left the queue for the
+ * person's page before they were done, and coming back found somebody else.
+ * The name is the way to that page, and Back is the way to the same person. */
+test("the name opens the person's page, and Back returns to them", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await answerForTheSector(page, { queue: true });
+  await logIn(page, USERS.normal, QUEUE);
+
+  await expect.poll(() => shownId(page), { timeout: 30_000 }).toBeTruthy();
+  const shown = shownId(page)!;
+  await expect(rowName(page)).toBeVisible({ timeout: 30_000 });
+  const name = (await rowName(page).textContent())!.trim();
+
+  await rowName(page).click();
+  await expect(page).toHaveURL(new RegExp(`/osoba/[^?]*-${shown}$`), {
+    timeout: 30_000,
+  });
+  await expect(page.locator("h1").first()).toHaveText(name, {
+    timeout: 30_000,
+  });
+
+  await page.goBack();
+  await expectShowing(page, shown, name);
+});
