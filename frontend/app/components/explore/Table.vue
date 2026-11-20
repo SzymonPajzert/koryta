@@ -93,10 +93,16 @@
     <template #[`item.name`]="{ item }">
       <div class="name-cell">
         <div class="d-flex flex-wrap align-center ga-1">
+          <!-- With no drawer to open, the name goes to the person's own page:
+               /eksploruj/nowe draws that page under the row, but a reviewer
+               still needs a way to the page itself. -->
           <template v-if="disableFocus">
-            <span class="person-name text-primary font-weight-bold">
+            <NuxtLink
+              class="person-name text-primary font-weight-bold"
+              :to="personPath(item)"
+            >
               {{ item.name }}
-            </span>
+            </NuxtLink>
           </template>
           <template v-else>
             <!-- `text-primary cursor-pointer` is load-bearing as a locator and
@@ -472,6 +478,7 @@ import {
 import { polishCounting } from "~/composables/polish";
 import { categoryIcon } from "~/utils/categoryIcons";
 import { longDate, monthYear } from "~~/shared/dates";
+import { generateEntityUrl } from "~~/shared/slugs";
 import { voteMeaning, voteScaleSummary } from "~/composables/votes";
 import type { PersonRich } from "~~/shared/model";
 
@@ -519,6 +526,10 @@ const VOTES_SORT_OPTIONS = [
  * nothing when both are. `factsCount` is absent rather than zero on a person
  * ingested before the counter existed - see `NodeStats.factsCount` - which
  * reads the same way here. */
+/** The person's own page, for the name where there is no drawer to open. */
+const personPath = (item: PersonRich) =>
+  generateEntityUrl("person", item.id, item.name);
+
 function countsCaption(item: PersonRich): string {
   const parts: string[] = [];
   if (item.stats?.notesCount) {

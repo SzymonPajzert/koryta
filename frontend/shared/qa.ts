@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "kolejka-imie-prowadzi-do-strony-osoby",
+    title: "Imię w kolejce prowadzi na stronę osoby",
+    description:
+      "W /eksploruj/nowe imię i nazwisko w wierszu tabeli jest linkiem do strony osoby. Po powrocie przyciskiem Wstecz kolejka pokazuje tę samą osobę.",
+    steps: [
+      "Zaloguj się, otwórz /eksploruj/nowe i kliknij imię i nazwisko w wierszu tabeli: otwiera się strona tej osoby.",
+      "Kliknij Wstecz w przeglądarce: w kolejce jest ta sama osoba.",
+    ],
+    link: "/eksploruj/nowe",
+    area: "contributor",
+    fixes: ["INTrv78UrTpxi1P8tC2R"],
+  },
+  {
     id: "profil-twoje-interakcje",
     title: "„Twoje interakcje” na /profil: propozycje zmian i głosy",
     description:
