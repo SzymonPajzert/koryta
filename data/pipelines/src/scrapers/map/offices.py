@@ -89,13 +89,133 @@ _OFFICE_WORDS = frozenset(
     {"URZAD", "GMINY", "GMINA", "MIASTA", "MIASTO", "MIEJSKI", "I", "W", "WE"}
 )
 
-#: "URZĄDGMINY RADZIECHOWY-WIEPRZ", the catalogue's one run-together name.
+#: "URZĄDGMINY RADZIECHOWY-WIEPRZ", the catalogue's one run-together urząd;
+#: and a patron or a number run into the word before it, "IM.JANA", "NR1".
 _GLUED = re.compile(r"\b(URZĄD)(GMINY|MIASTA|MIEJSKI)\b", re.IGNORECASE)
+_GLUED_PATRON = re.compile(r"\b(IM\.)(?=[^\W\d_])", re.IGNORECASE)
+_GLUED_NUMBER = re.compile(r"\b(NR\.?)(?=\d)", re.IGNORECASE)
 
 #: The words a name in normal case keeps lower: "Urząd Miasta i Gminy w Rui",
-#: "Nowe Miasto nad Pilicą". W, WE, I and NAD are the ones the catalogue's
-#: capitals hold; the rest are there for the next edition.
-_LOWER_WORDS = frozenset({"w", "we", "i", "nad", "pod", "na", "z", "ze", "o", "przy"})
+#: "Nowe Miasto nad Pilicą", "Dom Pomocy Społecznej dla Dzieci".
+_LOWER_WORDS = frozenset(
+    {"w", "we", "i", "nad", "pod", "na", "z", "ze", "o", "przy", "dla", "do", "oraz"}
+)
+
+#: Abbreviations Polish writes lower inside a name: "Szkoła Podstawowa nr 5
+#: im. ks. Jana Twardowskiego", "Państwowa Szkoła Muzyczna II st.".
+_LOWER_ABBREVIATIONS = frozenset(
+    {
+        "nr",
+        "nr.",
+        "im",
+        "im.",
+        "św",
+        "św.",
+        "ks",
+        "ks.",
+        "gen.",
+        "bryg.",
+        "prof.",
+        "dr",
+        "dr.",
+        "dra",
+        "st.",
+        "mjr",
+        "mjr.",
+        "płk",
+        "płk.",
+        "ppłk",
+        "ppłk.",
+        "kpt.",
+        "kard.",
+        "bł.",
+        "rtm.",
+        "hm.",
+        "kmdr",
+        "kmdr.",
+        "bp",
+        "bp.",
+        "abp",
+        "abp.",
+        "ps.",
+        "hr.",
+        "kpr.",
+        "inż.",
+        "mgr",
+        "ds.",
+        "pw.",
+        "z/s",
+        "ul.",
+        "al.",
+        "pl.",
+        "os.",
+    }
+)
+
+#: Acronyms with a vowel, which cannot be told from a word the way one without
+#: can ("DPS", "PCPR"), and those Polish writes with a small i.
+_ACRONYMS = {
+    word: word
+    for word in (
+        "SPZOZ",
+        "ZOZ",
+        "PGE",
+        "AK",
+        "CKU",
+        "SOSW",
+        "ZOL",
+        "SIM",
+        "PEC",
+        "OHP",
+        "KRUS",
+        "ZUS",
+        "USK",
+        "ZAZ",
+        "LO",
+        "SA",
+        "OPS",
+        "MOPS",
+        "GOPS",
+        "MGOPS",
+        "MOPR",
+        "PKO",
+        "PZU",
+    )
+} | {
+    "OSIR": "OSiR",
+    "MOSIR": "MOSiR",
+    "GOSIR": "GOSiR",
+    "CKZIU": "CKZiU",
+    "PGKIM": "PGKiM",
+    "ZGKIM": "ZGKiM",
+    "PWIK": "PWiK",
+    "MPWIK": "MPWiK",
+    "ZWIK": "ZWiK",
+    "ARIMR": "ARiMR",
+}
+
+_ROMAN = re.compile(r"C{0,3}(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})")
+_VOWELS = re.compile("[AEIOUYĄĘÓaeiouyąęó]")
+#: A patron's initials run together: "J.H." in "IM. J.H. DĄBROWSKIEGO".
+_INITIALS = re.compile(r"([^\W\d_]\.){2,}")
+#: What follows an "I" that is a numeral and not "and": "Branżowa Szkoła I
+#: Stopnia", "Szkoła Muzyczna I i II Stopnia".
+_DEGREE = frozenset({"STOPNIA", "STOPIEŃ", "ST.", "ST"})
+#: What a quoted or bracketed part of a name opens with: '"BAJKA"'.
+_OPENING = "\"„“”«'("
+_CLOSING = ".,;:)\"„“”»'"
+
+#: The legal forms after a company's name, as Polish writes them inside one.
+_COMPANY_FORMS = (
+    (re.compile(r"\bsp\. ?z ?o\. ?o\.?(?=\W|$)", re.IGNORECASE), "sp. z o.o."),
+    (
+        re.compile(r"(?<=\S )Spółka z Ograniczoną Odpowiedzialnością\b"),
+        "spółka z ograniczoną odpowiedzialnością",
+    ),
+    (re.compile(r"(?<=\S )Spółka Akcyjna\b"), "spółka akcyjna"),
+    (re.compile(r"\bS\.a\.(?=\W|$)"), "S.A."),
+    (re.compile(r"(?<=\S )m\. ?st\.", re.IGNORECASE), "m.st."),
+)
 
 COLUMNS = ["teryt", "region", "name", "regon", "nip"]
 
@@ -138,13 +258,13 @@ def offices_by_region(catalogue: pd.DataFrame, terc: pd.DataFrame) -> pd.DataFra
     office nobody works in any more under that number, and the other cannot be
     told apart from a second copy of itself once it is on the site.
     """
-    units = _Units(terc)
+    units = Units(terc)
     active = catalogue[
         (catalogue["Status"] == "ACTIVE") & catalogue["REGON"].notna()
     ].fillna("")
     # Before anything reads the names: run together, "URZĄDGMINY" does not
     # start the way a rural urząd's name does.
-    active = active.assign(**{"Nazwa podmiotu": active["Nazwa podmiotu"].map(_unglued)})
+    active = active.assign(**{"Nazwa podmiotu": active["Nazwa podmiotu"].map(unglued)})
 
     rows: list[dict[str, str | None]] = []
 
@@ -155,7 +275,7 @@ def offices_by_region(catalogue: pd.DataFrame, terc: pd.DataFrame) -> pd.DataFra
             {
                 "teryt": teryt,
                 "region": units.names.get(teryt),
-                "name": _recased(name or entry["Nazwa podmiotu"]),
+                "name": recased(name or entry["Nazwa podmiotu"]),
                 "regon": entry["REGON"].strip(),
                 "nip": entry["NIP"].strip() or None,
             }
@@ -191,29 +311,79 @@ def offices_by_region(catalogue: pd.DataFrame, terc: pd.DataFrame) -> pd.DataFra
     )
 
 
-def _unglued(name: str) -> str:
-    """The name single-spaced, with "URZĄDGMINY" as the two words it is."""
-    return _GLUED.sub(r"\1 \2", " ".join(name.split()))
+def unglued(name: str) -> str:
+    """The name single-spaced, with "URZĄDGMINY", "IM.JANA" and "NR1" as the
+    words they are."""
+    name = _GLUED.sub(r"\1 \2", " ".join(name.split()))
+    return _GLUED_NUMBER.sub(r"\1 ", _GLUED_PATRON.sub(r"\1 ", name))
 
 
-def _recased(name: str) -> str:
+def recased(name: str) -> str:
     """A name the catalogue prints in capitals, in normal case: "URZĄD MIASTA
     OPOLA" is "Urząd Miasta Opola". A name in any other case is the office's
     own spelling and is kept.
 
-    A new place on the site is stored under this name, and Szymon wants those
-    in normal case rather than the register's capitals (2026-11-11). Each word
+    A new place on the site is stored under this name, in normal case rather
+    than the register's capitals (decision on 2026-11-11). Each word
     and each part of a hyphenated one starts with a capital, as in
-    "Warmińsko-Mazurski", except the words in `_LOWER_WORDS`.
+    "Warmińsko-Mazurski", except the words in `_LOWER_WORDS` and the
+    abbreviations in `_LOWER_ABBREVIATIONS`; Roman numerals and acronyms stay
+    in capitals: "Szkoła Podstawowa nr 5 im. Jana Pawła II", "SPZOZ".
     """
     if not name.isupper():
         return name
     words = name.split(" ")
-    return " ".join(
-        word.lower()
-        if index > 0 and word.lower() in _LOWER_WORDS
-        else "-".join(part.capitalize() for part in word.split("-"))
-        for index, word in enumerate(words)
+    text = " ".join(_recased_word(words, index) for index in range(len(words)))
+    for form, written in _COMPANY_FORMS:
+        text = form.sub(written, text)
+    return text
+
+
+def _recased_word(words: list[str], index: int) -> str:
+    word = words[index]
+    opening = len(word) - len(word.lstrip(_OPENING))
+    if opening:
+        # The first word of a quoted or bracketed name: "Przedszkole "Pod
+        # Topolą"", "(SPZOZ)".
+        return word[:opening] + _recased_word([word[opening:]], 0)
+    lower = word.lower()
+    if index > 0 and lower in _LOWER_ABBREVIATIONS:
+        return lower
+    letters = word.strip(_CLOSING)
+    if len(letters) > 1 and _ROMAN.fullmatch(letters):
+        return word
+    if letters in _ACRONYMS:
+        return word.replace(letters, _ACRONYMS[letters])
+    if _INITIALS.fullmatch(word):
+        return word
+    # An acronym, unless it ends in a dot: "DPS" is one, "WLKP." is short
+    # for a word.
+    if (
+        len(letters) > 1
+        and letters.isalpha()
+        and not word.endswith(".")
+        and not _VOWELS.search(letters)
+    ):
+        return word
+    if index > 0 and lower in _LOWER_WORDS:
+        return "I" if word == "I" and _is_degree(words, index) else lower
+    return _capitalised(word)
+
+
+def _capitalised(word: str) -> str:
+    return "-".join(part.capitalize() for part in word.split("-"))
+
+
+def _is_degree(words: list[str], index: int) -> bool:
+    """Whether the "I" at `index` is a numeral: "I STOPNIA", "I I II STOPNIA"."""
+    following = [word.strip(_CLOSING) for word in words[index + 1 : index + 3]]
+    if following and following[0] in _DEGREE:
+        return True
+    return (
+        len(following) == 2
+        and following[0] == "I"
+        and bool(_ROMAN.fullmatch(following[1]))
+        and len(following[1]) > 1
     )
 
 
@@ -252,7 +422,7 @@ def _address(entry: pd.Series) -> tuple[str, ...]:
     )
 
 
-def _powiat_by_address(active: pd.DataFrame, units: "_Units") -> dict:
+def _powiat_by_address(active: pd.DataFrame, units: "Units") -> dict:
     """Powiat codes keyed by the address of the powiat's own catalogue entry.
 
     The entry for "POWIAT SŁUPSKI" is the legal person, not the office, but it
@@ -274,7 +444,7 @@ def _powiat_by_address(active: pd.DataFrame, units: "_Units") -> dict:
     return codes
 
 
-class _Units:
+class Units:
     """TERC, indexed the ways the catalogue's seat names need."""
 
     def __init__(self, terc: pd.DataFrame) -> None:
@@ -321,6 +491,11 @@ class _Units:
 
     def dzielnica(self, name: str) -> str | None:
         return self._dzielnice.get(normalize_unit_name(name))
+
+    def gminy(self, woj: str, name: str) -> list[tuple[str, str]]:
+        """The real gminy of that name in a województwo, as `(code, rodz)`:
+        two where a town and the villages around it share the name."""
+        return self._gminy.get((woj, normalize_unit_name(name)), [])
 
     def gmina_of_office(self, entry: pd.Series, woj: str) -> str | None:
         """The gmina an urząd miasta or gminy serves, or None if unsure.
