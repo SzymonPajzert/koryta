@@ -940,6 +940,104 @@ def test_a_koryta_people_from_before_birth_dates_still_merges(ctx):
     assert site_pages(ctx, pages)["birth_date"].isna().all()
 
 
+def site_page(
+    node_id: str,
+    name: str,
+    rejestr_io: str | None = None,
+    merged_into: str | None = None,
+) -> dict:
+    """One person node as `KorytaPeople` stores it: a tombstone, where
+    `merged_into` names the page it was merged into."""
+    return {
+        "id": node_id,
+        "full_name": name,
+        "rejestrIo": rejestr_io,
+        "merged_into": merged_into,
+        "birth_date": None,
+    }
+
+
+def match_site(ctx, krs: list[dict], pages: list[dict]) -> pd.DataFrame:
+    """`match_koryta` over the pages as `KorytaPeople` stores them, read
+    through `PeopleKorytaMerged` the way the night reads them."""
+    koryta = site_pages(ctx, pd.DataFrame(pages)).reset_index()
+    return match_koryta(ctx, krs, koryta.to_dict("records"))
+
+
+def test_a_page_merged_away_leaves_its_entry_to_the_page_it_went_into(ctx):
+    """The merge keeps the tombstone's link and carries it onto the survivor,
+    so an entry whose page was merged reached two pages, and `koryta_match`
+    gave it neither: on 2026-10-24 that was every such entry, 171 of 171.
+    Andrzej Marcin Golimont's page, linking 383093, was merged into Andrzej
+    Golimont's."""
+    link = "https://rejestr.io/osoby/383093"
+    result = match_site(
+        ctx,
+        [registered(krs_person("andrzej", "golimont", "1965-04-01"), "383093")],
+        [
+            site_page("tombstone", "Andrzej Marcin Golimont", link, "survivor"),
+            site_page("survivor", "Andrzej Golimont", link),
+        ],
+    )
+
+    assert list(result["koryta_id"]) == ["survivor"]
+
+
+def test_a_page_merged_away_is_not_a_namesake_of_the_page_it_went_into(ctx):
+    """Nor in the name tier. Marcin Kierwiński's page, linking no entry, was
+    merged into Marcin Piotr Kierwiński's, which links none either, and entry
+    1104298 fitted both by name: two pages, so neither."""
+    result = match_site(
+        ctx,
+        [registered(krs_person("marcin", "kierwiński", "1976-08-22"), "1104298")],
+        [
+            site_page("tombstone", "Marcin Kierwiński", merged_into="survivor"),
+            site_page("survivor", "Marcin Piotr Kierwiński"),
+        ],
+    )
+
+    assert list(result["koryta_id"]) == ["survivor"]
+
+
+def test_a_page_merged_away_lends_its_name_to_no_namesake(ctx):
+    """Why a tombstone is left out rather than followed to its survivor.
+
+    Witold Heronim Stępień's page linked no entry and was merged into Witold
+    Stępień's, which links 1332974, and by its name it fits namesakes of his:
+    405711, born 1968, is one. Kept, the tombstone offered them itself.
+    Followed, it would offer them the survivor - a page linking somebody
+    else's entry, which the name tier offers nobody. Only the namesake is in
+    the register here, so that the rule alone answers, and not the survivor's
+    own entry making the name ambiguous.
+    """
+    result = match_site(
+        ctx,
+        [registered(krs_person("witold", "stępień", "1968-10-28"), "405711")],
+        [
+            site_page("tombstone", "Witold Heronim Stępień", merged_into="survivor"),
+            site_page("survivor", "Witold Stępień", "https://rejestr.io/osoby/1332974"),
+        ],
+    )
+
+    assert list(result["koryta_id"]) == [None]
+
+
+@pytest.mark.parametrize(
+    "merged_into",
+    [{}, {"merged_into": float("nan")}],
+    ids=["built-before-merges", "restored-with-no-merge"],
+)
+def test_a_koryta_people_with_no_merge_keeps_every_page(ctx, merged_into):
+    """A `KorytaPeople` built before 2026-09-22 has no `merged_into`, and one
+    restored where no page was merged reads the column back as NaN. Neither
+    has a page to leave out."""
+    page = {"id": "node-1", "full_name": "Jan Kowalski", "rejestrIo": None}
+
+    pages = site_pages(ctx, pd.DataFrame([{**page, **merged_into}]))
+
+    assert list(pages.index) == ["node-1"]
+
+
 HETMAN_1963 = {
     **krs_person("krzysztof", "hetman", "1963-10-10"),
     "rejestrio_id": ["1203566"],
