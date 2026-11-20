@@ -244,6 +244,33 @@ def test_postgres_keeps_a_bands_strips_lines_and_pictures():
     assert row == band_with_hashes(band(SHA_A, 0, "viii"))
 
 
+def test_a_band_s_pictures_come_for_the_pages_asked_for_only():
+    store = MemoryBipDeclarationStore()
+    store.record_bands(SHA_A, 0, 1, [band(SHA_A, 0, "employer"), band(SHA_A, 0, "vii")])
+    store.record_bands(SHA_A, 4, 1, [band(SHA_A, 4, "employer")])
+    store.record_bands(SHA_A, 0, 2, [band(SHA_A, 0, "header", 2)])
+
+    pictures = store.band_pictures(1, [(SHA_A, 0)])
+
+    assert pictures == {
+        (SHA_A, 0, "employer"): (b"\x89PNG one", b"\x89PNG two"),
+        (SHA_A, 0, "vii"): (b"\x89PNG one", b"\x89PNG two"),
+    }
+    assert store.band_pictures(1, []) == {}
+
+
+def test_postgres_gives_a_band_s_pictures_in_its_strips_order():
+    rows = [(SHA_A, 0, "employer", [memoryview(b"\x89PNG one"), b"\x89PNG two"])]
+    store = PostgresBipDeclarationStore(FakePg({"b.pngs": rows}), LIST, create=False)  # type: ignore[arg-type]
+
+    assert store.band_pictures(1, [(SHA_A, 0)]) == {
+        (SHA_A, 0, "employer"): (b"\x89PNG one", b"\x89PNG two")
+    }
+    # Nothing asked, nothing read.
+    empty = PostgresBipDeclarationStore(FakePg({}), LIST, create=False)  # type: ignore[arg-type]
+    assert empty.band_pictures(1, []) == {}
+
+
 def test_postgres_cuts_the_bands_of_date_pages_without_them():
     crops = [
         # sha, host, url, bundle, filename, candidacy key, named, page, rotation

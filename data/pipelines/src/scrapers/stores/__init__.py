@@ -1667,9 +1667,9 @@ class DeclarationPages:
 class SentRow:
     """What the site was last sent for a record, and what it said."""
 
-    #: candidacy or extract.
+    #: candidacy, extract, or employment: a declaration's bands to read posts off.
     kind: str
-    #: The candidacy's key, or the extract's `<sha256>-p<page>`.
+    #: The candidacy's key, or the extract's (and its bands') `<sha256>-p<page>`.
     id: str
     #: A hash of what was sent: a record whose digest is unchanged is not sent again.
     digest: str
@@ -1765,4 +1765,12 @@ class BipDeclarationStore(metaclass=ABCMeta):
         self, version: int, with_images: bool = False
     ) -> list[DeclarationBandRow]:
         """Every band of this version, by file, page and band."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def band_pictures(
+        self, version: int, pages: list[tuple[str, int]]
+    ) -> dict[tuple[str, int, str], tuple[bytes, ...]]:
+        """The pictures of these (sha256, page) date pages' bands of this
+        version, by (sha256, page, band), in each band's strips' order."""
         raise NotImplementedError()

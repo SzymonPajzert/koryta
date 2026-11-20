@@ -14,8 +14,10 @@ night's list, which the job reads each run and hands the store
 - ``bip_decl_bands``: one row per band of such a page and version of the
   employment cut - its header, its employer's line, sections VII and VIII as
   PNG strips, their written lines and what OCR read in them;
-- ``bip_decl_sent``: one row per record sent to the site - a hash of what was
-  sent and the site's answer, so a run sends only what is new or changed.
+- ``bip_decl_sent``: one row per record sent to the site - a candidacy, a
+  date page's crops, or its bands to read posts off (kind ``employment``) - a
+  hash of what was sent and the site's answer, so a run sends only what is new
+  or changed.
 
 The crops and bands are pictures of named people's declarations, so they stay
 in this database on the machine that cut them, and go nowhere but the site's
@@ -521,6 +523,26 @@ class PostgresBipDeclarationStore(BipDeclarationStore):
             return [_band(row[:19], row[19]) for row in rows]
         return [_band(row) for row in rows]
 
+    def band_pictures(
+        self, version: int, pages: list[tuple[str, int]]
+    ) -> dict[tuple[str, int, str], tuple[bytes, ...]]:
+        if not pages:
+            return {}
+        rows = self.pg.fetchall(
+            """
+            SELECT b.sha256, b.page, b.band, b.pngs
+              FROM bip_decl_bands b
+              JOIN unnest(%s::text[], %s::int[]) AS wanted(sha256, page)
+                ON wanted.sha256 = b.sha256 AND wanted.page = b.page
+             WHERE b.version = %s
+            """,
+            ([sha for sha, _ in pages], [page for _, page in pages], version),
+        )
+        return {
+            (sha, int(page), band): tuple(bytes(png or b"") for png in pngs or [])
+            for sha, page, band, pngs in rows
+        }
+
 
 class MemoryBipDeclarationStore(BipDeclarationStore):
     """The same in memory, with the people mode's rows handed in: for tests."""
@@ -675,3 +697,13 @@ class MemoryBipDeclarationStore(BipDeclarationStore):
             )
             for row in rows
         ]
+
+    def band_pictures(
+        self, version: int, pages: list[tuple[str, int]]
+    ) -> dict[tuple[str, int, str], tuple[bytes, ...]]:
+        wanted = set(pages)
+        return {
+            (sha, page, band): tuple(s.png for s in row.strips)
+            for (sha, page, band, v), row in self.band_rows.items()
+            if v == version and (sha, page) in wanted
+        }
