@@ -59,6 +59,19 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "profil-twoje-interakcje",
+    title: "„Twoje interakcje” na /profil: propozycje zmian i głosy",
+    description:
+      "Karta „Twoje propozycje zmian” to teraz „Twoje interakcje”: obok propozycji są Twoje ostatnie głosy, każdy z osobą i głosem słowami skali. Chip „Głosy” zostawia same głosy.",
+    steps: [
+      "Zaloguj się, zagłosuj na kogoś w /eksploruj/nowe i wejdź na /profil: w „Twoje interakcje” ta osoba jest na górze, z głosem, np. „+3 Koryciarz”.",
+      "Kliknij chip „Głosy”: zostają same głosy. Drugie kliknięcie wraca do wszystkiego.",
+      "Kliknij wiersz z głosem: otwiera się strona tej osoby.",
+    ],
+    link: "/profil",
+    area: "contributor",
+  },
+  {
     id: "eksploruj-nowe-osoba-w-adresie",
     title: "Kolejka pamięta w adresie, kogo pokazuje",
     description:
