@@ -73,6 +73,81 @@ describe("EntityDetailsCard", () => {
     vi.mocked(authRequest).mockRejectedValue(new Error("Page not found"));
   });
 
+  it("shows a signed-in reader a draft's declarations under the facts, and asks nothing of a public page", async () => {
+    vi.mocked(authRequest).mockImplementation(async (url: string) => {
+      if (url === "/api/nodes/jan-szkic/declaration-crops") {
+        return {
+          publication: null,
+          crops: [],
+          searches: [
+            {
+              year: 2018,
+              office: "Rada gminy",
+              unit: "Strzelin (gmina miejsko-wiejska)",
+              status: null,
+              reason: null,
+              files: 0,
+              bipUrl: null,
+            },
+          ],
+          links: [],
+        };
+      }
+      throw new Error("Page not found");
+    });
+    const draft = await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: { ...person, id: "jan-szkic", published: false } as Person,
+        type: "person",
+      },
+    });
+    await flushPromises();
+    const html = draft.html();
+    const block = html.indexOf('data-testid="person-draft-declarations"');
+    expect(block).toBeGreaterThan(html.indexOf("Data urodzenia"));
+    expect(
+      draft.get('[data-testid="person-draft-declarations"]').text(),
+    ).toContain("Nie mamy oświadczenia majątkowego.");
+
+    const live = await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: { ...person, id: "jan-publiczny", published: true } as Person,
+        type: "person",
+      },
+    });
+    await flushPromises();
+    expect(
+      live.find('[data-testid="person-draft-declarations"]').exists(),
+    ).toBe(false);
+    expect(authRequest).not.toHaveBeenCalledWith(
+      "/api/nodes/jan-publiczny/declaration-crops",
+      expect.anything(),
+    );
+  });
+
+  it("asks nothing of a draft's declarations for a reader who is not signed in", async () => {
+    (useAuthState as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      user: ref(null),
+      isAdmin: ref(false),
+    });
+    await mountSuspended(EntityDetailsCard, {
+      props: {
+        entity: { ...person, id: "jan-gosc", published: false } as Person,
+        type: "person",
+      },
+    });
+    await flushPromises();
+    expect(authRequest).not.toHaveBeenCalledWith(
+      "/api/nodes/jan-gosc/declaration-crops",
+      expect.anything(),
+    );
+    // Signed in again, as the tests after this one take for granted.
+    (useAuthState as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      user: ref({ uid: "test-user" }),
+      isAdmin: ref(false),
+    });
+  });
+
   it("vouches for the birth date under the facts when a declaration confirms it", async () => {
     const declarations: PersonDeclarations = {
       autoPublished: null,
@@ -85,11 +160,20 @@ describe("EntityDetailsCard", () => {
         },
       ],
     };
-    vi.mocked(authRequest).mockResolvedValue(declarations);
-    // Its own id: the declarations are kept under the node's key.
+    vi.mocked(authRequest).mockImplementation(async (url: string) => {
+      if (url === "/api/nodes/jan-bip/declarations") return declarations;
+      throw new Error("Page not found");
+    });
+    // Its own id: the declarations are kept under the node's key. Public, as
+    // a page whose date a declaration confirmed is.
     const wrapper = await mountSuspended(EntityDetailsCard, {
       props: {
-        entity: { ...person, id: "jan-bip", birthDate: "1968-03-14" } as Person,
+        entity: {
+          ...person,
+          id: "jan-bip",
+          birthDate: "1968-03-14",
+          published: true,
+        } as Person,
         type: "person",
       },
     });

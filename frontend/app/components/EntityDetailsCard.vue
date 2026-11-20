@@ -127,6 +127,15 @@
       <CardPersonInfo :person="personEntity" class="mb-0" />
       <!-- Under the facts, as it vouches for one of them: the birth date. -->
       <PersonDeclarationNote v-if="entity?.id" :node-id="entity.id" />
+      <!-- Before the page is up, the same place tells a signed-in reader
+           where its declarations stand, with the crops, or with none, where
+           to look for them: researching a draft by hand, a reading on its
+           way decides whether to publish it now. -->
+      <PersonDraftDeclarations
+        v-if="user && entity?.id && entity.published !== true"
+        :node-id="entity.id"
+        :birth-date="personEntity?.birthDate ?? null"
+      />
       {{ entity?.content }}
     </v-card-text>
   </v-card>
