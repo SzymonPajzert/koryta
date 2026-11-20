@@ -12,6 +12,7 @@ from analysis.scores import (
     PeopleScoresCapture,
     PeopleScoresCoappointment,
     PeopleScoresFacts,
+    PeopleScoresLocality,
     PeopleScoresPageRank,
     PeopleScoresSuccession,
     PeopleScoresTurnover,
@@ -38,6 +39,7 @@ from analysis.scores.facts import (
     MAX_EXTRA_POINTS,
     article_points,
 )
+from analysis.scores.locality import UNDATED, stood_where_seated
 from analysis.scores.succession import as_date, successions
 from analysis.scores.turnover import same_region, year_of
 from entities.company_bodies import RADA_SPOLECZNA
@@ -167,6 +169,10 @@ class TestScoreRanges:
         )
         assert PeopleScoresPageRank.score_range == ScoreRange(ceiling=QUEUE_THRESHOLD)
         assert PeopleScoresCoappointment.score_range == ScoreRange(ceiling=2)
+        # Measured on 2026-11-20; the numbers are on the model.
+        assert PeopleScoresLocality.score_range == ScoreRange(
+            floor=QUEUE_THRESHOLD + 1, ceiling=5
+        )
 
     def test_the_fact_model_is_floored_but_unmeasured(self):
         # Floored so the people it names are actually read - the signal cannot
@@ -875,6 +881,81 @@ class TestTurnover:
         pop = self.build({"Anna": [("1", "2019-03-01")]}, {})
 
         assert model(PeopleScoresTurnover).raw_scores(None, pop) == {}
+
+
+class TestLocality:
+    COMPANIES = {
+        "here": CompanyFacts(name="Wodociągi Kraków", teryt="1261", is_public=True),
+        "gmina": CompanyFacts(name="ZGK Wieliczka", teryt="1219064", is_public=True),
+        "away": CompanyFacts(name="MPK Gdańsk", teryt="2261", is_public=True),
+        "nowhere": CompanyFacts(name="Bez adresu", teryt=None, is_public=True),
+    }
+
+    @staticmethod
+    def stood(teryt, year="2018"):
+        return Candidacy(year=year, teryt=teryt, party=None, committee=None)
+
+    def scores(self, employments, candidacies):
+        pop = population(employments, candidacies=candidacies, companies=self.COMPANIES)
+        return model(PeopleScoresLocality).raw_scores(None, pop)
+
+    def test_a_place_is_matched_down_to_the_powiat(self):
+        assert stood_where_seated("1261", "1261")
+        # A Sejm or sejmik candidacy names only the voivodeship.
+        assert stood_where_seated("12", "1261")
+        # A company seated in a gmina is in that gmina's powiat...
+        assert stood_where_seated("1219", "1219064")
+        # ...and two gminas of one powiat are the same place at that depth.
+        assert stood_where_seated("1219011", "1219064")
+        assert not stood_where_seated("1261", "2261")
+        assert not stood_where_seated(None, "1261")
+
+    def test_a_post_where_the_person_stood_counts_whenever_it_began(self):
+        # Turnover only looks at the election year and the one after.
+        scores = self.scores(
+            {"Anna": [("here", "2023-06-01")]}, {"Anna": [self.stood("1261")]}
+        )
+
+        assert scores == {"Anna": 2023.0}
+
+    def test_the_newest_matching_post_is_what_ranks(self):
+        scores = self.scores(
+            {
+                "Anna": [("here", "2025-02-01"), ("gmina", "2012-01-01")],
+                "Beata": [("here", "2012-01-01")],
+            },
+            {
+                "Anna": [self.stood("1261"), self.stood("1219")],
+                "Beata": [self.stood("12")],
+            },
+        )
+
+        assert scores == {"Anna": 2025.0, "Beata": 2012.0}
+
+    def test_an_undated_post_still_counts_below_any_dated_one(self):
+        scores = self.scores({"Anna": [("here", None)]}, {"Anna": [self.stood("1261")]})
+
+        assert scores == {"Anna": UNDATED}
+
+    def test_a_post_somewhere_else_or_unplaced_says_nothing(self):
+        scores = self.scores(
+            {"Anna": [("away", "2023-06-01"), ("nowhere", "2023-06-01")]},
+            {"Anna": [self.stood("1261")]},
+        )
+
+        assert scores == {}
+
+    def test_somebody_who_never_stood_is_not_this_models_business(self):
+        assert self.scores({"Anna": [("here", "2023-06-01")]}, {}) == {}
+
+    def test_whoever_it_names_lands_above_the_queue_threshold(self):
+        bands = banded_scores(
+            {"Anna": 2025.0, "Beata": 2012.0, "Celina": UNDATED},
+            PeopleScoresLocality.score_range,
+        )
+
+        assert min(bands.values()) > QUEUE_THRESHOLD
+        assert bands["Anna"] == 5
 
 
 class TestCapture:
