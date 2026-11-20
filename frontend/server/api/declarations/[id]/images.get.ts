@@ -1,6 +1,6 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
-import { requireAdmin } from "~~/server/utils/auth";
+import { getUser } from "~~/server/utils/auth";
 import {
   cropImages,
   type CropImages,
@@ -8,17 +8,19 @@ import {
 import { EXTRACT_ID_PATTERN } from "~~/shared/declarations";
 
 /**
- * The crop itself, for a row an admin opens on /admin/oswiadczenia: the line
- * with the date and, where the job cut one, the name. Asked for when the row
- * opens rather than with the overview, since a list of crops is a list of
- * handwriting nobody asked to see yet.
+ * The crop itself: the line with the date and, where the job cut one, the
+ * name. Asked for when it is drawn - a row an admin opens on
+ * /admin/oswiadczenia, a draft's page (`PersonDeclarationClip`) - rather
+ * than with the list, since a list of crops is a list of handwriting nobody
+ * asked to see yet.
  *
- * Admins only, checked before anything is read, and never cached: it is a
- * named person's handwriting. Readers get crops only through the reading
- * task, which never says whose page they are for.
+ * Signed-in readers only, checked before anything is read, as a draft's page
+ * shows its crops to them (decision on 2026-11-20); the reading task sends
+ * crops to anybody, without saying whose they are. Never cached: it is a
+ * named person's handwriting.
  */
 export default defineEventHandler(async (event): Promise<CropImages> => {
-  await requireAdmin(event);
+  await getUser(event);
   setResponseHeader(event, "Cache-Control", "private, no-store");
   const id = getRouterParam(event, "id") ?? "";
   const images = EXTRACT_ID_PATTERN.test(id)
