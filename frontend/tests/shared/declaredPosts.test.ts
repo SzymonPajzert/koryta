@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
+  asOfDay,
   declaredEntries,
+  declaredItemOf,
+  foldDeclared,
+  latestAsOf,
   publicDeclared,
+  rewriteAppliedEdges,
+  unionDeclared,
   withoutPrivateFields,
 } from "../../shared/declaredPosts";
 import type { DeclaredPost } from "../../shared/model";
@@ -100,5 +106,158 @@ describe("withoutPrivateFields", () => {
       target: "c1",
       as_of: "2024",
     });
+  });
+});
+
+describe("latestAsOf", () => {
+  it("reads a bare year as its 31 December", () => {
+    expect(asOfDay("2024")).toBe("2024-12-31");
+    expect(asOfDay("2024-05-15")).toBe("2024-05-15");
+    // So the year is later than a day inside it, and earlier than the next.
+    expect(
+      latestAsOf({
+        a: entry({ as_of: "2024-05-15" }),
+        b: entry({ as_of: "2024" }),
+      }),
+    ).toBe("2024");
+    expect(
+      latestAsOf({
+        a: entry({ as_of: "2024" }),
+        b: entry({ as_of: "2025-01-02" }),
+      }),
+    ).toBe("2025-01-02");
+  });
+
+  it("has nothing to say of no entries", () => {
+    expect(latestAsOf({})).toBeUndefined();
+  });
+});
+
+describe("unionDeclared", () => {
+  const first = entry({ as_of: "2023" });
+  const later = entry({ as_of: "2025" });
+
+  it("adds the entries the survivor lacks, and keeps its own as they are", () => {
+    const own = entry({ as_of: "2023", role: "starosta" });
+    expect(
+      unionDeclared(
+        { declared: { "a-p1:employer:0": own } },
+        {
+          declared: {
+            "a-p1:employer:0": first,
+            "b-p1:employer:0": later,
+          },
+        },
+      ),
+    ).toEqual({
+      declared: { "a-p1:employer:0": own, "b-p1:employer:0": later },
+    });
+  });
+
+  it("keeps a register edge without an as_of of its own", () => {
+    // Only an edge a declaration created carries one.
+    expect(
+      unionDeclared({}, {
+        declared: { "b-p1:employer:0": later },
+        as_of: "2025",
+      } as {
+        declared: unknown;
+      }),
+    ).toEqual({ declared: { "b-p1:employer:0": later } });
+  });
+
+  it("works the survivor's as_of out again from every entry it holds", () => {
+    expect(
+      unionDeclared(
+        { declared: { "a-p1:employer:0": first }, as_of: "2023" },
+        { declared: { "b-p1:employer:0": later } },
+      ),
+    ).toEqual({
+      declared: { "a-p1:employer:0": first, "b-p1:employer:0": later },
+      as_of: "2025",
+    });
+  });
+
+  it("is nothing when the copy brings no entry the survivor lacks", () => {
+    expect(
+      unionDeclared(
+        { declared: { "a-p1:employer:0": first } },
+        { declared: { "a-p1:employer:0": first } },
+      ),
+    ).toBeNull();
+    expect(unionDeclared({}, {})).toBeNull();
+  });
+});
+
+describe("foldDeclared", () => {
+  it("takes in every copy that goes, and names each move", () => {
+    const { union, moves } = foldDeclared(
+      { id: "kept", data: { as_of: "2023", declared: { k: entry() } } },
+      [
+        { id: "one", data: { declared: { "a-p1:employer:0": entry() } } },
+        { id: "bare", data: {} },
+        {
+          id: "two",
+          data: { declared: { "b-p2:vii:1": entry({ as_of: "2025" }) } },
+        },
+      ],
+    );
+
+    expect(Object.keys(union!.declared).sort()).toEqual([
+      "a-p1:employer:0",
+      "b-p2:vii:1",
+      "k",
+    ]);
+    expect(union!.as_of).toBe("2025");
+    expect(moves).toEqual([
+      { from: "one", to: "kept", keys: ["a-p1:employer:0"] },
+      { from: "two", to: "kept", keys: ["b-p2:vii:1"] },
+    ]);
+  });
+
+  it("names the move of a copy whose entries the survivor already holds", () => {
+    // The reading item lists the copy, which is going, whatever is added.
+    const held = { "a-p1:employer:0": entry() };
+    expect(
+      foldDeclared({ id: "kept", data: { declared: held } }, [
+        { id: "copy", data: { declared: held } },
+      ]),
+    ).toEqual({
+      union: null,
+      moves: [{ from: "copy", to: "kept", keys: ["a-p1:employer:0"] }],
+    });
+  });
+});
+
+describe("rewriteAppliedEdges", () => {
+  it("points a reading item's list at the edges that stay, each once", () => {
+    expect(declaredItemOf("f00d-p1:employer:0")).toBe("f00d-p1");
+    expect(
+      rewriteAppliedEdges(
+        ["copy", "other", "kept"],
+        [{ from: "copy", to: "kept", keys: ["f00d-p1:employer:0"] }],
+      ),
+    ).toEqual(["kept", "other"]);
+  });
+
+  it("follows one copy merged into another, and stops on a loop", () => {
+    expect(
+      rewriteAppliedEdges(
+        ["a"],
+        [
+          { from: "a", to: "b", keys: [] },
+          { from: "b", to: "c", keys: [] },
+        ],
+      ),
+    ).toEqual(["c"]);
+    expect(
+      rewriteAppliedEdges(
+        ["a"],
+        [
+          { from: "a", to: "b", keys: [] },
+          { from: "b", to: "a", keys: [] },
+        ],
+      ),
+    ).toEqual(["b"]);
   });
 });

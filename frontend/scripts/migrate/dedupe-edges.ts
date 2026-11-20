@@ -6,6 +6,12 @@ import {
   type EdgeLike,
 } from "../../server/utils/edges";
 import { pageIsPublic } from "../../shared/model";
+import {
+  declaredItemOf,
+  foldDeclared,
+  type DeclaredMove,
+  type DeclaredUnion,
+} from "../../shared/declaredPosts";
 
 /**
  * One-time migration: delete the edges that are genuinely a second copy of one
@@ -47,7 +53,9 @@ import { pageIsPublic } from "../../shared/model";
  *
  * Deleted edges take their revisions with them: a revision of an edge that
  * should never have existed is not history worth keeping, and leaving it would
- * orphan it.
+ * orphan it. What declarations said about a deleted copy goes onto the copy
+ * kept (`foldDeclared`), and the reading items that list a deleted copy are
+ * reported, for `rewriteAppliedEdges`.
  *
  * Usage (against the running dev:prod-data emulator):
  *   npx tsx scripts/migrate/dedupe-edges.ts            # dry run
@@ -67,13 +75,16 @@ if (!isProd) {
 
 const app = initializeApp({ projectId: "koryta-pl" });
 
-/** How much this copy knows, for choosing which one to keep. */
+/** How much this copy knows, for choosing which one to keep. What declarations
+ * said goes onto whichever copy is kept, so it does not decide which. */
 function informativeness(doc: FirebaseFirestore.QueryDocumentSnapshot): number {
   const data = doc.data();
   return Object.entries(data).filter(
     ([key, value]) =>
       key !== "revision_id" &&
       key !== "published" &&
+      key !== "declared" &&
+      key !== "as_of" &&
       value !== null &&
       value !== undefined &&
       value !== "",
@@ -163,6 +174,9 @@ async function migrate() {
   const collapsing: Record<string, number> = {};
   const kept: Record<string, { groups: number; copies: number; why: string }> =
     {};
+  /** The copies kept that take in a deleted copy's declared entries. */
+  const unions = new Map<string, DeclaredUnion>();
+  const declaredMoves: DeclaredMove[] = [];
 
   for (const group of groups.values()) {
     if (group.length < 2) continue;
@@ -178,11 +192,17 @@ async function migrate() {
     }
 
     const survivor = pickSurvivor(group);
-    for (const doc of group) {
-      if (doc.id === survivor.id) continue;
+    const retired = group.filter((doc) => doc.id !== survivor.id);
+    for (const doc of retired) {
       redundant.set(doc.id, doc);
       collapsing[type] = (collapsing[type] ?? 0) + 1;
     }
+    const { union, moves } = foldDeclared(
+      { id: survivor.id, data: survivor.data() },
+      retired.map((doc) => ({ id: doc.id, data: doc.data() })),
+    );
+    if (union) unions.set(survivor.id, union);
+    declaredMoves.push(...moves);
   }
 
   console.log(
@@ -196,6 +216,16 @@ async function migrate() {
       `  kept: ${entry.copies} extra ${type} edge(s) across ${entry.groups} ` +
         `group(s) — ${entry.why}`,
     );
+  }
+  console.log(
+    `  ${unions.size} edge(s) kept take in what declarations said about a ` +
+      `deleted copy.`,
+  );
+  // The reading items list the edges they wrote to; these are the lists that
+  // name a deleted copy, each to go through `rewriteAppliedEdges`.
+  for (const move of declaredMoves) {
+    const items = [...new Set(move.keys.map(declaredItemOf))];
+    console.log(`  ${move.from} -> ${move.to}: ${items.join(", ")}`);
   }
 
   // Revisions of an edge that is going away. Read after the edges so the set of
@@ -212,14 +242,22 @@ async function migrate() {
   if (commit) {
     let batch = db.batch();
     let pending = 0;
-    for (const doc of [...redundant.values(), ...orphanRevisions]) {
-      batch.delete(doc.ref);
+    const counted = async () => {
       pending++;
       if (pending >= 400) {
         await batch.commit();
         batch = db.batch();
         pending = 0;
       }
+    };
+    // Before any copy goes, so a run cut short has lost no entry.
+    for (const [id, union] of unions) {
+      batch.update(db.collection("edges").doc(id), union);
+      await counted();
+    }
+    for (const doc of [...redundant.values(), ...orphanRevisions]) {
+      batch.delete(doc.ref);
+      await counted();
     }
     if (pending > 0) await batch.commit();
   }
