@@ -684,6 +684,22 @@ export class MemoryFirestore {
   batch() {
     return new MemoryWriteBatch(this);
   }
+  /** Each write lands as it is handed over. */
+  bulkWriter() {
+    const land = async (write: Write) => {
+      this.write(write);
+      return {};
+    };
+    return {
+      set: (ref: MemoryDocumentReference, data: Data) =>
+        land({ kind: "set", ref, data: copy(data) }),
+      update: (ref: MemoryDocumentReference, data: Data) =>
+        land({ kind: "update", ref, data: copy(data) }),
+      delete: (ref: MemoryDocumentReference) => land({ kind: "delete", ref }),
+      flush: async () => {},
+      close: async () => {},
+    };
+  }
   async getAll(...args: unknown[]) {
     const last = args.at(-1);
     const options =
