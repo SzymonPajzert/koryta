@@ -515,6 +515,9 @@ EDGE_FIELDS = [
     # competing claim, so the ingest writes the correct one over it. Every
     # other lookup counts a removed edge as present, the way `findEdge` does.
     "deleted",
+    # Set only on an employment a declaration created: the latest `as_of` of
+    # what declarations say about it (`Edge.as_of` in frontend/shared/model.ts).
+    "as_of",
 ]
 
 #: The edge columns that are booleans rather than strings.

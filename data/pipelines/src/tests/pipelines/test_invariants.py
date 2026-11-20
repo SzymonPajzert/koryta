@@ -847,6 +847,8 @@ INTERNAL_FIELDS = {
     "needs_split",
     "nameChunksLower",
     "content_changed_at",
+    "declared",
+    "as_of",
 }
 
 

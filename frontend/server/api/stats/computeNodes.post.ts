@@ -73,6 +73,8 @@ const FIELDS = {
     "name",
     "start_date",
     "end_date",
+    // How old a declared post is, where a declaration created it.
+    "as_of",
     "position",
     "elected",
     "by_election",
