@@ -333,7 +333,7 @@ describe("isStalled", () => {
 
   describe("a request waiting for the morning export", () => {
     // Last heard from at 00:40 on 3 October in Warsaw, when the worker
-    // switched the machine off; the night's boot is due before 04:30.
+    // switched the machine off; the night's boot is due before 02:30.
     const waiting = {
       state: "queued" as const,
       heartbeatAt: "2026-10-02T22:40:00Z",
@@ -345,17 +345,17 @@ describe("isStalled", () => {
 
     it("is not stalled while the machine is off until the night", () => {
       expect(quiet("2026-10-03T00:30:00Z", waiting)).toBe(false);
-      // 04:30 in Warsaw, and the allowance after it.
-      expect(quiet("2026-10-03T03:00:00Z", waiting)).toBe(false);
-      expect(quiet("2026-10-03T03:01:00Z", waiting)).toBe(true);
+      // 02:30 in Warsaw, and the allowance after it.
+      expect(quiet("2026-10-03T01:00:00Z", waiting)).toBe(false);
+      expect(quiet("2026-10-03T01:01:00Z", waiting)).toBe(true);
     });
 
     it("still waiting after the night, counts to the next one", () => {
       // The export failed: last heard from at 07:05, after the night.
       const said = { ...waiting, heartbeatAt: "2026-10-03T05:05:00Z" };
       expect(quiet("2026-10-03T20:00:00Z", said)).toBe(false);
-      expect(quiet("2026-10-04T03:00:00Z", said)).toBe(false);
-      expect(quiet("2026-10-04T03:01:00Z", said)).toBe(true);
+      expect(quiet("2026-10-04T01:00:00Z", said)).toBe(false);
+      expect(quiet("2026-10-04T01:01:00Z", said)).toBe(true);
     });
 
     it("but waiting for the night, from its heartbeat alone", () => {

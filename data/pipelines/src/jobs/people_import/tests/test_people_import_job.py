@@ -55,9 +55,9 @@ def taken_at(moment: datetime) -> Export:
 #: The day the snapshot's frames are named after when no --koryta-date says.
 TODAY = CURRENT_DATE
 #: This morning's export, as Firestore stamps it.
-MORNING = warsaw(TODAY, 4, 0, 59)
+MORNING = warsaw(TODAY, 2, 0, 59)
 #: When the night's reprocess wrote the snapshot's frames.
-REPROCESS = warsaw(TODAY, 5, 26)
+REPROCESS = warsaw(TODAY, 3, 26)
 YESTERDAY = (date.fromisoformat(TODAY) - timedelta(days=1)).isoformat()
 
 
@@ -903,11 +903,11 @@ def test_a_run_says_which_export_it_compared_with(world, capsys):
     "argv",
     [[], ["--dry-run"], ["--scope", "not-on-koryta", "--max-new", "50"]],
 )
-def test_a_hand_run_between_midnight_and_four_is_refused(world, argv):
+def test_a_hand_run_between_midnight_and_two_is_refused(world, argv):
     """Yesterday's export has none of the pages yesterday's night created:
     compared with it, `not-on-koryta` would create them again."""
-    yesterdays = warsaw(YESTERDAY, 4, 0, 35)
-    world.clock = warsaw(TODAY, 2, 30)
+    yesterdays = warsaw(YESTERDAY, 2, 0, 35)
+    world.clock = warsaw(TODAY, 1, 30)
     world.export = taken_at(yesterdays)
     world.payloads = people(1)
 
@@ -947,10 +947,10 @@ def test_a_koryta_date_that_is_not_the_newest_exports_day_is_refused(world):
 def test_a_frame_cached_under_todays_name_before_the_export_is_rebuilt(
     world, refresh, capsys
 ):
-    """A run at two built `koryta_nodes_<today>` from yesterday's export, the
+    """A run at one built `koryta_nodes_<today>` from yesterday's export, the
     only one there was; `--refresh none` would have taken it as it is."""
     for pipeline in (KorytaNodes, KorytaEdges):
-        world.write_frame(pipeline(None), warsaw(TODAY, 2))
+        world.write_frame(pipeline(None), warsaw(TODAY, 1))
     world.payloads = people(1)
     world.answers = [person()]
 
@@ -1040,15 +1040,15 @@ def test_only_an_export_taken_today_at_four_or_later_is_compared_with(
     ],
 )
 def test_the_night_has_its_people_compared_with_the_export_it_took(world, argv, code):
-    """A night forced at three, before the 04:00 export: its export step
+    """A night forced at one, before the 02:00 export: its export step
     takes the one taken by hand at eleven, within its six hours, and names
     it. Named, the job compares with it; a hand run names none, and is
     refused as before."""
     eleven = warsaw(YESTERDAY, 23)
-    world.clock = warsaw(TODAY, 3, 10)
+    world.clock = warsaw(TODAY, 1, 10)
     world.export = taken_at(eleven)
     for pipeline in (KorytaNodes, KorytaEdges):
-        world.write_frame(pipeline(None), warsaw(TODAY, 2, 50))
+        world.write_frame(pipeline(None), warsaw(TODAY, 0, 50))
     world.payloads = people(1)
     world.answers = [person()]
 

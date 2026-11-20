@@ -110,7 +110,8 @@ const adminClient = new v1.FirestoreAdminClient();
 
 /**
  * The nightly dump the scrapers read (`snapshot.py`) and `npm run db:pull`
- * seeds the emulator from, taken at 04:00 Warsaw time.
+ * seeds the emulator from, taken at 02:00 Warsaw time (decision on 2026-11-20:
+ * the night on the VM follows it and is over before the morning).
  *
  * Once a day, not twice, because an export is billed one document read per
  * document exported - 94,103 of them as of 12 August 2026, and the reads do
@@ -125,9 +126,11 @@ const adminClient = new v1.FirestoreAdminClient();
  */
 export const scheduledFirestoreExport = onSchedule(
   {
-    // 04:00 in Warsaw, where the people who read the dump are, rather than in
-    // UTC - which would be 06:00 for half the year and 05:00 for the other.
-    schedule: "every day 04:00",
+    // 02:00 in Warsaw, where the people who read the dump are, rather than in
+    // UTC - which would be 04:00 for half the year and 03:00 for the other.
+    // 02:00 is the hour the clocks change in: on the last Sunday of March the
+    // export may come at 03:00 or not at all, in October it may run twice.
+    schedule: "every day 02:00",
     timeZone: "Europe/Warsaw",
     region: "europe-west1",
   },

@@ -541,7 +541,7 @@ describe("/admin/procesy", () => {
     expect(row.get("[data-health-detail]").text()).toBe(
       "Trwa od 04:30 - odpisy.",
     );
-    expect(row.get("[data-row-next]").text()).toBe("następne: 3.10, 04:30");
+    expect(row.get("[data-row-next]").text()).toBe("następne: 3.10, 02:30");
 
     await row.get("[data-row-toggle]").trigger("click");
     const runs = row.findAll("[data-run]").map((r) => r.attributes("data-run"));
@@ -557,7 +557,7 @@ describe("/admin/procesy", () => {
     expect(old.get("[data-run-chip]").text()).toBe("niedokończony");
     expect(old.get("[data-run-stop-reason]").text()).toBe("powód: deadline");
     expect(old.get("[data-run-exit]").text()).toBe("kod wyjścia 75");
-    expect(row.text()).toContain("codziennie o 04:30 czasu warszawskiego");
+    expect(row.text()).toContain("codziennie o 02:30 czasu warszawskiego");
     expect(row.text()).not.toContain("jeszcze nie uruchomiony");
   });
 
@@ -618,7 +618,7 @@ describe("/admin/procesy", () => {
     const page = await mountPage();
     const row = rowOf(page, "firestore_export");
     expect(row.get("[data-row-last]").text()).toBe("04:00 · 7 min");
-    expect(row.get("[data-row-next]").text()).toBe("następne: 3.10, 04:00");
+    expect(row.get("[data-row-next]").text()).toBe("następne: 3.10, 02:00");
     await row.get("[data-row-toggle]").trigger("click");
     expect(row.get("[data-probe]").text()).toContain(
       "date=2026-10-02T02:00:01_12345",
@@ -945,7 +945,7 @@ describe("/admin/procesy#przebieg-<id>", () => {
       "Czeka na dzisiejszą kopię bazy - w kolejce od 29 min.",
     );
     const dispatch = card.get("[data-focus-dispatch]").text();
-    expect(dispatch).toContain("wraca o 04:15");
+    expect(dispatch).toContain("wraca o 02:15");
     expect(dispatch).not.toContain("Maszynę uruchomiono");
     expect(card.find("[data-focus-redispatch]").exists()).toBe(false);
   });

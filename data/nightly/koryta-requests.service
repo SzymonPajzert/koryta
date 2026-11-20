@@ -28,7 +28,7 @@ ExecStart=/home/koryta/koryta/data/nightly/requests.sh
 ExecStopPost=+/home/koryta/koryta/data/nightly/poweroff.sh requests
 Restart=on-failure
 RestartSec=60
-# A stop - the schedule's 09:00, a shutdown - reaches the run in hand too; the
+# A stop - the schedule's 07:00, a shutdown - reaches the run in hand too; the
 # people import finishes the person it is sending and reports how far it got.
 TimeoutStopSec=120
 

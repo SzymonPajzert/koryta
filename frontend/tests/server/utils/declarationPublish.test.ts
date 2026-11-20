@@ -2044,15 +2044,15 @@ describe("the daily limit", () => {
     await queued();
     const before = state();
 
-    // 03:00 and 08:59 in Warsaw are in the window.
-    for (const now of ["2026-10-29T02:00:00Z", "2026-10-29T07:59:00Z"]) {
+    // 01:00 and 06:59 in Warsaw are in the window.
+    for (const now of ["2026-10-29T00:00:00Z", "2026-10-29T05:59:00Z"]) {
       const result = await drain(3, new Date(now));
       expect(result.skipped).toBe("night");
     }
     expect(state()).toBe(before);
 
-    // 09:00 is not.
-    const morning = await drain(3, new Date("2026-10-29T08:00:00Z"));
+    // 07:00 is not.
+    const morning = await drain(3, new Date("2026-10-29T06:00:00Z"));
     expect(morning.published).toEqual(["kowalska"]);
   });
 });
@@ -2341,7 +2341,7 @@ describe("an admin's press of „Opublikuj z kolejki”", () => {
     await queued();
     const before = state();
 
-    for (const now of ["2026-10-29T02:00:00Z", "2026-10-29T07:59:00Z"]) {
+    for (const now of ["2026-10-29T00:00:00Z", "2026-10-29T05:59:00Z"]) {
       expect(await press(0, new Date(now))).toMatchObject({
         skipped: "night",
         published: [],
@@ -3464,13 +3464,13 @@ describe("publishLimitOf", () => {
 });
 
 describe("inPeopleImportWindow", () => {
-  it("is 03:00 to 09:00 on a Warsaw clock, in summer time too", () => {
-    expect(inPeopleImportWindow(new Date("2026-10-29T01:59:00Z"))).toBe(false);
-    expect(inPeopleImportWindow(new Date("2026-10-29T02:00:00Z"))).toBe(true);
-    expect(inPeopleImportWindow(new Date("2026-10-29T08:00:00Z"))).toBe(false);
-    // 03:30 in Warsaw is 01:30 UTC in July.
-    expect(inPeopleImportWindow(new Date("2026-07-01T01:30:00Z"))).toBe(true);
-    expect(inPeopleImportWindow(new Date("2026-07-01T07:00:00Z"))).toBe(false);
+  it("is 01:00 to 07:00 on a Warsaw clock, in summer time too", () => {
+    expect(inPeopleImportWindow(new Date("2026-10-28T23:59:00Z"))).toBe(false);
+    expect(inPeopleImportWindow(new Date("2026-10-29T00:00:00Z"))).toBe(true);
+    expect(inPeopleImportWindow(new Date("2026-10-29T06:00:00Z"))).toBe(false);
+    // 01:30 in Warsaw is 23:30 UTC the day before in July.
+    expect(inPeopleImportWindow(new Date("2026-06-30T23:30:00Z"))).toBe(true);
+    expect(inPeopleImportWindow(new Date("2026-07-01T05:00:00Z"))).toBe(false);
   });
 });
 

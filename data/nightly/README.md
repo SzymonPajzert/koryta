@@ -1,19 +1,25 @@
 # The night on one VM
 
 Every night one small VM in `koryta-pl` boots, runs everything that keeps the
-data current, and switches itself off. It runs after the site's 04:00 export,
+data current, and switches itself off. It runs after the site's 02:00 export,
 when nobody is still editing, and compares tonight's people with that copy:
 
 | Warsaw time | What                                                                                                   |
 | ----------- | ------------------------------------------------------------------------------------------------------ |
-| 04:00       | `scheduledFirestoreExport` copies the site to `gs://koryta-pl-crawled/hostname=koryta.pl/date=<UTC>/` |
-| 04:15       | the instance schedule boots `koryta-nightly` (up to 15 minutes late, the docs say)                     |
-| 04:30       | `koryta-nightly.timer` starts `koryta-nightly.service`: `night.sh`, then `koryta_nightly`              |
-| ~06:30      | `declarations`: the site counts the declarations in people from predator's newest facts                |
-| ~06:30      | `compute_nodes`: autopush recounts every page's stats, the search lines among them                     |
-| ~06:30      | the night is over; `poweroff.sh` switches the VM off                                                   |
-| 08:30       | `--stop-by`: no step but `compress` and `tidy` starts after this                                       |
-| 09:00       | the instance schedule stops the VM, if a night hung                                                    |
+| 02:00       | `scheduledFirestoreExport` copies the site to `gs://koryta-pl-crawled/hostname=koryta.pl/date=<UTC>/` |
+| 02:15       | the instance schedule boots `koryta-nightly` (up to 15 minutes late, the docs say)                     |
+| 02:30       | `koryta-nightly.timer` starts `koryta-nightly.service`: `night.sh`, then `koryta_nightly`              |
+| ~04:30      | `declarations`: the site counts the declarations in people from predator's newest facts                |
+| ~04:30      | `compute_nodes`: autopush recounts every page's stats, the search lines among them                     |
+| ~04:30      | the night is over; `poweroff.sh` switches the VM off                                                   |
+| 06:30       | `--stop-by`: no step but `compress` and `tidy` starts after this                                       |
+| 07:00       | the instance schedule stops the VM, if a night hung                                                    |
+
+The night is over before the working morning (decision on 2026-11-20). On
+the last Sunday of March the clocks skip
+02:00-03:00: the VM boots at 03:15 and the night starts at 03:30, after an
+export Cloud Scheduler may run at 03:00 or skip (a skipped one holds that
+night's people). In October the hour repeats and the export may run twice.
 
 `night.sh` brings the checkout up to `KORYTA_REF` (`origin/main` by default),
 syncs the venv, builds the compressor, reads the secrets, and hands over to
@@ -331,7 +337,7 @@ builds and counts them and sends none.
 Scores: after the people, every scoring model (`analysis/scores`) is rebuilt
 and its shortlist reconciled with the votes it holds on the site - a changed
 score written, one it no longer gives taken back (`koryta_score_import`). The
-models rate the site's people as the 04:00 export has them and the pages the
+models rate the site's people as the 02:00 export has them and the pages the
 people step has just created (`scrapers/koryta/created.py`, read from what the
 import says it sent), so a new hire is in the queue on /eksploruj/nowe the same
 morning rather than after the next export. A model that rates nobody is not
@@ -409,7 +415,7 @@ At every boot `koryta-requests.service` (`requests.sh`) runs
   people with it and refuses an older one. A run asked for between midnight
   and the export stays queued, its card on /admin/procesy saying it waits for
   the export, and goes once the export's `.overall_export_metadata` is there,
-  with that export's stamp (`--export`) - at the 04:15 boot at the latest,
+  with that export's stamp (`--export`) - at the 02:15 boot at the latest,
   before the night, which waits for it (the runs asked for from 2026-10-06 to
   10-11 took 0.3-5.6 minutes);
 - takes `/var/lib/koryta-nightly/lock` for each run, as `night.sh` does for a
@@ -421,7 +427,7 @@ At every boot `koryta-requests.service` (`requests.sh`) runs
 - once it has run something - or found every queued run waiting for the
   export - and nothing more comes for 10 minutes, writes
   `poweroff-requested` and exits, and `poweroff.sh requests` switches the VM
-  off - never between 03:45 and 04:45 (the night is about to start), never
+  off - never between 01:45 and 02:45 (the night is about to start), never
   while somebody is logged in or a night holds the lock, never with
   `/etc/koryta/stay-up`. A VM booted by hand, where it has run nothing and
   nothing waits, stays up as before;
@@ -429,7 +435,7 @@ At every boot `koryta-requests.service` (`requests.sh`) runs
   the job's exit code, and at start a run this host was doing when it went down.
 
 Until the site may start the VM (task `grant-site-starts-nightly-vm`), a
-request waits for the next night: the 04:15 boot starts the worker too, which
+request waits for the next night: the 02:15 boot starts the worker too, which
 runs the queue once the export is done, or once the night lets go of the
 lock if it has taken it first.
 
@@ -475,9 +481,9 @@ and Secret Manager.
 
 3. Run the first night by hand, sending nobody. It is a cold one - empty
    `versioned/`, empty download cache - so it takes longer than the rest.
-   `--export-max-age 24` lets a daytime run take this morning's 04:00 export
+   `--export-max-age 24` lets a daytime run take this morning's 02:00 export
    as tonight's. Only one taken within 6 h of the start counts otherwise, so
-   a run started after 10:00 would wait 90 minutes for an export that comes
+   a run started after 08:00 would wait 90 minutes for an export that comes
    tomorrow and then hold the people step:
 
    ```bash
@@ -506,7 +512,7 @@ and Secret Manager.
    nights that build and count them and send none, put
    `KORYTA_NIGHTLY_ARGS=--people-dry-run` in `/etc/koryta/nightly.env`.
 
-Stop the VM afterwards, or leave it: the schedule boots it at 04:15 either
+Stop the VM afterwards, or leave it: the schedule boots it at 02:15 either
 way, and the timer runs the night on a VM that is already up too.
 
 ## Day to day
@@ -526,14 +532,24 @@ way, and the timer runs the night on a VM that is already up too.
   was measured on. Nothing is held or warned for it. A lag allowance
   (`within_budget(count, RECOMPUTE_LAG, allowance=True)`, the few nodes a
   sweep can be behind) is not a budget and is never listed.
-- **Log in during a night.** `sudo touch /etc/koryta/stay-up` before 04:30 and
+- **Log in during a night.** `sudo touch /etc/koryta/stay-up` before 02:30 and
   the VM stays up afterwards; remove it, or the VM runs - and bills - until
-  the schedule's 09:00 stop. A boot outside the night window runs no night -
+  the schedule's 07:00 stop. A boot outside the night window runs no night -
   only the requests worker, which does what is queued (above).
 - **One step by hand.** `night.sh --force --only people --people-dry-run`
   (the `systemd-run` line above). Steps left out by `--only` or `--skip` hold
   nothing back. A real people run by hand creates pages no model has rated:
   add `--only scores`, or they wait for the next night.
+- **Moving the night.** Four places move together, on the same day, or a
+  night is lost: the export's `schedule` in `frontend/functions/src/index.ts`
+  (deployed by hand: `firebase deploy --only functions:scheduledFirestoreExport`),
+  the instance schedule (`gcloud compute resource-policies update
+  instance-schedule koryta-nightly --region=europe-central2
+  --vm-start-schedule=... --vm-stop-schedule=...`, or `create-vm.sh` again),
+  the timer and the units (`setup-vm.sh` again: systemd reads its own copy, and
+  night.sh runs the night before's copy of itself), and the hours in the code
+  (`EXPORT_HOUR`, the window and `--stop-by` above, the worker's `--keep-up`,
+  `jobs.ts` and `PEOPLE_IMPORT_WINDOW` on the site).
 - **Other code.** `KORYTA_REF` in `/etc/koryta/nightly.env` - a tag holds the
   VM still while `main` moves. Every merge to `main` is otherwise live the
   next night.
@@ -600,7 +616,7 @@ shared cache grows by the night's backups as `main`; how long it keeps them is
 | ------------------------- | ------------------------------------------------------------------------------- |
 | `create-vm.sh`            | the GCP side, once: service account, grants, secrets, VM, schedule              |
 | `setup-vm.sh`             | the VM side, idempotent: packages, user, uv, Go, checkout, `/etc/koryta`, units |
-| `koryta-nightly.timer`    | 04:30 Warsaw; catches up a missed start after boot                              |
+| `koryta-nightly.timer`    | 02:30 Warsaw; catches up a missed start after boot                              |
 | `koryta-nightly.service`  | runs `night.sh` as `koryta`, then `poweroff.sh` as root                         |
 | `night.sh`                | night window, lock, checkout, venv, compressor, secrets, then `koryta_nightly`  |
 | `koryta-requests.service` | at every boot: `requests.sh`, the worker for runs asked for on the site         |

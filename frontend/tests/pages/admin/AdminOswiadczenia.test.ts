@@ -669,7 +669,7 @@ describe("/admin/oswiadczenia", () => {
 
     expect(snackbar(page)).toEqual({
       text:
-        "Nikogo nie opublikowano: od 3:00 do 9:00 trwa nocny import osób, " +
+        "Nikogo nie opublikowano: od 1:00 do 7:00 trwa nocny import osób, " +
         "który mógłby cofnąć publikację. W kolejce czeka jeszcze 9 osób.",
       color: null,
     });
@@ -773,7 +773,7 @@ describe("/admin/oswiadczenia", () => {
         "Szkic z tą samą datą publikuje się sam, razem z zatrudnieniami w KRS i wyborami w regionie z oświadczenia, najwyżej 10 osób dziennie. " +
         "Przycisk „Opublikuj z kolejki” publikuje od razu do 25 czekających osób, ponad dzienny limit, także przy wyłączonym publikowaniu automatycznym. " +
         "Każda strona przechodzi te same sprawdzenia co przy publikacji automatycznej, więc część może zostać wstrzymana, a „Dziś” liczy tylko publikacje automatyczne. " +
-        "W czasie importu osób, w tym nocnego od 3:00 do 9:00, nie publikuje się nikogo, także przyciskiem. " +
+        "W czasie importu osób, w tym nocnego od 1:00 do 7:00, nie publikuje się nikogo, także przyciskiem. " +
         "Data przyjęta przez administratora nikogo nie publikuje: szkic z nią czeka w sekcji „Wstrzymane publikacje” na publikację ręczną.",
     );
     // Not every date on the list is one readers agreed on.
