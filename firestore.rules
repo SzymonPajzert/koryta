@@ -206,6 +206,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Links to a draft's declaration that readers found by hand, given on
+    // the page through /api/nodes/<id>/declaration-links: who gave which
+    // stays on the server.
+    match /declarationLinks/{linkId} {
+      allow read, write: if false;
+    }
+
     // Each counted person's stage and candidacies, which the people count
     // moves during the day (server/utils/declarationPeopleCount.ts). Server
     // only: the pages read the counts through /api/declarations/people.

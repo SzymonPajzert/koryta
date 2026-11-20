@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
     setHeader,
     clear,
     requireAdmin: vi.fn(),
+    getUser: vi.fn(),
     decideExtract: vi.fn(),
     cropImages: vi.fn(),
     linkedOnAPage: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock("firebase-admin/app", () => ({ getApp: () => ({}) }));
 vi.mock("../../../../server/utils/auth", async (original) => ({
   ...(await original<typeof import("../../../../server/utils/auth")>()),
   requireAdmin: mocks.requireAdmin,
+  getUser: mocks.getUser,
 }));
 vi.mock("../../../../server/utils/declarationDecisions", async (original) => ({
   ...(await original<
@@ -112,6 +114,7 @@ beforeEach(() => {
   mocks.state.id = ID;
   mocks.state.body = {};
   mocks.requireAdmin.mockResolvedValue({ uid: "admin-uid", admin: true });
+  mocks.getUser.mockResolvedValue({ uid: "reader-uid", admin: false });
   mocks.decideExtract.mockImplementation(
     async (_db, args: { decision: { verdict: string; value?: string } }) => ({
       id: ID,
@@ -134,7 +137,7 @@ beforeEach(() => {
 });
 
 describe("api/declarations/[id]/images", () => {
-  it("answers an admin with the crop, never to be cached", async () => {
+  it("answers a signed-in reader with the crop, never to be cached", async () => {
     const crop = { date: "data:image/png;base64,AAAA", name: null };
     mocks.cropImages.mockResolvedValue(crop);
 
@@ -143,10 +146,12 @@ describe("api/declarations/[id]/images", () => {
     expect(headers()["Cache-Control"]).toBe("private, no-store");
   });
 
-  it("reads nothing for somebody who is not an admin", async () => {
-    mocks.requireAdmin.mockRejectedValue(refused());
+  it("reads nothing for somebody who is not signed in", async () => {
+    mocks.getUser.mockRejectedValue(
+      Object.assign(new Error("Proszę się zalogować."), { statusCode: 401 }),
+    );
 
-    expect((await failure(images(event))).statusCode).toBe(403);
+    expect((await failure(images(event))).statusCode).toBe(401);
     expect(mocks.cropImages).not.toHaveBeenCalled();
   });
 

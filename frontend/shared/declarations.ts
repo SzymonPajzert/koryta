@@ -1423,3 +1423,138 @@ export type PersonDeclarations = {
     office: LocalOffice | null;
   }[];
 };
+
+/** One of a page's crops, as a signed-in reader sees it on the page while it
+ * is a draft. */
+export type PersonDeclarationCrop = {
+  id: string;
+  /** Never `withdrawn`: a crop an admin took back is nobody's. */
+  status: ExtractStatus;
+  /** Why the cutter cut nothing, of a `failed` one: the job's code
+   * (`declarationReasonLabel` names it). */
+  failure: string | null;
+  unit: string;
+  office: LocalOffice | null;
+  /** The whole declaration on BIP. */
+  documentUrl: string;
+  /** Answers that vote, given so far. */
+  answers: number;
+  /** The settled reading, `YYYY-MM-DD` or `YYYY`, and who settled it. */
+  agreed: string | null;
+  agreedBy: SettledBy | null;
+  /** What the settled reading said about this page, once compared. */
+  outcome: PageOutcome | null;
+  /** The pictures' own pixels; null for a date the job read off a typed
+   * form and sent without one. */
+  imageSize: {
+    date: { width: number; height: number };
+    name: { width: number; height: number } | null;
+  } | null;
+};
+
+/** Where the publication of a page that is not public stands, as its
+ * record says (`declarationPublications`). `declined` is a held record an
+ * admin said will not be published. */
+export type PersonPublicationState = {
+  status: "queued" | "publishing" | "held" | "declined";
+  reason: PublicationHoldReason | null;
+  /** Of a held page: whether a paid public post is on it now
+   * (`pagesWithAPublicPost`), which decides what an admin does with it. */
+  paidPost: boolean;
+};
+
+/** The first local elections whose winners a page with no crop lists, with
+ * the search for each one's declaration (decision on 2026-11-20): the terms
+ * the crawler looks for declarations of. */
+export const DECLARATION_SEARCH_SINCE = 2014;
+
+/** A local election the person won, and what the crawler found when it
+ * looked for their declaration on that unit's BIP: on a draft with no crop,
+ * where to look for it by hand. */
+export type PersonDeclarationSearch = {
+  year: number;
+  office: LocalOffice;
+  /** The gmina as the crawler names it, or the region the page files the
+   * candidacy under where the crawler never looked. */
+  unit: string;
+  /** The crawler's verdict, or null where it never looked. */
+  status: CandidacyStatus | null;
+  /** The crawler's code for it (`declarationReasonLabel` names it). */
+  reason: string | null;
+  /** Files that came down for it. */
+  files: number;
+  /** Where its search started: the unit's BIP, or its office's website. */
+  bipUrl: string | null;
+};
+
+/** A link to a person's declaration somebody found by hand and gave on the
+ * page (`declarationLinks`), for the crawl to fetch. Who gave it stays on the
+ * server: the page says only whether it was this reader. */
+export type PersonDeclarationLink = {
+  url: string;
+  /** When it was given, ISO. */
+  at: string;
+  mine: boolean;
+};
+
+/** The longest link the page takes, as the ingest takes a declaration's. */
+export const MAX_DECLARATION_LINK_LENGTH = 2000;
+
+/** `POST /api/nodes/<id>/declaration-links`. */
+export const declarationLinkSchema = z.object({
+  url: z
+    .string()
+    .trim()
+    .max(MAX_DECLARATION_LINK_LENGTH)
+    .refine((value) => {
+      try {
+        const url = new URL(value);
+        return (
+          (url.protocol === "http:" || url.protocol === "https:") &&
+          url.hostname.includes(".")
+        );
+      } catch {
+        return false;
+      }
+    }, "an http(s) address"),
+});
+
+/** `GET /api/nodes/<id>/declaration-crops`: the crops of a draft's
+ * declarations and where its publication stands, for a signed-in reader of
+ * the page before it is public (decision on 2026-11-20), and with no crop,
+ * the elections it won, the searches for their declarations and the links
+ * readers gave. */
+export type PersonDeclarationCrops = {
+  publication: PersonPublicationState | null;
+  /** The ones that tell most first (`cropOrder`). */
+  crops: PersonDeclarationCrop[];
+  /** Only where there is no crop: the newest first. */
+  searches: PersonDeclarationSearch[];
+  /** Only where there is no crop: the oldest first. */
+  links: PersonDeclarationLink[];
+};
+
+/** How much a crop says about its page, for the order it is shown in: a
+ * date that matches the page first, then a date that contradicts it -
+ * likely a namesake's declaration, or a date wrong on one side, and either
+ * way more than a reading still to come - then one readers left to an admin,
+ * then what still waits for readers (the most answered first), then a
+ * reading compared with nothing, then the unreadable, and last a declaration
+ * nothing could be cut from. */
+export function cropOrder(crop: PersonDeclarationCrop): number {
+  if (crop.status === "agreed") {
+    if (
+      crop.outcome === "queued" ||
+      crop.outcome === "held" ||
+      crop.outcome === "confirmed"
+    ) {
+      return 0;
+    }
+    if (crop.outcome === "different") return 1;
+    return 4;
+  }
+  if (crop.status === "disputed") return 2;
+  if (crop.status === "open") return 3;
+  if (crop.status === "failed") return 6;
+  return 5;
+}

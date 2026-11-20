@@ -177,6 +177,9 @@ export const scheduledFirestoreExport = onSchedule(
           "declarationExtracts",
           "declarationPublications",
           "declarationAnswers",
+          // Links to declarations readers found by hand on a draft's page,
+          // which the crawl fetches: it reads them from here.
+          "declarationLinks",
         ],
       });
 
