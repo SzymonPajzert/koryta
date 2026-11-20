@@ -383,6 +383,12 @@ class PeopleScoreModel(Pipeline):
         """
         raise NotImplementedError
 
+    def bands(self, raw: typing.Mapping[str, float]) -> dict[str, int]:
+        """The raw scores on the shared 1-5 scale: by rank within the model,
+        folded onto its range, unless a model's raw score already means
+        something on its own."""
+        return banded_scores(raw, self.score_range)
+
     def process(self, ctx: Context):
         population = self.population(ctx)
         print(
@@ -394,9 +400,8 @@ class PeopleScoreModel(Pipeline):
 
         raw = self.raw_scores(ctx, population)
         eligible = set(population.shortlist)
-        banded = banded_scores(
-            {key: score for key, score in raw.items() if key in eligible},
-            self.score_range,
+        banded = self.bands(
+            {key: score for key, score in raw.items() if key in eligible}
         )
         demoted = demote_rada_spoleczna_only(banded, population)
         held = sum(1 for key, score in demoted.items() if score != banded[key])
