@@ -147,6 +147,24 @@ class TestTheNode:
             == []
         )
 
+    def test_a_status_reaches_a_page_whose_sectors_a_person_set(self):
+        # The ingest lays the payload's owner and status over a person's
+        # sectors (`withRegisterFactsFrom`), so a new one is a change there too.
+        manual = nodes(company={"categoriesSource": "manual"})
+        assert changes(
+            payload(categories=["szpitale", "w-likwidacji"]), node_rows=manual
+        ) == [COMPANY_FIELDS]
+        assert changes(payload(categories=["szpitale"]), node_rows=manual) == []
+        gone = nodes(
+            company={
+                "categoriesSource": "manual",
+                "categories": ["koleje", "w-likwidacji"],
+            }
+        )
+        assert changes(payload(categories=["koleje"]), node_rows=gone) == [
+            COMPANY_FIELDS
+        ]
+
     def test_an_ownership_answer_a_person_gave_is_not_overwritten(self):
         assert (
             changes(

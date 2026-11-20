@@ -2,7 +2,7 @@
 
 import pytest
 
-from entities.company import short_name
+from entities.company import register_statuses, short_name
 
 
 @pytest.mark.parametrize(
@@ -123,6 +123,38 @@ def test_a_partner_being_wound_up_is_not_the_company():
         "SPÓŁKA KOMANDYTOWA"
     )
     assert short_name(name) == name
+
+
+@pytest.mark.parametrize(
+    "registered, statuses",
+    [
+        ("TELEWIZJA POLSKA SPÓŁKA AKCYJNA W LIKWIDACJI", ["W LIKWIDACJI"]),
+        # Read off a name `short_name` already shortened, which is what the
+        # company frames carry.
+        ("TELEWIZJA POLSKA W LIKWIDACJI", ["W LIKWIDACJI"]),
+        ('LUBUSKIE FABRYKI MEBLI SPÓŁKA AKCYJNA " W LIKWIDACJI"', ["W LIKWIDACJI"]),
+        ("HUTA OSTROWIEC S.A. W UPADŁOŚCI", ["W UPADŁOŚCI"]),
+        ("Warynski Trade w likwidacji", ["w likwidacji"]),
+        ("X SPÓŁKA AKCYJNA W LIKWIDACJI W UPADŁOŚCI", ["W LIKWIDACJI", "W UPADŁOŚCI"]),
+        ("PKP CARGO SPÓŁKA AKCYJNA W RESTRUKTURYZACJI", ["W RESTRUKTURYZACJI"]),
+        ("PKP INTERCITY SPÓŁKA AKCYJNA", []),
+        # The town `display_name` adds goes after the status.
+        ("TELEWIZJA POLSKA W LIKWIDACJI (Warszawa)", []),
+        # The partner is being wound up, not the company.
+        (
+            "TARASY OSIEDLE SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ W LIKWIDACJI "
+            "SPÓŁKA KOMANDYTOWA",
+            [],
+        ),
+        # A status alone is a name, not a status.
+        ("W LIKWIDACJI", []),
+        (None, []),
+        ("", []),
+        (float("nan"), []),
+    ],
+)
+def test_the_statuses_the_register_appends(registered, statuses):
+    assert register_statuses(registered) == statuses
 
 
 @pytest.mark.parametrize(

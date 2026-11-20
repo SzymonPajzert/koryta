@@ -317,6 +317,8 @@ class CompaniesPayloads(Pipeline):
                 continue
 
             name = row.get("name")
+            # Before the town goes after it: the status is read off its end.
+            register_name = name if isinstance(name, str) else None
             if not isinstance(name, str) or not name:
                 name = krs
             else:
@@ -355,6 +357,7 @@ class CompaniesPayloads(Pipeline):
                     form,
                     wiki_categories(row),
                     treasury=on_the_treasury_list(row.get("treasury_share")),
+                    name=register_name,
                 ),
                 "supervisory_body": supervisory_body(form),
                 "owners": owners,
