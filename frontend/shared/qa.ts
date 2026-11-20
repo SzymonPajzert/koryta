@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "stanowiska-trzecia-zakladka",
+    title: "„Stanowiska” jako trzecia zakładka na głównej",
+    description:
+      "Wykres stanowisk jest ostatnią zakładką i strona główna nie otwiera się już na nim. Połowa czytelników widzi na start mapę, połowa oświadczenia.",
+    steps: [
+      "Otwórz / w oknie prywatnym: zakładki to „Mapa”, „Oświadczenia”, „Stanowiska”, a otwarta jest mapa albo oświadczenia.",
+    ],
+    link: "/",
+    area: "public",
+  },
+  {
     id: "staz-liczony-raz-dziennie",
     title: "Okrągłe staże liczone raz dziennie",
     description:

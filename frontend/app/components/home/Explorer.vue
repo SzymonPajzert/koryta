@@ -5,9 +5,11 @@
       data-testid="home-explorer"
     >
       <v-col cols="12" class="d-md-none pb-0">
+        <!-- The chart is the last tab on both strips and no arm opens on it
+             (decision on 2026-11-20). -->
         <!-- Slim, without the 90 px floor, and tracked tighter than the
-             desktop strip (`.explorer__phone-tabs`): „MAPA STANOWISKA
-             OŚWIADCZENIA” at the default spacing needs a 373 px phone, and
+             desktop strip (`.explorer__phone-tabs`): „MAPA OŚWIADCZENIA
+             STANOWISKA” at the default spacing needs a 373 px phone, and
              on a 360 px one, the commonest Android width, the strip clipped
              the third label on the map, where most readers land. -->
         <v-tabs
@@ -18,9 +20,6 @@
           @update:model-value="countSwitch"
         >
           <v-tab value="map" slim min-width="0" @click="pin('map')">Mapa</v-tab>
-          <v-tab value="graph" slim min-width="0" @click="pin('graph')">
-            Stanowiska
-          </v-tab>
           <v-tab
             v-if="people"
             value="oswiadczenia"
@@ -30,6 +29,9 @@
           >
             Oświadczenia
           </v-tab>
+          <v-tab value="graph" slim min-width="0" @click="pin('graph')">
+            Stanowiska
+          </v-tab>
         </v-tabs>
       </v-col>
       <v-col cols="12" md="8">
@@ -38,10 +40,6 @@
             <HomeHeading title="Mapa koryciarstwa" center />
             <ChartPolandMap :picked="region" @click="pickRegion" />
           </v-tabs-window-item>
-          <v-tabs-window-item value="graph">
-            <HomeHeading title="Zmiany na stanowiskach" center />
-            <HomeTimeline :grouping="grouping" :range="range" />
-          </v-tabs-window-item>
           <v-tabs-window-item v-if="people" value="oswiadczenia">
             <HomeHeading
               title="Oświadczenia majątkowe"
@@ -49,6 +47,10 @@
               center
             />
             <OswiadczeniaPeoplePanel :people="people" />
+          </v-tabs-window-item>
+          <v-tabs-window-item value="graph">
+            <HomeHeading title="Zmiany na stanowiskach" center />
+            <HomeTimeline :grouping="grouping" :range="range" />
           </v-tabs-window-item>
         </v-tabs-window>
       </v-col>
@@ -61,7 +63,6 @@
           @update:model-value="countSwitch"
         >
           <v-tab value="map" @click="pin('map')">Mapa</v-tab>
-          <v-tab value="graph" @click="pin('graph')">Stanowiska</v-tab>
           <v-tab
             v-if="people"
             value="oswiadczenia"
@@ -69,6 +70,7 @@
           >
             Oświadczenia
           </v-tab>
+          <v-tab value="graph" @click="pin('graph')">Stanowiska</v-tab>
         </v-tabs>
 
         <!-- The side panel is the map's result list, and the chart's controls.
