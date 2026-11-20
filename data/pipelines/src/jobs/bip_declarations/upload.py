@@ -23,6 +23,18 @@ that serve them: the site publishes a page from its declaration only then
 read for a page that never goes up.
 After the upload the job calls `/api/declarations/sweep`, which compares the
 readings settled since with their pages.
+
+`--employment` sends instead the bands readers read declared posts off
+(`/api/ingest/declarations/employment`, `employmentIngestSchema` in
+`frontend/shared/declarationEmployment.ts`): for each declaration, its header
+and its employer's line as `cut-employment` cut them, with the machine's
+suggestions for a printed line. It goes for the pages without a paid public
+post, the other side of `--public-post`, once readers agreed on the
+declaration's birth date and the site matched it to that one page
+(`employment_records`). A person's newest declaration is read first; the older
+ones go too, put off (`later`). The bands are kept by their date page's id, so
+sending them again overwrites them, and a band readers answered keeps its
+pictures; `bip_decl_sent` keeps them as kind `employment`.
 """
 
 from __future__ import annotations
@@ -32,23 +44,27 @@ import hashlib
 import json
 import re
 import time
-from collections import Counter
-from collections.abc import Callable, Iterable, Iterator
+from collections import Counter, defaultdict
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any
+from typing import Any, Protocol
 
 import requests
 
+from jobs.bip_declarations.employment import EMPLOYMENT_CUT_VERSION
 from jobs.bip_declarations.reading import birth_window, in_windows, name_matches
+from jobs.bip_declarations.suggest import BodyIndex, Roles, suggest
 from scrapers.stores import (
     BipDeclarationStore,
+    DeclarationBandRow,
     DeclarationCropRow,
     DeclarationCutRow,
     DeclarationLink,
     PersonRow,
     SentRow,
 )
+from stores.bip_declarations import png_hash
 from stores.koryta_login import TokenError, TokenSource
 
 #: Where the site is. The merge of the declarations pages lands on autopush
@@ -327,9 +343,13 @@ def due(records: Iterable[tuple[str, str]], sent: dict[str, SentRow]) -> set[str
     return wanted
 
 
-def batches(extracts: list[Extract]) -> Iterator[list[Extract]]:
+class _Pictured(Protocol):
+    image_bytes: int
+
+
+def batches[T: _Pictured](extracts: list[T]) -> Iterator[list[T]]:
     """Extracts in requests the site takes: 25 at most, 8 MB of pictures at most."""
-    batch: list[Extract] = []
+    batch: list[T] = []
     size = 0
     for extract in extracts:
         if batch and (
@@ -567,4 +587,416 @@ def upload(
             log(f"sent {result.requests}: {dict(result.extracts)}")
     if result.requests:
         result.sweep = site.post(SWEEP, {})
+    return result
+
+
+# -- the posts a declaration names (`upload --employment`) -------------------------
+
+EMPLOYMENT_INGEST = "/api/ingest/declarations/employment"
+#: `bip_decl_sent`'s kind for a declaration's bands.
+EMPLOYMENT = "employment"
+#: The bands read now, besides the header: the employer's line under the birth
+#: date. Sections VII and VIII wait for the pages whose line names no post.
+EMPLOYMENT_BANDS = ("employer",)
+#: What the site takes of a band (frontend/shared/declarationEmployment.ts and
+#: declarations.ts): past these it would refuse the whole request, so such a
+#: declaration stays here.
+MAX_STRIPS = 12
+MAX_LINES = 40
+MAX_LINE_Y = 20_000
+MAX_STRIP_PAGE = 500
+MAX_IMAGE_BYTES = 200_000
+ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+#: What a comparison of an agreed date with its pages calls the page whose
+#: birth date it is (`employmentGate`, server/utils/declarationEmployment.ts).
+MATCHED = frozenset({"confirmed", "queued"})
+
+
+@dataclass(frozen=True)
+class DatePage:
+    """A declaration's date page as the site's export has it."""
+
+    id: str
+    #: Its birth date agreed, a full date.
+    agreed: bool = False
+    #: The pages that date was found to be the birth date of: `confirmed` a
+    #: published one, `queued` a draft.
+    matched: tuple[str, ...] = ()
+
+
+def date_pages(documents: Iterable[Mapping[Any, Any]]) -> dict[str, DatePage]:
+    """The `declarationExtracts` documents of an export, as date pages by id."""
+    pages = {}
+    for doc in documents:
+        agreed, outcomes = doc.get("agreed"), doc.get("pageOutcomes")
+        page = DatePage(
+            str(doc["id"]),
+            doc.get("status") == "agreed"
+            and isinstance(agreed, Mapping)
+            and agreed.get("kind") == "date",
+            tuple(
+                sorted(str(p) for p, outcome in outcomes.items() if outcome in MATCHED)
+            )
+            if isinstance(outcomes, Mapping)
+            else (),
+        )
+        pages[page.id] = page
+    return pages
+
+
+@dataclass
+class EmploymentItem:
+    """One declaration's header and bands as the site takes them, without
+    their pictures until it goes."""
+
+    id: str
+    #: The page it is read for.
+    person: str
+    #: Put off for a newer declaration of the person's.
+    later: bool
+    record: dict[str, Any]
+    digest: str
+    #: Each band sent, the header first, with its strips' hashes in order.
+    strips: dict[str, tuple[str, ...]]
+    image_bytes: int = 0
+
+    @property
+    def status(self) -> str:
+        """How the site is asked to place it: open, or later."""
+        return "later" if self.later else "open"
+
+    @property
+    def page(self) -> tuple[str, int]:
+        """The date page: its file's sha256, and the page."""
+        sha, _, page = self.id.rpartition("-p")
+        return sha, int(page)
+
+
+def image_hash(header: DeclarationBandRow, band: DeclarationBandRow) -> str:
+    """What a band's card shows, its header included: the site keys readers'
+    answers by it, so an answer to other pictures has no voice."""
+    shown = "|".join(s.png_hash for s in header.strips) + "||"
+    shown += "|".join(s.png_hash for s in band.strips)
+    return hashlib.sha256(shown.encode("ascii")).hexdigest()
+
+
+def _kids(row: PersonRow) -> list[str]:
+    """The pages a candidacy has on the site."""
+    kids = row.person.get("koryta_ids")
+    if isinstance(kids, str) or not isinstance(kids, Iterable):
+        return []
+    return [str(kid) for kid in kids]
+
+
+def _lines(band: DeclarationBandRow) -> list[dict[str, int]]:
+    """The band's written lines as the site takes them: a line with no height,
+    or on no strip of the band, is none."""
+    return [
+        {"strip": strip, "top": top, "bottom": bottom}
+        for strip, top, bottom in band.lines
+        if 0 <= strip < len(band.strips) and 0 <= top < bottom <= MAX_LINE_Y
+    ]
+
+
+def _band(band: DeclarationBandRow) -> dict[str, Any]:
+    return {
+        "typed": band.typed,
+        # The pictures go in when the item goes.
+        "strips": [{"page": strip.page} for strip in band.strips],
+        "lines": _lines(band),
+    }
+
+
+def _machine_date(value: str, score: float) -> dict[str, Any] | None:
+    """A date the cut read, with its line's score; None for none, or for one
+    the site would not take as a day (`isReadingDate`)."""
+    if not ISO_DAY.match(value):
+        return None
+    try:
+        day = date.fromisoformat(value)
+    except ValueError:
+        return None
+    if not 1900 <= day.year <= 2100:
+        return None
+    return {"value": value, "score": round(min(max(score, 0.0), 1.0), 3)}
+
+
+def _unfit(cut: Mapping[str, DeclarationBandRow]) -> str:
+    """Why a declaration's bands cannot go, or "": one not cut, or past what
+    the site takes."""
+    for name in ("header", *EMPLOYMENT_BANDS):
+        band = cut.get(name)
+        if band is None:
+            return f"{name}_missing"
+        if band.status != "cut" or not band.strips:
+            return f"{name}_{band.status if band.status != 'cut' else 'empty'}"
+        if len(band.strips) > MAX_STRIPS:
+            return "too_many_strips"
+        if len(_lines(band)) > MAX_LINES:
+            return "too_many_lines"
+        if any(strip.page > MAX_STRIP_PAGE for strip in band.strips):
+            return "too_far_in_the_file"
+    return ""
+
+
+def _whose(
+    page: DatePage | None, listed: set[str], without_post: set[str]
+) -> tuple[str, str]:
+    """The page a declaration is read for and "", or "" and why none."""
+    if page is None:
+        return "", "no_date_page"
+    if not page.agreed:
+        return "", "date_not_agreed"
+    if len(page.matched) != 1:
+        return "", "not_one_page"
+    [person] = page.matched
+    if person not in listed:
+        return "", "page_not_listed"
+    if person not in without_post:
+        return "", "public_post"
+    return person, ""
+
+
+def _when(header: DeclarationBandRow, year: int | None) -> str:
+    """The day a declaration is for as far as the job read it, to tell a
+    person's newest: its „stanu na”, else the day it was signed, else the end
+    of the year it is for; "" when nothing was read."""
+    return header.stan_na or header.dnia or (f"{year}-12-31" if year else "")
+
+
+def _unit(linked: list[PersonRow], person: str) -> str:
+    """The unit the declarant was elected in, whose bodies the suggestions put
+    first: of the candidacies the file was found for, the page's newest."""
+    mine = [row for row in linked if person in _kids(row)] or linked
+    newest = max(mine, key=lambda row: (row.election_year, row.key), default=None)
+    return newest.unit if newest else ""
+
+
+def _employment_item(
+    item: str,
+    person: str,
+    later: bool,
+    cut: Mapping[str, DeclarationBandRow],
+    unit: str,
+    bodies: BodyIndex,
+    roles: Roles | None,
+) -> EmploymentItem:
+    header = cut["header"]
+    record: dict[str, Any] = {
+        "id": item,
+        "cutVersion": EMPLOYMENT_CUT_VERSION,
+        "later": later,
+        "header": {
+            **_band(header),
+            "asOf": _machine_date(header.stan_na, header.stan_na_score),
+            "filedOn": _machine_date(header.dnia, header.dnia_score),
+        },
+    }
+    for name in EMPLOYMENT_BANDS:
+        band = cut[name]
+        # None on handwriting: what OCR reads of it is noise.
+        found = suggest(
+            band.ocr_text.splitlines(), unit, bodies, typed=band.typed, roles=roles
+        )
+        record[name] = {
+            **_band(band),
+            "imageHash": image_hash(header, band),
+            "suggestions": [row.payload() for row in found],
+        }
+    strips = {
+        name: tuple(strip.png_hash for strip in cut[name].strips)
+        for name in ("header", *EMPLOYMENT_BANDS)
+    }
+    hashes = [png for each in strips.values() for png in each]
+    return EmploymentItem(item, person, later, record, digest(record, *hashes), strips)
+
+
+def employment_records(
+    store: BipDeclarationStore,
+    pages: Mapping[str, DatePage],
+    bodies: BodyIndex,
+    *,
+    roles: Roles | None = None,
+) -> tuple[list[EmploymentItem], Counter[str]]:
+    """Every declaration whose posts the site should read now, and why each
+    other date page with bands is not, counted by reason.
+
+    A declaration is read for a page without a paid public post, as the
+    night's list says (`BipPersonOfInterest.public_post`, which `--public-post`
+    reads), once its date crop agreed and the comparison with the pages named
+    that one page alone (`pages`, the site's export): whose declaration it is
+    is the site's word. Of a person's declarations the newest is read first,
+    the others go `later`. Its header goes with the employer's line, and a
+    printed line with the machine's suggestions (`suggest`)."""
+    people = store.candidacies()
+    if all(row.person.get("public_post") is None for row in people):
+        raise ListTooOld(
+            "the night's list says nobody's public_post: it was built before the "
+            "field existed; the next night's list will"
+        )
+    listed: set[str] = set()
+    without_post: set[str] = set()
+    for row in people:
+        listed.update(_kids(row))
+        # A candidacy with a post may owe it to another of its pages; one
+        # without has none on any.
+        if row.person.get("public_post") is False:
+            without_post.update(_kids(row))
+    by_key = {row.key: row for row in people}
+    linked: dict[str, list[PersonRow]] = defaultdict(list)
+    for link in store.links():
+        if link.key in by_key:
+            linked[link.sha256].append(by_key[link.key])
+    years = {(crop.sha256, crop.page): crop.declaration_year for crop in store.crops()}
+    cuts: dict[tuple[str, int], dict[str, DeclarationBandRow]] = defaultdict(dict)
+    for band in store.bands(EMPLOYMENT_CUT_VERSION):
+        cuts[(band.sha256, band.page)][band.band] = band
+
+    left_out: Counter[str] = Counter()
+    readable: dict[str, list[tuple[str, str, dict[str, DeclarationBandRow]]]] = (
+        defaultdict(list)
+    )
+    for (sha, page), cut in sorted(cuts.items()):
+        item = extract_id(sha, page)
+        person, why = _whose(pages.get(item), listed, without_post)
+        why = why or _unfit(cut)
+        if why:
+            left_out[why] += 1
+            continue
+        when = _when(cut["header"], years.get((sha, page)))
+        readable[person].append((when, item, cut))
+
+    items = []
+    for person, declarations in readable.items():
+        _, newest, _ = max(declarations, key=lambda d: d[:2])
+        for _, item, cut in declarations:
+            sha, _, _ = item.rpartition("-p")
+            unit = _unit(linked[sha], person)
+            items.append(
+                _employment_item(item, person, item != newest, cut, unit, bodies, roles)
+            )
+    items.sort(key=lambda each: each.id)
+    return items, left_out
+
+
+@dataclass
+class EmploymentPlan:
+    """What an employment upload sends, and what it does not."""
+
+    #: The declarations new or changed since the last upload.
+    items: list[EmploymentItem]
+    #: Declarations to read that the site was sent as they are.
+    unchanged: int = 0
+    #: Date pages with bands that are not read now, by why.
+    left_out: Counter[str] = field(default_factory=Counter)
+
+    def statuses(self) -> Counter[str]:
+        """The items to send, by how the site is asked to place them."""
+        return Counter(item.status for item in self.items)
+
+
+def employment_plan(
+    store: BipDeclarationStore,
+    pages: Mapping[str, DatePage],
+    bodies: BodyIndex,
+    *,
+    roles: Roles | None = None,
+) -> EmploymentPlan:
+    """`employment_records` less what the site was sent as it is."""
+    items, left_out = employment_records(store, pages, bodies, roles=roles)
+    wanted = due(((item.id, item.digest) for item in items), store.sent(EMPLOYMENT))
+    return EmploymentPlan(
+        [item for item in items if item.id in wanted],
+        len(items) - len(wanted),
+        left_out,
+    )
+
+
+def _with_pictures(
+    store: BipDeclarationStore, items: list[EmploymentItem], held: Counter[str]
+) -> list[EmploymentItem]:
+    """The items with their pictures, base64 as the site takes them. One whose
+    bands were cut again since it was planned waits for the next run, and so
+    does one with a picture the site would refuse."""
+    pictures = store.band_pictures(EMPLOYMENT_CUT_VERSION, [i.page for i in items])
+    ready = []
+    for item in items:
+        sha, page = item.page
+        pngs = {name: pictures.get((sha, page, name), ()) for name in item.strips}
+        if any(
+            tuple(map(png_hash, pngs[name])) != hashes
+            for name, hashes in item.strips.items()
+        ):
+            held["cut_again"] += 1
+            continue
+        sizes = [len(png) for each in pngs.values() for png in each]
+        if any(size > MAX_IMAGE_BYTES for size in sizes):
+            held["picture_too_big"] += 1
+            continue
+        for name, each in pngs.items():
+            for strip, png in zip(item.record[name]["strips"], each):
+                strip["png"] = base64.b64encode(png).decode("ascii")
+        item.image_bytes = sum(sizes)
+        ready.append(item)
+    return ready
+
+
+@dataclass
+class EmploymentResult:
+    #: Each declaration sent: stored, or skipped with the site's reason.
+    items: Counter[str] = field(default_factory=Counter)
+    #: Its bands as the site counted them: created, updated, kept, unchanged.
+    bands: Counter[str] = field(default_factory=Counter)
+    #: Declarations kept back while sending, by why (`_with_pictures`).
+    held: Counter[str] = field(default_factory=Counter)
+    requests: int = 0
+
+
+def upload_employment(
+    store: BipDeclarationStore,
+    site: Site,
+    pages: Mapping[str, DatePage],
+    bodies: BodyIndex,
+    *,
+    tag: str,
+    run_id: str,
+    max_requests: int | None = None,
+    roles: Roles | None = None,
+    log: Callable[[str], None] = print,
+) -> EmploymentResult:
+    """Send the declarations new or changed since the last upload
+    (`employment_plan`), a batch at a time, each batch's answer kept as it
+    comes. Nothing is swept after: the site places each band as it stores it."""
+    plan = employment_plan(store, pages, bodies, roles=roles)
+    result = EmploymentResult()
+    log(
+        f"to send: {len(plan.items)} declarations {dict(plan.statuses())}, "
+        f"{plan.unchanged} sent before as they are; "
+        f"not read now: {dict(plan.left_out)}"
+    )
+    # Pictures are loaded a slice at a time, as the date crops' are.
+    for start in range(0, len(plan.items), 100):
+        ready = _with_pictures(store, plan.items[start : start + 100], result.held)
+        for batch in batches(ready):
+            if max_requests is not None and result.requests >= max_requests:
+                return result
+            answer = site.post(
+                EMPLOYMENT_INGEST,
+                {"tag": tag, "runId": run_id, "items": [i.record for i in batch]},
+            )
+            result.requests += 1
+            skipped = {
+                str(s.get("id")): str(s.get("reason") or "")
+                for s in answer.get("skipped") or []
+            }
+            rows = _sent_rows(EMPLOYMENT, [(i.id, i.digest) for i in batch], skipped)
+            store.record_sent(rows, run_id)
+            result.items.update(row.reason or row.result for row in rows)
+            counted = answer.get("bands") or {}
+            result.bands.update({str(k): int(v) for k, v in counted.items()})
+            for item in batch:
+                for name in item.strips:
+                    for strip in item.record[name]["strips"]:
+                        strip.pop("png", None)
+            log(f"sent {result.requests}: {dict(result.items)}")
     return result
