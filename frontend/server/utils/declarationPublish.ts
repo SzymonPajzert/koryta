@@ -77,6 +77,7 @@ import {
 import { isAutomatedUid, isPublicEmployment } from "~~/shared/stats";
 import { placeClashes } from "~~/shared/twoPlaces";
 import { recordAudit } from "./audit";
+import { openEmploymentQuietly } from "./declarationEmployment";
 import {
   EXTRACTS,
   PUBLICATIONS,
@@ -260,11 +261,25 @@ async function peopleImportBusy(now: Date): Promise<boolean> {
  * record at all: it is up already, the admin's date links nothing on it, and
  * a hold would sit on the admin's list of held pages asking for nothing. A
  * page born on another day is flagged as for any reading.
+ *
+ * Then the readings of the declaration's posts, which wait for a comparison
+ * that names one page, are opened or closed by what this one found
+ * (`openEmploymentOf`).
  */
 export async function matchPages(
   db: Firestore,
   extractId: string,
   now: Date = new Date(),
+): Promise<MatchResult> {
+  const result = await comparePages(db, extractId, now);
+  await openEmploymentQuietly(db, extractId, now);
+  return result;
+}
+
+async function comparePages(
+  db: Firestore,
+  extractId: string,
+  now: Date,
 ): Promise<MatchResult> {
   const extractRef = db.collection(EXTRACTS).doc(extractId);
   const extract = (await extractRef.get()).data();
