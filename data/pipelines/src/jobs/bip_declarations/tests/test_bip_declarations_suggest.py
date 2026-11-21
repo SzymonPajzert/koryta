@@ -13,11 +13,10 @@ from jobs.bip_declarations.suggest import (
     EMPLOYEE_ROLE,
     MAX_SUGGESTIONS,
     OTHER_ROLE,
-    ROLES_FILE,
     BodyIndex,
     Suggestion,
     read_bodies,
-    read_roles,
+    read_title,
     suggest,
     valid_regon,
 )
@@ -27,6 +26,8 @@ from scrapers.map.offices import (
     POWIAT_OFFICE,
     VOIVODE_OFFICE,
 )
+from util import declaration_roles
+from util.declaration_roles import ROLES_FILE, read_roles
 
 SHARED = ROLES_FILE.parent / "declarationEmployment.ts"
 
@@ -167,53 +168,14 @@ def test_the_chips_are_the_files():
     }
 
 
-# The same table as `roleFamilyOf` in frontend/tests/shared/
-# declarationEmployment.test.ts: both read the families' patterns from the one
-# file, and Python's regular expressions have to read them as JavaScript's do.
-@pytest.mark.parametrize(
-    ("name", "family"),
-    [
-        ("prezes", "management_board"),
-        ("Prezes Zarządu", "management_board"),
-        ("zastępca prezesa", "management_board"),
-        ("Zarząd", "management_board"),
-        ("członek zarządu, CFO", "management_board"),
-        ("dyrektor", "director"),
-        ("p.o. dyrektora", "director"),
-        ("pełniący obowiązki dyrektora", "director"),
-        ("dyrektor Wydziału Kontroli i Skarg", "director"),
-        ("Dyrektor Szkoły im. Prezydenta Miasta", "director"),
-        ("z/ca dyrektora", "deputy_director"),
-        ("wicedyrektor", "deputy_director"),
-        ("Zastępca Wójta", "deputy_mayor"),
-        ("Z-ca Burmistrza", "deputy_mayor"),
-        ("wiceprezydent", "deputy_mayor"),
-        ("wójt gminy", "mayor"),
-        ("Rada Nadzorcza", "supervisory_board"),
-        ("członek rady nadzorczej", "supervisory_board"),
-        ("prezes rady nadzorczej", "supervisory_board"),
-        ("Rada Społeczna", "supervisory_board"),
-        ("Prokurent", "commercial_proxy"),
-        ("Pełnomocnik", "attorney"),
-        ("wicestarosta", "office_deputy"),
-        ("sekretarz stanu", "office_deputy"),
-        ("starosta powiatu", "office_head"),
-        ("sekretarz powiatu", "secretary"),
-        ("naczelnik wydziału", "manager"),
-        ("zastępca naczelnika wydziału", "manager"),
-        ("główny specjalista", "staff"),
-        ("", None),
-        ("radny", None),
-        ("przewodniczący rady", None),
-        ("sekretarz rady", None),
-        ("członek", None),
-        ("ministerstwo", None),
-        ("zlecenie dla", None),
-        (None, None),
-    ],
-)
-def test_titles_fold_into_the_sites_families(name, family):
-    assert read_roles().family(name) == family
+def test_the_suggestions_read_the_shared_roles(bodies):
+    """Titles fold with the reader the night's checks use, the way the site
+    folds them (src/util/tests/test_declaration_roles.py holds the two
+    together): „Z-cy” is the roles file's deputy, not a patch of the job's."""
+    band = ["Powiatowy Urząd Pracy w Przykładowie, na stanowisku Z-cy Dyrektora"]
+    roles = declaration_roles.read_roles()
+    found = suggest(band, "010102", bodies, typed=True, roles=roles)
+    assert found == [Suggestion(REGONS["pup"], "zastepca_dyrektora")]
 
 
 def test_every_chip_is_named_by_its_own_label():
@@ -221,7 +183,7 @@ def test_every_chip_is_named_by_its_own_label():
     reader can pick is one the machine can suggest."""
     for chip in read_roles().chips:
         if chip.family is not None:
-            assert read_roles().read(chip.label) == (chip.family, chip), chip.id
+            assert read_title(read_roles(), chip.label) == (chip.family, chip), chip.id
 
 
 @pytest.mark.parametrize(
@@ -239,7 +201,7 @@ def test_every_chip_is_named_by_its_own_label():
     ],
 )
 def test_a_title_reads_as_the_chip_a_reader_would_pick(title, chip):
-    _, found = read_roles().read(title)
+    _, found = read_title(read_roles(), title)
     assert (found.id if found else None) == chip
 
 
@@ -441,9 +403,12 @@ def test_a_school_secretary_is_no_sekretarz(bodies):
 
 
 def test_an_executive_title_of_offices_only_is_held_at_one(bodies):
-    """A „doradca zawodowy” at a PUP is no wojewoda's adviser, a school's
-    sekretarz no gmina's."""
+    """The roles file offers the doradca and the sekretarz at offices alone: a
+    PUP's „doradca” is no wojewoda's adviser, a school's sekretarz no gmina's.
+    A „doradca zawodowy” is staff, as the file reads it."""
     band = ["Powiatowy Urząd Pracy w Przykładowie - doradca zawodowy"]
+    assert rows(bodies, band, "010102") == [("pup", EMPLOYEE_ROLE)]
+    band = ["Powiatowy Urząd Pracy w Przykładowie - doradca"]
     assert rows(bodies, band, "010102") == []
     band = ["Szkoła Podstawowa nr 5 im. Jana Testowego w Przykładowie - sekretarz"]
     assert rows(bodies, band, "010102") == []
