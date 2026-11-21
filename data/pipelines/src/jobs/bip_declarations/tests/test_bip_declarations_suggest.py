@@ -88,8 +88,46 @@ ROWS = {
         "1465108",
     ),
     "pup": ("Powiatowy Urząd Pracy w Przykładowie", "urzędy pracy", "0101"),
+    "mops": (
+        "Miejski Ośrodek Pomocy Społecznej w Przykładowie",
+        "ośrodki pomocy społecznej",
+        "0101023",
+    ),
+    "kindergarten": (
+        "Przedszkole Miejskie nr 1 w Przykładowie",
+        "przedszkola",
+        "0101023",
+    ),
+    # Far away, in towns whose stems sit inside everyday words of a band:
+    # „kole” in „Szkoleń”, „koln” in „Szkolnictwa” (t read as l), „slaw” in
+    # „Podstawowa”, „olec” and „leczn” in „Społecznej”, „slar” in „Starszy”.
+    "starostwo_kole": ("Starostwo Powiatowe (Kole Testowe)", POWIAT_OFFICE, "0202"),
+    "starostwo_kolno": ("Starostwo Powiatowe (Kolno Testowe)", POWIAT_OFFICE, "0303"),
+    "kindergarten_kole": (
+        "Przedszkole Miejskie nr 1 (Kole Testowe)",
+        "przedszkola",
+        "0202011",
+    ),
+    "sp_slawa": (
+        "Szkoła Podstawowa w Sławie Testowej",
+        "szkoły podstawowe",
+        "0303011",
+    ),
+    "mops_olecko": (
+        "Miejski Ośrodek Pomocy Społecznej w Olecku Testowym",
+        "ośrodki pomocy społecznej",
+        "0202011",
+    ),
+    "mops_leczna": (
+        "Miejski Ośrodek Pomocy Społecznej w Łęcznie Testowej",
+        "ośrodki pomocy społecznej",
+        "0303011",
+    ),
+    "pup_stary": ("Powiatowy Urząd Pracy w Starym Testowie", "urzędy pracy", "0202"),
 }
 REGONS = {key: regon(10_000_000 + i) for i, key in enumerate(ROWS)}
+#: The gmina a body serving a powiat or a województwo stands in.
+SEATS = {"01": "0101023", "0101": "0101023", "0202": "0202011", "0303": "0303011"}
 
 
 def table() -> list[dict[str, str | None]]:
@@ -99,7 +137,7 @@ def table() -> list[dict[str, str | None]]:
             "name": name,
             "kind": kind,
             "teryt": teryt,
-            "seat": teryt if len(teryt) == 7 else "0101023",
+            "seat": SEATS.get(teryt, teryt),
             "ownership": "113",
         }
         for key, (name, kind, teryt) in ROWS.items()
@@ -334,6 +372,70 @@ def test_a_name_without_its_town_needs_the_town_or_the_unit(bodies):
     assert rows(bodies, band, "010101") == [("zgk_testowo", "kierownik")]
     # Nothing places it: the three are as likely.
     assert rows(bodies, band, "090901") == []
+
+
+@pytest.mark.parametrize(
+    ("band", "unit", "found"),
+    [
+        (
+            "Starostwo Powiatowe - Kierownik Referatu Szkoleń",
+            "010100",
+            [("starostwo", "kierownik")],
+        ),
+        (
+            "Starostwo Powiatowe - Kierownik Referatu Szkolnictwa",
+            "010100",
+            [("starostwo", "kierownik")],
+        ),
+        (
+            "Przedszkole Miejskie nr 1 - nauczyciel",
+            "010102",
+            [("kindergarten", "nauczyciel")],
+        ),
+        ("Przedszkole Miejskie nr 1 - nauczyciel", "090901", []),
+        ("Szkoła Podstawowa - nauczyciel", "090901", []),
+        (
+            "Miejski Ośrodek Pomocy Społecznej - kierownik działu",
+            "010102",
+            [("mops", "kierownik")],
+        ),
+        (
+            "Powiatowy Urząd Pracy - starszy referent",
+            "010102",
+            [("pup", EMPLOYEE_ROLE)],
+        ),
+    ],
+)
+def test_a_town_is_where_a_word_starts_and_not_inside_the_name(
+    bodies, band, unit, found
+):
+    """A town's stem inside a word of the line, or of the name itself, places
+    nothing: „Szkoleń” holds „kole”, „Przedszkole” too, „Podstawowa” „slaw”."""
+    assert rows(bodies, [band], unit) == found
+
+
+def test_a_town_found_elsewhere_is_no_match_for_the_declarants_unit(bodies):
+    """The name is the declarant's unit's, the town beside it another's: the
+    machine cannot tell which, so it suggests neither."""
+    band = ["Zakład Gospodarki Komunalnej w Innowie - kierownik"]
+    assert rows(bodies, band, "010101") == []
+    # Where the unit has no such body, the town says which it is.
+    assert rows(bodies, band, "090901") == [("zgk_innowo", "kierownik")]
+    # And where the town is the unit's, the two agree, though a town far away
+    # starts the same.
+    band = ["Zakład Gospodarki Komunalnej w Testowie - kierownik"]
+    assert rows(bodies, band, "010101") == [("zgk_testowo", "kierownik")]
+    far = {
+        "regon": regon(20_000_002),
+        "name": "Zakład Gospodarki Komunalnej (Testowo Małe)",
+        "kind": "zakłady usług komunalnych",
+        "teryt": "0303013",
+        "seat": "0303013",
+        "ownership": "113",
+    }
+    assert rows(BodyIndex([*table(), far]), band, "010101") == [
+        ("zgk_testowo", "kierownik")
+    ]
 
 
 def test_a_street_is_no_town(bodies):
