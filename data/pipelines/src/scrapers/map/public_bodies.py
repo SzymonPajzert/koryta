@@ -39,7 +39,10 @@ that a place made from either table is the same place under the same name.
 company the site may have a page for. `legal_form` and `ownership` are the GUS
 codes the catalogue prints before each form's name - "117" for a spółka z o.o.,
 "113" for a JST's property, 2xx for private - which is what tells a body that
-belongs in KRS, or in private hands, from one a place can be made for.
+belongs in KRS, or in private hands, from one a place can be made for. A local
+unit - a REGON of fourteen digits, the first nine its parent's - is part of its
+parent, so it takes the parent's number, form and ownership where it has none:
+a company's branch in another town is still the company.
 
 Names are in normal case by `offices.py`'s rule, with the town after a name
 that does not name it, as `display_name` does for a KRS company. Without the
@@ -170,6 +173,7 @@ def public_bodies(
         body.serve(places, offices, land)
     _serve_land_powiaty(bodies, land)
     rows = [body.row(register or {}) for body in bodies]
+    _from_parents(rows)
     return pd.DataFrame(rows, columns=COLUMNS).sort_values("regon", ignore_index=True)
 
 
@@ -177,8 +181,9 @@ def krs_by_regon(ledger: pd.DataFrame | None) -> dict[str, str]:
     """The register's KRS number for each REGON it gives exactly one.
 
     The register writes a company's REGON as fourteen digits ending in zeros,
-    the catalogue as nine; `_entity_regon` makes them meet. A REGON two
-    numbers share - a company registered again - says neither.
+    the catalogue as nine, and a local unit's as fourteen of its own;
+    `_entity_regon` makes them meet. A REGON two numbers share - a company
+    registered again - says neither.
     """
     if ledger is None or ledger.empty:
         return {}
@@ -191,8 +196,28 @@ def krs_by_regon(ledger: pd.DataFrame | None) -> dict[str, str]:
 
 
 def _entity_regon(regon: str) -> str:
+    """The legal person's REGON: the first nine of fourteen digits, which are
+    a local unit's number or, ending in zeros, the register's way of writing a
+    company's."""
     regon = regon.strip()
-    return regon[:9] if len(regon) == 14 and regon.endswith("00000") else regon
+    return regon[:9] if len(regon) == 14 else regon
+
+
+#: What a local unit shares with the legal person it is part of.
+_PARENT_COLUMNS = ("krs", "legal_form", "ownership")
+
+
+def _from_parents(rows: list[dict[str, str | None]]) -> None:
+    """A local unit's KRS number, legal form and ownership, where its row has
+    none, from its parent's row: a company's branch is the company, so a post
+    there belongs to the company's place."""
+    parents = {row["regon"]: row for row in rows if len(str(row["regon"])) == 9}
+    for row in rows:
+        regon = str(row["regon"])
+        parent = parents.get(_entity_regon(regon)) if len(regon) == 14 else None
+        if parent:
+            for column in _PARENT_COLUMNS:
+                row[column] = row[column] or parent[column]
 
 
 def _in_scope(catalogue: pd.DataFrame) -> list[dict[str, str]]:

@@ -30,6 +30,9 @@ from scrapers.tests.mocks import MockIO, get_test_context, setup_test_context
 
 TERC = [
     # WOJ, POW, GMI, RODZ, NAZWA
+    ("06", None, None, None, "LUBELSKIE"),
+    ("06", "16", None, None, "rycki"),
+    ("06", "16", "01", "1", "Dęblin"),
     ("10", None, None, None, "ŁÓDZKIE"),
     ("10", "06", None, None, "łódzki wschodni"),
     ("10", "06", "08", "2", "Nowosolna"),
@@ -78,9 +81,11 @@ COLUMNS = [
 POWIAT_UNIT = "430 - POWIATOWE SAMORZĄDOWE JEDNOSTKI ORGANIZACYJNE"
 GMINA_UNIT = "429 - GMINNE SAMORZĄDOWE JEDNOSTKI ORGANIZACYJNE"
 SPOLKA = "117 - SPÓŁKI Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ"
+SPOLKA_AKCYJNA = "116 - SPÓŁKI AKCYJNE"
 JST_PROPERTY = (
     "113 - WŁASNOŚĆ JEDNOSTEK SAMORZĄDU TERYTORIALNEGO LUB SAMORZĄDOWYCH OSÓB PRAWNYCH"
 )
+TREASURY = "111 - WŁASNOŚĆ SKARBU PAŃSTWA"
 
 
 def body(
@@ -91,6 +96,7 @@ def body(
     *,
     krs: str | None = None,
     form: str | None = GMINA_UNIT,
+    ownership: str | None = JST_PROPERTY,
     status: str = "ACTIVE",
     category: str = "PUBLIC",
     subtype: str | None = None,
@@ -108,7 +114,7 @@ def body(
         "1234563218",
         krs,
         form,
-        JST_PROPERTY,
+        ownership,
         woj,
         powiat,
         gmina,
@@ -123,6 +129,7 @@ IN_SLUPSK = ("POMORSKIE", "Słupsk", "Słupsk", "Słupsk")
 IN_PRZEMYSL = ("PODKARPACKIE", "Przemyśl", "Przemyśl", "Przemyśl")
 IN_WEJHEROWO = ("POMORSKIE", "wejherowski", "Wejherowo", "Wejherowo")
 IN_MOKOTOW = ("MAZOWIECKIE", "Warszawa", "Mokotów", "Warszawa")
+IN_DEBLIN = ("LUBELSKIE", "rycki", "Dęblin", "Dęblin")
 
 STAROSTWO_PRZEMYSL = body(
     "Starostwo Powiatowe w Przemyślu",
@@ -504,6 +511,58 @@ def test_the_rows_krs_number_is_kept_and_the_register_fills_in_a_missing_one():
     assert (
         found["Energetyka Słupsk spółka z ograniczoną odpowiedzialnością"]["krs"]
         is None
+    )
+
+
+def test_a_local_unit_is_part_of_its_parents_company():
+    # A local unit's REGON is its parent's nine digits and five of its own; the
+    # catalogue gives this branch no KRS number, form or ownership.
+    ledger = pd.DataFrame(
+        [{"krs": "123456", "status": STATUS_OK, "regon": "22000004800000"}]
+    )
+    found = table(
+        body(
+            "WOJSKOWE ZAKŁADY LOTNICZE NR 1 W ŁODZI SPÓŁKA AKCYJNA",
+            "przedsiębiorstwa sektora obronnego",
+            "000173278",
+            IN_LODZ,
+            krs="0000295398",
+            form=SPOLKA_AKCYJNA,
+            ownership=TREASURY,
+        ),
+        body(
+            "WOJSKOWE ZAKŁADY LOTNICZE NR 1 SPÓŁKA AKCYJNA ODDZIAŁ W DĘBLINIE",
+            "przedsiębiorstwa sektora obronnego",
+            "00017327800020",
+            IN_DEBLIN,
+            form=None,
+            ownership=None,
+        ),
+        # A branch of a company the catalogue does not list, which the
+        # register knows by the parent's REGON.
+        body(
+            "ZAKŁAD GOSPODARKI KOMUNALNEJ SP. Z O.O. ODDZIAŁ W SŁUPSKU",
+            "zakłady usług komunalnych",
+            "22000004800013",
+            IN_SLUPSK,
+            form=None,
+            ownership=None,
+        ),
+        register=krs_by_regon(ledger),
+    )
+
+    branch = found["Wojskowe Zakłady Lotnicze nr 1 spółka akcyjna Oddział w Dęblinie"]
+    assert (
+        branch["krs"],
+        branch["legal_form"],
+        branch["ownership"],
+        branch["teryt"],
+    ) == ("0000295398", "116", "111", "0616011")
+    other = found["Zakład Gospodarki Komunalnej sp. z o.o. Oddział w Słupsku"]
+    assert (other["krs"], other["legal_form"], other["ownership"]) == (
+        "0000123456",
+        None,
+        None,
     )
 
 
