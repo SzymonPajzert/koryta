@@ -113,3 +113,42 @@ def test_a_removed_post_beside_it_is_no_twin():
     assert not twins(
         created("dyrektor", "dyrektor"), post("other", "dyrektor", deleted=True)
     )
+
+
+def ageless(*edges: dict) -> bool:
+    """Whether the night finds a created post that says nothing of how old it
+    is."""
+    try:
+        invariants.test_a_post_a_declaration_created_says_how_old_it_is(
+            list(edges), {CREATED}
+        )
+    except AssertionError:
+        return True
+    return False
+
+
+def test_a_created_post_carries_its_entries_and_their_as_of():
+    assert not ageless(created("dyrektor", "dyrektor"))
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"as_of": None},
+        {"as_of": ""},
+        {"declared": {}},
+        {"declared": None},
+        {"declared": {f"{ITEM}:employer:0": None}},
+        {"declared": {}, "as_of": None},
+    ],
+)
+def test_a_created_post_without_entries_or_as_of_is_counted(change):
+    """A write that dropped the entries, or a withdrawal that left the post
+    behind: withdrawing an item soft-deletes a post it created that no other
+    entry holds."""
+    assert ageless({**created("dyrektor", "dyrektor"), **change})
+
+
+def test_a_created_post_withdrawn_whole_is_not_counted():
+    withdrawn = {**created("dyrektor", "dyrektor"), "declared": {}, "deleted": True}
+    assert not ageless(withdrawn)
