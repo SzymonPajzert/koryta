@@ -947,7 +947,7 @@ class _Band:
     def town_between(self, stem: str, start: int, end: int) -> bool:
         """Whether a town's stem stands within `start` to `end`, where a town's
         name can start: a word that is not a title's or a head noun, or right
-        after a „w” or „we” OCR glued to it („wKole”), never inside a word
+        after a „w” or „we” OCR glued to it („wTestowie”), never inside a word
         („Szkoleń”)."""
         at = self.towns.find(stem, max(0, start), max(0, end))
         while at >= 0:
