@@ -55,6 +55,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from bisect import bisect_right
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -547,6 +548,11 @@ class BodyIndex:
         wojewódzki by the województwo's two."""
         return self._offices.get((kind, code))
 
+    def _school(self, body: int) -> bool:
+        """A school or a kindergarten, of any kind: „szkoły podstawowe”,
+        „przedszkola”, „zespoły szkolno-przedszkolne”."""
+        return "szkol" in fold(self.bodies[body].kind)
+
     def find(self, band: _Band, unit: _Unit) -> list[_Mention]:
         """The bodies named on the band, one for each place a name is at."""
         text = band.canon
@@ -562,6 +568,8 @@ class BodyIndex:
                 if not entries or not band.stands_alone(start, end):
                     continue
                 entries = [e for e in entries if not e.word or band.starts_word(start)]
+                if band.private_school_before(start):
+                    entries = [e for e in entries if not self._school(e.body)]
                 if entries and not band.private_before(start):
                     hits.append(_Hit(start, end, entries))
         mentions = []
@@ -812,6 +820,16 @@ _CAMEL = re.compile(rf"(?<=[{_LOWER}]{{2}})(?=[{_UPPER}])|(?<=[0-9])(?=[{_UPPER}
 _SPACED_DASH = re.compile(r"\s+[-–—]+\s*|[-–—]+\s+")
 _TOKEN = re.compile(r"[^\W_]+|[;/|]|[,:()\-–—]")
 _PRIVATE_MARKS = tuple(_same(mark) for mark in ("niepubl", "prywat", "nzoz"))
+#: What stands before the name of a school or a kindergarten that is not the
+#: public one: „Społeczna” or „STO” (Społeczne Towarzystwo Oświatowe),
+#: „Katolicka”, a stowarzyszenie's or a fundacja's name.
+_PRIVATE_SCHOOL_MARKS = tuple(
+    _same(mark) for mark in ("spoleczn", "katolick", "stowarzysz", "fundacj")
+)
+_STO = _same("sto")
+#: How many words before a name such a mark may stand: „Fundacja Testowa
+#: Przedszkole ...”.
+_PRIVATE_SCHOOL_WORDS = 2
 #: What a street's name follows, and a street run together with its number:
 #: „ul. Polna 7” is no town Polna.
 _STREET = frozenset({"ul", "ulica", "al", "aleja", "aleje", "pl", "plac", "os"})
@@ -833,6 +851,14 @@ class _Word:
     dash: bool = False
     #: It starts a line.
     line: bool = False
+    #: The strongest punctuation before it, a line break aside: "" none, "("
+    #: a bracket, "," a comma, a colon or a spaced dash, ";" a semicolon or a
+    #: slash.
+    mark: str = ""
+
+
+#: The punctuation `_Word.mark` keeps, weakest first.
+_MARKS = ("", "(", ",", ";")
 
 
 class _Band:
@@ -844,7 +870,9 @@ class _Band:
             for i, word in enumerate(_line_words(line)):
                 gap = max(word.gap, 1) if i == 0 and self.words else word.gap
                 self.words.extend(
-                    _Word(part, gap, word.dash, i == 0) if j == 0 else _Word(part)
+                    _Word(part, gap, word.dash, i == 0, word.mark)
+                    if j == 0
+                    else _Word(part)
                     for j, part in enumerate(_peel(word.text))
                 )
         self.starts: list[int] = []
@@ -889,6 +917,26 @@ class _Band:
         before = self.canon[max(0, start - 14) : start]
         return any(mark in before for mark in _PRIVATE_MARKS)
 
+    def private_school_before(self, start: int) -> bool:
+        """Whether a school's or a kindergarten's name at `start` follows a
+        mark of one that is not public („Społeczna Szkoła Podstawowa”,
+        „KATOLICKASZKOŁA”, „Fundacja Testowa Przedszkole”): in the letters
+        OCR glued before it, or in the two words before it with no
+        punctuation between."""
+        word = bisect_right(self.starts, start) - 1
+        before = [self.canon[self.starts[word] : start]]
+        while (
+            len(before) <= _PRIVATE_SCHOOL_WORDS
+            and word > 0
+            and not self.words[word].mark
+        ):
+            word -= 1
+            end = self.starts[word] + len(self.words[word].text)
+            before.append(self.canon[self.starts[word] : end])
+        return any(
+            text.startswith(_PRIVATE_SCHOOL_MARKS) or text == _STO for text in before
+        )
+
     def segment(self, word: int) -> list[str]:
         """The words from `word` up to the next comma, dash or line break."""
         end = word + 1
@@ -927,19 +975,20 @@ def _without_streets(words: Sequence[_Word]) -> Iterator[str]:
 def _line_words(line: str) -> list[_Word]:
     text = _SPACED_DASH.sub(" , ", _CAMEL.sub(" ", line))
     words: list[_Word] = []
-    gap, dash = 0, False
+    gap, dash, mark = 0, False, ""
     for token in _TOKEN.findall(text):
         if token in ";/|":
-            gap = 2
+            gap, mark = 2, ";"
         elif token in "-–—":
             dash = True
         elif not token[0].isalnum():
             gap = max(gap, 1)
+            mark = max(mark, "(" if token in "()" else ",", key=_MARKS.index)
         else:
             folded = squash(token)
             if folded:
-                words.append(_Word(folded, gap, dash))
-                gap, dash = 0, False
+                words.append(_Word(folded, gap, dash, mark=mark))
+                gap, dash, mark = 0, False, ""
     return words
 
 

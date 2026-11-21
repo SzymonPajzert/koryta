@@ -496,6 +496,35 @@ def test_private_employers_are_never_suggested(bodies):
     assert rows(bodies, ["Biblioteka Publiczna w Testowie - kierownik"], "010101") == []
 
 
+@pytest.mark.parametrize(
+    "band",
+    [
+        ["Społeczna Szkoła Podstawowa nr 5 im. Jana Testowego w Przykładowie"],
+        ["KATOLICKASZKOŁAPODSTAWOWANR5WPRZYKŁADOWIE"],
+        ["STO Szkoła Podstawowa nr 5 w Przykładowie"],
+        ["Stowarzyszenie Testowe Szkoła Podstawowa nr 5 w Przykładowie"],
+        ["Fundacja Testowa Przedszkole Miejskie nr 1 w Przykładowie"],
+        ["Katolickie", "Przedszkole Miejskie nr 1 w Przykładowie"],
+    ],
+)
+def test_a_school_a_society_or_the_church_runs_is_not_the_public_one(bodies, band):
+    """A non-public school takes the public one's name with a mark before it:
+    „Społeczna” (STO's), „Katolicka”, a stowarzyszenie's or a fundacja's."""
+    assert rows(bodies, [*band, "nauczyciel"], "010102") == []
+
+
+def test_a_mark_elsewhere_on_the_line_makes_no_school_private(bodies):
+    band = [
+        "Społeczna Komisja Testowa, Szkoła Podstawowa nr 5 w Przykładowie - pedagog"
+    ]
+    assert rows(bodies, band, "010102") == [("sp5", EMPLOYEE_ROLE)]
+    band = ["Fundacja Testowa / Przedszkole Miejskie nr 1 w Przykładowie - nauczyciel"]
+    assert rows(bodies, band, "010102") == [("kindergarten", "nauczyciel")]
+    # „Społecznej” in a name is that name's.
+    band = ["Miejski Ośrodek Pomocy Społecznej w Przykładowie - kierownik"]
+    assert rows(bodies, band, "010102") == [("mops", "kierownik")]
+
+
 def test_a_school_secretary_is_no_sekretarz(bodies):
     """The chips' families leave out „sekretarz szkoły”, also as OCR reads it."""
     band = [
