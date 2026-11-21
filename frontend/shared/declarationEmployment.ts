@@ -744,8 +744,9 @@ export const employmentAnswerSchema = z
       .max(MAX_SUGGESTIONS_SHOWN)
       .default([]),
     msOnCard: z.number().int().min(0).max(3_600_000).optional(),
-    /** The picture the reader was shown. */
-    imageHash: sha256Hex.optional(),
+    /** The picture the reader was shown: every card has one, and an answer
+     * to another picture has no voice. */
+    imageHash: sha256Hex,
   })
   .strict()
   .refine(
@@ -775,10 +776,7 @@ export type EmploymentAnswer = z.infer<typeof employmentAnswerSchema>;
 
 /** An answer as `declarationAnswers` stores it. No `extractId` and no
  * `counted`: the date flow's tallies never see it. */
-export type StoredEmploymentAnswer<Time = string> = Omit<
-  EmploymentAnswer,
-  "imageHash"
-> & {
+export type StoredEmploymentAnswer<Time = string> = EmploymentAnswer & {
   kind: "employment";
   /** The item: the date page's `declarationExtracts` id. */
   employmentOf: string;
@@ -790,7 +788,6 @@ export type StoredEmploymentAnswer<Time = string> = Omit<
   control?: boolean;
   /** The Warsaw day it was given. */
   day: string;
-  imageHash: string | null;
   at: Time;
   /** Edges the agreement this answer was part of wrote. */
   addedEdgeIds?: string[];
@@ -1051,6 +1048,7 @@ export type EmploymentVote = {
   declarationKind?: string | null;
   votes?: boolean;
   control?: boolean | null;
+  /** The picture the answer was given to; every stored answer has one. */
   imageHash?: string | null;
 };
 
@@ -1156,7 +1154,9 @@ function settleDate(
 }
 
 /** Whether an answer is a voice: not a skip, not a Kontrola read, and given
- * to the picture the band has now. */
+ * to the picture the band has now, where that is known. An answer that does
+ * not say which picture it was given has no voice then: the old answers stay
+ * stored when a band is cut again. */
 function isVoice(
   answer: EmploymentVote,
   imageHash: string | null | undefined,
@@ -1164,7 +1164,7 @@ function isVoice(
   return (
     answer.verdict !== "skip" &&
     !answer.control &&
-    (!answer.imageHash || !imageHash || answer.imageHash === imageHash)
+    (!imageHash || answer.imageHash === imageHash)
   );
 }
 
@@ -1173,8 +1173,9 @@ function isVoice(
  *
  * One voice per reader, by their last answer, and only from answers with a
  * say (`answerVotes`): not automated, not given without a vote. A skip, a
- * Kontrola read and an answer to a picture the band has since been cut
- * again from (`imageHash`) are no voice. The machine never is one.
+ * Kontrola read and, once the band's picture is given (`imageHash`), an
+ * answer to another picture or to none are no voice. The machine never is
+ * one.
  *
  * Rows are compared by `rowKey`, with `lookup` telling where a REGON leads. A
  * row is accepted when at least `agree` readers are sure of it and lead
@@ -1199,7 +1200,7 @@ export function settleEmployment(
   answers: readonly EmploymentVote[],
   options: {
     lookup?: EmployerLookup;
-    /** The band's picture now. */
+    /** The band's picture now: only answers given to it are heard. */
     imageHash?: string | null;
     agree?: number;
     disputedAfter?: number;
