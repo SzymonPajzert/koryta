@@ -77,7 +77,6 @@ from scrapers.map.offices import (
 from scrapers.map.public_bodies import PublicBodies
 from scrapers.stores import Context
 from util.declaration_roles import (
-    ROLES_FILE,  # noqa: F401 - the upload's tests find the site's files by it
     RoleChip,
     Roles,
     read_roles,

@@ -797,12 +797,17 @@ def _when(header: DeclarationBandRow, year: int | None, today: date) -> str:
     return f"{year}-12-31" if year and year <= today.year else ""
 
 
-def _unit(linked: list[PersonRow], person: str) -> str:
+def _elected(linked: list[PersonRow], person: str) -> tuple[str, str | None]:
     """The unit the declarant was elected in, whose bodies the suggestions put
-    first: of the candidacies the file was found for, the page's newest."""
+    first, and the office as PKW names it („Wójt”, „Rada gminy”), which tells
+    whether a bare „Wójt” names their own urząd: of the candidacies the file
+    was found for, the page's newest."""
     mine = [row for row in linked if person in _kids(row)] or linked
     newest = max(mine, key=lambda row: (row.election_year, row.key), default=None)
-    return newest.unit if newest else ""
+    if newest is None:
+        return "", None
+    office = newest.person.get("office")
+    return newest.unit, office if isinstance(office, str) else None
 
 
 def _employment_item(
@@ -811,6 +816,7 @@ def _employment_item(
     later: bool,
     cut: Mapping[str, DeclarationBandRow],
     unit: str,
+    office: str | None,
     bodies: BodyIndex,
     roles: Roles | None,
 ) -> EmploymentItem:
@@ -829,7 +835,12 @@ def _employment_item(
         band = cut[name]
         # None on handwriting: what OCR reads of it is noise.
         found = suggest(
-            band.ocr_text.splitlines(), unit, bodies, typed=band.typed, roles=roles
+            band.ocr_text.splitlines(),
+            unit,
+            bodies,
+            typed=band.typed,
+            roles=roles,
+            office=office,
         )
         record[name] = {
             **_band(band),
@@ -907,9 +918,11 @@ def employment_records(
         _, newest, _ = max(declarations, key=lambda d: d[:2])
         for _, item, cut in declarations:
             sha, _, _ = item.rpartition("-p")
-            unit = _unit(linked[sha], person)
+            unit, office = _elected(linked[sha], person)
             items.append(
-                _employment_item(item, person, item != newest, cut, unit, bodies, roles)
+                _employment_item(
+                    item, person, item != newest, cut, unit, office, bodies, roles
+                )
             )
     items.sort(key=lambda each: each.id)
     return items, left_out
