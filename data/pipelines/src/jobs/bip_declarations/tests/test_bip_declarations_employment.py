@@ -24,6 +24,7 @@ from jobs.bip_declarations.employment import (
     FileBands,
     Row,
     cut_bands,
+    holds_address,
     holds_name,
     kinds_of,
     pack,
@@ -271,6 +272,68 @@ def test_a_surname_is_read_run_into_other_letters_too():
     # A first name, or a surname too short to tell from a word, only whole.
     assert not holds_name(["Janowiec, Lisowice"], [("Jan", "Lis")])
     assert holds_name(["Jan Lis"], [("Jan", "Lis")])
+
+
+#: A made-up firm with its address, as a sole trader writes it on the
+#: employer's line.
+FIRM = "Uslugi Remontowe Testbud, ul. Polna 12, 00-950 Testowo - wlasciciel"
+
+
+def test_a_band_reading_a_street_address_is_kept_back(ocr):
+    drawn = employment_declaration(NAME, BORN, employer=FIRM)
+
+    cut = bands(cut_bands(drawn.pdf(), [(0, 0)], ocr, names={0: [("Jan", "Testowy")]}))
+
+    employer = cut["employer"]
+    assert (employer.status, employer.typed) == ("holds_address", True)
+    assert "never to be sent" in "; ".join(employer.notes)
+    assert employer.strips  # drawn and kept, for a person to look at
+    assert {band.status for name, band in cut.items() if name != "employer"} == {"cut"}
+
+
+def test_a_text_layer_reading_a_street_address_is_kept_back(ocr):
+    data = typed_pdf(NAME, BORN, employer="Testbud, al. 3 Maja 5/7 - wlasciciel")
+
+    employer = bands(cut_bands(data, [(0, 0)], ocr))["employer"]
+
+    assert (employer.source, employer.status) == ("text_layer", "holds_address")
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        [FIRM],
+        # Bold print read without its spaces.
+        ["TESTBUD UL.POLNA12A"],
+        ["al. 3 Maja 5/7"],
+        ["os. Sloneczne 7"],
+        ["Pl. Wolnosci 1, Testowo"],
+        # The street's name on the next line.
+        ["Szkola Podstawowa nr 1, ul.", "Lipowa 3, nauczycielka"],
+        # A village's house number, its postal code run into the town.
+        ["Testowo 12,00-950Testowice"],
+        ["Testowo 12, 00 – 950 Testowice"],
+    ],
+)
+def test_a_street_address_or_a_postal_code_is_read(lines):
+    assert holds_address(lines)
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ["Urzad Gminy Testowo - Sekretarz Gminy"],
+        # A street without its number, a sole trader without an address.
+        ["Testbud, ul. Polna"],
+        ["os. fizyczna prowadzaca dzialalnosc gospodarcza"],
+        ["Testowo, dnia 24-04-2025 r."],
+        ["2019-2024 Wojt Gminy Testowo"],
+        ["Dieta radnego 12 000,00 zl", "Spolka Testowa Sp. z o.o."],
+        ["bip.testowo.pl 2024"],
+    ],
+)
+def test_no_address_is_read_where_there_is_none(lines):
+    assert not holds_address(lines)
 
 
 def test_a_caption_on_one_line_with_po_zapoznaniu_still_ends_the_band(ocr):

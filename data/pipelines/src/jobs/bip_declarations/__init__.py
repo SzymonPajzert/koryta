@@ -28,7 +28,8 @@ VII and VIII. It has a version of its own, and `--items` keeps it to the pages
 the site will read; `--recut` cuts a band one caption wider where readers said
 it lacks a part. It sends nothing: the bands stay in its table. A band that
 reads the declarant's first name or surname (the candidacy's) is kept there as
-`holds_name`, which no upload sends.
+`holds_name`, and one that reads a street address or a postal code as
+`holds_address`, which no upload sends.
 
 `upload` sends the site what it lacks or what changed since the last upload:
 every candidacy with a page on the site, and the crops of their files (`upload`).
