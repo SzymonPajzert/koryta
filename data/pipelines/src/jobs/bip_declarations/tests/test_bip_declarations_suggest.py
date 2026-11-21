@@ -171,12 +171,14 @@ def bodies() -> BodyIndex:
     return BodyIndex(table())
 
 
-def rows(bodies: BodyIndex, lines: list[str], unit: str) -> list[tuple[str, str]]:
+def rows(
+    bodies: BodyIndex, lines: list[str], unit: str, office: str | None = None
+) -> list[tuple[str, str]]:
     """What is suggested, as (key in ROWS, role)."""
     names = {number: key for key, number in REGONS.items()}
     return [
         (names.get(s.regon, s.regon), s.role)
-        for s in suggest(lines, unit, bodies, typed=True)
+        for s in suggest(lines, unit, bodies, typed=True, office=office)
     ]
 
 
@@ -344,16 +346,51 @@ def test_a_gmina_ending_in_wice_is_no_wicewojt(bodies):
 
 
 def test_a_title_alone_names_its_own_office(bodies):
-    assert rows(bodies, ["W6jt Gminy Testowo"], "010101") == [("ug_testowo", "wojt")]
+    """Where the declarant can hold that post in their own unit: a mayor in
+    their urząd, a powiat's or a sejmik's councillor on its zarząd."""
+    band = ["W6jt Gminy Testowo"]
+    assert rows(bodies, band, "010101", office="Wójt") == [("ug_testowo", "wojt")]
     band = ["Wicestarosta Przykładowski, Radny Powiatu Przykładowskiego"]
     assert rows(bodies, band, "010100") == [("starostwo", "wicestarosta")]
-    assert rows(bodies, ["Sekretarz Powiatu"], "010101") == [("starostwo", "sekretarz")]
+    assert rows(bodies, ["Starosta Przykładowski"], "010100") == [
+        ("starostwo", "starosta")
+    ]
+    band = ["Członek Zarządu Powiatu Przykładowskiego"]
+    assert rows(bodies, band, "010100") == [("starostwo", "czlonek_zarzadu")]
     assert rows(bodies, ["Marszałek Województwa Testowego"], "010000") == [
         ("marshal", "marszalek")
     ]
-    assert rows(bodies, ["Doradca Wojewody Testowego"], "010000") == [
-        ("voivode", "doradca")
-    ]
+    band = ["Członek Zarządu Województwa Testowego"]
+    assert rows(bodies, band, "010000") == [("marshal", "czlonek_zarzadu")]
+
+
+@pytest.mark.parametrize(
+    ("title", "unit", "office"),
+    [
+        # A councillor of the gmina is no wójt, nor a burmistrz a wójt.
+        ("Wójt Gminy Testowo", "010101", None),
+        ("Wójt Gminy Testowo", "010101", "Rada gminy"),
+        ("Wójt Gminy Testowo", "010101", "Burmistrz"),
+        # Staff of the office: a councillor may not work there.
+        ("Sekretarz Gminy", "010101", "Rada gminy"),
+        ("Skarbnik Gminy", "010101", "Rada gminy"),
+        ("Zastępca Wójta", "010101", "Wójt"),
+        ("Zastępca Burmistrza", "010102", "Rada miasta"),
+        ("Naczelnik Wydziału Testów", "010102", "Rada miasta"),
+        ("Kierownik Referatu Testów", "010101", "Rada gminy"),
+        ("Sekretarz Powiatu", "010100", "Rada powiatu"),
+        ("Skarbnik Województwa", "010000", "Sejmik"),
+        ("Doradca Wojewody Testowego", "010000", "Sejmik"),
+        # Another unit's zarząd.
+        ("Wicestarosta Przykładowski", "010101", "Rada gminy"),
+        ("Członek Zarządu Powiatu", "010000", "Sejmik"),
+        ("Marszałek Województwa Testowego", "010100", "Rada powiatu"),
+    ],
+)
+def test_a_title_alone_names_no_post_the_declarant_cannot_hold(
+    bodies, title, unit, office
+):
+    assert rows(bodies, [title], unit, office=office) == []
 
 
 def test_a_title_alone_names_no_office_it_cannot_tell(bodies):

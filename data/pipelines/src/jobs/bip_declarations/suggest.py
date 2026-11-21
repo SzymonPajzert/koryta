@@ -40,10 +40,14 @@ add it themselves. A handwritten band gets none.
    followed by a title no chip names. A title that runs into a body's name
    („Dyrektor Szkoły Podstawowej ...”) is that body's, not the one before
    it. A title no
-   body took that starts an item names its own office where it can: a wójt
-   or a burmistrz the urząd of the declarant's gmina, a wicestarosta or a
-   „sekretarz powiatu” the starostwo of their powiat, a marszałek the urząd
-   marszałkowski; not where it names another place.
+   body took that starts an item names the office of the declarant's own
+   unit only for a post they can hold there: a wójt, a burmistrz or a
+   prezydent their urząd on their own declaration; a starosta, a
+   wicestarosta or a „członek zarządu powiatu” the starostwo, for a powiat
+   councillor; a marszałek, a wicemarszałek or a „członek zarządu
+   województwa” the urząd marszałkowski, for a sejmik's. Never a staff title
+   (a sekretarz, a skarbnik, a zastępca wójta, a naczelnik): a councillor
+   may not work in that office. Nor where the title names another place.
 5. Rows at the declarant's unit come first, at most four.
 
 What the 2026-11-20 pilot's classify.py learned is kept: OCR's letter swaps;
@@ -120,6 +124,19 @@ OFFICE_LEVELS = {
 #: The families who run an office, so that the title alone says which:
 #: a wójt, a zastępca burmistrza, a starosta, a wicemarszałek.
 OFFICE_FAMILIES = frozenset({"mayor", "deputy_mayor", "office_head", "office_deputy"})
+#: The posts a title alone names in the office of the declarant's own unit,
+#: with the digits of their unit's code that office serves: the mayor's own
+#: urząd, on a mayor's declaration (`suggest`'s office); the zarząd of the
+#: powiat or the województwo, for its councillor. No staff post: a
+#: councillor may not work in the office of their own unit.
+OWN_POSTS = {
+    "urzad_gminy": (6, frozenset({"wojt", "burmistrz", "prezydent"})),
+    "starostwo": (4, frozenset({"starosta", "wicestarosta", "czlonek_zarzadu"})),
+    "urzad_marszalkowski": (
+        2,
+        frozenset({"marszalek", "wicemarszalek", "czlonek_zarzadu"}),
+    ),
+}
 
 
 # -- text --------------------------------------------------------------------------
@@ -1191,10 +1208,12 @@ def suggest(
     *,
     typed: bool,
     roles: Roles | None = None,
+    office: str | None = None,
 ) -> list[Suggestion]:
     """At most four rows for a band's OCR lines, in reading order, read by a
-    declarant elected in `unit` (PKW's TERYT: WWPPGG, WWPP00 or WW0000), those
-    at the unit first. None for a handwritten band."""
+    declarant elected in `unit` (PKW's TERYT: WWPPGG, WWPP00 or WW0000) to
+    `office` (PKW's: „Wójt”, „Rada gminy”, „Sejmik”; None where not known),
+    those at the unit first. None for a handwritten band."""
     if not typed:
         return []
     roles = roles or read_roles()
@@ -1218,9 +1237,9 @@ def suggest(
             and mention.leads
             and not mention.taken
         ):
-            office = _office(bodies, roles, mention, where)
-            if office is not None:
-                rows.append((mention.start, office, mention.chip))
+            own = _office(bodies, roles, mention, where, office or "")
+            if own is not None:
+                rows.append((mention.start, own, mention.chip))
     return _ordered(rows, bodies, where)
 
 
@@ -1290,23 +1309,24 @@ def _held_at(roles: Roles, title: _Mention, kind: str) -> bool:
 
 
 def _office(
-    bodies: BodyIndex, roles: Roles, title: _Mention, unit: _Unit
+    bodies: BodyIndex, roles: Roles, title: _Mention, unit: _Unit, office: str
 ) -> int | None:
-    """The office a title no body took names: the declarant's urząd for a
-    wójt, their starostwo for a wicestarosta or a „sekretarz powiatu”, their
-    urząd marszałkowski for a marszałek. None where the title names a place
-    other than that office's."""
+    """The office a title no body took names, where the declarant can hold
+    that post in their own unit (`OWN_POSTS`): a wójt's own urząd on a wójt's
+    declaration (`office`, as PKW names it), the starostwo of a powiat
+    councillor's powiat for a wicestarosta, the urząd marszałkowski for a
+    sejmik councillor's marszałek. None where the title names a place other
+    than that office's."""
     offices = _offices_of(roles, title)
-    if len(offices) != 1:
+    if len(offices) != 1 or title.chip is None:
         return None
-    office = offices.pop()
-    if office == "urzad_gminy":
-        code = unit.code if len(unit.prefix) == 6 else ""
-    elif office == "starostwo":
-        code = unit.code[:4] if len(unit.prefix) >= 4 else ""
-    else:
-        code = unit.code[:2]
-    found = bodies.office(OFFICE_KINDS[office], code) if code else None
+    kind = offices.pop()
+    digits, posts = OWN_POSTS.get(kind, (0, frozenset()))
+    if title.chip.id not in posts or len(unit.prefix) != digits:
+        return None
+    if kind == "urzad_gminy" and fold(office) != title.chip.id:
+        return None
+    found = bodies.office(OFFICE_KINDS[kind], unit.code[:digits])
     if found is None or not _agrees(title.words[1:], bodies.bodies[found].name):
         return None
     return found
