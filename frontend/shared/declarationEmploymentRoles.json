@@ -1,11 +1,18 @@
 {
-  "about": "Role chips for posts read off BIP declarations, shared by the site (shared/declarationEmployment.ts) and the pipeline. A chip's id never changes; its family is what a declared post is matched by. Family patterns are regular expressions over a name folded to lower-case ASCII words (no diacritics, every run of other characters one space), tried in this order after the prefixes are cut off; the first family with a matching pattern is the name's.",
-  "prefixes": ["^p o ", "^pelniac\\w* obowiazki "],
+  "about": "Role chips for posts read off BIP declarations, shared by the site (shared/declarationEmployment.ts) and the pipeline (data/pipelines/src/util/declaration_roles.py). A chip's id never changes; its family is what a declared post is matched by. Family patterns are regular expressions over a name folded to lower-case ASCII words (no diacritics, every run of other characters one space), tried in this order after the prefixes („p.o.”, then an ordinal such as „I Zastępca”) are cut off, each once and in their order; the first family with a matching pattern is the name's. A deputy is „zastępca”, „Z-ca” or the genitive „Z-cy”. tests/shared/declarationEmploymentRoleFamilies.json holds names both sides fold.",
+  "prefixes": [
+    "^p o ",
+    "^pelniac\\w* obowiazki ",
+    "^(i|ii|iii|pierwsz\\w*|drug\\w*|trzec\\w*) "
+  ],
   "families": [
     {
       "id": "supervisory_board",
       "board": true,
-      "patterns": ["\\brad\\w* (nadzorcz|spoleczn)", "\\bkomisj\\w* rewizyjn"]
+      "patterns": [
+        "\\brad\\w* (nadzorcz|spoleczn)",
+        "\\bkomisj\\w* rewizyjn\\w*\\b(?! (rad\\w* (gmin|miast|miejsk|powiat|dzielnic|osiedl)|sejmik))"
+      ]
     },
     { "id": "commercial_proxy", "board": true, "patterns": ["^prokur"] },
     { "id": "attorney", "board": true, "patterns": ["^pelnomocni"] },
@@ -13,7 +20,7 @@
       "id": "deputy_mayor",
       "board": false,
       "patterns": [
-        "^(zastepc\\w*|z ca|zca) (wojt|burmistrz|prezydent)",
+        "^(zastepc\\w*|z ?c[ay]) (wojt|burmistrz|prezydent)",
         "^wice ?(wojt|burmistrz|prezydent)"
       ]
     },
@@ -27,7 +34,7 @@
       "board": false,
       "patterns": [
         "^(wicestarost|wicemarszal|wicewojewod|wiceminist|podsekretarz stanu|sekretarz stanu)",
-        "^(zastepc\\w*|z ca|zca) (starost|marszal|wojewod|ministr)"
+        "^(zastepc\\w*|z ?c[ay]) (starost|marszal|wojewod|ministr)"
       ]
     },
     {
@@ -39,7 +46,7 @@
       "id": "deputy_director",
       "board": false,
       "patterns": [
-        "^(zastepc\\w*|z ca|zca) (dyrektor|komendant)",
+        "^(zastepc\\w*|z ?c[ay]) (dyrektor|komendant)",
         "^wice ?(dyrektor|komendant)"
       ]
     },
@@ -49,7 +56,7 @@
       "board": true,
       "patterns": [
         "^(wice)?prezes",
-        "^(zastepc\\w*|z ca|zca) prezes",
+        "^(zastepc\\w*|z ?c[ay]) prezes",
         "^czlon\\w* (rady )?zarzad",
         "^przewodnicz\\w* zarzad",
         "^zarzad\\b"
@@ -61,19 +68,26 @@
       "patterns": ["^sekretarz\\b(?! (rady|komisji|zarzadu|redakcji|szkoly))"]
     },
     { "id": "treasurer", "board": false, "patterns": ["^skarbnik\\b"] },
-    { "id": "advisor", "board": false, "patterns": ["^doradc"] },
+    {
+      "id": "advisor",
+      "board": false,
+      "patterns": [
+        "^doradca$",
+        "^doradc\\w* (wojewod|starost|marszal|prezydent|burmistrz|wojt|minist)"
+      ]
+    },
     {
       "id": "manager",
       "board": false,
       "patterns": [
-        "^((zastepc\\w*|z ca|zca) )?(kierownik|kierowniczk|naczelnik|koordynator|glown\\w* ksiegow)"
+        "^((zastepc\\w*|z ?c[ay]) )?(kierownik|kierowniczk|naczelnik|koordynator|glown\\w* ksiegow)"
       ]
     },
     {
       "id": "staff",
       "board": false,
       "patterns": [
-        "^((starsz|mlodsz|glown)\\w* )?(pracowni|nauczyciel|specjalist|inspektor|podinspektor|referent|ekspert|asystent|pedagog|wychowawc|urzednik|informatyk|wykladowc|lekarz|pielegniar)"
+        "^((starsz|mlodsz|glown)\\w* )?(pracowni|nauczyciel|specjalist|inspektor|podinspektor|referent|ekspert|asystent|pedagog|wychowawc|urzednik|informatyk|wykladowc|lekarz|pielegniar|doradc)"
       ]
     }
   ],
