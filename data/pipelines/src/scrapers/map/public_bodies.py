@@ -450,35 +450,48 @@ def _stems(word: str) -> list[str]:
     return [s for s in stems if len(s) >= 3]
 
 
-def _declined(token: str, word: str) -> bool:
-    """Whether `token` is `word` in some case: "PRZEMYŚLA" is Przemyśl, and
-    "SŁUPSKIEGO" the powiat słupski. Not a word made of it with a suffix of its
-    own - "KRAKOWSKI" is not Kraków, nor "LUBAWSKIEGO" Lubawa."""
+def _ending(token: str, word: str) -> int | None:
+    """How long a case ending `token` puts on `word`, 0 for the word itself,
+    or None if it is not `word` in any case: "PRZEMYŚLA" is Przemyśl with one,
+    and "SŁUPSKIEGO" the powiat słupski with four. Not a word made of it with a
+    suffix of its own - "KRAKOWSKI" is not Kraków, nor "LUBAWSKIEGO" Lubawa."""
     if token == word or token in _IRREGULAR.get(word, ()):
-        return True
-    for stem in _stems(word):
-        ending = token[len(stem) :]
-        if (
-            token.startswith(stem)
-            and len(ending) <= 4
-            and not re.search("[SC]K", ending)
-        ):
-            return True
-    return False
-
-
-def _run_at(tokens: list[str], start: int, words: tuple[str, ...]) -> bool:
-    """Whether `words` are the tokens from `start` on, in whatever case."""
-    end = start + len(words)
-    return end <= len(tokens) and all(
-        _declined(token, word) for token, word in zip(tokens[start:end], words)
+        return 0
+    return min(
+        (
+            len(token) - len(stem)
+            for stem in _stems(word)
+            if token.startswith(stem)
+            and len(token) - len(stem) <= 4
+            and not re.search("[SC]K", token[len(stem) :])
+        ),
+        default=None,
     )
+
+
+def _declined(token: str, word: str) -> bool:
+    """Whether `token` is `word` in some case - see `_ending`."""
+    return _ending(token, word) is not None
+
+
+def _run_at(tokens: list[str], start: int, words: tuple[str, ...]) -> int | None:
+    """How long the case endings are that make `words` the tokens from `start`
+    on, or None if those tokens are not `words` in any case."""
+    if start + len(words) > len(tokens):
+        return None
+    total = 0
+    for token, word in zip(tokens[start:], words):
+        ending = _ending(token, word)
+        if ending is None:
+            return None
+        total += ending
+    return total
 
 
 def _names(tokens: list[str], words: list[str]) -> bool:
     """Whether the words of a place are anywhere in a name, in whatever case."""
     return bool(words) and any(
-        _run_at(tokens, start, tuple(words)) for start in range(len(tokens))
+        _run_at(tokens, start, tuple(words)) is not None for start in range(len(tokens))
     )
 
 
@@ -768,9 +781,13 @@ class _Places:
         units: list[tuple[tuple[str, ...], str]], tokens: list[str], start: int
     ) -> list[str]:
         """The codes of the units with the longest name that begins at `start`:
-        "NOWA WIEŚ WIELKA" over "NOWA WIEŚ"."""
-        found = [
-            (len(words), code) for words, code in units if _run_at(tokens, start, words)
-        ]
-        longest = max((length for length, _ in found), default=0)
-        return [code for length, code in found if length == longest]
+        "NOWA WIEŚ WIELKA" over "NOWA WIEŚ". Of those, the ones the name
+        writes with the shortest case ending, the name itself first: "GMINY
+        CZYŻEW" is Czyżew, though Czyże declines to CZYŻEW as well."""
+        found = []
+        for words, code in units:
+            ending = _run_at(tokens, start, words)
+            if ending is not None:
+                found.append(((-len(words), ending), code))
+        best = min((rank for rank, _ in found), default=None)
+        return [code for rank, code in found if rank == best]

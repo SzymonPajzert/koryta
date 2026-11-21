@@ -49,6 +49,11 @@ TERC = [
     ("18", "13", "08", "2", "Przemyśl"),
     ("18", "62", None, None, "Przemyśl"),
     ("18", "62", "01", "1", "Przemyśl"),
+    ("20", None, None, None, "PODLASKIE"),
+    ("20", "05", None, None, "hajnowski"),
+    ("20", "05", "04", "2", "Czyże"),
+    ("20", "13", None, None, "wysokomazowiecki"),
+    ("20", "13", "03", "3", "Czyżew"),
     ("22", None, None, None, "POMORSKIE"),
     ("22", "12", None, None, "słupski"),
     ("22", "12", "08", "2", "Redzikowo"),
@@ -130,6 +135,8 @@ IN_PRZEMYSL = ("PODKARPACKIE", "Przemyśl", "Przemyśl", "Przemyśl")
 IN_WEJHEROWO = ("POMORSKIE", "wejherowski", "Wejherowo", "Wejherowo")
 IN_MOKOTOW = ("MAZOWIECKIE", "Warszawa", "Mokotów", "Warszawa")
 IN_DEBLIN = ("LUBELSKIE", "rycki", "Dęblin", "Dęblin")
+IN_CZYZEW = ("PODLASKIE", "wysokomazowiecki", "Czyżew", "Czyżew")
+IN_CZYZE = ("PODLASKIE", "hajnowski", "Czyże", "Czyże")
 
 STAROSTWO_PRZEMYSL = body(
     "Starostwo Powiatowe w Przemyślu",
@@ -222,6 +229,36 @@ def test_the_powiat_or_gmina_a_name_states_is_the_one_it_serves():
     assert served(found, "Centrum Usług Wspólnych Powiatu Słupskiego") == (
         "2212",
         "2263011",
+        RULE_NAME,
+    )
+
+
+def test_a_gmina_the_name_gives_exactly_wins_over_one_it_declines_to():
+    # CZYŻEW is also Czyże with a case ending, and Czyże the gmina wiejska a
+    # bare GMINY would prefer; Czyżew's own name says more.
+    found = table(
+        body(
+            "BIBLIOTEKA PUBLICZNA GMINY CZYŻEW",
+            "biblioteki",
+            "000926826",
+            IN_CZYZEW,
+        ),
+        body(
+            "OŚRODEK POMOCY SPOŁECZNEJ GMINY CZYŻE",
+            "ośrodki pomocy społecznej",
+            "200000013",
+            IN_CZYZE,
+        ),
+    )
+
+    assert served(found, "Biblioteka Publiczna Gminy Czyżew") == (
+        "2013033",
+        "2013033",
+        RULE_NAME,
+    )
+    assert served(found, "Ośrodek Pomocy Społecznej Gminy Czyże") == (
+        "2005042",
+        "2005042",
         RULE_NAME,
     )
 
