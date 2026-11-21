@@ -416,6 +416,8 @@ def test_a_gminny_unit_in_a_town_is_the_gmina_wiejska_of_its_name():
 
 
 def test_a_warsaw_unit_serves_the_dzielnica_it_names_and_else_the_city():
+    # The capital city is written out in any case or short; a name that says
+    # only "w Warszawie" stays on the dzielnica it stands in.
     found = table(
         body(
             "OŚRODEK SPORTU I REKREACJI M.ST. WARSZAWY W DZIELNICY ŻOLIBORZ",
@@ -430,6 +432,27 @@ def test_a_warsaw_unit_serves_the_dzielnica_it_names_and_else_the_city():
             IN_MOKOTOW,
         ),
         body(
+            "POWIATOWA STACJA SANITARNO-EPIDEMIOLOGICZNA W MIEŚCIE STOŁECZNYM "
+            "WARSZAWIE",
+            "stacje sanitarno-epidemiologiczne",
+            "012945850",
+            IN_MOKOTOW,
+            form=None,
+        ),
+        body(
+            "MIEJSKIE PRZEDSIĘBIORSTWO OCZYSZCZANIA W M. ST. WARSZAWIE",
+            "zakłady usług komunalnych",
+            "015314451",
+            IN_MOKOTOW,
+        ),
+        body(
+            "PROKURATURA OKRĘGOWA W WARSZAWIE",
+            "prokuratury",
+            "140000033",
+            IN_MOKOTOW,
+            form=None,
+        ),
+        body(
             "PRZEDSZKOLE NR 1",
             "przedszkola",
             "140000027",
@@ -440,16 +463,14 @@ def test_a_warsaw_unit_serves_the_dzielnica_it_names_and_else_the_city():
     assert served(
         found, "Ośrodek Sportu i Rekreacji m.st. Warszawy w Dzielnicy Żoliborz"
     ) == ("1465198", "1465058", RULE_NAME)
-    assert served(found, "Urząd Pracy Miasta Stołecznego Warszawy") == (
-        "1465011",
-        "1465058",
-        RULE_NAME,
-    )
-    assert served(found, "Przedszkole nr 1 (Warszawa)") == (
-        "1465058",
-        "1465058",
-        RULE_SEAT,
-    )
+    for name in (
+        "Urząd Pracy Miasta Stołecznego Warszawy",
+        "Powiatowa Stacja Sanitarno-Epidemiologiczna w Mieście Stołecznym Warszawie",
+        "Miejskie Przedsiębiorstwo Oczyszczania w m.st. Warszawie",
+    ):
+        assert served(found, name) == ("1465011", "1465058", RULE_NAME)
+    for name in ("Prokuratura Okręgowa w Warszawie", "Przedszkole nr 1 (Warszawa)"):
+        assert served(found, name) == ("1465058", "1465058", RULE_SEAT)
 
 
 def test_the_gmina_and_the_powiat_themselves_are_left_out():
