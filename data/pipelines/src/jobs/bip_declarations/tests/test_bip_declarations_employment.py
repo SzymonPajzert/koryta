@@ -467,8 +467,10 @@ def test_the_declarations_own_dates():
     assert stan_na_in(title) is None
     assert stan_na_in(title, title=True) == date(2024, 2, 29)
     assert stan_na_in("zatrudniony na stanowisku 12.03.2020", title=True) is None
-    assert dnia_in("Brodnica, dnia 24kwietnia 2025r...") == date(2025, 4, 24)
-    assert dnia_in("Pajeczno dn.27.04.2023.") == date(2023, 4, 27)
+    # The month's name run into the day, and "dn." for "dnia", as OCR reads
+    # them off the line over "(miejscowość)".
+    assert dnia_in("Testowo, dnia 17kwietnia 2025r...") == date(2025, 4, 17)
+    assert dnia_in("Testowice dn.19.03.2023.") == date(2023, 3, 19)
     # A form's heading quotes the act it follows: not the day it was signed.
     assert dnia_in("Rozporzadzenia Rady Ministrow z dnia 26 lutego 2003 r.") is None
     # The birth date's reading keeps its years.
