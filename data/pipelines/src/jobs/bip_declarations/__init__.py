@@ -430,12 +430,20 @@ def run_cut_employment(
     items: set[str] | None = None,
     recut: list[tuple[str, str]] | None = None,
 ) -> int:
-    """Cut the bands of the date pages that have none of this version."""
+    """Cut the bands of the date pages that have none of this version; with
+    `recut` alone, only those pages, and with `items`, those first."""
     again = {item for item, _ in recut or []}
     widen = recut_widths(store, recut) if recut else {}
     if items is not None:
         items = items | again
-    due = store.pages_to_band(EMPLOYMENT_CUT_VERSION, limit, items, again)
+    elif again:
+        items = again
+    due = store.pages_to_band(EMPLOYMENT_CUT_VERSION, None, items, again)
+    # Readers wait on a recut: --limit and --max-minutes reach it first.
+    due.sort(
+        key=lambda d: not any(f"{d.file.sha256}-p{p}" in again for p, _ in d.pages)
+    )
+    due = due[:limit]
     print(
         f"to cut: the bands of {sum(len(d.pages) for d in due)} date pages "
         f"in {len(due)} files",

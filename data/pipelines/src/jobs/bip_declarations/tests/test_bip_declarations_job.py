@@ -291,6 +291,54 @@ def test_a_recut_runs_the_band_readers_flagged_one_caption_further(banded, tmp_p
     assert widths[(4, "employer")] == widths[(0, "vii")] == 0
 
 
+def test_a_recut_alone_cuts_only_the_pages_asked_for(banded, tmp_path):
+    on_disk = next(iter(banded.files))
+
+    # Before any run: every other date page has no bands yet.
+    run(banded, tmp_path, recut=[job.recut_bands(f"{on_disk}-p4:employer")])
+
+    assert asked == [(((4, 180),), {(4, "employer"): 1}, (0, 4))]
+
+
+def test_a_recut_goes_first_so_a_limit_reaches_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(job, "cut_bands", fake_bands)
+    asked.clear()
+    one, two = b"%PDF one declaration", b"%PDF another declaration"
+    bundle(tmp_path / "b.tar.gz", [("h/one.pdf", one), ("h/two.pdf", two)])
+    files = [
+        DeclarationFile(sha(data), "h", f"https://h/{n}.pdf", "b.tar.gz", f"{n}.pdf")
+        for n, data in (("one", one), ("two", two))
+    ]
+    people = [
+        PersonRow("1" * 16, "021704", 0, 2024, "Jan", "Testowy", {"koryta_ids": ["p"]}),
+        PersonRow("2" * 16, "021704", 2, 2024, "Ewa", "Druga", {"koryta_ids": []}),
+    ]
+    links = [
+        DeclarationLink(person.key, file.sha256, file.url)
+        for person, file in zip(people, files)
+    ]
+    store = MemoryBipDeclarationStore(people, files, links)
+    for file in files:
+        store.record_cut(
+            DeclarationCutRow(file.sha256, job.CUT_VERSION, "cut"),
+            [DeclarationCropRow(file.sha256, 0)],
+        )
+
+    job.run_cut_employment(
+        store,
+        tmp_path,
+        workers=1,
+        threads=1,
+        limit=1,
+        max_minutes=None,
+        items={f"{file.sha256}-p0" for file in files},
+        recut=[job.recut_bands(f"{files[1].sha256}-p0:employer")],
+    )
+
+    # Ewa's page is asked for again: it goes before Jan's, who is on the site.
+    assert asked == [(((0, 0),), {(0, "employer"): 1}, (0,))]
+
+
 def test_recut_names_a_page_and_a_band():
     with pytest.raises(Exception, match="<sha256>-p<page>:<band>"):
         job.recut_bands(f"{'a' * 64}-p0:name")
