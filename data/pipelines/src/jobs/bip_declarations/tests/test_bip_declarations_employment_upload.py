@@ -10,6 +10,7 @@ import os
 import re
 from collections import Counter
 from dataclasses import replace
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -60,6 +61,7 @@ SHA_EWA = "d" * 64  # Ewa's: readers have not agreed on its birth date yet
 SHA_COUNCIL = "e" * 64  # a council's file: three date pages that are not read
 NEW, OLD = f"{SHA_NEW}-p0", f"{SHA_OLD}-p0"
 RUN = "20261120T120000Z"
+RUN_DAY = date(2026, 11, 20)
 
 
 def regon(n: int) -> str:
@@ -333,12 +335,79 @@ def test_the_newest_is_the_latest_stan_na_else_the_day_signed_else_the_year(stor
         SHA_OLD,
         0,
         EMPLOYMENT_CUT_VERSION,
-        bands(SHA_OLD, 0, NACZELNIK, typed=False, dnia="2025-04-28"),
+        bands(SHA_OLD, 0, NACZELNIK, typed=False, dnia="2025-04-28", dnia_score=0.93),
     )
 
-    statuses = {i.id: i.status for i in employment_plan(store, PAGES, BODIES).items}
+    statuses = {
+        i.id: i.status
+        for i in employment_plan(store, PAGES, BODIES, today=RUN_DAY).items
+    }
 
     assert statuses == {NEW: "later", OLD: "open"}
+
+
+@pytest.mark.parametrize(
+    "dnia, score",
+    [
+        # Signed in 2024 and read as 2029, surely: no declaration is signed
+        # after the run.
+        ("2029-05-31", 0.95),
+        # A day after Anna's other one, read off its line at 0.55.
+        ("2025-04-28", 0.55),
+    ],
+)
+def test_a_day_misread_or_read_unsurely_does_not_make_a_declaration_newest(
+    store, dnia, score
+):
+    store.record_bands(
+        SHA_OLD,
+        0,
+        EMPLOYMENT_CUT_VERSION,
+        bands(SHA_OLD, 0, NACZELNIK, typed=False, dnia=dnia, dnia_score=score),
+    )
+
+    statuses = {
+        i.id: i.status
+        for i in employment_plan(store, PAGES, BODIES, today=RUN_DAY).items
+    }
+
+    # Its date crop's year, 2023, goes as its 31 December.
+    assert statuses == {NEW: "open", OLD: "later"}
+
+
+def test_a_newer_declaration_s_unsure_dates_fall_back_to_its_year(store):
+    # Anna's 2024 declaration with both dates misread as 2023 days, unsurely.
+    unsure = {"stan_na_score": 0.62, "dnia_score": 0.58}
+    store.record_bands(
+        SHA_NEW,
+        0,
+        EMPLOYMENT_CUT_VERSION,
+        bands(SHA_NEW, 0, NACZELNIK, stan_na="2023-01-07", dnia="2023-02-20", **unsure),
+    )
+
+    statuses = {
+        i.id: i.status
+        for i in employment_plan(store, PAGES, BODIES, today=RUN_DAY).items
+    }
+
+    # 31 December 2024 against the 2023 one's 31 December 2023.
+    assert statuses == {NEW: "open", OLD: "later"}
+
+
+def test_a_year_to_come_on_a_date_crop_is_no_year(store):
+    # Anna's handwritten declaration's crop read 2029 for its year, and its
+    # header no date at all.
+    store.record_cut(
+        DeclarationCutRow(SHA_OLD, job.CUT_VERSION, "cut"),
+        [DeclarationCropRow(SHA_OLD, 0, declaration_year=2029)],
+    )
+
+    statuses = {
+        i.id: i.status
+        for i in employment_plan(store, PAGES, BODIES, today=RUN_DAY).items
+    }
+
+    assert statuses == {NEW: "open", OLD: "later"}
 
 
 def test_a_page_with_no_readable_band_lets_the_next_newest_open(store):
@@ -584,11 +653,11 @@ def test_a_newer_declaration_puts_the_one_before_it_off(store):
         newer,
         2,
         EMPLOYMENT_CUT_VERSION,
-        bands(newer, 2, NACZELNIK, stan_na="2025-12-31"),
+        bands(newer, 2, NACZELNIK, stan_na="2025-12-31", stan_na_score=0.96),
     )
     pages = {**PAGES, f"{newer}-p2": DatePage(f"{newer}-p2", True, ("anna",))}
 
-    plan = employment_plan(store, pages, BODIES)
+    plan = employment_plan(store, pages, BODIES, today=RUN_DAY)
 
     # The older one did not change and is not sent again.
     assert [(i.id, i.status) for i in plan.items] == [
