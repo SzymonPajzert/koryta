@@ -658,6 +658,8 @@ def test_a_local_unit_is_part_of_its_parents_company():
 def test_the_town_goes_after_a_name_that_names_no_place():
     # In any case, by the first word of a longer name, or by an adjective made
     # of it, the town is named already; a gmina the name states is a place.
+    # A gminny unit in a town serves the gmina wiejska around it, which its
+    # name does not name.
     found = table(
         body("SZKOŁA PODSTAWOWA NR 1", "szkoły podstawowe", "190000047", IN_WEJHEROWO),
         body(
@@ -678,6 +680,12 @@ def test_the_town_goes_after_a_name_that_names_no_place():
             "005310998",
             IN_SLUPSK,
         ),
+        body(
+            'GMINNY ŻŁOBEK "KUBUSIOWY ZAKĄTEK"',
+            "żłobki i kluby dziecięce",
+            "190000077",
+            IN_WEJHEROWO,
+        ),
     )
 
     assert list(found) == [
@@ -685,7 +693,13 @@ def test_the_town_goes_after_a_name_that_names_no_place():
         "Szkoła Podstawowa nr 1 (Wejherowo)",
         "Zespół Szkół nr 2 w Wejherowie",
         "Wejherowskie Centrum Kultury",
+        'Gminny Żłobek "Kubusiowy Zakątek" (Wejherowo)',
     ]
+    assert served(found, 'Gminny Żłobek "Kubusiowy Zakątek" (Wejherowo)') == (
+        "2215102",
+        "2215031",
+        RULE_NAME,
+    )
 
 
 class LogIO(MockIO):
