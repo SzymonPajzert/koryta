@@ -19,11 +19,13 @@ add it themselves. A handwritten band gets none.
    same in the case the line puts it in („w Urzędzie Miejskim w Opolu”), or
    an abbreviation that starts a word („GOPS w ...”). A name that does not
    say its town („Zakład Gospodarki Komunalnej”) counts only with twelve
-   letters or more, and with its town beside it on the band (never a
+   letters or more, and with its town beside it on the band, where a word
+   starts or after a glued „w” (never inside a word, the name itself or a
    street's name), or with the body in the declarant's unit or their powiat,
-   and only where that leaves one body; a ministry's or a central
-   institution's long name counts alone, unless the line names a branch.
-   Where bodies share a name, the one nearest the declarant's unit is taken.
+   and only where that leaves one body; a town beside it that is not the
+   unit's body's leaves none. A ministry's or a central institution's long
+   name counts alone, unless the line names a branch. Where bodies share a
+   name, the one nearest the declarant's unit is taken.
 3. A title starts a word: „zastępca dyrektora”, „Z-ca Naczelnika Wydziału”,
    „Główny Specjalista”. Its family is the one declarationEmploymentRoles.json
    folds it into, as the site does (`roleFamilyOf`; read through
@@ -91,6 +93,10 @@ UNIQUE_CORE = 20
 #: How far after and before a name its town may stand, in squashed letters.
 TOWN_AFTER = 40
 TOWN_BEFORE = 20
+#: How a name not saying its town is placed (`BodyIndex._placed`), best first:
+#: by its town beside it, the body in the declarant's unit or their powiat;
+#: in their unit; in their powiat; by its town, elsewhere; a national body.
+_TOWN_AT_UNIT, _AT_UNIT, _IN_POWIAT, _TOWN_ELSEWHERE, _NATIONAL = range(5)
 
 #: The offices a title can name without naming the body, by the kind of
 #: institution declarationEmploymentRoles.json offers their chips at.
@@ -570,7 +576,9 @@ class BodyIndex:
     def _choose(self, cluster: list[_Hit], band: _Band, unit: _Unit) -> int | None:
         """The body overlapping names are: of the names saying their town, the
         longest, nearest the declarant's unit; else of the others, one placed
-        by its town or by the unit (`_placed`). None where two bodies tie."""
+        by its town or by the unit (`_placed`). None where two bodies tie, and
+        where a town beside the name is not that of the body in the unit."""
+        span = (min(hit.start for hit in cluster), max(hit.end for hit in cluster))
         named: dict[int, tuple[int, ...]] = {}
         placed: dict[int, tuple[int, ...]] = {}
         for hit in cluster:
@@ -581,38 +589,45 @@ class BodyIndex:
                 if entry.named:
                     found, score = named, (-length, level)
                 else:
-                    how = self._placed(entry.body, hit, band, level)
+                    how = self._placed(entry.body, hit, band, level, span)
                     if how is None:
                         continue
                     found, score = placed, (how, -length, level)
                 found[entry.body] = min(found.get(entry.body, score), score)
-        for found in (named, placed):
-            if found:
-                ranked = sorted((score, body) for body, score in found.items())
-                if len(ranked) > 1 and ranked[1][0] == ranked[0][0]:
-                    return None
-                return ranked[0][1]
-        return None
+        if named:
+            return _best(named)
+        hows = {score[0] for score in placed.values()}
+        if (
+            min(hows, default=None) in (_AT_UNIT, _IN_POWIAT)
+            and _TOWN_ELSEWHERE in hows
+        ):
+            return None
+        return _best(placed)
 
-    def _placed(self, body: int, hit: _Hit, band: _Band, level: int) -> int | None:
-        """How a name not saying its town is placed: 0 by its town beside it on
-        the band, 1 by the body standing in the declarant's unit or serving
-        it, 2 in their powiat, 3 by a national body's long name no other body
-        has; None when nothing places it."""
+    def _placed(
+        self, body: int, hit: _Hit, band: _Band, level: int, span: tuple[int, int]
+    ) -> int | None:
+        """How a name not saying its town is placed, as `_TOWN_AT_UNIT` and
+        the rest rank it, by its town beside the names at `span` or by the
+        unit; None when nothing places it."""
+        start, end = span
         town = self._towns[body]
-        around = slice(max(0, hit.start - TOWN_BEFORE), hit.end + TOWN_AFTER)
-        if town and town in band.towns[around]:
-            return 0
+        beside = bool(town) and (
+            band.town_between(town, start - TOWN_BEFORE, start)
+            or band.town_between(town, end, end + TOWN_AFTER)
+        )
         if level <= 1:
-            return 1 + level
-        near = band.canon[around]
+            return _TOWN_AT_UNIT if beside else _AT_UNIT + level
+        if beside:
+            return _TOWN_ELSEWHERE
+        near = band.canon[max(0, hit.start - TOWN_BEFORE) : hit.end + TOWN_AFTER]
         if (
             len(hit.entries) == 1
             and hit.end - hit.start >= UNIQUE_CORE
             and _national(self.bodies[body].kind)
             and not any(word in near for word in _BRANCH)
         ):
-            return 3
+            return _NATIONAL
         return None
 
 
@@ -621,6 +636,14 @@ class _Hit:
     start: int
     end: int
     entries: list[_Entry]
+
+
+def _best(found: Mapping[int, tuple[int, ...]]) -> int | None:
+    """The body of the lowest score; None where two share it, or none is."""
+    ranked = sorted((score, body) for body, score in found.items())
+    if not ranked or (len(ranked) > 1 and ranked[1][0] == ranked[0][0]):
+        return None
+    return ranked[0][1]
 
 
 def _body(row: Mapping[str, Any]) -> Body | None:
@@ -766,6 +789,16 @@ _LEXICON = (
 )  # fmt: skip
 _LEXICON_LONGEST = sorted(_LEXICON, key=len, reverse=True)
 _LEXICON_SAME = {word: _same(word) for word in _LEXICON}
+#: Words no town's name is, though a town's stem may start them: a title's
+#: („Starszy”, „Główny”, „stanowisku”) and a body's head noun („Starostwa”).
+_NOT_TOWNS = frozenset(
+    _same(word)
+    for word in (
+        *_LEXICON,
+        *_UNDECLINED,
+        *(case for noun, cases in _NOUNS.items() for case in (noun, *cases)),
+    )
+)
 #: Words an office is named with besides its place: „Wójt Gminy”, „Urzędu”.
 _OFFICE_WORDS = frozenset(
     {"urzad", "urzedu", "starostwa", "rzeczypospolitej", "polskiej", "miejskiej"}
@@ -821,10 +854,26 @@ class _Band:
             at += len(word.text)
         self.canon = _same("".join(word.text for word in self.words))
         self.towns = "".join(_without_streets(self.words))
-        self._starts = set(self.starts)
+        self._starts = {start: word for word, start in enumerate(self.starts)}
 
     def starts_word(self, at: int) -> bool:
         return at in self._starts
+
+    def town_between(self, stem: str, start: int, end: int) -> bool:
+        """Whether a town's stem stands within `start` to `end`, where a town's
+        name can start: a word that is not a title's or a head noun, or right
+        after a „w” or „we” OCR glued to it („wKole”), never inside a word
+        („Szkoleń”)."""
+        at = self.towns.find(stem, max(0, start), max(0, end))
+        while at >= 0:
+            word = self._starts.get(at)
+            if word is not None:
+                if _same(self.words[word].text) not in _NOT_TOWNS:
+                    return True
+            elif self.towns[at - 1 : at] == "w" or self.towns[at - 2 : at] == "we":
+                return True
+            at = self.towns.find(stem, at + 1, max(0, end))
+        return False
 
     def stands_alone(self, start: int, end: int) -> bool:
         """A name ending in a number is not the start of a longer number: „nr
