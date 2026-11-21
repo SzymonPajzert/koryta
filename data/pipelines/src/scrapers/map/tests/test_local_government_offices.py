@@ -7,7 +7,12 @@ docstring describes against what the sources actually say.
 
 import pandas as pd
 
-from scrapers.map.offices import LocalGovernmentOffices, _recased, offices_by_region
+from scrapers.map.offices import (
+    LocalGovernmentOffices,
+    offices_by_region,
+    recased,
+    unglued,
+)
 from scrapers.stores import Pipeline, ProcessPolicy
 from scrapers.tests.mocks import get_test_context, setup_test_context
 
@@ -400,20 +405,67 @@ def test_the_pipeline_reads_both_files_and_keeps_the_leading_zeros():
 
 
 def test_a_name_in_capitals_is_written_in_normal_case():
-    # What the site stores a new place under, so Szymon wants it this way
-    # rather than in the register's capitals (2026-11-11).
-    assert _recased("URZĄD MIASTA OPOLA") == "Urząd Miasta Opola"
+    # What the site stores a new place under, in normal case rather than the
+    # register's capitals (decision on 2026-11-11).
+    assert recased("URZĄD MIASTA OPOLA") == "Urząd Miasta Opola"
     assert (
-        _recased("WARMIŃSKO-MAZURSKI URZĄD WOJEWÓDZKI W OLSZTYNIE")
+        recased("WARMIŃSKO-MAZURSKI URZĄD WOJEWÓDZKI W OLSZTYNIE")
         == "Warmińsko-Mazurski Urząd Wojewódzki w Olsztynie"
     )
-    assert _recased("URZĄD MIASTA I GMINY W RUI") == "Urząd Miasta i Gminy w Rui"
-    assert _recased("URZĄD GMINY NOWE MIASTO NAD PILICĄ") == (
+    assert recased("URZĄD MIASTA I GMINY W RUI") == "Urząd Miasta i Gminy w Rui"
+    assert recased("URZĄD GMINY NOWE MIASTO NAD PILICĄ") == (
         "Urząd Gminy Nowe Miasto nad Pilicą"
     )
 
 
 def test_a_name_in_its_own_case_is_kept():
     # The office's own spelling, whatever it is.
-    assert _recased("Urząd Gminy Gniewino") == "Urząd Gminy Gniewino"
-    assert _recased("Starostwo Powiatowe w Słupsku") == "Starostwo Powiatowe w Słupsku"
+    assert recased("Urząd Gminy Gniewino") == "Urząd Gminy Gniewino"
+    assert recased("Starostwo Powiatowe w Słupsku") == "Starostwo Powiatowe w Słupsku"
+
+
+def test_any_public_bodys_name_is_written_the_way_polish_writes_it():
+    # The public bodies table names all of the catalogue by this rule, and
+    # most of it is schools with a number, a patron and a degree.
+    cases = {
+        "SZKOŁA PODSTAWOWA NR 5 IM. KS. JANA TWARDOWSKIEGO W PRZEMYŚLU": (
+            "Szkoła Podstawowa nr 5 im. ks. Jana Twardowskiego w Przemyślu"
+        ),
+        "III LICEUM OGÓLNOKSZTAŁCĄCE IM. JANA PAWŁA II": (
+            "III Liceum Ogólnokształcące im. Jana Pawła II"
+        ),
+        "BRANŻOWA SZKOŁA I STOPNIA": "Branżowa Szkoła I Stopnia",
+        "SZKOŁA MUZYCZNA I I II STOPNIA": "Szkoła Muzyczna I i II Stopnia",
+        'PRZEDSZKOLE NR 4 "POD TOPOLĄ"': 'Przedszkole nr 4 "Pod Topolą"',
+        "DOM POMOCY SPOŁECZNEJ DLA DZIECI": "Dom Pomocy Społecznej dla Dzieci",
+        "SZKOŁA PODSTAWOWA IM. J.H. DĄBROWSKIEGO": (
+            "Szkoła Podstawowa im. J.H. Dąbrowskiego"
+        ),
+        "OŚRODEK SPORTU I REKREACJI M.ST. WARSZAWY": (
+            "Ośrodek Sportu i Rekreacji m.st. Warszawy"
+        ),
+        "POWIATOWY INSPEKTORAT NADZORU BUDOWLANEGO W GORZOWIE WLKP.": (
+            "Powiatowy Inspektorat Nadzoru Budowlanego w Gorzowie Wlkp."
+        ),
+        # Acronyms stay acronyms, with or without a vowel.
+        "DPS W DĘBICY": "DPS w Dębicy",
+        "SPZOZ W GŁOGOWIE": "SPZOZ w Głogowie",
+        "SZPITAL MIEJSKI (SPZOZ)": "Szpital Miejski (SPZOZ)",
+        "MIEJSKI OŚRODEK SPORTU I REKREACJI - MOSIR": (
+            "Miejski Ośrodek Sportu i Rekreacji - MOSiR"
+        ),
+        "ZAKŁAD GOSPODARKI KOMUNALNEJ SP. Z O.O.": (
+            "Zakład Gospodarki Komunalnej sp. z o.o."
+        ),
+        "PRZEDSIĘBIORSTWO KOMUNALNE SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ": (
+            "Przedsiębiorstwo Komunalne spółka z ograniczoną odpowiedzialnością"
+        ),
+    }
+
+    assert {name: recased(name) for name in cases} == cases
+
+
+def test_a_patron_or_a_number_run_into_the_word_before_is_split_off():
+    assert unglued("SZKOŁA PODSTAWOWA NR1 IM.JANA PAWŁA II") == (
+        "SZKOŁA PODSTAWOWA NR 1 IM. JANA PAWŁA II"
+    )
