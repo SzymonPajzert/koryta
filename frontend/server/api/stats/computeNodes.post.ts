@@ -73,13 +73,23 @@ const FIELDS = {
     "name",
     "start_date",
     "end_date",
+    // How old a declared post is, where a declaration created it.
+    "as_of",
     "position",
     "elected",
     "by_election",
   ],
   notes: ["nodeId", "sources"],
   votes: ["nodeId", "userUid", "updatedAt", "categoryVotes"],
-  revisions: ["node_id", "nodeId", "update_time", "update_automatic"],
+  // `update_user`: a first revision by the declarations automation does not
+  // put a post on the teaser (server/utils/provenance.ts).
+  revisions: [
+    "node_id",
+    "nodeId",
+    "update_time",
+    "update_automatic",
+    "update_user",
+  ],
   // `fact_type` is what `queueTier` files a person by.
   extractions: ["personNodeId", "fact_type"],
 };
@@ -262,7 +272,7 @@ export default defineEventHandler(async (event) => {
   const revisionsByNode: Record<string, RevisionMinimal[]> = {};
   const firstRevisions: Record<
     string,
-    { at: string; update_automatic?: unknown }
+    { at: string; update_automatic?: unknown; update_user?: unknown }
   > = {};
   for await (const doc of read("revisions")) {
     const rev = doc.data() as Revision;
@@ -276,7 +286,11 @@ export default defineEventHandler(async (event) => {
     if (!id || at === null) continue;
     const first = firstRevisions[id];
     if (!first || at < first.at) {
-      firstRevisions[id] = { at, update_automatic: rev.update_automatic };
+      firstRevisions[id] = {
+        at,
+        update_automatic: rev.update_automatic,
+        update_user: rev.update_user,
+      };
     }
   }
 

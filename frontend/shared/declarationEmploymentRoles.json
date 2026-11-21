@@ -1,0 +1,343 @@
+{
+  "about": "Role chips for posts read off BIP declarations, shared by the site (shared/declarationEmployment.ts) and the pipeline (data/pipelines/src/util/declaration_roles.py). A chip's id never changes; its family is what a declared post is matched by. Family patterns are regular expressions over a name folded to lower-case ASCII words (no diacritics, every run of other characters one space), tried in this order after the prefixes („p.o.”, then an ordinal such as „I Zastępca”) are cut off, each once and in their order; the first family with a matching pattern is the name's. A deputy is „zastępca”, „Z-ca” or the genitive „Z-cy”. tests/shared/declarationEmploymentRoleFamilies.json holds names both sides fold.",
+  "prefixes": [
+    "^p o ",
+    "^pelniac\\w* obowiazki ",
+    "^(i|ii|iii|pierwsz\\w*|drug\\w*|trzec\\w*) "
+  ],
+  "families": [
+    {
+      "id": "supervisory_board",
+      "board": true,
+      "patterns": [
+        "\\brad\\w* (nadzorcz|spoleczn)",
+        "\\bkomisj\\w* rewizyjn\\w*\\b(?! (rad\\w* (gmin|miast|miejsk|powiat|dzielnic|osiedl)|sejmik))"
+      ]
+    },
+    { "id": "commercial_proxy", "board": true, "patterns": ["^prokur"] },
+    { "id": "attorney", "board": true, "patterns": ["^pelnomocni"] },
+    {
+      "id": "deputy_mayor",
+      "board": false,
+      "patterns": [
+        "^(zastepc\\w*|z ?c[ay]) (wojt|burmistrz|prezydent)",
+        "^wice ?(wojt|burmistrz|prezydent)"
+      ]
+    },
+    {
+      "id": "mayor",
+      "board": false,
+      "patterns": ["^(wojt|burmistrz|prezydent)"]
+    },
+    {
+      "id": "office_deputy",
+      "board": false,
+      "patterns": [
+        "^(wicestarost|wicemarszal|wicewojewod|wiceminist|podsekretarz stanu|sekretarz stanu)",
+        "^(zastepc\\w*|z ?c[ay]) (starost|marszal|wojewod|ministr)"
+      ]
+    },
+    {
+      "id": "office_head",
+      "board": false,
+      "patterns": ["^(starosta|marszalek|wojewoda|minister)\\b"]
+    },
+    {
+      "id": "deputy_director",
+      "board": false,
+      "patterns": [
+        "^(zastepc\\w*|z ?c[ay]) (dyrektor|komendant)",
+        "^wice ?(dyrektor|komendant)"
+      ]
+    },
+    { "id": "director", "board": false, "patterns": ["^(dyrektor|komendant)"] },
+    {
+      "id": "management_board",
+      "board": true,
+      "patterns": [
+        "^(wice)?prezes",
+        "^(zastepc\\w*|z ?c[ay]) prezes",
+        "^czlon\\w* (rady )?zarzad",
+        "^przewodnicz\\w* zarzad",
+        "^zarzad\\b"
+      ]
+    },
+    {
+      "id": "secretary",
+      "board": false,
+      "patterns": ["^sekretarz\\b(?! (rady|komisji|zarzadu|redakcji|szkoly))"]
+    },
+    { "id": "treasurer", "board": false, "patterns": ["^skarbnik\\b"] },
+    {
+      "id": "advisor",
+      "board": false,
+      "patterns": [
+        "^doradca$",
+        "^doradc\\w* (wojewod|starost|marszal|prezydent|burmistrz|wojt|minist)"
+      ]
+    },
+    {
+      "id": "manager",
+      "board": false,
+      "patterns": [
+        "^((zastepc\\w*|z ?c[ay]) )?(kierownik|kierowniczk|naczelnik|koordynator|glown\\w* ksiegow)"
+      ]
+    },
+    {
+      "id": "staff",
+      "board": false,
+      "patterns": [
+        "^((starsz|mlodsz|glown)\\w* )?(pracowni|nauczyciel|specjalist|inspektor|podinspektor|referent|ekspert|asystent|pedagog|wychowawc|urzednik|informatyk|wykladowc|lekarz|pielegniar|doradc)"
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "id": "wojt",
+      "label": "wójt",
+      "kind": "elected",
+      "family": "mayor",
+      "office": "Wójt"
+    },
+    {
+      "id": "burmistrz",
+      "label": "burmistrz",
+      "kind": "elected",
+      "family": "mayor",
+      "office": "Burmistrz"
+    },
+    {
+      "id": "prezydent",
+      "label": "prezydent",
+      "kind": "elected",
+      "family": "mayor",
+      "office": "Prezydent"
+    },
+    {
+      "id": "zastepca_wojta",
+      "label": "zastępca wójta",
+      "kind": "executive",
+      "family": "deputy_mayor",
+      "office": "Wójt"
+    },
+    {
+      "id": "zastepca_burmistrza",
+      "label": "zastępca burmistrza",
+      "kind": "executive",
+      "family": "deputy_mayor",
+      "office": "Burmistrz"
+    },
+    {
+      "id": "zastepca_prezydenta",
+      "label": "zastępca prezydenta",
+      "kind": "executive",
+      "family": "deputy_mayor",
+      "office": "Prezydent"
+    },
+    {
+      "id": "starosta",
+      "label": "starosta",
+      "kind": "executive",
+      "family": "office_head"
+    },
+    {
+      "id": "wicestarosta",
+      "label": "wicestarosta",
+      "kind": "executive",
+      "family": "office_deputy"
+    },
+    {
+      "id": "marszalek",
+      "label": "marszałek",
+      "kind": "executive",
+      "family": "office_head"
+    },
+    {
+      "id": "wicemarszalek",
+      "label": "wicemarszałek",
+      "kind": "executive",
+      "family": "office_deputy"
+    },
+    {
+      "id": "wojewoda",
+      "label": "wojewoda",
+      "kind": "executive",
+      "family": "office_head"
+    },
+    {
+      "id": "wicewojewoda",
+      "label": "wicewojewoda",
+      "kind": "executive",
+      "family": "office_deputy"
+    },
+    {
+      "id": "prezes",
+      "label": "prezes",
+      "kind": "executive",
+      "family": "management_board"
+    },
+    {
+      "id": "wiceprezes",
+      "label": "wiceprezes",
+      "kind": "executive",
+      "family": "management_board"
+    },
+    {
+      "id": "czlonek_zarzadu",
+      "label": "członek zarządu",
+      "kind": "executive",
+      "family": "management_board"
+    },
+    {
+      "id": "sekretarz",
+      "label": "sekretarz",
+      "kind": "executive",
+      "family": "secretary"
+    },
+    {
+      "id": "skarbnik",
+      "label": "skarbnik",
+      "kind": "executive",
+      "family": "treasurer"
+    },
+    {
+      "id": "doradca",
+      "label": "doradca",
+      "kind": "executive",
+      "family": "advisor"
+    },
+    {
+      "id": "dyrektor",
+      "label": "dyrektor",
+      "kind": "managerial",
+      "family": "director"
+    },
+    {
+      "id": "zastepca_dyrektora",
+      "label": "zastępca dyrektora",
+      "kind": "managerial",
+      "family": "deputy_director"
+    },
+    {
+      "id": "wicedyrektor",
+      "label": "wicedyrektor",
+      "kind": "managerial",
+      "family": "deputy_director"
+    },
+    {
+      "id": "naczelnik",
+      "label": "naczelnik",
+      "kind": "managerial",
+      "family": "manager"
+    },
+    {
+      "id": "kierownik",
+      "label": "kierownik",
+      "kind": "managerial",
+      "family": "manager"
+    },
+    {
+      "id": "rada_nadzorcza",
+      "label": "rada nadzorcza",
+      "kind": "managerial",
+      "family": "supervisory_board"
+    },
+    {
+      "id": "komisja_rewizyjna",
+      "label": "komisja rewizyjna",
+      "kind": "managerial",
+      "family": "supervisory_board"
+    },
+    {
+      "id": "prokurent",
+      "label": "prokurent",
+      "kind": "managerial",
+      "family": "commercial_proxy"
+    },
+    {
+      "id": "pracownik",
+      "label": "pracownik",
+      "kind": "staff",
+      "family": "staff"
+    },
+    {
+      "id": "nauczyciel",
+      "label": "nauczyciel",
+      "kind": "staff",
+      "family": "staff"
+    },
+    { "id": "inne", "label": "Inne", "kind": null, "family": null }
+  ],
+  "institutions": {
+    "urzad_gminy": [
+      "wojt",
+      "burmistrz",
+      "prezydent",
+      "zastepca_wojta",
+      "zastepca_burmistrza",
+      "zastepca_prezydenta",
+      "sekretarz",
+      "skarbnik",
+      "naczelnik",
+      "kierownik",
+      "pracownik",
+      "inne"
+    ],
+    "starostwo": [
+      "starosta",
+      "wicestarosta",
+      "czlonek_zarzadu",
+      "sekretarz",
+      "skarbnik",
+      "naczelnik",
+      "kierownik",
+      "pracownik",
+      "inne"
+    ],
+    "urzad_marszalkowski": [
+      "marszalek",
+      "wicemarszalek",
+      "czlonek_zarzadu",
+      "sekretarz",
+      "skarbnik",
+      "dyrektor",
+      "pracownik",
+      "inne"
+    ],
+    "urzad_wojewodzki": [
+      "wojewoda",
+      "wicewojewoda",
+      "dyrektor",
+      "doradca",
+      "pracownik",
+      "inne"
+    ],
+    "szkola": ["dyrektor", "wicedyrektor", "nauczyciel", "inne"],
+    "jednostka": [
+      "dyrektor",
+      "zastepca_dyrektora",
+      "kierownik",
+      "pracownik",
+      "inne"
+    ],
+    "spolka": [
+      "prezes",
+      "wiceprezes",
+      "czlonek_zarzadu",
+      "rada_nadzorcza",
+      "prokurent",
+      "dyrektor",
+      "kierownik",
+      "pracownik",
+      "inne"
+    ]
+  },
+  "seats": [
+    "prezes",
+    "wiceprezes",
+    "czlonek_zarzadu",
+    "rada_nadzorcza",
+    "komisja_rewizyjna",
+    "prokurent"
+  ]
+}

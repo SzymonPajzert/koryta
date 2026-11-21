@@ -71,6 +71,8 @@ export const skippedChangeFields = new Set([
   "needs_split",
   "nameChunksLower",
   "content_changed_at",
+  "declared",
+  "as_of",
   "offices",
 ]);
 

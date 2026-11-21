@@ -10,6 +10,7 @@ cipher against its own inverse.
 
 import base64
 import random
+import types
 
 import pytest
 from cryptography.hazmat.primitives import padding
@@ -232,3 +233,58 @@ def test_the_search_token_uses_the_placeholder_krs():
     headers = auth_headers("")
     assert set(headers) == {"x-api-key", "apiKey"}
     assert len(headers["apiKey"]) == 512
+
+
+# ---------------------------------------------------------------------------
+# The odpis PDF -- what an HTTP 200 may hold.
+# ---------------------------------------------------------------------------
+
+#: The start of the page the ministry served, with HTTP 200, for every request
+#: of the 2026-11-21 night.
+MAINTENANCE_PAGE = (
+    b"\n\n<html>\n<head>\n\t<title>Przerwa techniczna</title>\n"
+    b"\t<meta http-equiv=Content-Type content=text/html; charset=utf-8 />\n"
+)
+
+
+class Answering:
+    """A session whose every POST gets the same status and body."""
+
+    def __init__(self, status: int, content: bytes):
+        self.status = status
+        self.content = content
+        self.posted: list[str] = []
+
+    def post(self, url, **kwargs):
+        self.posted.append(url)
+        return types.SimpleNamespace(status_code=self.status, content=self.content)
+
+
+def test_a_pdf_is_returned_as_served():
+    odpis = b"%PDF-1.4 the odpis"
+    session = Answering(200, odpis)
+    assert search.fetch_odpis_pdf("0000000029", session=session) == odpis
+    assert session.posted == [f"{search.SEARCH_API_URL}wyszukiwarka/OdpisPelny/pdf"]
+
+
+def test_the_maintenance_page_is_not_an_odpis():
+    """Filed as one, it stood as the company's odpis and the company was never
+    asked again: 1,500 of them from the nights of 2026-10-17, 10-18 and 11-21."""
+    with pytest.raises(search.OdpisUnavailable, match="maintenance page") as raised:
+        search.fetch_odpis_pdf("0000000029", session=Answering(200, MAINTENANCE_PAGE))
+    assert raised.value.status == 200
+
+
+def test_any_other_200_that_is_not_a_pdf_is_not_an_odpis():
+    with pytest.raises(search.OdpisUnavailable, match="not a PDF"):
+        search.fetch_odpis_pdf("0000000029", session=Answering(200, b'{"x": 1}'))
+
+
+@pytest.mark.parametrize("status,content", [(404, b""), (400, b"{}")])
+def test_not_in_this_register_is_none(status, content):
+    session = Answering(status, content)
+    assert search.fetch_odpis_pdf("0000000029", session=session) is None
+
+
+def test_an_empty_200_is_left_to_the_caller_as_before():
+    assert search.fetch_odpis_pdf("0000000029", session=Answering(200, b"")) == b""

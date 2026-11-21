@@ -115,6 +115,25 @@ def test_every_edge_field_the_comparison_reads_is_exported():
     assert read <= set(KorytaEdges.fields)
 
 
+def test_a_declared_posts_as_of_comes_back_as_written(tmp_path):
+    """A bare year is a column of digits, which `read_json` would make 2024.0."""
+    posts = [
+        {"id": "e1", "type": "employed", "source": "a", "target": "b", "as_of": "2024"},
+        {
+            "id": "e2",
+            "type": "employed",
+            "source": "a",
+            "target": "c",
+            "as_of": "2024-05-15",
+        },
+        OTHER_EDGE,
+    ]
+
+    stored = through_the_export(posts, KorytaEdges, tmp_path)
+
+    assert list(stored["as_of"][:2]) == ["2024", "2024-05-15"]
+
+
 @pytest.mark.parametrize(
     ("elected", "expected"),
     [

@@ -711,6 +711,50 @@ def test_a_service_that_stops_answering_fails_the_run(monkeypatch):
     assert end["stop_reason"].endswith(crawl.REFUSING)
 
 
+class MaintenancePage:
+    status_code = 200
+    content = b"\n\n<html><head><title>Przerwa techniczna</title></head></html>"
+
+
+class DownForMaintenance:
+    """The ministry down for maintenance: its page, with HTTP 200, for every POST."""
+
+    def __init__(self):
+        self.posted = 0
+
+    def post(self, url, **kwargs):
+        self.posted += 1
+        return MaintenancePage()
+
+
+def test_a_maintenance_page_is_filed_as_nothing_and_fails_the_run(monkeypatch):
+    """The 2026-11-21 night filed 500 of them as odpisy and called it a success."""
+    monkeypatch.setattr(job, "warsaw_day", lambda: TODAY)
+    monkeypatch.setattr(crawl, "COOL_DOWN", 0.0)
+    monkeypatch.setattr(crawl, "STALL_REST", 0.0)
+    client, status, session = FakeClient(), RecordingRun(), DownForMaintenance()
+    many = [plan.Ask(f"{i:010d}", ("P", "S"), "no_odpis") for i in range(1, 30)]
+
+    code = job.run(
+        plan.Plan(asks=many),
+        interval=0,
+        flush_every=100,
+        client=client,
+        session=session,
+        status=status,
+    )
+
+    assert code == crawl.EXIT_UPSTREAM_REFUSING
+    assert not [k for k in client.objects if k[0] == "koryta-pl-crawled"]
+    # No rest: a stall is waited out, a maintenance page is not.
+    assert session.posted == crawl.MAX_CONSECUTIVE_FAILURES
+    end = status.ending()
+    assert end["state"] == "failed"
+    assert end["counters"]["failed"] == crawl.MAX_CONSECUTIVE_FAILURES
+    assert end["counters"]["fetched"] == 0
+    assert "maintenance page" in end["errors"][0]
+
+
 def test_a_slowed_service_is_how_a_run_ends_not_a_failure():
     stopped = crawl.Result(stopped="trailing-50 mean 3.00s over the 2.50s ceiling")
     assert job.run_state(stopped) == "partial"

@@ -124,6 +124,13 @@ export const INTERNAL_FIELDS = new Set([
   // there back onto the node whenever an old revision was re-approved,
   // restoring a stale date over the live one.
   "content_changed_at",
+  // What declarations say about an employment (shared/declaredPosts.ts),
+  // written by their automation as a field update. Every `set` carries them
+  // across, so approving a proposal filed before an entry was added keeps the
+  // entry; and no revision, which any signed in reader may open, holds who
+  // read an entry or what it pays.
+  "declared",
+  "as_of",
   // A region's urzędy, written by /api/ingest/region from the register's
   // table (see shared/offices.ts). No revision states them, and one written
   // over the region must not drop them.

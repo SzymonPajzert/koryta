@@ -53,6 +53,10 @@ INTERNAL_FIELDS = frozenset(
         "delete_reason",
         "visibility",
         "nameChunksLower",
+        # What declarations say about an employment, which only their
+        # automation writes.
+        "declared",
+        "as_of",
     }
 )
 

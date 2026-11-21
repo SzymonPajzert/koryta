@@ -78,6 +78,10 @@ import { isAutomatedUid, isPublicEmployment } from "~~/shared/stats";
 import { placeClashes } from "~~/shared/twoPlaces";
 import { recordAudit } from "./audit";
 import {
+  openEmploymentQuietly,
+  placeEmploymentAgain,
+} from "./declarationEmployment";
+import {
   EXTRACTS,
   PUBLICATIONS,
   PUBLISH_LIMITS,
@@ -260,11 +264,25 @@ async function peopleImportBusy(now: Date): Promise<boolean> {
  * record at all: it is up already, the admin's date links nothing on it, and
  * a hold would sit on the admin's list of held pages asking for nothing. A
  * page born on another day is flagged as for any reading.
+ *
+ * Then the readings of the declaration's posts, which wait for a comparison
+ * that names one page, are opened or closed by what this one found
+ * (`openEmploymentOf`).
  */
 export async function matchPages(
   db: Firestore,
   extractId: string,
   now: Date = new Date(),
+): Promise<MatchResult> {
+  const result = await comparePages(db, extractId, now);
+  await openEmploymentQuietly(db, extractId, now);
+  return result;
+}
+
+async function comparePages(
+  db: Firestore,
+  extractId: string,
+  now: Date,
 ): Promise<MatchResult> {
   const extractRef = db.collection(EXTRACTS).doc(extractId);
   const extract = (await extractRef.get()).data();
@@ -2069,6 +2087,10 @@ export async function matchAndDrain(
  * The ones compared again go least recently compared first: a crop compared
  * to no effect is stamped and goes to the back, so each sweep reaches others.
  *
+ * And it places again the readings of declarations' posts that a
+ * comparison's own placing missed (`placeEmploymentAgain`), starting from
+ * `random()` in their order.
+ *
  * Says which pages it compared, put back or took up (`touched`), for the
  * people count to move them.
  */
@@ -2076,7 +2098,7 @@ export async function sweepDeclarations(
   db: Firestore,
   now: Date,
   limit: number,
-  options: { batch?: number } = {},
+  options: { batch?: number; random?: () => number } = {},
 ): Promise<SweepResult & { touched: string[] }> {
   const size = options.batch ?? SWEEP_BATCH;
   const extracts = db.collection(EXTRACTS);
@@ -2118,12 +2140,17 @@ export async function sweepDeclarations(
     // Even when a comparison fails: those before it reached their people.
     await requeueQuietly(db, pagesNewlyReached(matched));
   }
+  const placed = await placeEmploymentAgain(db, now, {
+    limit: size,
+    start: (options.random ?? Math.random)(),
+  });
 
   const reverted = await restoreReverted(db, now);
   const drain = await drainPublications(db, now, limit);
   return {
     checked: unmatched.size + recheck.size,
     changed,
+    placed,
     reverted,
     drain,
     touched: pagesTouched({ matched, drain, reverted }),

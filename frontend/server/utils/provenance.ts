@@ -1,4 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore";
+import { DECLARATION_ACTOR } from "~~/shared/declarations";
 
 /** A node or an edge, as much of it as `importedOrReviewed` reads. */
 type Written = { id?: string; revision_id?: unknown };
@@ -17,8 +18,9 @@ type Written = { id?: string; revision_id?: unknown };
  * So a document qualifies when it has an approved revision (`revision_id`),
  * or when its first revision was written by an import - `update_automatic`,
  * which the server sets from how the write was made rather than from anything
- * in the request. A document with no revisions at all is older than the
- * question can be answered for, and does not.
+ * in the request - other than the declarations automation (see
+ * `writtenByImportOrReviewed`). A document with no revisions at all is older
+ * than the question can be answered for, and does not.
  *
  * One read per document left to check: the first of its revisions, off the
  * `(node_id, update_time)` index the revision history already uses.
@@ -57,10 +59,17 @@ export async function importedOrReviewed(
  * id, as the query above finds it. /api/stats/computeNodes reads every
  * revision anyway, and asks this of every person and post at once for the
  * line the search box shows under an unpublished person
- * (shared/searchLine.ts). */
+ * (shared/searchLine.ts).
+ *
+ * Not a document the declarations automation created: a post readers agreed
+ * on is still their reading until a reviewer approves it, or
+ * `approveWaitingEdge` does once its page is live. */
 export function writtenByImportOrReviewed(
   doc: Written,
-  first: { update_automatic?: unknown } | undefined,
+  first: { update_automatic?: unknown; update_user?: unknown } | undefined,
 ): boolean {
-  return !!doc.revision_id || first?.update_automatic === true;
+  if (doc.revision_id) return true;
+  return (
+    first?.update_automatic === true && first.update_user !== DECLARATION_ACTOR
+  );
 }

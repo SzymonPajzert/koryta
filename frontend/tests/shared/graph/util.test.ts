@@ -328,6 +328,72 @@ describe("graph utils", () => {
     });
   });
 
+  describe("a post a declaration names", () => {
+    const job: DBEdge = {
+      id: "j1",
+      source: "p1",
+      target: "starostwo",
+      type: "employed",
+      name: "wicestarosta",
+    } as DBEdge;
+
+    it("carries its age and what a page reads of each entry, nothing else", () => {
+      const [edge] = getEdges([
+        {
+          ...job,
+          as_of: "2024",
+          declared: {
+            "f00d-p1:employer:0": {
+              url: "https://bip.example.pl/oswiadczenie.pdf",
+              as_of: "2024",
+              kind: "annual",
+              band: "employer",
+              role: "wicestarosta",
+              roleId: "wicestarosta",
+              start: "2019-11-21",
+              by: "readers",
+              readers: 2,
+              at: "2026-11-20T12:00:00.000Z",
+              income: [
+                {
+                  amount: 12345678,
+                  currency: "PLN",
+                  from: "2024-01-01",
+                  to: "2024-12-31",
+                  measure: "dochod",
+                  gross: null,
+                  kind: "pay",
+                  line: "f00d-p1:viii:0",
+                  part: 0,
+                  partRole: "single",
+                },
+              ],
+            },
+          },
+        },
+      ]);
+
+      expect(edge!.as_of).toBe("2024");
+      // Who read it, how it settled and what it pays stay on the edge.
+      expect(edge!.declared).toEqual({
+        "f00d-p1:employer:0": {
+          url: "https://bip.example.pl/oswiadczenie.pdf",
+          as_of: "2024",
+          kind: "annual",
+          role: "wicestarosta",
+          start: "2019-11-21",
+        },
+      });
+    });
+
+    it("adds nothing to a post no declaration names", () => {
+      const [edge] = getEdges([job]);
+
+      expect(edge).not.toHaveProperty("as_of");
+      expect(edge).not.toHaveProperty("declared");
+    });
+  });
+
   describe("tagged edges", () => {
     const taggedEdge: DBEdge = {
       id: "t1",

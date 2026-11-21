@@ -3,6 +3,7 @@ send the crops to the site's readers.
 
     koryta_bip_declarations cut --out ~/.cache/koryta/bip-people-crawl
     koryta_bip_declarations cut --out ... --limit 20      # twenty files, to look at
+    koryta_bip_declarations cut-employment --items pages.txt --max-minutes 60
     koryta_bip_declarations upload --dry-run              # what would go; nothing sent
     koryta_bip_declarations upload                        # send what is new or changed
     koryta_bip_declarations status                        # where the declarations stand
@@ -19,6 +20,14 @@ the crawler) and the same bundles (`--out`, the crawler's), and runs beside it.
 out of it (`cutter`), the files of people on the site first. Its tables are its
 own (`stores.bip_declarations`): a file once cut is not read again until the
 cutter's version changes, so a run stopped anywhere loses only the files in hand.
+
+`cut-employment` cuts, from each date page `cut` found, the bands readers read
+declared posts from (`employment`): the header, the employer's line, sections
+VII and VIII. It has a version of its own, and `--items` keeps it to the pages
+the site will read; `--recut` cuts a band one caption wider where readers said
+it lacks a part. It sends nothing: the bands stay in its table. A band that
+reads the declarant's first name or surname (the candidacy's) is kept there as
+`holds_name`, which no upload sends.
 
 `upload` sends the site what it lacks or what changed since the last upload:
 every candidacy with a page on the site, and the crops of their files (`upload`).
@@ -65,6 +74,7 @@ import argparse
 import hashlib
 import multiprocessing
 import os
+import re
 import sys
 import tarfile
 import time
@@ -79,8 +89,15 @@ from conductor import setup_context
 from jobs.bip_crawler import DEFAULT_OUT
 from jobs.bip_crawler.people_list import list_policy, read_list
 from jobs.bip_declarations.cutter import FileCut, Ocr, cut_file
+from jobs.bip_declarations.employment import (
+    BANDS,
+    EMPLOYMENT_CUT_VERSION,
+    BandCut,
+    cut_bands,
+)
 from jobs.bip_declarations.facts import facts_summary, read_facts, site_rows
 from jobs.bip_declarations.names import Names, read_names
+from jobs.bip_declarations.reading import name_matches
 from jobs.bip_declarations.stats import report, write_units_csv
 from jobs.bip_declarations.upload import (
     DEFAULT_ENDPOINT,
@@ -94,9 +111,12 @@ from jobs.bip_declarations.upload import (
 from scrapers.common.pg import PostgresClient
 from scrapers.stores import (
     BipDeclarationStore,
+    DeclarationBandRow,
     DeclarationCropRow,
     DeclarationCutRow,
     DeclarationFile,
+    DeclarationPages,
+    DeclarationStrip,
     PersonRow,
 )
 from stores.bip_declaration_facts import FactsPart, newest_facts, write_facts
@@ -246,6 +266,237 @@ def run_cut(
     return EXIT_TRY_LATER if stopped else 0
 
 
+#: The site's id of a declaration's date page, `<sha256>-p<page>`.
+ITEM = re.compile(r"^([0-9a-f]{64})-p(\d+)$")
+
+
+def band_row(sha256: str, page: int, cut: BandCut) -> DeclarationBandRow:
+    return DeclarationBandRow(
+        sha256,
+        page,
+        cut.band,
+        EMPLOYMENT_CUT_VERSION,
+        cut.status,
+        cut.widen,
+        cut.dpi,
+        cut.width,
+        tuple(DeclarationStrip(s.page, s.top, s.bottom, s.png) for s in cut.strips),
+        tuple(cut.lines),
+        cut.text,
+        cut.score,
+        cut.typed,
+        cut.source,
+        cut.dnia,
+        cut.dnia_score,
+        cut.stan_na,
+        cut.stan_na_score,
+        "; ".join(cut.notes),
+    )
+
+
+#: A person's first name and surname.
+Name = tuple[str, str]
+
+
+def declarants(
+    store: BipDeclarationStore, due: list[DeclarationPages]
+) -> dict[tuple[str, int], tuple[Name, ...]]:
+    """Whose names no band of each due date page may show: the candidacies
+    the name read on the page is, and the one person the file's links name;
+    every candidacy the file was found for when neither tells (a council's
+    file whose page's name was not read)."""
+    wanted = {d.file.sha256 for d in due}
+    people = {p.key: p for p in store.candidacies()}
+    links: dict[str, list[tuple[str, bool]]] = {}
+    for link in store.links():
+        if link.sha256 in wanted and link.key in people:
+            links.setdefault(link.sha256, []).append((link.key, link.named))
+    read = {(c.sha256, c.page): c.name for c in store.crops() if c.sha256 in wanted}
+    names = {}
+    for d in due:
+        sha = d.file.sha256
+        whose = {
+            key: (people[key].first_name, people[key].last_name)
+            for key, _ in links.get(sha, [])
+        }
+        named = {whose[key] for key, by in links.get(sha, []) if by}
+        own = list(named) if len(named) == 1 else []
+        for page, _ in d.pages:
+            reading = read.get((sha, page), "")
+            matched = [
+                name
+                for name in whose.values()
+                if reading and name_matches(reading, *name)
+            ]
+            chosen = matched + own or list(whose.values())
+            names[(sha, page)] = tuple(dict.fromkeys(chosen))
+    return names
+
+
+def band_one(
+    job: tuple[
+        str, DeclarationPages, dict[tuple[int, str], int], dict[int, tuple[Name, ...]]
+    ],
+) -> tuple[str, dict[int, list[DeclarationBandRow]], str]:
+    """Cut one file's bands: what the worker processes run. The file's sha256,
+    each date page's bands, and a word on how it went."""
+    root, due, widen, names = job
+    sha = due.file.sha256
+    started = time.monotonic()
+    data = read_blob(Path(root), due.file)
+    if data is None:
+        return sha, {}, "no_file"
+    result = cut_bands(data, due.pages, _ocr or Ocr(), widen, due.starts, names)
+    rows = {
+        page: [band_row(sha, page, cut) for cut in cuts]
+        for page, cuts in result.bands.items()
+    }
+    if result.status != "cut":
+        # The file as a whole: an HTML page, a broken download. Kept, so the
+        # next run does not read it again until the version changes.
+        rows = {
+            page: [
+                DeclarationBandRow(
+                    sha,
+                    page,
+                    band,
+                    EMPLOYMENT_CUT_VERSION,
+                    result.status,
+                    notes=result.error,
+                )
+                for band in BANDS
+            ]
+            for page, _ in due.pages
+        }
+    seconds = round(time.monotonic() - started, 1)
+    return (
+        sha,
+        rows,
+        f"{result.status} {result.pages_read}/{result.pages} pages {seconds}s",
+    )
+
+
+def read_items(path: Path) -> set[str]:
+    """The date pages in a file, one `<sha256>-p<page>` a line."""
+    items = set()
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not ITEM.match(line):
+            raise ValueError(f"not a date page's id (<sha256>-p<page>): {line!r}")
+        items.add(line)
+    return items
+
+
+def recut_bands(text: str) -> tuple[str, str]:
+    """`--recut`'s `<sha256>-p<page>:<band>`, as (item, band)."""
+    item, _, band = text.rpartition(":")
+    if not ITEM.match(item) or band not in BANDS:
+        raise argparse.ArgumentTypeError(
+            f"expected <sha256>-p<page>:<band>, the band one of {', '.join(BANDS)}"
+        )
+    return item, band
+
+
+def recut_widths(
+    store: BipDeclarationStore, recut: list[tuple[str, str]]
+) -> dict[str, dict[tuple[int, str], int]]:
+    """How far each band of the pages asked for again runs: as last cut, and
+    one caption further for the bands readers said lack a part."""
+    asked = {item for item, _ in recut}
+    widen: dict[str, dict[tuple[int, str], int]] = {}
+    before = {}
+    for row in store.bands(EMPLOYMENT_CUT_VERSION):
+        before[(row.item, row.band)] = row.widen
+        if row.item in asked:
+            widen.setdefault(row.sha256, {})[(row.page, row.band)] = row.widen
+    for item, band in recut:
+        match = ITEM.match(item)
+        assert match is not None
+        sha, page = match.group(1), int(match.group(2))
+        widen.setdefault(sha, {})[(page, band)] = before.get((item, band), 0) + 1
+    return widen
+
+
+def run_cut_employment(
+    store: BipDeclarationStore,
+    root: Path,
+    *,
+    workers: int,
+    threads: int,
+    limit: int | None,
+    max_minutes: float | None,
+    items: set[str] | None = None,
+    recut: list[tuple[str, str]] | None = None,
+) -> int:
+    """Cut the bands of the date pages that have none of this version; with
+    `recut` alone, only those pages, and with `items`, those first."""
+    again = {item for item, _ in recut or []}
+    widen = recut_widths(store, recut) if recut else {}
+    if items is not None:
+        items = items | again
+    elif again:
+        items = again
+    due = store.pages_to_band(EMPLOYMENT_CUT_VERSION, None, items, again)
+    # Readers wait on a recut: --limit and --max-minutes reach it first.
+    due.sort(
+        key=lambda d: not any(f"{d.file.sha256}-p{p}" in again for p, _ in d.pages)
+    )
+    due = due[:limit]
+    print(
+        f"to cut: the bands of {sum(len(d.pages) for d in due)} date pages "
+        f"in {len(due)} files",
+        flush=True,
+    )
+    if not due:
+        return 0
+    deadline = time.monotonic() + max_minutes * 60 if max_minutes else None
+    names = declarants(store, due)
+    jobs = [
+        (
+            str(root),
+            d,
+            widen.get(d.file.sha256, {}),
+            {page: names[(d.file.sha256, page)] for page, _ in d.pages},
+        )
+        for d in due
+    ]
+    statuses: Counter[str] = Counter()
+    missing = 0
+    stopped = False
+    results: Iterator[tuple[str, dict[int, list[DeclarationBandRow]], str]]
+    if workers <= 1:
+        _init_worker(threads)
+        results = map(band_one, jobs)
+        pool = None
+    else:
+        pool = multiprocessing.get_context("spawn").Pool(
+            workers, initializer=_init_worker, initargs=(threads,)
+        )
+        results = pool.imap_unordered(band_one, jobs)
+    try:
+        for done, (sha, pages, said) in enumerate(results, 1):
+            missing += said == "no_file"
+            for page, bands in pages.items():
+                store.record_bands(sha, page, EMPLOYMENT_CUT_VERSION, bands)
+                statuses.update(f"{b.band} {b.status}" for b in bands)
+            print(f"{done}/{len(due)} {sha[:12]} {said}", flush=True)
+            if deadline is not None and time.monotonic() > deadline:
+                stopped = True
+                break
+    except KeyboardInterrupt:
+        print("interrupted", flush=True)
+        return EXIT_INTERRUPTED
+    finally:
+        if pool is not None:
+            pool.terminate()
+    print(f"bands: {dict(sorted(statuses.items()))}", flush=True)
+    if missing:
+        print(f"{missing} files' bundles are not on disk under {root}", flush=True)
+    return EXIT_TRY_LATER if stopped else 0
+
+
 def store_with_list() -> PostgresBipDeclarationStore:
     """The job's store, handed the night's newest list of people of interest."""
     ctx, _ = setup_context(policy=list_policy())
@@ -267,6 +518,24 @@ def cmd_cut(args: argparse.Namespace) -> int:
     if code != EXIT_INTERRUPTED:
         facts_after(store)
     return code
+
+
+def cmd_cut_employment(args: argparse.Namespace) -> int:
+    try:
+        items = read_items(args.items) if args.items else None
+    except (OSError, ValueError) as exc:
+        print(f"--items: {exc}", file=sys.stderr)
+        return 1
+    return run_cut_employment(
+        store_with_list(),
+        Path(args.out).expanduser(),
+        workers=args.workers,
+        threads=args.threads,
+        limit=args.limit,
+        max_minutes=args.max_minutes,
+        items=items,
+        recut=args.recut,
+    )
 
 
 def cmd_upload(args: argparse.Namespace) -> int:
@@ -540,6 +809,41 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
     cut.add_argument("--limit", type=int, help="cut at most this many files")
     cut.add_argument("--max-minutes", type=float, help="stop after this long (exit 75)")
     cut.set_defaults(func=cmd_cut)
+    bands = sub.add_parser(
+        "cut-employment",
+        help="cut the header, employer, VII and VIII bands of the date pages "
+        "that have none of this version",
+    )
+    bands.add_argument(
+        "--out",
+        type=Path,
+        default=DEFAULT_OUT,
+        help="the crawler's --out, where its bundles are",
+    )
+    bands.add_argument(
+        "--workers", type=int, default=4, help="processes cutting at once (default: 4)"
+    )
+    bands.add_argument(
+        "--threads", type=int, default=2, help="OCR threads in each (default: 2)"
+    )
+    bands.add_argument("--limit", type=int, help="cut at most this many files")
+    bands.add_argument(
+        "--max-minutes", type=float, help="stop after this long (exit 75)"
+    )
+    bands.add_argument(
+        "--items",
+        type=Path,
+        help="only these date pages: a file of <sha256>-p<page>, one a line",
+    )
+    bands.add_argument(
+        "--recut",
+        type=recut_bands,
+        action="append",
+        metavar="ITEM:BAND",
+        help="cut a band again one caption wider, as readers asked: "
+        "<sha256>-p<page>:<band> (repeat for more)",
+    )
+    bands.set_defaults(func=cmd_cut_employment)
     send = sub.add_parser("upload", help="send the site what is new or changed")
     send.add_argument(
         "--endpoint", default=os.environ.get("KORYTA_ENDPOINT", DEFAULT_ENDPOINT)
