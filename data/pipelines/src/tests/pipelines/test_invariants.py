@@ -47,6 +47,7 @@ from analysis.payloads.site import (
 )
 from scrapers.koryta.snapshot import is_reference, reference_id
 from scrapers.wiki.shareholders import normalize_title
+from util.declaration_roles import read_roles
 from util.polish import format_person_name, names_agree
 
 #: Every test here reads the production export rather than a fixture, which is
@@ -141,48 +142,6 @@ PIPELINE_USER = "pipeline"
 #: `frontend/shared/declarations.ts`. A post it creates is what readers agreed
 #: an asset declaration says, and it is the only writer of `Edge.as_of`.
 DECLARATION_ACTOR = "pipeline-declarations"
-
-#: Role families an employment's name folds into: two posts of one person at
-#: one place in one family are one post, as the declarations automation
-#: matches what a declaration names to a stored edge. Read in order, so a
-#: deputy is told from the head whose title it holds, and by whole words of
-#: the name lowercased without diacritics. A name none of them names is a
-#: family of its own.
-ROLE_FAMILIES = (
-    (
-        "deputy mayor",
-        (
-            "zastepca wojta",
-            "zastepca burmistrza",
-            "zastepca prezydenta",
-            "zastepczyni wojta",
-            "zastepczyni burmistrza",
-            "zastepczyni prezydenta",
-            "wicewojt",
-            "wiceburmistrz",
-            "wiceprezydent",
-        ),
-    ),
-    ("mayor", ("wojt", "burmistrz", "prezydent")),
-    (
-        "deputy head",
-        (
-            "wicestarosta",
-            "wicemarszalek",
-            "wicewojewoda",
-            "wicedyrektor",
-            "wicedyrektorka",
-            "zastepca dyrektora",
-            "zastepczyni dyrektora",
-        ),
-    ),
-    ("head", ("starosta", "marszalek", "wojewoda", "dyrektor", "dyrektorka")),
-    ("sekretarz", ("sekretarz",)),
-    ("skarbnik", ("skarbnik",)),
-    ("zarzad", ("zarzad", "zarzadu", "prezes", "prezeska", "wiceprezes")),
-    ("rada nadzorcza", ("nadzorcza", "nadzorczej")),
-    ("prokura", ("prokura", "prokurent", "prokurentka")),
-)
 
 
 def sample(items, limit: int = 10) -> list:
@@ -2604,16 +2563,29 @@ def test_only_a_post_a_declaration_created_has_an_as_of(edges, created_by_declar
     )
 
 
-def role_family(name) -> tuple[str, str]:
-    """The family of `ROLE_FAMILIES` an employment's name falls in, or the
-    folded name for one it does not."""
-    folded = unicodedata.normalize("NFKD", str(name or "").lower())
-    words = "".join(c for c in folded if not unicodedata.combining(c))
-    words = " ".join(re.sub(r"[^a-z0-9]+", " ", words.replace("ł", "l")).split())
-    for family, names in ROLE_FAMILIES:
-        if any(f" {named} " in f" {words} " for named in names):
-            return ("family", family)
-    return ("name", words)
+def role_families(edge) -> frozenset[str]:
+    """The families of roles an employment is matched by, as the declarations
+    automation matches a declared row to a stored post.
+
+    Those of the chips its declared entries name (`roleId`), which is what it
+    was matched by; else the one its name folds into, as the site folds it
+    (`roleFamilyOf`, over frontend/shared/declarationEmploymentRoles.json);
+    else its folded name, a family of its own.
+    """
+    roles = read_roles()
+    declared = edge.get("declared")
+    entries = declared.values() if isinstance(declared, dict) else ()
+    chips = {
+        chip.family
+        for entry in entries
+        if isinstance(entry, dict)
+        and (chip := roles.chip(entry.get("roleId"))) is not None
+        and chip.family
+    }
+    if chips:
+        return frozenset(chips)
+    name = edge.get("name")
+    return frozenset({roles.family(name) or f"name: {roles.fold(name)}"})
 
 
 def spell_day(value, *, end: bool) -> str | None:
@@ -2641,11 +2613,12 @@ def test_a_declared_post_is_not_a_second_copy_of_one_stored(
 
     The automation writes what a declaration says onto the person's stored
     post at the place when one is there, of the same family of roles
-    (`ROLE_FAMILIES`) and held on the declaration's day, and creates a post
-    only when none is. One beside such a post is that post twice: a page that
-    lists the job twice, and two of everything counted from it. The people
-    import storing the register's seat beside a declared one would do the
-    same. Nothing writes these yet, so it starts strict.
+    (`role_families`, by the site's own roles file) and held on the
+    declaration's day, and creates a post only when none is. One beside such
+    a post is that post twice: a page that lists the job twice, and two of
+    everything counted from it. The people import storing the register's seat
+    beside a declared one would do the same. Nothing writes these yet, so it
+    starts strict.
     """
     by_place: dict[tuple, list[dict]] = collections.defaultdict(list)
     for edge in edges:
@@ -2661,9 +2634,9 @@ def test_a_declared_post_is_not_a_second_copy_of_one_stored(
             if isinstance(entry, dict)
         } | {spell_day(post.get("as_of"), end=True)}
         days.discard(None)
-        family = role_family(post.get("name"))
+        families = role_families(post)
         for other in by_place[(post.get("source"), post.get("target"))]:
-            if other["id"] == post["id"] or role_family(other.get("name")) != family:
+            if other["id"] == post["id"] or not families & role_families(other):
                 continue
             start = spell_day(other.get("start_date"), end=False) or "0000"
             stop = spell_day(other.get("end_date"), end=True) or "9999"

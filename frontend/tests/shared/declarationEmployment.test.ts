@@ -23,6 +23,7 @@ import {
   type EmployerRef,
   type EmploymentVote,
 } from "../../shared/declarationEmployment";
+import roleNames from "./declarationEmploymentRoleFamilies.json";
 
 /** Synthetic REGONs with their check digits: a starostwo, a company and a
  * local unit of the first. */
@@ -133,50 +134,10 @@ describe("role chips", () => {
 });
 
 describe("roleFamilyOf", () => {
-  it.each([
-    ["prezes", "management_board"],
-    ["Prezes Zarządu", "management_board"],
-    ["zastępca prezesa", "management_board"],
-    ["Zarząd", "management_board"],
-    ["członek zarządu, CFO", "management_board"],
-    ["dyrektor", "director"],
-    ["p.o. dyrektora", "director"],
-    ["pełniący obowiązki dyrektora", "director"],
-    ["dyrektor Wydziału Kontroli i Skarg", "director"],
-    ["Dyrektor Szkoły im. Prezydenta Miasta", "director"],
-    ["z/ca dyrektora", "deputy_director"],
-    ["wicedyrektor", "deputy_director"],
-    ["Zastępca Wójta", "deputy_mayor"],
-    ["Z-ca Burmistrza", "deputy_mayor"],
-    ["wiceprezydent", "deputy_mayor"],
-    ["wójt gminy", "mayor"],
-    ["Rada Nadzorcza", "supervisory_board"],
-    ["członek rady nadzorczej", "supervisory_board"],
-    ["prezes rady nadzorczej", "supervisory_board"],
-    ["Rada Społeczna", "supervisory_board"],
-    ["Prokurent", "commercial_proxy"],
-    ["Pełnomocnik", "attorney"],
-    ["wicestarosta", "office_deputy"],
-    ["sekretarz stanu", "office_deputy"],
-    ["starosta powiatu", "office_head"],
-    ["sekretarz powiatu", "secretary"],
-    ["naczelnik wydziału", "manager"],
-    ["zastępca naczelnika wydziału", "manager"],
-    ["główny specjalista", "staff"],
-  ])("folds %j into %s", (name, family) => {
+  // The pipeline checks the same rows (util/declaration_roles.py), so the
+  // night and the site fold a name alike.
+  it.each(roleNames.names)("folds %j into %s", (name, family) => {
     expect(roleFamilyOf(name)).toBe(family);
-  });
-
-  it.each([
-    [""],
-    ["radny"],
-    ["przewodniczący rady"],
-    ["sekretarz rady"],
-    ["członek"],
-    ["ministerstwo"],
-    ["zlecenie dla"],
-  ])("folds %j into no family", (name) => {
-    expect(roleFamilyOf(name)).toBeNull();
   });
 
   it("folds a missing name into no family", () => {
