@@ -7,7 +7,7 @@ docstring describes against what the sources actually say.
 
 import pandas as pd
 
-from scrapers.map.offices import LocalGovernmentOffices, offices_by_region
+from scrapers.map.offices import LocalGovernmentOffices, _recased, offices_by_region
 from scrapers.stores import Pipeline, ProcessPolicy
 from scrapers.tests.mocks import get_test_context, setup_test_context
 
@@ -153,7 +153,7 @@ def test_a_rural_urzad_standing_in_a_town_of_another_name_is_found_by_its_own():
 
     assert found == {
         "0417052": ["Urząd Gminy Ryńsk"],
-        "2212082": ["URZĄD GMINY REDZIKOWO"],
+        "2212082": ["Urząd Gminy Redzikowo"],
     }
 
 
@@ -180,8 +180,8 @@ def test_an_urzad_that_names_no_place_is_given_its_gminas_name():
     )
 
     assert found == {
-        "0411053": ["URZĄD MIASTA I GMINY PIOTRKÓW KUJAWSKI"],
-        "0412042": ["URZĄD GMINY RYPIN"],
+        "0411053": ["Urząd Miasta i Gminy Piotrków Kujawski"],
+        "0412042": ["Urząd Gminy Rypin"],
     }
 
 
@@ -223,8 +223,8 @@ def test_a_run_together_name_is_split_before_it_is_read():
     )
 
     assert found == {
-        "2215102": ["URZĄD GMINY WEJHEROWO"],
-        "2417102": ["URZĄD GMINY RADZIECHOWY-WIEPRZ"],
+        "2215102": ["Urząd Gminy Wejherowo"],
+        "2417102": ["Urząd Gminy Radziechowy-Wieprz"],
     }
 
 
@@ -241,7 +241,7 @@ def test_a_city_that_is_its_own_powiat_is_run_by_its_urzad_at_both_levels():
         )
     )
 
-    assert found == {"1661": ["URZĄD MIASTA OPOLA"], "1661011": ["URZĄD MIASTA OPOLA"]}
+    assert found == {"1661": ["Urząd Miasta Opola"], "1661011": ["Urząd Miasta Opola"]}
 
 
 def test_a_starostwo_in_the_city_serves_the_powiat_around_it():
@@ -306,7 +306,7 @@ def test_a_wojewodztwo_has_the_marszalek_and_the_wojewoda_but_no_delegatura():
 
     assert found == {
         "22": [
-            "POMORSKI URZĄD WOJEWÓDZKI W GDAŃSKU",
+            "Pomorski Urząd Wojewódzki w Gdańsku",
             "Urząd Marszałkowski Województwa Pomorskiego w Gdańsku",
         ]
     }
@@ -326,7 +326,7 @@ def test_a_warsaw_dzielnica_has_an_urzad_of_its_own():
         )
     )
 
-    assert found == {"1465058": ["URZĄD DZIELNICY MOKOTÓW MIASTA STOŁECZNEGO WARSZAWY"]}
+    assert found == {"1465058": ["Urząd Dzielnicy Mokotów Miasta Stołecznego Warszawy"]}
 
 
 def test_withdrawn_and_unnumbered_entries_are_left_out():
@@ -397,3 +397,23 @@ def test_the_pipeline_reads_both_files_and_keeps_the_leading_zeros():
             "nip": "5882155172",
         }
     ]
+
+
+def test_a_name_in_capitals_is_written_in_normal_case():
+    # What the site stores a new place under, so Szymon wants it this way
+    # rather than in the register's capitals (2026-11-11).
+    assert _recased("URZĄD MIASTA OPOLA") == "Urząd Miasta Opola"
+    assert (
+        _recased("WARMIŃSKO-MAZURSKI URZĄD WOJEWÓDZKI W OLSZTYNIE")
+        == "Warmińsko-Mazurski Urząd Wojewódzki w Olsztynie"
+    )
+    assert _recased("URZĄD MIASTA I GMINY W RUI") == "Urząd Miasta i Gminy w Rui"
+    assert _recased("URZĄD GMINY NOWE MIASTO NAD PILICĄ") == (
+        "Urząd Gminy Nowe Miasto nad Pilicą"
+    )
+
+
+def test_a_name_in_its_own_case_is_kept():
+    # The office's own spelling, whatever it is.
+    assert _recased("Urząd Gminy Gniewino") == "Urząd Gminy Gniewino"
+    assert _recased("Starostwo Powiatowe w Słupsku") == "Starostwo Powiatowe w Słupsku"

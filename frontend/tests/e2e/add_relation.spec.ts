@@ -148,7 +148,7 @@ test.describe("Add a relation", () => {
     ).toBeVisible();
     await dialog.getByTestId("add-relation-verb-office").click();
     await expect(dialog.getByTestId("region-workplace")).toContainText(
-      "URZĄD MIASTA OPOLA",
+      "Urząd Miasta Opola",
       { timeout: 30_000 },
     );
 
@@ -161,7 +161,7 @@ test.describe("Add a relation", () => {
 
     await page.reload();
     await expect(page.getByTestId("relations-history")).toContainText(
-      "URZĄD MIASTA OPOLA",
+      "Urząd Miasta Opola",
       { timeout: 30_000 },
     );
     await expect(page.locator("body")).toContainText(
