@@ -18,7 +18,7 @@ import pytest
 
 import jobs.bip_declarations as job
 from jobs.bip_declarations.employment import EMPLOYMENT_CUT_VERSION
-from jobs.bip_declarations.suggest import ROLES_FILE, BodyIndex
+from jobs.bip_declarations.suggest import BodyIndex
 from jobs.bip_declarations.upload import (
     EMPLOYMENT,
     EMPLOYMENT_INGEST,
@@ -31,6 +31,8 @@ from jobs.bip_declarations.upload import (
     SWEEP,
     DatePage,
     ListTooOld,
+    _elected,
+    _employment_item,
     _with_pictures,
     date_pages,
     employment_plan,
@@ -47,6 +49,7 @@ from scrapers.stores import (
     PersonRow,
 )
 from stores.bip_declarations import MemoryBipDeclarationStore
+from util.declaration_roles import ROLES_FILE, read_roles
 
 FRONTEND = ROLES_FILE.parents[1]
 #: The body this upload sends, as frontend/tests/shared/declarationEmployment.test.ts
@@ -462,6 +465,28 @@ def test_suggestions_go_only_with_a_printed_line(store):
     # The same words in handwriting are OCR's guess: nothing is suggested.
     assert old.record["employer"]["typed"] is False
     assert old.record["employer"]["suggestions"] == []
+
+
+def test_a_mayors_own_title_is_suggested_only_on_a_mayors_declaration():
+    cut = {row.band: row for row in bands(SHA_NEW, 0, "Burmistrz")}
+    burmistrz = replace(
+        ANNA, key="5" * 16, person={**ANNA.person, "office": "Burmistrz"}
+    )
+
+    unit, office = _elected([ANNA_2018, burmistrz], "anna")
+    assert (unit, office) == ("010102", "Burmistrz")
+    mayor = _employment_item(
+        NEW, "anna", False, cut, unit, office, BODIES, read_roles()
+    )
+    assert mayor.record["employer"]["suggestions"] == [
+        {"employer": {"regon": URZAD}, "role": "burmistrz"}
+    ]
+    # A councillor's bare „Burmistrz” is not their own office: no row.
+    unit, office = _elected([ANNA], "anna")
+    councillor = _employment_item(
+        NEW, "anna", False, cut, unit, office, BODIES, read_roles()
+    )
+    assert councillor.record["employer"]["suggestions"] == []
 
 
 def test_the_header_s_picture_is_part_of_what_a_band_shows(store):
