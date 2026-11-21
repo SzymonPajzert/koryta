@@ -406,9 +406,11 @@ describe("AddRelationDialog", () => {
       await pick(wrapper, wejherowo);
 
       expect(document.body.textContent).toContain("kandydował/a w");
-      expect(document.body.textContent).toContain(
-        "pracował/a w urzędzie lub jednostce podległej",
-      );
+      expect(
+        document
+          .querySelector('[data-testid="add-relation-verb-office"]')
+          ?.textContent.trim(),
+      ).toBe("pracował/a");
     });
 
     it("is not offered by a section about something else", async () => {
