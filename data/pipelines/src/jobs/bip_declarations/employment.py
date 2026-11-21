@@ -201,6 +201,8 @@ PRINTED: dict[str, tuple[str, ...]] = {
     ),
 }
 PLACE_CAPTION = _near("miejscowos", 2)
+#: The act's text under the employer's caption, "po zapoznaniu się z ...".
+ACT = _near("pozapoznaniusie", 2)
 #: A page's running header or footer: the act's "Dziennik Ustaw" and "Poz.",
 #: "Strona 3 z 5", a page number alone, a form generator's address.
 RUNNING = re.compile(
@@ -811,7 +813,8 @@ def find_header(scan: PageScan, birth: Band | None, widen: int) -> Found:
 def find_employer(scan: PageScan, birth: Band | None, widen: int) -> Found:
     """From the first line under the birth date's line to its caption, or, a
     caption wider, to section I; "po zapoznaniu się ..." where the caption
-    was not read."""
+    was not read. A form that runs the caption on into "po zapoznaniu się"
+    on its line ends under that line."""
     if birth is None:
         return Found("no_birth_line")
     h = scan.h
@@ -819,7 +822,7 @@ def find_employer(scan: PageScan, birth: Band | None, widen: int) -> Found:
     below = [m for m in scan.marks if m.top > foot]
     after = next((m for m in below if "zapoznaniu" in m.kinds), None)
     limit = after.top if after is not None else foot + 14 * h
-    captions = [m for m in below if "caption" in m.kinds and m.top < limit]
+    captions = [m for m in below if "caption" in m.kinds and m.top <= limit]
     notes = []
     if widen:
         ends = [m for m in below if "section_i" in m.kinds]
@@ -1043,10 +1046,17 @@ class Row:
 
 
 def printed(text: str, band: str) -> bool:
-    """A line that is the band's own print and nothing more."""
+    """A line that is the band's own print and nothing more. The employer's
+    caption may run on into "po zapoznaniu się z przepisami ...", the act's
+    print too."""
     if NUMERAL.fullmatch(re.sub(r"\s", "", text)):
         return True
     s = squash(text)
+    act = ACT.search(s) if band == "employer" else None
+    if act is not None:
+        s = s[: act.start()]
+        if not s:
+            return True
     if len(s) < 3:
         return False
     piece = regex.compile(f"(?:{s}){{e<={max(1, len(s) // 7)}}}")
