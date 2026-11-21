@@ -579,7 +579,7 @@ def test_a_national_body_is_named_alone_but_not_by_its_branch(bodies):
 
 
 def test_a_shared_name_is_the_one_at_the_declarants_unit(bodies):
-    band = ["SZKOLA PODSTAWOWA NR 5-STARSZY INSPEKTOR"]
+    band = ["SZKOŁA PODSTAWOWA NR 5-PEDAGOG"]
     assert rows(bodies, band, "010102") == [("sp5", EMPLOYEE_ROLE)]
     assert rows(bodies, band, "020201") == [("sp5_innowo", EMPLOYEE_ROLE)]
     # „nr 5” is not in „nr 51”.
