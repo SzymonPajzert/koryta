@@ -124,11 +124,15 @@ def test_cut_stops_when_its_time_is_up(store, tmp_path):
 
 # -- cut-employment ----------------------------------------------------------------
 
-asked: list[tuple[tuple[tuple[int, int], ...], dict[tuple[int, str], int]]] = []
+#: Each file's cut as asked: its due pages, how far each band runs, and every
+#: date page of the file.
+asked: list[
+    tuple[tuple[tuple[int, int], ...], dict[tuple[int, str], int], tuple[int, ...]]
+] = []
 
 
-def fake_bands(data: bytes, pages, ocr, widen=None) -> FileBands:
-    asked.append((tuple(pages), dict(widen or {})))
+def fake_bands(data: bytes, pages, ocr, widen=None, starts=()) -> FileBands:
+    asked.append((tuple(pages), dict(widen or {}), tuple(starts)))
     result = FileBands("cut", "pdf", 5, 3)
     for page, _ in pages:
         result.bands[page] = [
@@ -181,7 +185,7 @@ def test_cut_employment_keeps_each_date_page_s_bands(banded, tmp_path, capsys):
 
     assert code == 0
     on_disk = next(iter(banded.files))
-    assert asked == [(((0, 0), (4, 180)), {})]
+    assert asked == [(((0, 0), (4, 180)), {}, (0, 4))]
     rows = banded.bands(job.EMPLOYMENT_CUT_VERSION, with_images=True)
     assert [(r.page, r.band) for r in rows] == [
         (page, band) for page in (0, 4) for band in sorted(BANDS)
@@ -208,10 +212,21 @@ def test_cut_employment_takes_only_the_pages_named(banded, tmp_path):
 
     run(banded, tmp_path, items=job.read_items(names))
 
-    assert asked == [(((4, 180),), {})]
+    assert asked == [(((4, 180),), {}, (0, 4))]
     with pytest.raises(ValueError):
         names.write_text("not-a-page\n")
         job.read_items(names)
+
+
+def test_a_page_cut_alone_ends_where_its_file_s_next_date_page_starts(banded, tmp_path):
+    on_disk = next(iter(banded.files))
+    names = tmp_path / "pages.txt"
+    names.write_text(f"{on_disk}-p0\n")
+
+    run(banded, tmp_path, items=job.read_items(names))
+
+    # Page 4 is not due, but it starts the declaration after page 0's.
+    assert asked == [(((0, 0),), {}, (0, 4))]
 
 
 def test_a_recut_runs_the_band_readers_flagged_one_caption_further(banded, tmp_path):
@@ -227,10 +242,12 @@ def test_a_recut_runs_the_band_readers_flagged_one_caption_further(banded, tmp_p
         (
             ((0, 0),),
             {(0, "employer"): 1, (0, "header"): 0, (0, "vii"): 0, (0, "viii"): 0},
+            (0, 4),
         ),
         (
             ((0, 0),),
             {(0, "employer"): 2, (0, "header"): 0, (0, "vii"): 0, (0, "viii"): 0},
+            (0, 4),
         ),
     ]
     widths = {

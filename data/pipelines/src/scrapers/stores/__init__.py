@@ -1657,6 +1657,9 @@ class DeclarationPages:
     file: DeclarationFile
     #: (page, rotation) of each date page, as the date cut found it.
     pages: tuple[tuple[int, int], ...]
+    #: Every date page of the file, due or not: each starts a declaration, so
+    #: it ends the one before it.
+    starts: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1744,7 +1747,8 @@ class BipDeclarationStore(metaclass=ABCMeta):
         """Files with date pages (the date cut's crops) that have no bands of
         this version, those of people on the site first, at most `limit`
         files. Only the pages `items` names (`<sha256>-p<page>`) when given;
-        the ones `again` names even when they have bands."""
+        the ones `again` names even when they have bands. Each with every
+        date page of its file, due or not, as `starts`."""
         raise NotImplementedError()
 
     @abstractmethod

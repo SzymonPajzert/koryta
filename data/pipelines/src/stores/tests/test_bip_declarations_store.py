@@ -167,6 +167,22 @@ def test_bands_are_cut_in_the_list_s_order_once_a_version():
     assert len(store.pages_to_band(2, None)) == 2
 
 
+def test_a_due_page_comes_with_every_date_page_of_its_file():
+    files = [DeclarationFile(SHA_B, "h", "u/b", "b", "b.pdf")]
+    store = MemoryBipDeclarationStore(
+        LIST, files, [DeclarationLink("draft", SHA_B, "")]
+    )
+    store.record_cut(
+        DeclarationCutRow(SHA_B, 1, "cut"),
+        [DeclarationCropRow(SHA_B, 0), DeclarationCropRow(SHA_B, 4, rotation=180)],
+    )
+
+    [due] = store.pages_to_band(1, None, items={f"{SHA_B}-p0"})
+
+    # Page 4 is not due, but it ends the declaration page 0 starts.
+    assert (due.pages, due.starts) == (((0, 0),), (0, 4))
+
+
 def test_a_page_cut_again_replaces_its_bands_of_that_version_only():
     store = MemoryBipDeclarationStore()
     store.record_bands(SHA_A, 0, 1, [band(SHA_A, 0, "employer"), band(SHA_A, 0, "vii")])
@@ -240,9 +256,9 @@ def test_postgres_cuts_the_bands_of_date_pages_without_them():
 
     due = store.pages_to_band(1, None)
 
-    assert [(d.file.sha256, d.pages) for d in due] == [
-        (SHA_B, ((4, 90),)),
-        (SHA_A, ((0, 0),)),
+    assert [(d.file.sha256, d.pages, d.starts) for d in due] == [
+        (SHA_B, ((4, 90),), (0, 4)),
+        (SHA_A, ((0, 0),), (0,)),
     ]
     assert [d.file.sha256 for d in store.pages_to_band(1, None, {f"{SHA_A}-p0"})] == [
         SHA_A

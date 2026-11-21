@@ -476,12 +476,17 @@ class PostgresBipDeclarationStore(BipDeclarationStore):
             )
         }
         pages: dict[str, set[tuple[int, int]]] = {}
+        starts: dict[str, set[int]] = {}
         for row in rows:
             sha, page, rotation = row[0], int(row[7]), int(row[8])
+            starts.setdefault(sha, set()).add(page)
             if _wanted(sha, page, banded, items, again):
                 pages.setdefault(sha, set()).add((page, rotation))
         files = self._listed(row[:7] for row in rows if row[0] in pages)
-        due = [DeclarationPages(f, tuple(sorted(pages[s]))) for s, f in files.items()]
+        due = [
+            DeclarationPages(f, tuple(sorted(pages[s])), tuple(sorted(starts[s])))
+            for s, f in files.items()
+        ]
         return due[:limit]
 
     def record_bands(
@@ -617,7 +622,9 @@ class MemoryBipDeclarationStore(BipDeclarationStore):
     ) -> list[DeclarationPages]:
         banded = {(sha, page) for sha, page, _, v in self.band_rows if v == version}
         pages: dict[str, set[tuple[int, int]]] = {}
+        starts: dict[str, set[int]] = {}
         for (sha, page), crop in self.crop_rows.items():
+            starts.setdefault(sha, set()).add(page)
             if sha in self.files and _wanted(sha, page, banded, items, again):
                 pages.setdefault(sha, set()).add((page, crop.rotation))
         on_site = {p.key for p in self.people if p.person.get("koryta_ids")}
@@ -635,7 +642,9 @@ class MemoryBipDeclarationStore(BipDeclarationStore):
             )
 
         return [
-            DeclarationPages(self.files[sha], tuple(sorted(pages[sha])))
+            DeclarationPages(
+                self.files[sha], tuple(sorted(pages[sha])), tuple(sorted(starts[sha]))
+            )
             for sha in sorted(pages, key=order)[:limit]
         ]
 

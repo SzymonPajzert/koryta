@@ -2,7 +2,9 @@
 
 The date cut (`cutter`) found each declaration's part A: the page with the
 birth date's line. From that page, and the pages after it up to the next
-declaration's, this pass cuts four bands:
+declaration's, this pass cuts four bands. The next declaration starts at the
+file's next date page, due in this run or not, or at a page that reads
+"CZĘŚĆ A", the name's label or the birth date's:
 
 - `header`: the title with its list of functions (struck ones too), the
   "według stanu na dzień" line where the form prints one, the "dnia" line and
@@ -44,7 +46,7 @@ from __future__ import annotations
 import difflib
 import io
 import re
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -64,6 +66,7 @@ from jobs.bip_declarations.cutter import (
     dark_level,
     date_band,
     dotted_line,
+    has_label,
     kind_of,
     png,
 )
@@ -141,7 +144,8 @@ NUMERAL = re.compile(r"(?:v[il1|!]{1,4}[ft]?|[il1|!]x|[vx]\.)[.,:;]?", re.I)
 #: Where a declaration's band stops whatever was asked: part B, the
 #: signature's paragraph.
 HARD_STOPS = frozenset({"czesc_b", "part_b", "signed"})
-#: A later page with these is another declaration's part A.
+#: A later page with these, or with the birth date's label, is another
+#: declaration's part A.
 NEXT_DECLARATION = frozenset({"czesc_a", "name"})
 #: Lines of a receipt stamp ("wpłynęło", "data wpływu", "Z up.", "L.dz."), a
 #: signature's caption and a form generator's footer.
@@ -583,7 +587,9 @@ class Declaration:
             scan = scan_page(
                 turned(self.pages.image(index), self.rotation), index, self.ocr
             )
-            if any(mark.kinds & NEXT_DECLARATION for mark in scan.marks):
+            if any(mark.kinds & NEXT_DECLARATION for mark in scan.marks) or has_label(
+                scan.lines
+            ):
                 self.end = index
                 return None
             self.scans.append(scan)
@@ -1193,10 +1199,13 @@ def cut_bands(
     pages: Sequence[tuple[int, int]],
     ocr: Ocr,
     widen: Mapping[tuple[int, str], int] | None = None,
+    starts: Collection[int] = (),
 ) -> FileBands:
     """The bands of each date page (`pages`: page and rotation, as the date
     cut found them) of a declaration file; `widen` runs a band of a page that
-    many captions further."""
+    many captions further. `starts`: every date page of the file, those not
+    due in this run too, each the start of a declaration and so the end of the
+    one before it."""
     kind = kind_of(data)
     if kind == "html":
         return FileBands("not_fetched", kind)
@@ -1207,10 +1216,10 @@ def cut_bands(
     except Exception as exc:  # noqa: BLE001 - a broken download is a result
         return FileBands("unreadable", kind, error=f"{type(exc).__name__}: {exc}"[:300])
     result = FileBands("cut", kind, source.count)
-    starts = sorted(page for page, _ in pages)
+    date_pages = sorted({page for page, _ in pages} | set(starts))
     try:
         for page, rotation in sorted(pages):
-            following = [p for p in starts if p > page]
+            following = [p for p in date_pages if p > page]
             end = following[0] if following else source.count
             mine = {band: n for (p, band), n in (widen or {}).items() if p == page}
             try:

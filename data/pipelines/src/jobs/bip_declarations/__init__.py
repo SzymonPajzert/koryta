@@ -302,7 +302,7 @@ def band_one(
     data = read_blob(Path(root), due.file)
     if data is None:
         return sha, {}, "no_file"
-    result = cut_bands(data, due.pages, _ocr or Ocr(), widen)
+    result = cut_bands(data, due.pages, _ocr or Ocr(), widen, due.starts)
     rows = {
         page: [band_row(sha, page, cut) for cut in cuts]
         for page, cuts in result.bands.items()
