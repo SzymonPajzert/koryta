@@ -6,6 +6,7 @@ send the crops to the site's readers.
     koryta_bip_declarations cut-employment --items pages.txt --max-minutes 60
     koryta_bip_declarations upload --dry-run              # what would go; nothing sent
     koryta_bip_declarations upload                        # send what is new or changed
+    koryta_bip_declarations upload --employment --dry-run # the bands to read posts off
     koryta_bip_declarations status                        # where the declarations stand
     koryta_bip_declarations status --units-csv units.csv  # and every unit with no file
     koryta_bip_declarations facts-part                    # each candidacy's facts
@@ -37,6 +38,12 @@ a PDF's text layer inside the candidacy's PKW window settles without them.
 of drafts whose page has a birth date, and only the candidacies they serve.
 `upload --public-post` sends only the people the site would publish from a
 declaration: those with a paid post, current or ended, at a public company.
+`upload --employment` sends the bands `cut-employment` cut, for readers to
+read declared posts off: the header and the employer's line of the
+declarations of pages without such a post, whose birth date readers agreed on
+and the site's newest export matched to that one page. It reads the export's
+`declarationExtracts` and the public bodies table each run; `--dry-run` says
+how many would go open and how many later, and why the rest do not.
 
 `status` says where the declarations stand (`stats`): the candidacies found,
 their files downloaded, cut, cropped and sent, by priority, and the units
@@ -99,18 +106,25 @@ from jobs.bip_declarations.facts import facts_summary, read_facts, site_rows
 from jobs.bip_declarations.names import Names, read_names
 from jobs.bip_declarations.reading import name_matches
 from jobs.bip_declarations.stats import report, write_units_csv
+from jobs.bip_declarations.suggest import BodyIndex, read_bodies
 from jobs.bip_declarations.upload import (
     DEFAULT_ENDPOINT,
+    DatePage,
     ListTooOld,
     Site,
     SiteError,
     SiteUnavailable,
+    date_pages,
+    employment_plan,
     plan,
     upload,
+    upload_employment,
 )
 from scrapers.common.pg import PostgresClient
+from scrapers.koryta.download import FirestoreCollection
 from scrapers.stores import (
     BipDeclarationStore,
+    Context,
     DeclarationBandRow,
     DeclarationCropRow,
     DeclarationCutRow,
@@ -128,6 +142,7 @@ from stores.storage import Client, warsaw_tz
 #: crops come from a new `tag` and keeps the pictures readers already answered.
 CUT_VERSION = 1
 TAG = f"bip-declarations-cut-{CUT_VERSION}"
+EMPLOYMENT_TAG = f"bip-declarations-employment-{EMPLOYMENT_CUT_VERSION}"
 EXIT_TRY_LATER = 75
 EXIT_INTERRUPTED = 130
 #: Where the site takes the facts it counts the declarations in people from.
@@ -500,9 +515,27 @@ def run_cut_employment(
 def store_with_list() -> PostgresBipDeclarationStore:
     """The job's store, handed the night's newest list of people of interest."""
     ctx, _ = setup_context(policy=list_policy())
+    return listed_store(ctx)
+
+
+def listed_store(ctx: Context) -> PostgresBipDeclarationStore:
     return PostgresBipDeclarationStore(
         PostgresClient.from_env(max_size=2), people=read_list(ctx)
     )
+
+
+def employment_inputs() -> tuple[
+    PostgresBipDeclarationStore, dict[str, DatePage], BodyIndex
+]:
+    """What `upload --employment` reads: the job's store with the night's list,
+    the date pages of the site's newest export, and the public bodies table
+    the suggestions name bodies from."""
+    ctx, _ = setup_context(policy=list_policy())
+    store = listed_store(ctx)
+    frame, day = FirestoreCollection.latest_on_or_before(ctx, "declarationExtracts")
+    pages = date_pages(frame.to_dict("records"))
+    print(f"date pages: {len(pages):,} in the site's export of {day}", flush=True)
+    return store, pages, read_bodies(ctx)
 
 
 def cmd_cut(args: argparse.Namespace) -> int:
@@ -539,6 +572,8 @@ def cmd_cut_employment(args: argparse.Namespace) -> int:
 
 
 def cmd_upload(args: argparse.Namespace) -> int:
+    if args.employment:
+        return cmd_upload_employment(args)
     store = store_with_list()
     priorities = set(args.priority) if args.priority else None
     if args.dry_run:
@@ -594,6 +629,65 @@ def run_upload(
     print(
         f"sent in {result.requests} requests: candidacies {dict(result.candidacies)}, "
         f"extracts {dict(result.extracts)}; sweep: {result.sweep}"
+    )
+    left = args.max_requests is not None and result.requests >= args.max_requests
+    return EXIT_TRY_LATER if left else 0
+
+
+def cmd_upload_employment(args: argparse.Namespace) -> int:
+    """`upload --employment`: the bands to read declared posts off. Nothing
+    after it: no sweep, no facts part, which count the date crops only."""
+    if args.priority or args.sample is not None or args.public_post:
+        print(
+            "--employment reads the pages without a paid public post; it takes "
+            "no --priority, --sample or --public-post",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        store, pages, bodies = employment_inputs()
+    except FileNotFoundError as exc:
+        print(f"no export of the site's date pages: {exc}", file=sys.stderr)
+        return 1
+    if args.dry_run:
+        try:
+            planned = employment_plan(store, pages, bodies)
+        except ListTooOld as exc:
+            print(f"cannot tell the pages without a post: {exc}", file=sys.stderr)
+            return 1
+        print(
+            f"would send {len(planned.items)} declarations "
+            f"({dict(planned.statuses())}) to {args.endpoint}, "
+            f"{planned.unchanged} sent before as they are; not read now: "
+            f"{dict(sorted(planned.left_out.items()))}; sent nothing"
+        )
+        return 0
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    try:
+        site = Site(args.endpoint, token_source(args.endpoint))
+        result = upload_employment(
+            store,
+            site,
+            pages,
+            bodies,
+            tag=EMPLOYMENT_TAG,
+            run_id=run_id,
+            max_requests=args.max_requests,
+        )
+    except ListTooOld as exc:
+        print(f"cannot tell the pages without a post: {exc}", file=sys.stderr)
+        return 1
+    except SiteUnavailable as exc:
+        print(f"the site did not answer: {exc}", file=sys.stderr)
+        return EXIT_TRY_LATER
+    except (SiteError, TokenError) as exc:
+        print(f"the site refused: {exc}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return EXIT_INTERRUPTED
+    print(
+        f"sent in {result.requests} requests: declarations {dict(result.items)}, "
+        f"bands {dict(result.bands)}; held back {dict(result.held)}"
     )
     left = args.max_requests is not None and result.requests >= args.max_requests
     return EXIT_TRY_LATER if left else 0
@@ -873,6 +967,13 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
         action="store_true",
         help="only the people whose page holds a paid post, current or ended, at "
         "a public company: the ones the site would publish from a declaration",
+    )
+    send.add_argument(
+        "--employment",
+        action="store_true",
+        help="send the header and employer bands cut-employment cut, to read posts "
+        "off: the declarations of pages without a paid public post whose birth "
+        "date the site's newest export says agreed and matched",
     )
     send.set_defaults(func=cmd_upload)
     status = sub.add_parser(

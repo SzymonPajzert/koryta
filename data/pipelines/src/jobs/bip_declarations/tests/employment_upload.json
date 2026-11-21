@@ -1,0 +1,110 @@
+{
+  "tag": "bip-declarations-employment-1",
+  "runId": "20261120T120000Z",
+  "items": [
+    {
+      "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-p0",
+      "cutVersion": 1,
+      "later": false,
+      "header": {
+        "typed": true,
+        "strips": [
+          {
+            "page": 0,
+            "png": "iVBORw0KGgoAAAANSUhEUgAABnYAAAC0YTBoZWFkZXIw"
+          }
+        ],
+        "lines": [
+          {
+            "strip": 0,
+            "top": 12,
+            "bottom": 64
+          }
+        ],
+        "asOf": {
+          "value": "2024-05-07",
+          "score": 0.97
+        },
+        "filedOn": {
+          "value": "2024-05-20",
+          "score": 0.91
+        }
+      },
+      "employer": {
+        "typed": true,
+        "strips": [
+          {
+            "page": 0,
+            "png": "iVBORw0KGgoAAAANSUhEUgAABnYAAAC0YTBlbXBsb3llcjA="
+          }
+        ],
+        "lines": [
+          {
+            "strip": 0,
+            "top": 12,
+            "bottom": 64
+          }
+        ],
+        "imageHash": "cdcc9e8b845b440466668e55118e8de0fedf379f154bfe4a50f7ca7d39799938",
+        "suggestions": [
+          {
+            "employer": {
+              "regon": "100000014"
+            },
+            "role": "naczelnik"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-p0",
+      "cutVersion": 1,
+      "later": true,
+      "header": {
+        "typed": false,
+        "strips": [
+          {
+            "page": 0,
+            "png": "iVBORw0KGgoAAAANSUhEUgAABnYAAAC0YjBoZWFkZXIw"
+          }
+        ],
+        "lines": [
+          {
+            "strip": 0,
+            "top": 12,
+            "bottom": 64
+          }
+        ],
+        "asOf": null,
+        "filedOn": null
+      },
+      "employer": {
+        "typed": false,
+        "strips": [
+          {
+            "page": 0,
+            "png": "iVBORw0KGgoAAAANSUhEUgAABnYAAAC0YjBlbXBsb3llcjA="
+          },
+          {
+            "page": 1,
+            "png": "iVBORw0KGgoAAAANSUhEUgAABnYAAAC0YjBlbXBsb3llcjE="
+          }
+        ],
+        "lines": [
+          {
+            "strip": 0,
+            "top": 12,
+            "bottom": 64
+          },
+          {
+            "strip": 1,
+            "top": 12,
+            "bottom": 64
+          }
+        ],
+        "imageHash": "b7d09ea1fdd782ee8fffa0d00e0d0aa866b07fb0b5b6dcc80b9b51bd423f15e4",
+        "suggestions": []
+      }
+    }
+  ]
+}
