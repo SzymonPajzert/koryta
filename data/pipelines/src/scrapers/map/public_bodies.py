@@ -54,10 +54,11 @@ number, form and ownership where it has none: a company's branch in another
 town is still the company.
 
 Names are in normal case by `offices.py`'s rule, with the town after a name
-that does not name it, as `display_name` does for a KRS company. Without the
-town 1,978 rows share 743 names; with it 1,077 share 502 - eight units in one
-city called "Dom Pomocy Społecznej w Krakowie", or a village name many gminy
-have - which a place made from the table has to be told apart from.
+that names neither the town nor, where rule 1 decided `teryt`, the unit served,
+as `display_name` does for a KRS company. Without the town 1,978 rows share 743
+names; with it 1,077 share 502 - eight units in one city called "Dom Pomocy
+Społecznej w Krakowie", or a village name many gminy have - which a place made
+from the table has to be told apart from.
 """
 
 import collections
@@ -181,7 +182,7 @@ def public_bodies(
     for body in bodies:
         body.serve(places, offices, land)
     _serve_land_powiaty(bodies, land)
-    rows = [body.row(register or {}) for body in bodies]
+    rows = [body.row(register or {}, places.units.names) for body in bodies]
     _from_parents(rows)
     return pd.DataFrame(rows, columns=COLUMNS).sort_values("regon", ignore_index=True)
 
@@ -374,11 +375,14 @@ class _Body:
             if stated:
                 self.teryt, self.rule = stated, RULE_NAME
 
-    def row(self, register: dict[str, frozenset[str]]) -> dict[str, str | None]:
+    def row(
+        self, register: dict[str, frozenset[str]], names: dict[str, str]
+    ) -> dict[str, str | None]:
+        """The table's row; `names` is TERC's name for each unit."""
         entry = self.entry
         return {
             "regon": self.regon,
-            "name": self.office_name or self.place_name(),
+            "name": self.office_name or self.place_name(names),
             "kind": self.kind,
             "nip": entry["NIP"].strip() or None,
             "krs": _krs_number(
@@ -392,12 +396,18 @@ class _Body:
             "rule": self.rule,
         }
 
-    def place_name(self) -> str:
-        """The name in normal case, and its town where it does not name it."""
+    def place_name(self, names: dict[str, str]) -> str:
+        """The name in normal case, and its town where it names neither the
+        town nor, if rule 1 decided `teryt`, the unit: "Centrum Usług
+        Społecznych Gminy Redzikowo" in Słupsk needs none, a "Gminny Żłobek"
+        in Łowicz does."""
         name = recased(self.entry["Nazwa podmiotu"])
         town = recased(" ".join(self.entry["Miasto siedziby"].split()))
         words = _tokens(town)
-        if self.rule == RULE_NAME or not words or _names_town(self.tokens, words):
+        if not words or _names_town(self.tokens, words):
+            return name
+        unit = _tokens(names.get(self.teryt or "", ""))
+        if self.rule == RULE_NAME and unit and _names_town(self.tokens, unit):
             return name
         return typing.cast(str, display_name(name, town))
 
