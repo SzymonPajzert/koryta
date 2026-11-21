@@ -235,6 +235,21 @@ def test_a_surname_is_read_run_into_other_letters_too():
     assert holds_name(["Jan Lis"], [("Jan", "Lis")])
 
 
+def test_a_caption_on_one_line_with_po_zapoznaniu_still_ends_the_band(ocr):
+    drawn = employment_declaration(NAME, BORN, caption_runs_on=True)
+
+    cut = bands(cut_bands(drawn.pdf(), [(0, 0)], ocr))
+
+    employer = cut["employer"]
+    assert employer.status == "cut"
+    assert not any("caption not read" in note for note in employer.notes)
+    [strip] = employer.strips
+    # Under the caption's line, so the writing resting on it is whole.
+    assert strip.bottom >= drawn.at["caption"][2] > drawn.at["employer"][2]
+    assert "sekretarzgminy" in squash(employer.text)
+    assert "zapoznaniu" not in squash(employer.text)  # the act's print
+
+
 def test_an_employer_band_with_nothing_written_in_it_is_empty(ocr):
     # The post is on the birth date's line, which the band may not show; under
     # it only the empty dots and the caption.
@@ -424,6 +439,13 @@ def test_the_declarations_own_dates():
 def test_a_bands_own_print_says_nothing():
     assert printed("(miejsce zatrudnienia, stanowisko lub funkcja)", "employer")
     assert printed("(miejsse zatrudnienia,stanowiskolub funkcja)", "employer")
+    # The caption run on into the act's text, on one line.
+    assert printed(
+        "(miejsce zatrudnienia, stanowisko lub funkcja) po zapoznaniu sie z "
+        "przepisami ustawy z dnia 8 marca 1990 r.",
+        "employer",
+    )
+    assert not printed("Sekretarz Gminy po zapoznaniu sie z przepisami", "employer")
     assert printed("VIll.", "viii")
     assert printed("- jestem czlonkiem rady nadzorczej (od kiedy):", "vii")
     assert not printed("Urzad Gminy Testowo - Sekretarz Gminy", "employer")

@@ -283,6 +283,7 @@ def _part_a(
     *,
     signed: bool = False,
     on_birth_line: bool = False,
+    caption_runs_on: bool = False,
 ) -> None:
     page = _Page(drawn)
     if signed:
@@ -312,23 +313,42 @@ def _part_a(
         drawn.at["employer"] = (page.index, 1215, 1255)
     else:
         page.text(1215, employer, size=40, x=300, name="employer")
-    page.text(
-        1300,
-        "(miejsce zatrudnienia, stanowisko lub funkcja)",
-        size=22,
-        x=600,
-        name="caption",
-    )
-    page.lines(
-        1400,
-        (
-            "po zapoznaniu sie z przepisami ustawy z dnia 8 marca 1990 r. o",
-            "samorzadzie gminnym, zgodnie z art. 24h tej ustawy oswiadczam, ze",
-            "posiadam wchodzace",
-            "w sklad malzenskiej wspolnosci majatkowej lub stanowiace moj majatek:",
-        ),
-        size=22,
-    )
+    if caption_runs_on:
+        # Some forms go on from the caption into the act's text on its line.
+        page.text(
+            1300,
+            "(miejsce zatrudnienia, stanowisko lub funkcja) po zapoznaniu sie z "
+            "przepisami ustawy",
+            size=22,
+            name="caption",
+        )
+        page.lines(
+            1345,
+            (
+                "z dnia 8 marca 1990 r. o samorzadzie gminnym, zgodnie z art. 24h tej",
+                "ustawy oswiadczam, ze posiadam wchodzace w sklad malzenskiej",
+                "wspolnosci majatkowej lub stanowiace moj majatek odrebny:",
+            ),
+            size=22,
+        )
+    else:
+        page.text(
+            1300,
+            "(miejsce zatrudnienia, stanowisko lub funkcja)",
+            size=22,
+            x=600,
+            name="caption",
+        )
+        page.lines(
+            1400,
+            (
+                "po zapoznaniu sie z przepisami ustawy z dnia 8 marca 1990 r. o",
+                "samorzadzie gminnym, zgodnie z art. 24h tej ustawy oswiadczam, ze",
+                "posiadam wchodzace",
+                "w sklad malzenskiej wspolnosci majatkowej lub stanowiace moj majatek:",
+            ),
+            size=22,
+        )
     page.text(1560, "I.", size=28)
     page.text(1610, "Zasoby pieniezne:", size=28)
     page.text(1660, "- srodki pieniezne w walucie polskiej: nie dotyczy", size=28)
@@ -348,6 +368,7 @@ def employment_declaration(
     scribbled: bool = False,
     signed: bool = False,
     on_birth_line: bool = False,
+    caption_runs_on: bool = False,
 ) -> Drawn:
     """Part A, then VII and VIII on the next page: VIII running onto a third
     page over IX and X when `viii_runs_on`, else stopped by "CZĘŚĆ B" right
@@ -355,7 +376,8 @@ def employment_declaration(
     `signed` adds a receipt stamp over the title and the declarant's
     electronic signature's block beside it, and another beside VII.
     `on_birth_line` writes the employer at the end of the birth date's line,
-    leaving its own dotted line empty."""
+    leaving its own dotted line empty. `caption_runs_on` prints the caption
+    and "po zapoznaniu się z przepisami" on one line."""
     drawn = Drawn()
     _part_a(
         drawn,
@@ -365,6 +387,7 @@ def employment_declaration(
         scribbled,
         signed=signed,
         on_birth_line=on_birth_line,
+        caption_runs_on=caption_runs_on,
     )
     page = _Page(drawn)
     y = page.text(150, "III.", size=28)
