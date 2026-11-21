@@ -816,6 +816,37 @@ def test_a_dry_run_counts_what_would_go_and_sends_nothing(command, capsys):
     assert command.sent(EMPLOYMENT) == {}
 
 
+@pytest.mark.parametrize(
+    "header, employer, why",
+    [
+        ("holds_name", "cut", "header_holds_name"),
+        ("cut", "holds_name", "employer_holds_name"),
+        ("holds_address", "cut", "header_holds_address"),
+        ("cut", "holds_address", "employer_holds_address"),
+        ("cut", "empty", "employer_empty"),
+    ],
+)
+def test_a_band_the_cut_keeps_back_is_never_sent_and_is_counted(
+    command, capsys, header, employer, why
+):
+    # As the cut keeps such bands: drawn, their pictures there.
+    rows = bands(SHA_NEW, 0, NACZELNIK, stan_na="2024-05-07", stan_na_score=0.97)
+    rows[0] = replace(rows[0], status=header)
+    rows[1] = replace(rows[1], status=employer)
+    command.record_bands(SHA_NEW, 0, EMPLOYMENT_CUT_VERSION, rows)
+
+    assert job.main(["upload", "--employment", "--dry-run"]) == 0
+    said = capsys.readouterr().out
+    site = FakeSite()
+    send(command, site)
+
+    # Anna's older declaration opens in its place.
+    assert "would send 1 declarations ({'open': 1})" in said
+    assert f"'{why}': 1" in said
+    assert {i: item["later"] for i, item in items_of(site).items()} == {OLD: False}
+    assert NEW not in command.sent(EMPLOYMENT)
+
+
 def test_the_command_sends_once_and_sweeps_nothing(command, monkeypatch, capsys):
     sites: list[FakeSite] = []
 
