@@ -572,6 +572,41 @@ describe("AddRelationDialog", () => {
         ],
       ]);
     });
+
+    const NONE = "Nie znaleziono urzędów w regionie, dodaj ręcznie";
+    const noneShown = () =>
+      document
+        .querySelector('[data-testid="region-workplace-none"]')
+        ?.textContent.trim();
+
+    it("says no urząd was found when the region has none", async () => {
+      mockAuthRequest.mockImplementation(async () => ({ offices: [] }));
+      const wrapper = mountDialog();
+      await chooseOffice(wrapper);
+
+      expect(noneShown()).toBe(NONE);
+    });
+
+    it("says the same when the question fails", async () => {
+      // The contributor has the same thing left to do either way.
+      mockAuthRequest.mockImplementation(async () => {
+        throw new Error("500");
+      });
+      const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+      const wrapper = mountDialog();
+      await chooseOffice(wrapper);
+
+      expect(noneShown()).toBe(NONE);
+      quiet.mockRestore();
+    });
+
+    it("says nothing of the kind once an urząd is offered", async () => {
+      serve(null);
+      const wrapper = mountDialog();
+      await chooseOffice(wrapper);
+
+      expect(noneShown()).toBeUndefined();
+    });
   });
 
   it("forgets the last relation when it reopens", async () => {

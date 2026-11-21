@@ -10,15 +10,17 @@
       class="mb-2"
       data-testid="region-workplace-loading"
     />
+    <!-- Whether the table has no urząd for the region or the question failed,
+         the contributor is left with the same thing to do. -->
     <v-alert
-      v-else-if="failed"
+      v-else-if="offices.length === 0"
       type="warning"
       variant="tonal"
       density="compact"
       class="mb-2"
+      data-testid="region-workplace-none"
     >
-      Nie udało się sprawdzić, jaki urząd prowadzi ten region. Możesz wyszukać
-      go poniżej.
+      Nie znaleziono urzędów w regionie, dodaj ręcznie
     </v-alert>
 
     <v-radio-group
@@ -129,14 +131,12 @@ const OTHER = "other";
 
 const offices = ref<RegionOfficeOption[]>([]);
 const loading = ref(false);
-const failed = ref(false);
 const picked = ref<string | undefined>(undefined);
 const place = ref<Link<NodeType> | undefined>(undefined);
 const createdIds = ref(new Set<string>());
 
 async function load(regionId: string) {
   loading.value = true;
-  failed.value = false;
   offices.value = [];
   picked.value = undefined;
   place.value = undefined;
@@ -151,7 +151,6 @@ async function load(regionId: string) {
     offices.value = response.offices;
   } catch (e) {
     console.error("Failed to load the region's offices", e);
-    if (regionId === props.regionId) failed.value = true;
   } finally {
     if (regionId === props.regionId) {
       loading.value = false;
