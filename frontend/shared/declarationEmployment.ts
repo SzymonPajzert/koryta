@@ -292,9 +292,11 @@ const FAMILY_PATTERNS = ROLES.families.map((family) => ({
 /**
  * The family a free-text role belongs to, or null when it names none: an
  * edge name typed by hand („prezes”, „Zastępca Wójta”), the register's organ
- * („Zarząd”, „Rada Nadzorcza”) or a reader's „Inne”. „p.o.” and „pełniący
- * obowiązki” are cut off first, so an acting director is a director. A mandate
- * („radny”), a contract or a bare „członek” names no family.
+ * („Zarząd”, „Rada Nadzorcza”) or a reader's „Inne”. „p.o.”, „pełniący
+ * obowiązki” and an ordinal („I Zastępca”) are cut off first, so an acting
+ * director is a director and a first deputy a deputy. A mandate („radny”), a
+ * contract, a bare „członek” or a council's komisja rewizyjna names no
+ * family.
  */
 export function roleFamilyOf(name: string | null | undefined): string | null {
   if (!name) return null;
