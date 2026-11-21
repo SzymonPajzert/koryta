@@ -50,13 +50,11 @@
               <div :class="office.gmina ? 'text-caption' : 'text-body-2'">
                 {{ office.node?.name ?? office.name }}
               </div>
+              <!-- Only the exception is said: adding the urząd with the
+                   relation is what happens unless it is already there. -->
               <div class="text-caption text-medium-emphasis">
-                REGON {{ office.regon }} ·
-                {{
-                  office.node
-                    ? "już jest w bazie"
-                    : "dodamy go do bazy razem z tym powiązaniem"
-                }}
+                REGON {{ office.regon }}
+                <template v-if="office.node">· już jest w bazie</template>
               </div>
             </div>
           </template>
