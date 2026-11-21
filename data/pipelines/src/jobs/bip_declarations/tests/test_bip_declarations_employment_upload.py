@@ -22,6 +22,7 @@ from jobs.bip_declarations.suggest import ROLES_FILE, BodyIndex
 from jobs.bip_declarations.upload import (
     EMPLOYMENT,
     EMPLOYMENT_INGEST,
+    MAX_BAND_PICTURE_BYTES,
     MAX_IMAGE_BYTES,
     MAX_LINE_Y,
     MAX_LINES,
@@ -495,6 +496,51 @@ def test_a_band_the_site_would_refuse_whole_stays_here(store):
     assert (plan.left_out["too_many_strips"], plan.left_out["too_many_lines"]) == (1, 1)
 
 
+def weighing(label: str, size: int) -> bytes:
+    """A picture of `size` bytes."""
+    head = picture(label)
+    return head + b"\0" * (size - len(head))
+
+
+def heavy_new(store: MemoryBipDeclarationStore, employer: list[int]) -> None:
+    """Anna's newest declaration, its header 10 kB and its employer's line in
+    strips of these sizes."""
+    header = band(SHA_NEW, 0, "header", stan_na="2024-05-07", stan_na_score=0.97)
+    header = replace(
+        header, strips=(DeclarationStrip(0, 100, 280, weighing("h", 10_000)),)
+    )
+    strips = tuple(
+        DeclarationStrip(k, 0, 280, weighing(f"e{k}", size))
+        for k, size in enumerate(employer)
+    )
+    store.record_bands(
+        SHA_NEW,
+        0,
+        EMPLOYMENT_CUT_VERSION,
+        [header, replace(band(SHA_NEW, 0, "employer"), strips=strips)],
+    )
+
+
+@pytest.mark.parametrize("past", [0, 1])
+def test_a_band_past_what_a_band_s_document_holds_lets_the_next_newest_open(
+    store, past
+):
+    # Handwriting at 300 dpi: five strips each within the site's 200 kB, and
+    # the header, 1 MB together, or a byte past it.
+    heavy_new(store, [198_000] * 4 + [198_000 + past])
+
+    plan = employment_plan(store, PAGES, BODIES, today=RUN_DAY)
+
+    if past:
+        assert [(i.id, i.status) for i in plan.items] == [(OLD, "open")]
+        assert plan.left_out["too_large"] == 1
+    else:
+        assert [(i.id, i.status) for i in plan.items] == [
+            (NEW, "open"),
+            (OLD, "later"),
+        ]
+
+
 def test_a_line_the_site_would_refuse_is_left_off_the_band(store):
     odd = replace(
         band(SHA_NEW, 0, "employer", text=NACZELNIK),
@@ -689,12 +735,10 @@ def test_a_band_cut_again_while_sending_waits_for_the_next_run(store):
     )
 
 
-def test_a_picture_the_site_would_refuse_waits(store):
+def test_a_picture_the_site_would_refuse_lets_the_next_newest_open(store):
     big = replace(
         band(SHA_NEW, 0, "employer"),
-        strips=(
-            DeclarationStrip(0, 100, 280, picture("big") + b"\0" * MAX_IMAGE_BYTES),
-        ),
+        strips=(DeclarationStrip(0, 100, 280, weighing("big", MAX_IMAGE_BYTES + 1)),),
     )
     store.record_bands(
         SHA_NEW, 0, EMPLOYMENT_CUT_VERSION, [bands(SHA_NEW, 0, "")[0], big]
@@ -703,9 +747,10 @@ def test_a_picture_the_site_would_refuse_waits(store):
 
     result = send(store, site)
 
-    assert list(items_of(site)) == [OLD]
-    assert result.held == {"picture_too_big": 1}
+    assert {i: item["later"] for i, item in items_of(site).items()} == {OLD: False}
+    assert result.held == {}
     assert NEW not in store.sent(EMPLOYMENT)
+    assert employment_plan(store, PAGES, BODIES).left_out["picture_too_big"] == 1
 
 
 def test_max_requests_stops_the_upload(store):
@@ -740,6 +785,9 @@ def test_the_limits_are_the_site_s():
 
     assert f"export const MAX_STRIPS = {MAX_STRIPS};" in shared
     assert f"export const MAX_LINES = {MAX_LINES};" in shared
+    assert (
+        f"export const MAX_BAND_PICTURE_BYTES = {MAX_BAND_PICTURE_BYTES:_};" in shared
+    )
     assert re.search(
         rf"page: z\.number\(\)\.int\(\)\.min\(0\)\.max\({MAX_STRIP_PAGE}\)", shared
     )

@@ -197,6 +197,8 @@ def test_a_page_cut_again_replaces_its_bands_of_that_version_only():
     [light] = store.bands(1)
     assert [s.png for s in light.strips] == [b"", b""]
     assert light.strips[1].png_hash == png_hash(b"\x89PNG two")
+    # Weighed without the pictures: the site takes a band's only up to a size.
+    assert [s.png_bytes for s in light.strips] == [8, 8]
     assert len(store.bands(2)) == 1
 
 
@@ -227,8 +229,20 @@ def test_postgres_keeps_a_bands_strips_lines_and_pictures():
     assert insert.startswith("INSERT INTO bip_decl_bands")
     assert values[:4] == (SHA_A, 0, "viii", 1)
     assert json.loads(values[8]) == [
-        {"page": 0, "top": 30, "bottom": 330, "hash": png_hash(b"\x89PNG one")},
-        {"page": 1, "top": 0, "bottom": 120, "hash": png_hash(b"\x89PNG two")},
+        {
+            "page": 0,
+            "top": 30,
+            "bottom": 330,
+            "hash": png_hash(b"\x89PNG one"),
+            "bytes": 8,
+        },
+        {
+            "page": 1,
+            "top": 0,
+            "bottom": 120,
+            "hash": png_hash(b"\x89PNG two"),
+            "bytes": 8,
+        },
     ]
     assert json.loads(values[9]) == [[0, 10, 60], [1, 5, 50]]
     assert values[-1] == [b"\x89PNG one", b"\x89PNG two"]
@@ -242,6 +256,14 @@ def test_postgres_keeps_a_bands_strips_lines_and_pictures():
     )
     [row] = reading.bands(1, with_images=True)
     assert row == band_with_hashes(band(SHA_A, 0, "viii"))
+    # Without the pictures, still with their sizes.
+    light = PostgresBipDeclarationStore(
+        FakePg({"FROM bip_decl_bands": [stored]}),  # type: ignore[arg-type]
+        LIST,
+        create=False,
+    )
+    [row] = light.bands(1)
+    assert [(s.png, s.png_bytes) for s in row.strips] == [(b"", 8), (b"", 8)]
 
 
 def test_a_band_s_pictures_come_for_the_pages_asked_for_only():

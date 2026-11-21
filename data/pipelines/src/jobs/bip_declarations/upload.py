@@ -606,7 +606,12 @@ MAX_STRIPS = 12
 MAX_LINES = 40
 MAX_LINE_Y = 20_000
 MAX_STRIP_PAGE = 500
+#: A picture's bytes, and a band's pictures' with its header's: past these the
+#: site refuses the declaration (bad_image, too_large), which then counts as
+#: sent, or the whole request. Such a declaration stays here, and is never a
+#: person's newest.
 MAX_IMAGE_BYTES = 200_000
+MAX_BAND_PICTURE_BYTES = 1_000_000
 ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 #: What a comparison of an agreed date with its pages calls the page whose
 #: birth date it is (`employmentGate`, server/utils/declarationEmployment.ts).
@@ -727,9 +732,14 @@ def _machine_date(value: str, score: float) -> dict[str, Any] | None:
     return {"value": value, "score": round(min(max(score, 0.0), 1.0), 3)}
 
 
+def _weight(band: DeclarationBandRow) -> int:
+    """The bytes of a band's pictures, as the store keeps their sizes."""
+    return sum(strip.png_bytes for strip in band.strips)
+
+
 def _unfit(cut: Mapping[str, DeclarationBandRow]) -> str:
     """Why a declaration's bands cannot go, or "": one not cut, or past what
-    the site takes."""
+    the site takes, its pictures weighed before they are loaded."""
     for name in ("header", *EMPLOYMENT_BANDS):
         band = cut.get(name)
         if band is None:
@@ -742,6 +752,14 @@ def _unfit(cut: Mapping[str, DeclarationBandRow]) -> str:
             return "too_many_lines"
         if any(strip.page > MAX_STRIP_PAGE for strip in band.strips):
             return "too_far_in_the_file"
+        if any(strip.png_bytes > MAX_IMAGE_BYTES for strip in band.strips):
+            return "picture_too_big"
+    header = _weight(cut["header"])
+    if any(
+        header + _weight(cut[name]) > MAX_BAND_PICTURE_BYTES
+        for name in EMPLOYMENT_BANDS
+    ):
+        return "too_large"
     return ""
 
 
@@ -935,8 +953,8 @@ def _with_pictures(
     store: BipDeclarationStore, items: list[EmploymentItem], held: Counter[str]
 ) -> list[EmploymentItem]:
     """The items with their pictures, base64 as the site takes them. One whose
-    bands were cut again since it was planned waits for the next run, and so
-    does one with a picture the site would refuse."""
+    bands were cut again since it was planned waits for the next run: its
+    pictures are not the ones `_unfit` weighed."""
     pictures = store.band_pictures(EMPLOYMENT_CUT_VERSION, [i.page for i in items])
     ready = []
     for item in items:
@@ -948,14 +966,10 @@ def _with_pictures(
         ):
             held["cut_again"] += 1
             continue
-        sizes = [len(png) for each in pngs.values() for png in each]
-        if any(size > MAX_IMAGE_BYTES for size in sizes):
-            held["picture_too_big"] += 1
-            continue
         for name, each in pngs.items():
             for strip, png in zip(item.record[name]["strips"], each):
                 strip["png"] = base64.b64encode(png).decode("ascii")
-        item.image_bytes = sum(sizes)
+        item.image_bytes = sum(len(png) for each in pngs.values() for png in each)
         ready.append(item)
     return ready
 

@@ -1597,6 +1597,9 @@ class DeclarationStrip:
     bottom: int
     png: bytes = b""
     png_hash: str = ""
+    #: The picture's size in bytes, there without the picture: the site takes
+    #: a band's pictures only up to a size.
+    png_bytes: int = 0
 
 
 @dataclass(frozen=True)
