@@ -807,8 +807,11 @@ export type StoredEmploymentAnswer<Time = string> = EmploymentAnswer & {
  * - `agreed`, `unreadable`, `disputed`: settled; a disputed one goes to an
  *   admin.
  * - `recut`: off the queue until its band is cut again, wider.
- * - `withdrawn`: taken back by an admin, or its page link broke before it
- *   applied.
+ * - `closed`: answered or settled, and nothing written from it, when its date
+ *   crop stopped naming one page. It keeps its answers and what they
+ *   settled, and goes back to where it was (`closedFrom`) once the crop names
+ *   one page again: the readings are of the declaration's own lines.
+ * - `withdrawn`: taken back by an admin, for good.
  */
 export const employmentStatuses = [
   "waiting",
@@ -818,6 +821,7 @@ export const employmentStatuses = [
   "unreadable",
   "disputed",
   "recut",
+  "closed",
   "withdrawn",
 ] as const;
 export type EmploymentStatus = (typeof employmentStatuses)[number];
@@ -1003,6 +1007,8 @@ export type EmploymentControl<Time = string> = {
 /** One band's reading, as the map on `declarationExtracts` holds it. */
 export type EmploymentState<Time = string> = {
   status: EmploymentStatus;
+  /** What a `closed` band goes back to; null for any other. */
+  closedFrom: EmploymentStatus | null;
   /** The one live page the item reads for, followed through merges. */
   personId: string | null;
   /** `employmentPriority`. */

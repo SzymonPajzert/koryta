@@ -815,6 +815,45 @@ describe("matchPages and the declaration's employer line", () => {
     });
   });
 
+  it("closes an answered one while her birth date reads another day, and opens it again once it does not", async () => {
+    kowalska();
+    employerLine();
+    await matchPages(firestore, "kowalska-crop", NOON);
+    put("declarationExtracts/kowalska-crop", {
+      ...read("declarationExtracts/kowalska-crop")!,
+      employment: { ...line(), answerCount: 2 },
+    });
+    const birthDate = (value: string) =>
+      put("nodes/kowalska", { ...read("nodes/kowalska")!, birthDate: value });
+
+    birthDate("1980-01-02");
+    await matchPages(firestore, "kowalska-crop", LATER);
+    // The readings are of the declaration's own lines: they are kept.
+    expect(line()).toMatchObject({
+      status: "closed",
+      closedFrom: "open",
+      answerCount: 2,
+      personId: "kowalska",
+    });
+
+    // A reviewer puts her date back.
+    birthDate(BORN);
+    await matchPages(
+      firestore,
+      "kowalska-crop",
+      new Date("2026-10-29T12:20:00Z"),
+    );
+    expect(line()).toMatchObject({
+      status: "open",
+      closedFrom: null,
+      answerCount: 2,
+      personId: "kowalska",
+    });
+    expect(read("stats/declaration_employment")).toMatchObject({
+      employer: { waiting: 0, open: 1, closed: 0 },
+    });
+  });
+
   it("writes nothing to a crop without one", async () => {
     kowalska();
     await matchPages(firestore, "kowalska-crop", NOON);

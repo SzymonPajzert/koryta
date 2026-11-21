@@ -506,6 +506,7 @@ describe("api/ingest/declarations/employment", () => {
     });
     expect(band()).toEqual({
       status: "open",
+      closedFrom: null,
       personId: "kowalska",
       // A draft without a paid public post, not held for it.
       priority: 1,
@@ -909,40 +910,97 @@ describe("api/ingest/declarations/employment", () => {
       expect(state()).toBe(before);
     });
 
-    it("closes a band once the crop no longer names her page", async () => {
-      await send({ items: [item()] });
-      const brokenGate = () =>
-        put(CROP, {
-          ...read(CROP)!,
-          pageOutcomes: { kowalska: "held", "kowalska-2": "held" },
-        });
+    describe("when the crop no longer names her page", () => {
+      /** A second page born that day: the comparison holds both. */
+      const broken = { kowalska: "held", "kowalska-2": "held" };
+      const hers = { kowalska: "queued" };
+      const gate = (outcomes: Data) =>
+        put(CROP, { ...read(CROP)!, pageOutcomes: outcomes });
       const withBand = (fields: Data) =>
         put(CROP, { ...read(CROP)!, employment: { ...band(), ...fields } });
 
-      // Nobody voted on it: it waits again, and opens again with the gate.
-      brokenGate();
-      await openEmploymentOf(firestore, ITEM);
-      expect(band()).toMatchObject({ status: "waiting", personId: null });
+      it("puts a band nobody voted on back to wait, and opens it with the gate", async () => {
+        await send({ items: [item()] });
 
-      // Votes were cast on it, or it settled and nothing was written: its
-      // readings may be another person's, so it is withdrawn.
-      for (const fields of [
-        { status: "open", answerCount: 1, personId: "kowalska" },
-        { status: "agreed", answerCount: 2, applyState: "planned" },
-        { status: "disputed", answerCount: 6, applyState: null },
-      ]) {
-        withBand(fields);
+        gate(broken);
         await openEmploymentOf(firestore, ITEM);
         expect(band()).toMatchObject({
-          status: "withdrawn",
-          personId: "kowalska",
+          status: "waiting",
+          personId: null,
+          closedFrom: null,
         });
-      }
 
-      // Written to the graph already: left for an admin.
-      withBand({ status: "agreed", applyState: "applied" });
-      expect(await openEmploymentOf(firestore, ITEM)).toEqual([]);
-      expect(band()).toMatchObject({ status: "agreed" });
+        gate(hers);
+        await openEmploymentOf(firestore, ITEM);
+        expect(band()).toMatchObject({ status: "open", personId: "kowalska" });
+      });
+
+      it.each([
+        ["an answered band", { status: "open", answerCount: 1 }],
+        [
+          "an agreed band nothing was written from",
+          {
+            status: "agreed",
+            answerCount: 2,
+            applyState: "planned",
+            agreed: { rows: [], asOf: null, kind: null, readers: 2 },
+          },
+        ],
+        ["an unreadable band", { status: "unreadable", answerCount: 3 }],
+        ["a disputed band", { status: "disputed", answerCount: 6 }],
+      ])(
+        "closes %s with its answers, and puts it back when the gate passes again",
+        async (_, fields) => {
+          await send({ items: [item()] });
+          withBand(fields);
+          const kept = band();
+
+          gate(broken);
+          expect(await openEmploymentOf(firestore, ITEM)).toEqual([
+            { band: "employer", from: fields.status, to: "closed" },
+          ]);
+          expect(band()).toEqual({
+            ...kept,
+            status: "closed",
+            closedFrom: fields.status,
+            updatedAt: expect.any(FakeTimestamp),
+          });
+
+          // Sent again while closed: its picture and answers stay.
+          const result = await send({
+            items: [item({}, { imageHash: NEW_HASH })],
+          });
+          expect(result.bands.kept).toBe(1);
+          expect(band()).toMatchObject({ status: "closed", imageHash: HASH });
+
+          gate(hers);
+          expect(await openEmploymentOf(firestore, ITEM)).toEqual([
+            { band: "employer", from: "closed", to: fields.status },
+          ]);
+          expect(band()).toEqual({
+            ...kept,
+            closedFrom: null,
+            updatedAt: expect.any(FakeTimestamp),
+          });
+        },
+      );
+
+      it("leaves an admin's withdrawal and a written band as they are", async () => {
+        await send({ items: [item()] });
+
+        withBand({ status: "withdrawn", answerCount: 2 });
+        for (const outcomes of [broken, hers]) {
+          gate(outcomes);
+          expect(await openEmploymentOf(firestore, ITEM)).toEqual([]);
+          expect(band()).toMatchObject({ status: "withdrawn" });
+        }
+
+        // Written to the graph already: left for an admin.
+        withBand({ status: "agreed", applyState: "applied" });
+        gate(broken);
+        expect(await openEmploymentOf(firestore, ITEM)).toEqual([]);
+        expect(band()).toMatchObject({ status: "agreed" });
+      });
     });
   });
 
