@@ -12,6 +12,7 @@ import io
 import random
 from datetime import date
 
+import numpy as np
 import pytest
 from PIL import Image
 
@@ -30,6 +31,7 @@ from jobs.bip_declarations.employment import (
 )
 from jobs.bip_declarations.reading import date_in, dnia_in, stan_na_in
 from jobs.bip_declarations.tests.synthetic_declarations import (
+    SIGNATURE_X,
     Drawn,
     council_file,
     employment_declaration,
@@ -62,6 +64,20 @@ def runs_on(ocr) -> tuple[Drawn, dict[str, BandCut]]:
     """VIII running onto the next page, over IX."""
     drawn = employment_declaration(NAME, BORN, viii_runs_on=True)
     return drawn, bands(cut_bands(drawn.pdf(), [(0, 0)], ocr))
+
+
+@pytest.fixture(scope="module")
+def signed(ocr) -> tuple[Drawn, dict[str, BandCut]]:
+    """A receipt stamp over the title; the declarant's electronic signature's
+    block, with their name, beside the title and again beside VII."""
+    drawn = employment_declaration(NAME, BORN, signed=True)
+    return drawn, bands(cut_bands(drawn.pdf(), [(0, 0)], ocr))
+
+
+def read_back(ocr: Ocr, png: bytes) -> str:
+    """What OCR reads in a picture, as `squash` gives it."""
+    image = Image.open(io.BytesIO(png))
+    return squash(" ".join(line["text"] for line in ocr.lines(image, False)))
 
 
 def test_the_employer_band_holds_the_employer_not_the_name_or_the_birth_date(
@@ -98,6 +114,40 @@ def test_the_header_holds_the_title_and_the_dnia_date_not_the_name(stopped):
     assert strip.top <= drawn.at["title"][1]
     # It ends at "Uwaga:", over "CZĘŚĆ A" and the name under it.
     assert drawn.at["dnia"][2] < strip.bottom <= drawn.at["uwaga"][1]
+
+
+def test_the_header_starts_at_the_title_not_at_a_stamp_over_it(signed):
+    drawn, cut = signed
+    header = cut["header"]
+
+    [strip] = header.strips
+    assert drawn.at["stamp"][2] < strip.top <= drawn.at["title"][1]
+    assert "oswiadczeniemajatkowe" in squash(header.text)
+    assert header.dnia == "2025-04-24"
+
+
+def test_no_band_shows_an_electronic_signature_s_block(ocr, signed):
+    drawn, cut = signed
+
+    for band in cut.values():
+        for strip in band.strips:
+            seen = read_back(ocr, strip.png)
+            assert "testowy" not in seen and "podpis" not in seen, band.band
+    # Where the blocks were, the pictures hold paper only.
+    for block, name in (("signature", "header"), ("signature_vii", "vii")):
+        page, top, bottom = drawn.at[block]
+        band = cut[name]
+        scale = band.dpi / 200
+        beside = 0
+        for strip in band.strips:
+            image = np.array(Image.open(io.BytesIO(strip.png)))
+            a = max(0, round(top * scale) - strip.top)
+            b = min(image.shape[0], round(bottom * scale) - strip.top)
+            if strip.page != page or a >= b:
+                continue
+            beside += 1
+            assert image[a:b, round(SIGNATURE_X * scale) :].min() >= 245, name
+        assert beside, name
 
 
 def test_vii_starts_at_its_own_heading_not_at_section_iii(stopped):

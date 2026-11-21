@@ -6,9 +6,10 @@ declaration's, this pass cuts four bands. The next declaration starts at the
 file's next date page, due in this run or not, or at a page that reads
 "CZĘŚĆ A", the name's label or the birth date's:
 
-- `header`: the title with its list of functions (struck ones too), the
-  "według stanu na dzień" line where the form prints one, the "dnia" line and
-  any receipt stamp, down to "Uwaga:" or "CZĘŚĆ A";
+- `header`: from the title, "OŚWIADCZENIE MAJĄTKOWE", with its list of
+  functions (struck ones too), the "według stanu na dzień" line where the form
+  prints one, the "dnia" line and any receipt stamp beside them, down to
+  "Uwaga:" or "CZĘŚĆ A";
 - `employer`: from the first line under the birth date to the printed
   "(miejsce zatrudnienia, stanowisko lub funkcja)" under the employer;
 - `vii`: section VII, from "W spółkach handlowych (nazwa, siedziba spółki)",
@@ -16,7 +17,10 @@ file's next date page, due in this run or not, or at a page that reads
 - `viii`: section VIII, to the next heading: IX, X or "CZĘŚĆ B".
 
 No band shows the declarant's name or birth date (decision on 2026-11-20), and
-none runs past "CZĘŚĆ B", whose addresses are not public.
+none runs past "CZĘŚĆ B", whose addresses are not public. An electronic
+signature's block ("PODPIS ZAUFANY", the signer's name, "Dokument podpisany
+elektronicznie") is painted white on every page a band is drawn from, and its
+lines are not read.
 
 A band runs from its printed caption to the next one, read by RapidOCR with a
 few letters wrong, and on across a page break: a piece of each page, in order,
@@ -51,7 +55,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import regex
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from jobs.bip_declarations.cutter import (
     LONG_SIDE,
@@ -134,6 +138,24 @@ MARKS: dict[str, tuple[regex.Pattern[str], ...]] = {
     ),
     "signed": (_near("powyzszeoswiadczenieskladam", 4),),
 }
+#: The declaration's title, where the header starts; "Oświadczenie" alone on a
+#: line where the rest was not read.
+TITLE = (_near("oswiadczeniemajatkow", 3), regex.compile(r"^(?:oswiadczenie){e<=2}$"))
+#: A numbered note under "Uwaga:" ("4. Oświadczenie majątkowe dotyczy ..."),
+#: which is no title.
+NOTE_NUMBER = re.compile(r"^\W*\d{1,2}\s*[.)]")
+#: The printed lines of an electronic signature's block: ePUAP's "PODPIS
+#: ZAUFANY" and "Dokument podpisany elektronicznie podpisem zaufanym", a
+#: qualified signature's "podpisany przez", "Signed by".
+E_SIGNATURE = (
+    _near("podpiszaufany", 2),
+    _near("podpisanyelektronicznie", 3),
+    _near("podpisemkwalifikowanym", 3),
+    _near("podpisemzaufanym", 2),
+    _near("dokumentpodpisany", 2),
+    _near("podpisanyprzez", 2),
+    _near("signedby", 1),
+)
 #: VII's heading: companies, by their name and seat ("nazwa", "siedziba").
 COMPANIES = _near("handlowych", 2)
 NAMED = (_near("nazwa", 1), _near("siedzib", 1))
@@ -209,6 +231,8 @@ class PageScan:
     #: Where the text runs across the page.
     left: int
     right: int
+    #: The electronic signatures' blocks painted white on `image`.
+    signed: list[Box] = field(default_factory=list)
 
     @property
     def width(self) -> int:
@@ -261,15 +285,107 @@ def _marks(lines: list[OcrLine], boxes: list[Box], left: float, h: float) -> lis
     return marks
 
 
+def _within(block: Box, box: Box) -> bool:
+    """Whether a line's middle is inside a block."""
+    x, y = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+    return block[0] <= x <= block[2] and block[1] <= y <= block[3]
+
+
+def names_a_signature(text: str) -> bool:
+    """A printed line of an electronic signature's block."""
+    s = squash(text)
+    return any(p.search(s) for p in E_SIGNATURE)
+
+
+def signature_blocks(
+    lines: list[OcrLine], boxes: list[Box], grey: np.ndarray, h: float
+) -> list[Box]:
+    """The electronic signatures' blocks on a page: each line that names one
+    (`E_SIGNATURE`) with the lines of its column on the rows next to it, which
+    name the signer, and the ink on their rows either side of them up to a gap
+    (the block's icon, a name too wide to read), with a margin."""
+    blocks: list[Box] = []
+    for seed, line in enumerate(lines):
+        if not names_a_signature(line["text"]):
+            continue
+        if any(_within(block, boxes[seed]) for block in blocks):
+            continue
+        x0, y0, x1, y1 = boxes[seed]
+        members = {seed}
+        grew = True
+        while grew:
+            grew = False
+            for i, box in enumerate(boxes):
+                width = max(1.0, box[2] - box[0])
+                column = min(x1, box[2]) - max(x0, box[0]) >= 0.5 * width
+                if i in members or not column:
+                    continue
+                if box[1] <= y1 + 0.8 * h and box[3] >= y0 - 0.8 * h:
+                    members.add(i)
+                    x0, y0 = min(x0, box[0]), min(y0, box[1])
+                    x1, y1 = max(x1, box[2]), max(y1, box[3])
+                    grew = True
+        x0, x1 = _inked_across(grey, (x0, y0, x1, y1), h)
+        pad = 0.4 * h
+        blocks.append((x0 - pad, y0 - pad, x1 + pad, y1 + pad))
+    return blocks
+
+
+def _inked_across(grey: np.ndarray, box: Box, h: float) -> tuple[float, float]:
+    """A block's columns widened over the ink on its rows either side of it
+    (and a little over and under them, where an icon's frame runs), up to a
+    gap of more than half a line, and at most four lines out."""
+    x0, x1 = int(box[0]), int(box[2])
+    y0, y1 = int(box[1] - 0.3 * h), int(box[3] + 0.3 * h)
+    rows = grey[max(0, y0) : y1 + 1]
+    if not rows.size:
+        return box[0], box[2]
+    inked = (rows < dark_level(rows, 30)).any(axis=0)
+    gap, most = max(2, int(0.6 * h)), int(4 * h)
+    right = x1
+    while right < min(inked.size - 1, x1 + most):
+        ahead = np.flatnonzero(inked[right + 1 : right + 1 + gap])
+        if not ahead.size:
+            break
+        right += 1 + int(ahead[-1])
+    left = x0
+    while left > max(0, x0 - most):
+        behind = np.flatnonzero(inked[max(0, left - gap) : left])
+        if not behind.size:
+            break
+        left = max(0, left - gap) + int(behind[0])
+    return float(min(left, box[0])), float(max(right, box[2]))
+
+
+def blank(image: Image.Image, blocks: list[Box], scale: float = 1.0) -> Image.Image:
+    """The page (grey) with the blocks, in its rows at 200 dpi, painted white."""
+    if not blocks:
+        return image
+    painted = image.copy()
+    draw = ImageDraw.Draw(painted)
+    for x0, y0, x1, y1 in blocks:
+        draw.rectangle((x0 * scale, y0 * scale, x1 * scale, y1 * scale), fill=255)
+    return painted
+
+
 def scan_page(
     image: Image.Image, index: int, ocr: Ocr, *, words: bool = False
 ) -> PageScan:
-    """Read a page drawn at 200 dpi and find its captions."""
+    """Read a page drawn at 200 dpi and find its captions. An electronic
+    signature's block is painted white, and its lines are not the page's."""
     lines = sorted(
         ocr.lines(image, with_words=words), key=lambda line: bounds(line["box"])[1]
     )
     boxes = [bounds(line["box"]) for line in lines]
     grey = np.array(image.convert("L"))
+    signed = signature_blocks(lines, boxes, grey, body_height(lines))
+    if signed:
+        image = blank(image, signed)
+        grey = np.array(image.convert("L"))
+        kept = [
+            i for i, b in enumerate(boxes) if not any(_within(s, b) for s in signed)
+        ]
+        lines, boxes = [lines[i] for i in kept], [boxes[i] for i in kept]
     height, width = grey.shape
     edge = int(0.04 * width)
     level = dark_level(grey, 30)
@@ -294,6 +410,7 @@ def scan_page(
         ink,
         left,
         right,
+        signed,
     )
 
 
@@ -610,10 +727,12 @@ class Declaration:
             n, after = n + 1, -1.0
 
     def fine(self, index: int) -> Image.Image:
-        """The page drawn at 300 dpi (a picture as it is), turned as read."""
+        """The page drawn at 300 dpi (a picture as it is), turned as read, its
+        electronic signatures' blocks painted white as on its scan."""
         if index not in self._fine:
-            image = self.pages.image(index, FINE_LONG_SIDE)
-            self._fine[index] = turned(image, self.rotation)
+            image = turned(self.pages.image(index, FINE_LONG_SIDE), self.rotation)
+            scan = self.page(index)
+            self._fine[index] = blank(image, scan.signed, image.height / scan.height)
         return self._fine[index]
 
     def digital(self, index: int) -> bool:
@@ -637,9 +756,23 @@ class Declaration:
 # -- where each band is ---------------------------------------------------------
 
 
+def title_top(scan: PageScan, stop: float) -> float | None:
+    """Where the declaration's title starts, over row `stop`; None where it
+    was not read. A stamp or a signature over it is not the header's."""
+    tops = [
+        box[1]
+        for line, box in zip(scan.lines, scan.boxes)
+        if box[1] < stop
+        and not NOTE_NUMBER.match(line["text"])
+        and any(t.search(squash(line["text"])) for t in TITLE)
+    ]
+    return min(tops, default=None)
+
+
 def find_header(scan: PageScan, birth: Band | None, widen: int) -> Found:
-    """From the page's first line to "Uwaga:" (or the notes it heads), or,
-    a caption wider, to "CZĘŚĆ A"; never down to the name or the birth date."""
+    """From the title to "Uwaga:" (or the notes it heads), or, a caption
+    wider, to "CZĘŚĆ A"; never down to the name or the birth date. From the
+    page's first ink where the title was not read."""
     h = scan.h
     guards = [m.top for m in scan.marks if m.kinds & {"czesc_a", "name"}]
     if birth is not None:
@@ -655,9 +788,15 @@ def find_header(scan: PageScan, birth: Band | None, widen: int) -> Found:
     above = [b for b in scan.boxes if b[3] < stop.top + 0.3 * h and b[1] < stop.top]
     if not above:
         return Found("no_title")
-    top = first_ink(scan)
+    notes = []
+    title = title_top(scan, stop.top)
+    if title is not None:
+        top = over(scan, title)
+    else:
+        top = first_ink(scan)
+        notes.append("title not read: starts at the page's first ink")
     bottom = min(over(scan, stop.top), int(guard))
-    return Found("cut", [Piece(scan.index, top, bottom)])
+    return Found("cut", [Piece(scan.index, top, bottom)], notes)
 
 
 def find_employer(scan: PageScan, birth: Band | None, widen: int) -> Found:
@@ -976,7 +1115,9 @@ def read_piece(
             rows = [
                 Row((0, i, 0, i), " ".join(t.split()), 1.0, printed(t, band))
                 for i, t in enumerate(texts)
-                if not STAMP.search(fold(t)) and len(squash(t)) >= 2
+                if not STAMP.search(fold(t))
+                and not names_a_signature(t)
+                and len(squash(t)) >= 2
             ]
             return rows, "text_layer"
     crop = scan.image.crop((0, piece.top, scan.width, piece.bottom))

@@ -235,6 +235,22 @@ class _Page:
             self.drawn.at[name] = (self.index, rows[0][0], rows[-1][1])
         return y
 
+    def signature(self, x: int, y: int, signer: str, name: str) -> None:
+        """An electronic signature's block, as ePUAP prints it in a corner:
+        "PODPIS ZAUFANY", the signer's name a word a line, the time, and
+        "Dokument podpisany elektronicznie podpisem zaufanym"."""
+        top = y
+        for text, size in (
+            ("PODPIS ZAUFANY", 22),
+            *((word.upper(), 26) for word in signer.split()),
+            ("24.04.2025 10:15:33 (GMT+2)", 16),
+            ("Dokument podpisany elektronicznie", 16),
+            ("podpisem zaufanym", 16),
+        ):
+            _, bottom = self._write(y, text, size, x)
+            y = bottom + 6
+        self.drawn.at[name] = (self.index, top, y)
+
     def scribble(self, x: int, y: int, width: int, seed: int) -> None:
         """Pen strokes no OCR reads as print: words of loops along a line."""
         rng = random.Random(seed)
@@ -254,8 +270,23 @@ class _Page:
             start += word + rng.randrange(30, 60)
 
 
-def _part_a(drawn: Drawn, name: str, born: str, employer: str, scribbled: bool) -> None:
+#: Where a drawn electronic signature's block starts across the page.
+SIGNATURE_X = 1300
+
+
+def _part_a(
+    drawn: Drawn,
+    name: str,
+    born: str,
+    employer: str,
+    scribbled: bool,
+    *,
+    signed: bool = False,
+) -> None:
     page = _Page(drawn)
+    if signed:
+        page.text(40, "Wplynelo 25.04.2025", size=26, name="stamp")
+        page.signature(SIGNATURE_X, 30, name, "signature")
     page.text(110, "OSWIADCZENIE MAJATKOWE", size=40, x=540, name="title")
     page.lines(180, FUNCTIONS, size=26, name="functions")
     page.text(330, "Testowo, dnia 24.04.2025 r.", x=1000, name="dnia")
@@ -311,16 +342,21 @@ def employment_declaration(
     *,
     viii_runs_on: bool = False,
     scribbled: bool = False,
+    signed: bool = False,
 ) -> Drawn:
     """Part A, then VII and VIII on the next page: VIII running onto a third
     page over IX and X when `viii_runs_on`, else stopped by "CZĘŚĆ B" right
-    under it. `scribbled` writes the employer by hand, which no OCR reads."""
+    under it. `scribbled` writes the employer by hand, which no OCR reads.
+    `signed` adds a receipt stamp over the title and the declarant's
+    electronic signature's block beside it, and another beside VII."""
     drawn = Drawn()
-    _part_a(drawn, name, born, employer, scribbled)
+    _part_a(drawn, name, born, employer, scribbled, signed=signed)
     page = _Page(drawn)
     y = page.text(150, "III.", size=28)
     page.lines(y, SECTION_III, name="section_iii")
     top = 1300 if viii_runs_on else 400
+    if signed:
+        page.signature(SIGNATURE_X, top + 20, name, "signature_vii")
     page.text(top, "VII.", size=28, name="vii")
     y = page.lines(top + 50, SECTION_VII)
     y = page.text(y + 40, "VIII.", size=28, name="viii")
