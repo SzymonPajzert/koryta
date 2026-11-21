@@ -282,6 +282,7 @@ def _part_a(
     scribbled: bool,
     *,
     signed: bool = False,
+    on_birth_line: bool = False,
 ) -> None:
     page = _Page(drawn)
     if signed:
@@ -303,7 +304,10 @@ def _part_a(
     page.text(1115, born, size=44, x=420, name="born")
     page.text(1115, "Testowie", size=44, x=1020)
     page.text(1250, "." * 95, size=30)
-    if scribbled:
+    if on_birth_line:
+        # After the place of birth; the employer's own dotted line stays empty.
+        page.text(1125, employer, size=30, x=1240, name="employer")
+    elif scribbled:
         page.scribble(300, 1235, 1000, seed=7)
         drawn.at["employer"] = (page.index, 1215, 1255)
     else:
@@ -343,14 +347,25 @@ def employment_declaration(
     viii_runs_on: bool = False,
     scribbled: bool = False,
     signed: bool = False,
+    on_birth_line: bool = False,
 ) -> Drawn:
     """Part A, then VII and VIII on the next page: VIII running onto a third
     page over IX and X when `viii_runs_on`, else stopped by "CZĘŚĆ B" right
     under it. `scribbled` writes the employer by hand, which no OCR reads.
     `signed` adds a receipt stamp over the title and the declarant's
-    electronic signature's block beside it, and another beside VII."""
+    electronic signature's block beside it, and another beside VII.
+    `on_birth_line` writes the employer at the end of the birth date's line,
+    leaving its own dotted line empty."""
     drawn = Drawn()
-    _part_a(drawn, name, born, employer, scribbled, signed=signed)
+    _part_a(
+        drawn,
+        name,
+        born,
+        employer,
+        scribbled,
+        signed=signed,
+        on_birth_line=on_birth_line,
+    )
     page = _Page(drawn)
     y = page.text(150, "III.", size=28)
     page.lines(y, SECTION_III, name="section_iii")
