@@ -1585,6 +1585,8 @@ class DeclarationLink:
     context: str = ""
     #: The crawler's own link named the person.
     named: bool = True
+    #: The link carried the person's first name too, not their surname alone.
+    first_name: bool = True
 
 
 @dataclass(frozen=True)

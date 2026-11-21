@@ -70,7 +70,7 @@ EWA = person("4" * 16, "Ewa", "Probna", 2024, 45, ["ewa-page"])
 NOT_ON_SITE = person("5" * 16, "Adam", "Nieobecny", 2024, 40, [])
 
 
-def link(key: str, sha: str, named: bool) -> DeclarationLink:
+def link(key: str, sha: str, named: bool, first_name: bool = True) -> DeclarationLink:
     return DeclarationLink(
         key,
         sha,
@@ -79,6 +79,7 @@ def link(key: str, sha: str, named: bool) -> DeclarationLink:
         "Oświadczenie majątkowe",
         "",
         named,
+        first_name,
     )
 
 
@@ -216,6 +217,61 @@ def test_a_file_that_gave_no_crop_is_a_failed_extract(store):
         "failed",
         "no_label",
     )
+
+
+SHA_SURNAME = "b" * 64  # a file a link named Anna in by her surname alone
+
+
+def with_surname_only_file(
+    store: MemoryBipDeclarationStore, cut: str, crops: list[DeclarationCropRow]
+) -> MemoryBipDeclarationStore:
+    store.link_rows.append(link(ANNA.key, SHA_SURNAME, True, first_name=False))
+    store.files[SHA_SURNAME] = DeclarationFile(
+        SHA_SURNAME, "bip.testowo.example", "", "b.tar.gz", "przykladowa.pdf"
+    )
+    store.record_cut(DeclarationCutRow(SHA_SURNAME, 1, cut), crops)
+    return store
+
+
+def test_a_surname_only_link_s_page_goes_only_when_the_name_on_it_is_theirs(store):
+    with_surname_only_file(
+        store,
+        "cut",
+        [
+            crop(SHA_SURNAME, 0, "ocr", "1974-05-05", "Anna Maria Przykladowa"),
+            # A relative's declaration, filed under the same surname.
+            crop(SHA_SURNAME, 1, "ocr", "1950-02-02", "Beata Przykladowa-Nowak"),
+            crop(SHA_SURNAME, 2, "handwritten", "", ""),
+        ],
+    )
+
+    records = by_id(plan(store)[1])
+
+    anna = records[f"{SHA_SURNAME}-p0"]
+    assert anna["candidacies"] == [ANNA.key]
+    assert anna["machine"]["nameMatches"] is True
+    assert anna["outcome"] == "crop"
+    assert f"{SHA_SURNAME}-p1" not in records
+    assert f"{SHA_SURNAME}-p2" not in records
+
+
+def test_a_surname_only_link_s_file_that_gave_no_crop_is_no_failed_extract(store):
+    with_surname_only_file(store, "no_label", [])
+
+    assert not [e for e in plan(store)[1] if e.record["sha256"] == SHA_SURNAME]
+
+
+def test_a_file_named_by_first_name_goes_whatever_the_name_read(store):
+    store.record_cut(
+        DeclarationCutRow(SHA_ONE, 1, "cut"),
+        [crop(SHA_ONE, 0, "ocr", "1965-03-12", "Jam Tsetowy")],
+    )
+
+    jan = by_id(plan(store)[1])[f"{SHA_ONE}-p0"]
+
+    assert jan["candidacies"] == [JAN_2024.key, JAN_2018.key]
+    assert jan["linkNamed"] is True
+    assert jan["machine"]["nameMatches"] is False
 
 
 class FakeSite:

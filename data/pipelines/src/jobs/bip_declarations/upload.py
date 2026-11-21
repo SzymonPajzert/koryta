@@ -11,7 +11,8 @@ Only candidacies with a page on the site go: the contract has no room for the
 others (`kids` takes at least one), and an extract goes only for the
 candidacies of those. Of a council's file, a page goes for a candidacy only
 when the name read on it is the candidate's: one page of such a file holds a
-stranger's declaration more often than not.
+stranger's declaration more often than not. The same holds for a file the links
+named the candidate in by surname alone: it is a relative's as often as theirs.
 
 What was sent is kept in `bip_decl_sent` as a hash, so a run sends what is new
 or changed since the last: a candidacy whose search moved on, a crop cut again.
@@ -138,15 +139,24 @@ class _File:
     council: bool
 
 
+def _by_first_name(file: _File) -> bool:
+    """Whether a link that named the file's person gave their first name, not
+    their surname alone: 19 of the first 500 crops were a relative's
+    declaration, every one from a surname-only link (2026-10-31)."""
+    return any(link.first_name for link in file.links if link.named)
+
+
 def _served(
     file: _File, crop: DeclarationCropRow | None, people: dict[str, PersonRow]
 ) -> tuple[list[str], bool, bool | None]:
     """The candidacies a page serves, whether a link named them, and whether the
     name read on the page is theirs (None when nothing was read).
 
-    One person's file serves the candidacies its links named. A council's page
-    serves the candidacies whose name is the one read on it, and only when that
-    is one person: two namesakes on a council are told apart by a reader, not here.
+    One person's file serves the candidacies its links named; when no link gave
+    their first name, only on a page where the name read is theirs. A council's
+    page serves the candidacies whose name is the one read on it, and only when
+    that is one person: two namesakes on a council are told apart by a reader,
+    not here.
     """
     name = crop.name if crop else ""
     if not file.council:
@@ -157,6 +167,8 @@ def _served(
             if name and first
             else None
         )
+        if not matches and not _by_first_name(file):
+            return [], False, None
         return keys, True, matches
     if not name:
         return [], False, None
@@ -300,6 +312,8 @@ def _crop_extract(
 def _failed_extract(
     file: _File, cut: DeclarationCutRow, on_site: set[str]
 ) -> Extract | None:
+    if not _by_first_name(file):
+        return None  # no page whose name could say it is theirs
     keys = [
         k
         for k in dict.fromkeys(link.key for link in file.links if link.named)

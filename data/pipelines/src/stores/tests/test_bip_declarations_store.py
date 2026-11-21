@@ -78,6 +78,24 @@ def test_candidacies_are_the_list_with_the_search_s_outcomes():
     assert not any("CREATE TABLE IF NOT EXISTS bip_poi " in s for s in pg.executed)
 
 
+def test_links_say_whether_they_gave_the_first_name():
+    pg = FakePg(
+        {
+            "FROM bip_poi_docs": [
+                # key, sha256, url, page_url, anchor, context, named, first_name
+                ("draft", "a", "u/a", "p", "Jan Kowalski", "", True, True),
+                ("other", "b", "u/b", "p", "radna Lis", "", True, False),
+            ]
+        }
+    )
+    store = PostgresBipDeclarationStore(pg, LIST, create=False)  # type: ignore[arg-type]
+
+    assert [(link.key, link.named, link.first_name) for link in store.links()] == [
+        ("draft", True, True),
+        ("other", True, False),
+    ]
+
+
 def test_a_store_opened_to_read_creates_nothing():
     """`facts-part` runs beside a crawl chunk or a cut: no DDL there."""
     reading = FakePg({"FROM bip_poi": [("draft", "found", "named", 2, CHECKED)]})

@@ -238,7 +238,7 @@ class PostgresBipDeclarationStore(BipDeclarationStore):
     def links(self) -> list[DeclarationLink]:
         rows = self.pg.fetchall(
             """
-            SELECT key, sha256, url, page_url, anchor, context, named
+            SELECT key, sha256, url, page_url, anchor, context, named, first_name
               FROM bip_poi_docs WHERE status = 'ok' AND sha256 <> ''
              ORDER BY key, score DESC, url
             """
