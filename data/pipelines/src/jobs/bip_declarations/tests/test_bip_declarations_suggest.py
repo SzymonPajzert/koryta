@@ -357,6 +357,49 @@ def test_the_mandate_is_no_post(bodies):
     assert rows(bodies, band, "010101") == []
 
 
+@pytest.mark.parametrize(
+    "band",
+    [
+        "emeryt, były dyrektor Szkoły Podstawowej nr 5 im. Jana Testowego",
+        "emerytka - do 31.08.2023 dyrektor Szkoły Podstawowej nr 5 w Przykładowie",
+        "Emerytowany nauczyciel Szkoły Podstawowej nr 5 w Przykładowie",
+        "Urząd Gminy Testowo - Wójt w latach 2014-2024, obecnie radny",
+        "Urząd Gminy Testowo - Wójt (obecnie radny)",
+        "Urząd Gminy Testowo - inspektor, obecnie emeryt",
+        "Urząd Gminy Testowo - inspektor (do 2023 r.)",
+        "Urząd Gminy Testowo - inspektor do dnia 30.06.2024",
+        "URZĄDGMINYTESTOWO-INSPEKTOR(do30czerwca2024roku)",
+    ],
+)
+def test_a_post_the_line_says_is_over_gets_no_row(bodies, band):
+    """„Radny, emeryt” is „Brak” on the card, and so is a post held once."""
+    assert rows(bodies, [band], "010102") == []
+
+
+def test_a_post_held_now_keeps_its_row(bodies):
+    ug = [("ug_testowo", EMPLOYEE_ROLE)]
+    assert rows(bodies, ["Urząd Gminy Testowo - inspektor od 2020 r."], "010101") == ug
+    band = ["Urząd Gminy Testowo - inspektor do chwili obecnej"]
+    assert rows(bodies, band, "010101") == ug
+    assert rows(bodies, ["Urząd Gminy Testowo - obecnie inspektor"], "010101") == ug
+    band = ["Urząd Gminy Testowo - inspektor", "emeryt"]
+    assert rows(bodies, band, "010101") == ug
+    # The form's own words after the title are another clause.
+    band = ["Urząd Gminy Testowo - Wójt, składane co roku do dnia 30 kwietnia"]
+    assert rows(bodies, band, "010101") == [("ug_testowo", "wojt")]
+    # A line's dates are its own item's.
+    band = [
+        "Urząd Gminy Testowo - Wójt (do 30.04.2024)",
+        "GOPS w Testowie - główny specjalista",
+        "od 20.05.2024 do 31.07.2024 pełnomocnik zarządu",
+        "Szkoła Podstawowa nr 5 w Przykładowie - dyrektor (od 01.09.2024)",
+    ]
+    assert rows(bodies, band, "010101") == [
+        ("gops", EMPLOYEE_ROLE),
+        ("sp5", "dyrektor"),
+    ]
+
+
 def test_an_unknown_title_after_na_stanowisku_takes_its_bodys_place(bodies):
     band = [
         "Zatrudniony w Urzędzie Miejskim w Przykładowie na stanowisku leśniczego,",

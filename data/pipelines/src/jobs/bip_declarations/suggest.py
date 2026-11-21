@@ -857,8 +857,26 @@ class _Word:
     mark: str = ""
 
 
-#: The punctuation `_Word.mark` keeps, weakest first.
+#: The punctuation `_Word.mark` keeps, weakest first; a title's clause runs
+#: through the first two (`_Band.over`).
 _MARKS = ("", "(", ",", ";")
+_IN_CLAUSE = _MARKS[:2]
+#: Before a title, a post that is over: „były dyrektor”, „emerytowany
+#: nauczyciel”, „wcześniej inspektor”.
+_ONCE = tuple(
+    _same(word)
+    for word in (
+        "byl", "byla", "byly", "bylego", "bylej", "bylym", "byli",
+        "wczesniej", "poprzednio", "uprzednio",
+    )
+)  # fmt: skip
+_RETIRED = _same("emeryt")
+#: After a title: „Wójt (obecnie radny)”, „inspektor, obecnie emeryt”.
+_NOW = _same("obecnie")
+#: Beside a title: „w latach 2014-2024”, „do 31.08.2023”, „do 2023 r.”, „do
+#: dnia ...”, also as OCR glues them: „wlatach”, „(do23stycznia2021roku)”.
+_YEARS = _same("latach")
+_UNTIL = re.compile(r"^do(dnia)?[0-9]")
 
 
 class _Band:
@@ -936,6 +954,36 @@ class _Band:
         return any(
             text.startswith(_PRIVATE_SCHOOL_MARKS) or text == _STO for text in before
         )
+
+    def over(self, first: int, end: int) -> bool:
+        """Whether the title in words `first` to `end` names a post the line
+        says is over: „był” or „emeryt” before it, „do” a date or a year or
+        „w latach” beside it, „obecnie” after it, all in its clause (a comma,
+        a dash, a semicolon or a line's end ends one, a bracket does not), or
+        „obecnie” opening the next."""
+
+        def joins(word: _Word) -> bool:
+            return not word.line and word.mark in _IN_CLAUSE
+
+        start, stop = first, end
+        while start > 0 and joins(self.words[start]):
+            start -= 1
+        while stop < len(self.words) and joins(self.words[stop]):
+            stop += 1
+        raw = [word.text for word in self.words[start:stop]]
+        same = [_same(text) for text in raw]
+        before, after = same[: first - start], same[first - start + 1 :]
+        if any(word in _ONCE or word.startswith(_RETIRED) for word in before):
+            return True
+        if any(_YEARS in word for word in same) or any(
+            _UNTIL.match(text)
+            or (text == "do" and _UNTIL.match("".join(["do", *raw[i + 1 : i + 3]])))
+            for i, text in enumerate(raw)
+        ):
+            return True
+        if stop < len(self.words):
+            after.append(_same(self.words[stop].text))
+        return any(word.startswith(_NOW) for word in after)
 
     def segment(self, word: int) -> list[str]:
         """The words from `word` up to the next comma, dash or line break."""
@@ -1058,7 +1106,8 @@ _LEADS_INTO = ("stanowisk", "funkcj", "jako", "zatrudnion")
 class _Mention:
     start: int
     end: int
-    #: "body"; "title"; "mandate"; or "other", a contract or a pension.
+    #: "body"; "title"; "mandate"; or "other", a contract, a pension or a post
+    #: that is over.
     what: str
     body: int | None = None
     chip: RoleChip | None = None
@@ -1101,6 +1150,8 @@ def _titles(band: _Band, roles: Roles, bodies: list[_Mention]) -> list[_Mention]
         if what is None:
             word += 1
             continue
+        if what == "title" and band.over(word, word + len(segment)):
+            what = "other"
         start = band.starts[word]
         end = start + sum(len(text) for text in segment)
         here = band.words[word]
