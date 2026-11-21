@@ -201,6 +201,9 @@ _INITIALS = re.compile(r"([^\W\d_]\.){2,}")
 #: What follows an "I" that is a numeral and not "and": "Branżowa Szkoła I
 #: Stopnia", "Szkoła Muzyczna I i II Stopnia".
 _DEGREE = frozenset({"STOPNIA", "STOPIEŃ", "ST.", "ST"})
+#: An oddział numbered in a town: "Zakład Ubezpieczeń Społecznych I Oddział w
+#: Poznaniu", where "Szkoła Podstawowa i Oddział Przedszkolny" joins two.
+_NUMBERED_BRANCH = frozenset({("ODDZIAŁ", "W"), ("ODDZIAŁ", "WE")})
 #: What a quoted or bracketed part of a name opens with: '"BAJKA"'.
 _OPENING = "\"„“”«'("
 _CLOSING = ".,;:)\"„“”»'"
@@ -366,7 +369,7 @@ def _recased_word(words: list[str], index: int) -> str:
     ):
         return word
     if index > 0 and lower in _LOWER_WORDS:
-        return "I" if word == "I" and _is_degree(words, index) else lower
+        return "I" if word == "I" and _is_numeral(words, index) else lower
     return _capitalised(word)
 
 
@@ -374,10 +377,14 @@ def _capitalised(word: str) -> str:
     return "-".join(part.capitalize() for part in word.split("-"))
 
 
-def _is_degree(words: list[str], index: int) -> bool:
-    """Whether the "I" at `index` is a numeral: "I STOPNIA", "I I II STOPNIA"."""
+def _is_numeral(words: list[str], index: int) -> bool:
+    """Whether the "I" at `index`, not the first word, is a numeral and not
+    "and": the last word ("Komenda Rejonowa Policji Warszawa I"), after "nr",
+    before a degree ("I Stopnia", "I i II Stopnia") or a numbered oddział."""
     following = [word.strip(_CLOSING) for word in words[index + 1 : index + 3]]
-    if following and following[0] in _DEGREE:
+    if not following or words[index - 1].strip(_CLOSING) == "NR":
+        return True
+    if following[0] in _DEGREE or tuple(following) in _NUMBERED_BRANCH:
         return True
     return (
         len(following) == 2
