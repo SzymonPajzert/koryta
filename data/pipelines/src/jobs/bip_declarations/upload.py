@@ -31,8 +31,9 @@ and its employer's line as `cut-employment` cut them, with the machine's
 suggestions for a printed line. It goes for the pages without a paid public
 post, the other side of `--public-post`, once readers agreed on the
 declaration's birth date and the site matched it to that one page
-(`employment_records`). A person's newest declaration is read first; the older
-ones go too, put off (`later`). The bands are kept by their date page's id, so
+(`employment_records`). A person's newest declaration, by the header's dates
+where they were read surely (`_when`), is read first; the older ones go too,
+put off (`later`). The bands are kept by their date page's id, so
 sending them again overwrites them, and a band readers answered keeps its
 pictures; `bip_decl_sent` keeps them as kind `employment`.
 """
@@ -52,7 +53,7 @@ from typing import Any, Protocol
 
 import requests
 
-from jobs.bip_declarations.employment import EMPLOYMENT_CUT_VERSION
+from jobs.bip_declarations.employment import EMPLOYMENT_CUT_VERSION, TYPED_SCORE
 from jobs.bip_declarations.reading import birth_window, in_windows, name_matches
 from jobs.bip_declarations.suggest import BodyIndex, Roles, suggest
 from scrapers.stores import (
@@ -707,16 +708,21 @@ def _band(band: DeclarationBandRow) -> dict[str, Any]:
     }
 
 
-def _machine_date(value: str, score: float) -> dict[str, Any] | None:
-    """A date the cut read, with its line's score; None for none, or for one
-    the site would not take as a day (`isReadingDate`)."""
+def _iso_day(value: str) -> date | None:
+    """A YYYY-MM-DD day, or None."""
     if not ISO_DAY.match(value):
         return None
     try:
-        day = date.fromisoformat(value)
+        return date.fromisoformat(value)
     except ValueError:
         return None
-    if not 1900 <= day.year <= 2100:
+
+
+def _machine_date(value: str, score: float) -> dict[str, Any] | None:
+    """A date the cut read, with its line's score; None for none, or for one
+    the site would not take as a day (`isReadingDate`)."""
+    day = _iso_day(value)
+    if day is None or not 1900 <= day.year <= 2100:
         return None
     return {"value": value, "score": round(min(max(score, 0.0), 1.0), 3)}
 
@@ -757,11 +763,20 @@ def _whose(
     return person, ""
 
 
-def _when(header: DeclarationBandRow, year: int | None) -> str:
+def _when(header: DeclarationBandRow, year: int | None, today: date) -> str:
     """The day a declaration is for as far as the job read it, to tell a
-    person's newest: its „stanu na”, else the day it was signed, else the end
-    of the year it is for; "" when nothing was read."""
-    return header.stan_na or header.dnia or (f"{year}-12-31" if year else "")
+    person's newest: its „stanu na”, else the day it was signed, each only
+    when its line was read as surely as a typed one's and it is not after
+    `today`; else the 31 December of the year its date crop says it is for,
+    which may not be a year to come; "" when nothing was read."""
+    for value, score in (
+        (header.stan_na, header.stan_na_score),
+        (header.dnia, header.dnia_score),
+    ):
+        day = _iso_day(value)
+        if day is not None and score >= TYPED_SCORE and day <= today:
+            return day.isoformat()
+    return f"{year}-12-31" if year and year <= today.year else ""
 
 
 def _unit(linked: list[PersonRow], person: str) -> str:
@@ -817,6 +832,7 @@ def employment_records(
     bodies: BodyIndex,
     *,
     roles: Roles | None = None,
+    today: date | None = None,
 ) -> tuple[list[EmploymentItem], Counter[str]]:
     """Every declaration whose posts the site should read now, and why each
     other date page with bands is not, counted by reason.
@@ -825,9 +841,11 @@ def employment_records(
     night's list says (`BipPersonOfInterest.public_post`, which `--public-post`
     reads), once its date crop agreed and the comparison with the pages named
     that one page alone (`pages`, the site's export): whose declaration it is
-    is the site's word. Of a person's declarations the newest is read first,
-    the others go `later`. Its header goes with the employer's line, and a
-    printed line with the machine's suggestions (`suggest`)."""
+    is the site's word. Of a person's declarations the newest (`_when`, as of
+    `today`, the run's day) is read first, the others go `later`. Its header
+    goes with the employer's line, and a printed line with the machine's
+    suggestions (`suggest`)."""
+    today = today or date.today()
     people = store.candidacies()
     if all(row.person.get("public_post") is None for row in people):
         raise ListTooOld(
@@ -863,7 +881,7 @@ def employment_records(
         if why:
             left_out[why] += 1
             continue
-        when = _when(cut["header"], years.get((sha, page)))
+        when = _when(cut["header"], years.get((sha, page)), today)
         readable[person].append((when, item, cut))
 
     items = []
@@ -901,9 +919,10 @@ def employment_plan(
     bodies: BodyIndex,
     *,
     roles: Roles | None = None,
+    today: date | None = None,
 ) -> EmploymentPlan:
     """`employment_records` less what the site was sent as it is."""
-    items, left_out = employment_records(store, pages, bodies, roles=roles)
+    items, left_out = employment_records(store, pages, bodies, roles=roles, today=today)
     wanted = due(((item.id, item.digest) for item in items), store.sent(EMPLOYMENT))
     return EmploymentPlan(
         [item for item in items if item.id in wanted],
@@ -962,12 +981,13 @@ def upload_employment(
     run_id: str,
     max_requests: int | None = None,
     roles: Roles | None = None,
+    today: date | None = None,
     log: Callable[[str], None] = print,
 ) -> EmploymentResult:
     """Send the declarations new or changed since the last upload
     (`employment_plan`), a batch at a time, each batch's answer kept as it
     comes. Nothing is swept after: the site places each band as it stores it."""
-    plan = employment_plan(store, pages, bodies, roles=roles)
+    plan = employment_plan(store, pages, bodies, roles=roles, today=today)
     result = EmploymentResult()
     log(
         f"to send: {len(plan.items)} declarations {dict(plan.statuses())}, "
