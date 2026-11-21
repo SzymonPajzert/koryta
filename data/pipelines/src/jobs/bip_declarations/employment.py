@@ -20,7 +20,9 @@ No band shows the declarant's name or birth date (decision on 2026-11-20), and
 none runs past "CZĘŚĆ B", whose addresses are not public. An electronic
 signature's block ("PODPIS ZAUFANY", the signer's name, "Dokument podpisany
 elektronicznie") is painted white on every page a band is drawn from, and its
-lines are not read.
+lines are not read. A band whose lines read the declarant's first name or
+surname anyway, as a sole trader's firm on the employer's line does, is kept
+as `holds_name` and never sent; no word of it is masked.
 
 A band runs from its printed caption to the next one, read by RapidOCR with a
 few letters wrong, and on across a page break: a piece of each page, in order,
@@ -50,7 +52,7 @@ from __future__ import annotations
 import difflib
 import io
 import re
-from collections.abc import Collection, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -80,6 +82,7 @@ from jobs.bip_declarations.reading import (
     date_in,
     dnia_in,
     fold,
+    name_tokens,
     stan_na_in,
 )
 
@@ -99,6 +102,8 @@ TYPED_SCORE = 0.9
 LAYER_AGREES = 0.9
 #: No strip is shorter, in px: a picture cut is between lines, not at an edge.
 MIN_STRIP = 24
+#: A declarant's surname this long is looked for inside other letters too.
+GLUED = 5
 
 
 def squash(text: str) -> str:
@@ -638,7 +643,8 @@ class BandCut:
 
     band: str
     #: cut, or why not: no_stop, no_title, no_birth_line, no_caption,
-    #: no_heading, empty, unreadable.
+    #: no_heading, empty, unreadable; or holds_name, drawn but reading the
+    #: declarant's name, so never to be sent.
     status: str = "cut"
     widen: int = 0
     dpi: int = 0
@@ -1098,20 +1104,21 @@ def agrees(layer: str, read: str) -> bool:
 
 def read_piece(
     doc: Declaration, band: str, piece: Piece, written: list[tuple[int, int]]
-) -> tuple[list[Row], str]:
-    """What a piece says, line by line, and where that came from."""
+) -> tuple[list[Row], str, list[str]]:
+    """What a piece says, line by line, and where that came from; and every
+    line read in it, stamps and print too, as its picture shows them."""
     scan = doc.page(piece.page)
     if doc.digital(piece.page):
         box = (0.0, float(piece.top), float(scan.width), float(piece.bottom))
         texts = doc.pages.text_in(piece.page, box).splitlines()
-        seen = sum(
+        ocr_reads = sum(
             len(squash(line["text"]))
             for line, b in zip(scan.lines, scan.boxes)
             if piece.top <= (b[1] + b[3]) / 2 <= piece.bottom
         )
         # A page drawn from text can still carry a picture of what was filled
         # in by hand: its layer then says much less than OCR sees.
-        if sum(len(squash(t)) for t in texts) >= 0.5 * seen:
+        if sum(len(squash(t)) for t in texts) >= 0.5 * ocr_reads:
             rows = [
                 Row((0, i, 0, i), " ".join(t.split()), 1.0, printed(t, band))
                 for i, t in enumerate(texts)
@@ -1119,12 +1126,13 @@ def read_piece(
                 and not names_a_signature(t)
                 and len(squash(t)) >= 2
             ]
-            return rows, "text_layer"
+            return rows, "text_layer", texts
     crop = scan.image.crop((0, piece.top, scan.width, piece.bottom))
     rows = [
         Row(bounds(line["box"]), line["text"], line["score"])
         for line in doc.ocr.read_lines(crop)
     ]
+    shown = [row.text for row in rows]
     source = "ocr"
     rows = keep(rows, written, scan.h)
     for row in rows:
@@ -1132,8 +1140,32 @@ def read_piece(
         layer = doc.layer(piece.page, (x0, y0 + piece.top, x1, y1 + piece.top))
         if layer and agrees(layer, row.text):
             row.text, source = " ".join(layer.split()), "ocr+text_layer"
+            shown.append(row.text)
         row.printed = printed(row.text, band)
-    return text_lines(rows), source
+    return text_lines(rows), source, shown
+
+
+def holds_name(texts: Iterable[str], people: Iterable[tuple[str, str]]) -> bool:
+    """Whether a line reads one of the people's (first name, surname): a first
+    name or a surname's part ("Nowak-Kowalska" has two) as a whole word,
+    folded; or a surname's part of `GLUED` letters or more inside the line's
+    letters run together. OCR runs the words of bold capitals together
+    ("TOMASZKOWALSKI"), and a firm its owner's initials ("JKOWALSKI sp.k.")."""
+    words: set[str] = set()
+    glued: set[str] = set()
+    for first, last in people:
+        words.update(name_tokens(first))
+        for part in name_tokens(last):
+            words.add(part)
+            if len(part) >= GLUED:
+                glued.add(part)
+    for text in texts:
+        if words & set(name_tokens(text)):
+            return True
+        letters = re.sub(r"[^a-z]", "", fold(text))
+        if any(part in letters for part in glued):
+            return True
+    return False
 
 
 def header_dates(cut: BandCut, rows: list[Row]) -> None:
@@ -1257,8 +1289,16 @@ def inked(scan: PageScan, piece: Piece) -> bool:
     )
 
 
-def finish(doc: Declaration, band: str, found: Found, widen: int) -> BandCut:
-    """Read a band, decide whether it is typed, and draw it."""
+def finish(
+    doc: Declaration,
+    band: str,
+    found: Found,
+    widen: int,
+    names: Collection[tuple[str, str]] = (),
+) -> BandCut:
+    """Read a band, decide whether it is typed, and draw it. A band any line
+    of which reads the declarant's name (`names`: first name and surname) is
+    `holds_name`: drawn and kept, never to be sent (decision on 2026-11-20)."""
     cut = BandCut(band, found.status, widen, notes=list(found.notes))
     if found.status != "cut":
         return cut
@@ -1266,6 +1306,7 @@ def finish(doc: Declaration, band: str, found: Found, widen: int) -> BandCut:
         cut.status = "empty"
         return cut
     rows: list[Row] = []
+    shown: list[str] = []
     sources = set()
     pieces, written = [], []
     for n, piece in enumerate(found.pieces):
@@ -1275,8 +1316,9 @@ def finish(doc: Declaration, band: str, found: Found, widen: int) -> BandCut:
             continue  # the next page's paper over the next heading: nothing on it
         pieces.append(piece)
         written.append(lines)
-        read, source = read_piece(doc, band, piece, lines)
+        read, source, said = read_piece(doc, band, piece, lines)
         rows += read
+        shown += said
         sources.add(source)
     content = [r for r in rows if not r.printed]
     digital = sources == {"text_layer"}
@@ -1292,6 +1334,9 @@ def finish(doc: Declaration, band: str, found: Found, widen: int) -> BandCut:
     draw(doc, cut, pieces, written)
     if not cut.typed and cut.dpi == 200:
         cut.notes.append("a picture, not a PDF: nothing finer to draw")
+    if holds_name(shown, names):
+        cut.status = "holds_name"
+        cut.notes.append("the declarant's name is read in it: never to be sent")
     return cut
 
 
@@ -1311,8 +1356,14 @@ class FileBands:
     error: str = ""
 
 
-def cut_declaration(doc: Declaration, widen: Mapping[str, int]) -> list[BandCut]:
-    """The four bands of the declaration whose date page `doc` starts at."""
+def cut_declaration(
+    doc: Declaration,
+    widen: Mapping[str, int],
+    names: Collection[tuple[str, str]] = (),
+) -> list[BandCut]:
+    """The four bands of the declaration whose date page `doc` starts at;
+    `names`, the declarant's first name and surname, which no band sent may
+    read."""
     scan = doc.scans[0]
     birth = date_band(scan.lines, scan.width, scan.height, scan.grey, doc.ocr)
     vii = find_vii(doc, widen.get("vii", 0))
@@ -1322,7 +1373,7 @@ def cut_declaration(doc: Declaration, widen: Mapping[str, int]) -> list[BandCut]
         "vii": vii,
         "viii": find_viii(doc, vii, widen.get("viii", 0)),
     }
-    cuts = [finish(doc, band, found[band], widen.get(band, 0)) for band in BANDS]
+    cuts = [finish(doc, band, found[band], widen.get(band, 0), names) for band in BANDS]
     header = cuts[0]
     if not header.stan_na:
         # Some forms print it under "CZĘŚĆ A" or beside the employer.
@@ -1341,12 +1392,14 @@ def cut_bands(
     ocr: Ocr,
     widen: Mapping[tuple[int, str], int] | None = None,
     starts: Collection[int] = (),
+    names: Mapping[int, Collection[tuple[str, str]]] | None = None,
 ) -> FileBands:
     """The bands of each date page (`pages`: page and rotation, as the date
     cut found them) of a declaration file; `widen` runs a band of a page that
     many captions further. `starts`: every date page of the file, those not
     due in this run too, each the start of a declaration and so the end of the
-    one before it."""
+    one before it. `names`: for each date page, the first name and surname of
+    whoever it may be the declaration of, which a band sent may not show."""
     kind = kind_of(data)
     if kind == "html":
         return FileBands("not_fetched", kind)
@@ -1365,7 +1418,9 @@ def cut_bands(
             mine = {band: n for (p, band), n in (widen or {}).items() if p == page}
             try:
                 doc = Declaration(source, ocr, page, rotation, end)
-                result.bands[page] = cut_declaration(doc, mine)
+                result.bands[page] = cut_declaration(
+                    doc, mine, (names or {}).get(page, ())
+                )
                 result.pages_read += len(doc.scans)
             except Exception as exc:  # noqa: BLE001 - one page's failure, not the file's
                 why = f"{type(exc).__name__}: {exc}"[:300]
