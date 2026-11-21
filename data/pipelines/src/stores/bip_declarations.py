@@ -13,7 +13,8 @@ night's list, which the job reads each run and hands the store
   PNG bytes and what was read on it;
 - ``bip_decl_bands``: one row per band of such a page and version of the
   employment cut - its header, its employer's line, sections VII and VIII as
-  PNG strips, their written lines and what OCR read in them;
+  PNG strips with each one's hash and size, their written lines and what OCR
+  read in them;
 - ``bip_decl_sent``: one row per record sent to the site - a candidacy, a
   date page's crops, or its bands to read posts off (kind ``employment``) - a
   hash of what was sent and the site's answer, so a run sends only what is new
@@ -126,9 +127,9 @@ def png_hash(data: bytes) -> str:
 
 
 def band_with_hashes(band: DeclarationBandRow) -> DeclarationBandRow:
-    """The band with its strips' hashes filled in."""
+    """The band with its strips' hashes and sizes filled in."""
     strips = tuple(
-        DeclarationStrip(s.page, s.top, s.bottom, s.png, png_hash(s.png))
+        DeclarationStrip(s.page, s.top, s.bottom, s.png, png_hash(s.png), len(s.png))
         for s in band.strips
     )
     return DeclarationBandRow(**{**band.__dict__, "strips": strips})
@@ -136,7 +137,13 @@ def band_with_hashes(band: DeclarationBandRow) -> DeclarationBandRow:
 
 def _band_values(band: DeclarationBandRow) -> tuple:
     strips = [
-        {"page": s.page, "top": s.top, "bottom": s.bottom, "hash": s.png_hash}
+        {
+            "page": s.page,
+            "top": s.top,
+            "bottom": s.bottom,
+            "hash": s.png_hash,
+            "bytes": s.png_bytes,
+        }
         for s in band.strips
     ]
     return (
@@ -187,6 +194,7 @@ def _band(row: tuple, pngs: list[bytes] | None = None) -> DeclarationBandRow:
                 int(s["bottom"]),
                 bytes(pictures[k]) if k < len(pictures) else b"",
                 s["hash"],
+                int(s["bytes"]),
             )
             for k, s in enumerate(strips)
         ),
@@ -690,7 +698,9 @@ class MemoryBipDeclarationStore(BipDeclarationStore):
                 **{
                     **row.__dict__,
                     "strips": tuple(
-                        DeclarationStrip(s.page, s.top, s.bottom, b"", s.png_hash)
+                        DeclarationStrip(
+                            s.page, s.top, s.bottom, b"", s.png_hash, s.png_bytes
+                        )
                         for s in row.strips
                     ),
                 }
