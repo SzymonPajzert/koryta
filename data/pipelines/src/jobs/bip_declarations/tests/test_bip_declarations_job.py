@@ -129,10 +129,13 @@ def test_cut_stops_when_its_time_is_up(store, tmp_path):
 asked: list[
     tuple[tuple[tuple[int, int], ...], dict[tuple[int, str], int], tuple[int, ...]]
 ] = []
+#: Each file's date pages' declarants' names, as handed to the cut.
+named: list[dict[int, tuple[str, ...]]] = []
 
 
-def fake_bands(data: bytes, pages, ocr, widen=None, starts=()) -> FileBands:
+def fake_bands(data: bytes, pages, ocr, widen=None, starts=(), names=None) -> FileBands:
     asked.append((tuple(pages), dict(widen or {}), tuple(starts)))
+    named.append(dict(names or {}))
     result = FileBands("cut", "pdf", 5, 3)
     for page, _ in pages:
         result.bands[page] = [
@@ -159,6 +162,7 @@ def banded(store, monkeypatch) -> MemoryBipDeclarationStore:
     """The `store` with a date page in each file, two in the one on disk."""
     monkeypatch.setattr(job, "cut_bands", fake_bands)
     asked.clear()
+    named.clear()
     on_disk, later = store.files.values()
     store.record_cut(
         DeclarationCutRow(on_disk.sha256, job.CUT_VERSION, "cut"),
@@ -186,6 +190,8 @@ def test_cut_employment_keeps_each_date_page_s_bands(banded, tmp_path, capsys):
     assert code == 0
     on_disk = next(iter(banded.files))
     assert asked == [(((0, 0), (4, 180)), {}, (0, 4))]
+    # Whose names no band may show: the one person the file was found for.
+    assert named == [{0: (("Jan", "Testowy"),), 4: (("Jan", "Testowy"),)}]
     rows = banded.bands(job.EMPLOYMENT_CUT_VERSION, with_images=True)
     assert [(r.page, r.band) for r in rows] == [
         (page, band) for page in (0, 4) for band in sorted(BANDS)
@@ -203,6 +209,34 @@ def test_cut_employment_keeps_each_date_page_s_bands(banded, tmp_path, capsys):
     # The file whose bundle is not on disk yet is tried again next time.
     assert "1 files' bundles are not on disk" in capsys.readouterr().out
     assert [d.file.sha256 for d in banded.pages_to_band(1, None)] == ["9" * 64]
+
+
+def test_a_council_page_keeps_out_its_declarant_s_names_or_everybody_s():
+    sha = "c" * 64
+    url = "https://h/rada.pdf"
+    people = [
+        PersonRow("a" * 16, "021704", 0, 2024, "Jan", "Testowy", {"koryta_ids": ["p"]}),
+        PersonRow("b" * 16, "021704", 0, 2024, "Ewa", "Druga", {"koryta_ids": ["q"]}),
+    ]
+    # A council's file: its links name two people.
+    store = MemoryBipDeclarationStore(
+        people,
+        [DeclarationFile(sha, "h", url, "b.tar.gz", "rada.pdf")],
+        [DeclarationLink("a" * 16, sha, url), DeclarationLink("b" * 16, sha, url)],
+    )
+    store.record_cut(
+        DeclarationCutRow(sha, job.CUT_VERSION, "cut"),
+        [
+            DeclarationCropRow(sha, 0, name="Ewa Druga"),
+            DeclarationCropRow(sha, 3, name="nieczytelne"),
+        ],
+    )
+
+    names = job.declarants(store, store.pages_to_band(job.EMPLOYMENT_CUT_VERSION, None))
+
+    # The name read on page 0 is Ewa's; page 3's tells nobody.
+    assert names[(sha, 0)] == (("Ewa", "Druga"),)
+    assert set(names[(sha, 3)]) == {("Jan", "Testowy"), ("Ewa", "Druga")}
 
 
 def test_cut_employment_takes_only_the_pages_named(banded, tmp_path):

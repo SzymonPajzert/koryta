@@ -25,7 +25,9 @@ cutter's version changes, so a run stopped anywhere loses only the files in hand
 declared posts from (`employment`): the header, the employer's line, sections
 VII and VIII. It has a version of its own, and `--items` keeps it to the pages
 the site will read; `--recut` cuts a band one caption wider where readers said
-it lacks a part. It sends nothing: the bands stay in its table.
+it lacks a part. It sends nothing: the bands stay in its table. A band that
+reads the declarant's first name or surname (the candidacy's) is kept there as
+`holds_name`, which no upload sends.
 
 `upload` sends the site what it lacks or what changed since the last upload:
 every candidacy with a page on the site, and the crops of their files (`upload`).
@@ -95,6 +97,7 @@ from jobs.bip_declarations.employment import (
 )
 from jobs.bip_declarations.facts import facts_summary, read_facts, site_rows
 from jobs.bip_declarations.names import Names, read_names
+from jobs.bip_declarations.reading import name_matches
 from jobs.bip_declarations.stats import report, write_units_csv
 from jobs.bip_declarations.upload import (
     DEFAULT_ENDPOINT,
@@ -291,18 +294,59 @@ def band_row(sha256: str, page: int, cut: BandCut) -> DeclarationBandRow:
     )
 
 
+#: A person's first name and surname.
+Name = tuple[str, str]
+
+
+def declarants(
+    store: BipDeclarationStore, due: list[DeclarationPages]
+) -> dict[tuple[str, int], tuple[Name, ...]]:
+    """Whose names no band of each due date page may show: the candidacies
+    the name read on the page is, and the one person the file's links name;
+    every candidacy the file was found for when neither tells (a council's
+    file whose page's name was not read)."""
+    wanted = {d.file.sha256 for d in due}
+    people = {p.key: p for p in store.candidacies()}
+    links: dict[str, list[tuple[str, bool]]] = {}
+    for link in store.links():
+        if link.sha256 in wanted and link.key in people:
+            links.setdefault(link.sha256, []).append((link.key, link.named))
+    read = {(c.sha256, c.page): c.name for c in store.crops() if c.sha256 in wanted}
+    names = {}
+    for d in due:
+        sha = d.file.sha256
+        whose = {
+            key: (people[key].first_name, people[key].last_name)
+            for key, _ in links.get(sha, [])
+        }
+        named = {whose[key] for key, by in links.get(sha, []) if by}
+        own = list(named) if len(named) == 1 else []
+        for page, _ in d.pages:
+            reading = read.get((sha, page), "")
+            matched = [
+                name
+                for name in whose.values()
+                if reading and name_matches(reading, *name)
+            ]
+            chosen = matched + own or list(whose.values())
+            names[(sha, page)] = tuple(dict.fromkeys(chosen))
+    return names
+
+
 def band_one(
-    job: tuple[str, DeclarationPages, dict[tuple[int, str], int]],
+    job: tuple[
+        str, DeclarationPages, dict[tuple[int, str], int], dict[int, tuple[Name, ...]]
+    ],
 ) -> tuple[str, dict[int, list[DeclarationBandRow]], str]:
     """Cut one file's bands: what the worker processes run. The file's sha256,
     each date page's bands, and a word on how it went."""
-    root, due, widen = job
+    root, due, widen, names = job
     sha = due.file.sha256
     started = time.monotonic()
     data = read_blob(Path(root), due.file)
     if data is None:
         return sha, {}, "no_file"
-    result = cut_bands(data, due.pages, _ocr or Ocr(), widen, due.starts)
+    result = cut_bands(data, due.pages, _ocr or Ocr(), widen, due.starts, names)
     rows = {
         page: [band_row(sha, page, cut) for cut in cuts]
         for page, cuts in result.bands.items()
@@ -400,7 +444,16 @@ def run_cut_employment(
     if not due:
         return 0
     deadline = time.monotonic() + max_minutes * 60 if max_minutes else None
-    jobs = [(str(root), d, widen.get(d.file.sha256, {})) for d in due]
+    names = declarants(store, due)
+    jobs = [
+        (
+            str(root),
+            d,
+            widen.get(d.file.sha256, {}),
+            {page: names[(d.file.sha256, page)] for page, _ in d.pages},
+        )
+        for d in due
+    ]
     statuses: Counter[str] = Counter()
     missing = 0
     stopped = False

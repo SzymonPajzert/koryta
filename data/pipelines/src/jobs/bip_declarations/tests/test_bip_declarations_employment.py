@@ -23,6 +23,7 @@ from jobs.bip_declarations.employment import (
     FileBands,
     Row,
     cut_bands,
+    holds_name,
     kinds_of,
     pack,
     printed,
@@ -195,6 +196,43 @@ def test_nothing_past_czesc_b(stopped, runs_on):
                 assert strip.page < page or (
                     strip.page == page and strip.bottom * 200 <= czesc_b * band.dpi
                 ), band.band
+
+
+def test_a_band_reading_the_declarant_s_name_is_kept_back(ocr):
+    # A sole trader's firm carries its owner's name.
+    drawn = employment_declaration(NAME, BORN, employer="PHU Jan Testowy - wlasciciel")
+
+    cut = bands(cut_bands(drawn.pdf(), [(0, 0)], ocr, names={0: [("Jan", "Testowy")]}))
+
+    employer = cut["employer"]
+    assert employer.status == "holds_name"
+    assert "never to be sent" in "; ".join(employer.notes)
+    assert employer.strips  # drawn and kept, for a person to look at
+    assert {band.status for name, band in cut.items() if name != "employer"} == {"cut"}
+
+
+def test_a_name_is_read_as_a_whole_word_folded():
+    names = [("Jan", "Testowy-Łąkowa")]
+
+    assert holds_name(["P.H.U. JAN KOWAL"], names)
+    assert holds_name(["Usługi Remontowe ŁĄKOWA s.c."], names)
+    assert holds_name(["x", "testowy"], names)
+    # Another word that starts or ends like one of them is not it.
+    assert not holds_name(["Szkola Podstawowa im. Jana Pawla II"], names)
+    assert not holds_name(["Testowa 5, Testowo"], names)
+    assert not holds_name(["Urzad Gminy Testowo"], ())
+
+
+def test_a_surname_is_read_run_into_other_letters_too():
+    names = [("Jan", "Testowy-Łąkowa")]
+
+    # Bold capitals read without their spaces; a firm with its owner's initials.
+    assert holds_name(["USLUGIBUDOWLANEJANTESTOWY"], names)
+    assert holds_name(["Komandytariusz spolki JTESTOWY sp. z o.o. sp.k."], names)
+    assert holds_name(["Te stowy"], names)
+    # A first name, or a surname too short to tell from a word, only whole.
+    assert not holds_name(["Janowiec, Lisowice"], [("Jan", "Lis")])
+    assert holds_name(["Jan Lis"], [("Jan", "Lis")])
 
 
 def test_a_handwritten_band_comes_out_at_300_dpi(ocr, stopped):

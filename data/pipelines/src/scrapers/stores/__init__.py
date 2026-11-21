@@ -1614,7 +1614,8 @@ class DeclarationBandRow:
     band: str
     version: int
     #: cut, or why there is no band: no_stop, no_title, no_birth_line,
-    #: no_caption, no_heading, empty, unreadable.
+    #: no_caption, no_heading, empty, unreadable; or holds_name, drawn but
+    #: reading the declarant's name. Only a band "cut" may be sent.
     status: str = "cut"
     #: How many captions past its own a recut runs the band.
     widen: int = 0
