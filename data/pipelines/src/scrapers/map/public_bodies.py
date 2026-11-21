@@ -21,8 +21,12 @@ not always the same:
    INSPEKTORAT NADZORU BUDOWLANEGO DLA MIASTA PRZEMYŚLA serves the city. A
    gminny unit in a town that shares its name with the gmina wiejska around it
    - GMINNY OŚRODEK POMOCY SPOŁECZNEJ W TARNOWIE - is that gmina's, as an urząd
-   gminy there is in `offices.py`. A Warsaw unit that names its dzielnica is
-   the dzielnica's, one that names only the city the city's.
+   gminy there is in `offices.py`. In Warsaw, a unit whose name says DZIELNICA
+   and which dzielnica - OŚRODEK SPORTU I REKREACJI M.ST. WARSZAWY W DZIELNICY
+   ŻOLIBORZ - is that dzielnica's, and else one that names the capital city -
+   MIASTA STOŁECZNEGO WARSZAWY, M.ST. WARSZAWY, W MIEŚCIE STOŁECZNYM
+   WARSZAWIE - the city's. "W Warszawie" alone states nothing: such a unit
+   stays by rule 3 on its seat, the dzielnica the catalogue gives as its gmina.
 2. **A powiat's unit in a city on powiat rights serves the land powiat whose
    starostwo stands there**: POWIATOWE CENTRUM POMOCY RODZINIE W PRZEMYŚLU is
    powiat przemyski's. Unless another unit of its kind in that city is that
@@ -414,11 +418,16 @@ def _code(form: str) -> str | None:
 #: W or DLA, since "IM. M. KOPERNIKA" is a patron's initial.
 _CAPITAL_SHORT = re.compile(r"\bM\.\s*ST\.?\s*")
 _CITY_SHORT = re.compile(r"\b(W|DLA) M\.\s*")
+#: The capital city written out in any case: "W MIEŚCIE STOŁECZNYM WARSZAWIE",
+#: "MIASTO STOŁECZNE WARSZAWA".
+_CAPITAL = re.compile(r"\bMI(?:ASTO|ASTA|ASTU|ASTEM|ESCIE) STOLECZN[A-Z]*")
 
 
 def _tokens(name: str) -> list[str]:
-    """The words of a name, uppercase and without diacritics."""
+    """The words of a name, uppercase and without diacritics, with the capital
+    city in whatever case and spelling as MIASTA STOLECZNEGO."""
     text = _CAPITAL_SHORT.sub("MIASTA STOLECZNEGO ", normalise(name))
+    text = _CAPITAL.sub("MIASTA STOLECZNEGO", text)
     text = _CITY_SHORT.sub(r"\1 MIASTA ", text)
     return re.findall(r"[A-Z0-9]+", text)
 
