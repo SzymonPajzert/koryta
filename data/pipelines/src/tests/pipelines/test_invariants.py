@@ -2509,16 +2509,32 @@ def declared_posts(edges, created_by_declarations) -> list[dict]:
     ]
 
 
+def declared_entries(edge: dict) -> list[dict]:
+    """The entries of an edge's `declared` map: what declarations say of the
+    post, one an agreed row (`declaredEntries` in
+    frontend/shared/declaredPosts.ts)."""
+    declared = edge.get("declared")
+    if not isinstance(declared, dict):
+        return []
+    return [entry for entry in declared.values() if isinstance(entry, dict)]
+
+
 def test_a_post_a_declaration_created_says_how_old_it_is(
     edges, created_by_declarations
 ):
-    """A post the declarations automation created carries `as_of`.
+    """A post the declarations automation created carries its entries
+    (`declared`) and `as_of`.
 
     A declaration names a post as held on the day it was made out, and gives
     no end; read off it, a post is as old as the latest declaration behind it,
     which is what `as_of` keeps and what a page dates the post by.
     `test_a_dated_edge_says_when_it_began` leaves an edge with `declared` out
     for that reason, so this is where an undated one has to have it.
+
+    And a created post with no entry is one nothing stands behind: withdrawing
+    an item soft-deletes a post it created that no other entry holds, so a
+    live one is a write that dropped the map, or a withdrawal that left the
+    post behind.
 
     Stated of the posts the automation created, dated or not, and not of every
     undated edge with `declared`: an edge another writer created keeps its own
@@ -2530,12 +2546,13 @@ def test_a_post_a_declaration_created_says_how_old_it_is(
     ageless = [
         edge["id"]
         for edge in declared_posts(edges, created_by_declarations)
-        if edge.get("declared") and not edge.get("as_of")
+        if not declared_entries(edge) or not edge.get("as_of")
     ]
 
     assert not ageless, (
         f"{len(ageless)} posts the declarations automation created say nothing "
-        f"of how old they are (`as_of`): {sample(ageless)}"
+        f"of what declared them (`declared`) or how old they are (`as_of`): "
+        f"{sample(ageless)}"
     )
 
 
@@ -2573,14 +2590,10 @@ def role_families(edge) -> frozenset[str]:
     else its folded name, a family of its own.
     """
     roles = read_roles()
-    declared = edge.get("declared")
-    entries = declared.values() if isinstance(declared, dict) else ()
     chips = {
         chip.family
-        for entry in entries
-        if isinstance(entry, dict)
-        and (chip := roles.chip(entry.get("roleId"))) is not None
-        and chip.family
+        for entry in declared_entries(edge)
+        if (chip := roles.chip(entry.get("roleId"))) is not None and chip.family
     }
     if chips:
         return frozenset(chips)
@@ -2629,9 +2642,7 @@ def test_a_declared_post_is_not_a_second_copy_of_one_stored(
     twins: dict[tuple, str | None] = {}
     for post in declared_posts(edges, created_by_declarations):
         days = {
-            spell_day(entry.get("as_of"), end=True)
-            for entry in (post.get("declared") or {}).values()
-            if isinstance(entry, dict)
+            spell_day(entry.get("as_of"), end=True) for entry in declared_entries(post)
         } | {spell_day(post.get("as_of"), end=True)}
         days.discard(None)
         families = role_families(post)
