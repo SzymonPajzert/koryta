@@ -783,23 +783,25 @@ def title_top(scan: PageScan, stop: float) -> float | None:
 def find_header(scan: PageScan, birth: Band | None, widen: int) -> Found:
     """From the title to "Uwaga:" (or the notes it heads), or, a caption
     wider, to "CZĘŚĆ A"; never down to the name or the birth date. From the
-    page's first ink where the title was not read."""
+    page's first ink where the title was not read; to "Uwaga:" still where a
+    wider one cannot read "CZĘŚĆ A"."""
     h = scan.h
     guards = [m.top for m in scan.marks if m.kinds & {"czesc_a", "name"}]
     if birth is not None:
         guards.append(birth.label[1])
     guard = min(guards, default=float(scan.height))
-    stops = [] if widen else [m for m in scan.marks if m.kinds & {"uwaga", "notes"}]
-    stops = [m for m in stops if m.top < guard] or [
-        m for m in scan.marks if "czesc_a" in m.kinds and m.top <= guard
-    ]
+    near = [m for m in scan.marks if m.kinds & {"uwaga", "notes"} and m.top < guard]
+    far = [m for m in scan.marks if "czesc_a" in m.kinds and m.top <= guard]
+    notes = []
+    if widen and not far and near:
+        notes.append("„CZĘŚĆ A” not read: one caption wider is not wider")
+    stops = far if widen and far else near or far
     if not stops:
-        return Found("no_stop")
+        return Found("no_stop", notes=notes)
     stop = min(stops, key=lambda m: m.top)
     above = [b for b in scan.boxes if b[3] < stop.top + 0.3 * h and b[1] < stop.top]
     if not above:
-        return Found("no_title")
-    notes = []
+        return Found("no_title", notes=notes)
     title = title_top(scan, stop.top)
     if title is not None:
         top = over(scan, title)

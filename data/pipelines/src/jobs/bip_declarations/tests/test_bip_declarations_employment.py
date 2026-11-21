@@ -316,6 +316,18 @@ def test_a_recut_runs_a_band_one_caption_further(ocr, stopped):
     assert vii.strips[-1].bottom <= drawn.at["czesc_b"][1]
 
 
+def test_a_header_recut_where_czesc_a_is_not_read_ends_where_it_did(ocr):
+    drawn = employment_declaration(NAME, BORN, czesc_a=False)
+
+    cut = bands(cut_bands(drawn.pdf(), [(0, 0)], ocr, {(0, "header"): 1}))
+
+    header = cut["header"]
+    assert (header.status, header.widen) == ("cut", 1)
+    assert any("„CZĘŚĆ A” not read" in note for note in header.notes)
+    [strip] = header.strips
+    assert drawn.at["dnia"][2] < strip.bottom <= drawn.at["uwaga"][1]
+
+
 def test_a_page_with_no_date_line_gives_no_employer_band(ocr):
     drawn = employment_declaration(NAME, BORN)
 

@@ -284,6 +284,7 @@ def _part_a(
     signed: bool = False,
     on_birth_line: bool = False,
     caption_runs_on: bool = False,
+    czesc_a: bool = True,
 ) -> None:
     page = _Page(drawn)
     if signed:
@@ -295,7 +296,8 @@ def _part_a(
     page.text(375, "(miejscowosc)", size=20, x=1080)
     page.text(450, "Uwaga:", size=26, name="uwaga")
     page.lines(495, NOTES, size=22)
-    page.text(930, "CZESC A", size=30, x=760, name="czesc_a")
+    if czesc_a:
+        page.text(930, "CZESC A", size=30, x=760, name="czesc_a")
     page.text(1010, "Ja, nizej podpisany(a), " + "." * 70, size=30)
     page.text(980, name, size=44, x=620, name="name")
     page.text(1060, "(imiona i nazwisko oraz nazwisko rodowe)", size=22, x=560)
@@ -369,6 +371,7 @@ def employment_declaration(
     signed: bool = False,
     on_birth_line: bool = False,
     caption_runs_on: bool = False,
+    czesc_a: bool = True,
 ) -> Drawn:
     """Part A, then VII and VIII on the next page: VIII running onto a third
     page over IX and X when `viii_runs_on`, else stopped by "CZĘŚĆ B" right
@@ -377,7 +380,8 @@ def employment_declaration(
     electronic signature's block beside it, and another beside VII.
     `on_birth_line` writes the employer at the end of the birth date's line,
     leaving its own dotted line empty. `caption_runs_on` prints the caption
-    and "po zapoznaniu się z przepisami" on one line."""
+    and "po zapoznaniu się z przepisami" on one line. Without `czesc_a` the
+    form prints no "CZĘŚĆ A" over the name."""
     drawn = Drawn()
     _part_a(
         drawn,
@@ -388,6 +392,7 @@ def employment_declaration(
         signed=signed,
         on_birth_line=on_birth_line,
         caption_runs_on=caption_runs_on,
+        czesc_a=czesc_a,
     )
     page = _Page(drawn)
     y = page.text(150, "III.", size=28)
