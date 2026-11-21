@@ -66,7 +66,7 @@ export const QA_ITEMS: QaItem[] = [
       "Po wybraniu regionu w „Dodaj powiązanie” jest teraz, obok kandydowania, „pracował/a”. Podpowiadamy urząd tego regionu z numerem REGON - przy powiecie także urzędy jego gmin - a jeśli nie ma go jeszcze w bazie, dodajemy go jako propozycję razem z powiązaniem.",
     steps: [
       "Na stronie osoby kliknij „Dodaj powiązanie”, wyszukaj „Gmina Wejherowo” i wybierz „pracował/a” - ma się pokazać Urząd Miejski w Wejherowie z numerem REGON.",
-      "Wpisz stanowisko, np. „zastępca prezydenta”, i zapisz - po odświeżeniu urząd ma być na liście powiązań tej osoby.",
+      "Wpisz stanowisko, np. „zastępca prezydenta”, i zapisz - po odświeżeniu urząd ma być na liście powiązań tej osoby, z etykietą „Urząd”.",
       "Zamiast gminy wybierz „Powiat wejherowski” - pod starostwem mają być urzędy gmin tego powiatu, podpisane nazwą gminy.",
     ],
     area: "contributor",

@@ -20,8 +20,14 @@
 </template>
 
 <script lang="ts" setup>
-import { mdiBankOutline, mdiDomain, mdiHelpCircleOutline } from "@mdi/js";
+import {
+  mdiBankOutline,
+  mdiDomain,
+  mdiHelpCircleOutline,
+  mdiOfficeBuildingOutline,
+} from "@mdi/js";
 import { publicSectorKnown, type Company } from "~~/shared/model";
+import { isOfficeName } from "~~/shared/offices";
 
 const props = defineProps<{
   /** Takes the whole company rather than the flags, so a caller holding
@@ -40,6 +46,17 @@ const props = defineProps<{
 // register's behalf.
 const chip = computed(() => {
   if (!props.company) return undefined;
+
+  // Public by definition, and not a company: said as what it is rather than
+  // with the badge a publicly owned company gets (Szymon, 2026-11-11).
+  if (isOfficeName(props.company.name)) {
+    return {
+      label: "Urząd",
+      color: "primary",
+      icon: mdiOfficeBuildingOutline,
+      tooltip: "Urząd administracji publicznej.",
+    };
+  }
 
   if (props.company.isPublic) {
     return {

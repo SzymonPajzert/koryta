@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   gminaLabel,
   indexOffices,
+  isOfficeName,
   officeChoices,
   officeProposal,
   officesFor,
@@ -236,5 +237,17 @@ describe("officeProposal", () => {
     });
 
     expect(proposal).not.toHaveProperty("nipNumber");
+  });
+});
+
+describe("isOfficeName", () => {
+  it("reads whole words only", () => {
+    expect(isOfficeName("URZĄD MIASTA OPOLA")).toBe(true);
+    expect(isOfficeName("Starostwo Powiatowe w Wejherowie")).toBe(true);
+    // A unit named after the urząd it serves is not the urząd.
+    expect(isOfficeName("Centrum Usług Wspólnych Urzędu Miasta")).toBe(false);
+    expect(isOfficeName("Urzędnicza Spółdzielnia Mieszkaniowa")).toBe(false);
+    expect(isOfficeName("ENERGA SPÓŁKA AKCYJNA")).toBe(false);
+    expect(isOfficeName(undefined)).toBe(false);
   });
 });
