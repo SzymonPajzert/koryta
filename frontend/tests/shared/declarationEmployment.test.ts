@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   DECLARED_INCOME_SHOWN,
@@ -35,6 +37,15 @@ const REGON_LOCAL = "12345678500002";
 
 const STAROSTWO: EmployerRef = { regon: REGON_A };
 const COMPANY: EmployerRef = { place: "fxCompany0001" };
+
+/** What the pipeline's `upload --employment` sends, as its own test writes it
+ * (test_bip_declarations_employment_upload.py beside it): one file both sides
+ * check, so the job and the schema cannot drift apart. */
+const UPLOAD_FILE =
+  "data/pipelines/src/jobs/bip_declarations/tests/employment_upload.json";
+const PIPELINE_UPLOAD = existsSync(UPLOAD_FILE)
+  ? resolve(UPLOAD_FILE)
+  : resolve("..", UPLOAD_FILE);
 
 type Row = NonNullable<EmploymentVote["rows"]>[number];
 
@@ -750,6 +761,17 @@ describe("the upload", () => {
         items: Array.from({ length: 26 }, () => item),
       }).success,
     ).toBe(false);
+  });
+
+  it("takes what the pipeline's upload sends, as it sends it", () => {
+    const sent: unknown = JSON.parse(readFileSync(PIPELINE_UPLOAD, "utf8"));
+
+    const parsed = employmentIngestSchema.safeParse(sent);
+
+    expect(parsed.success ? [] : parsed.error.issues).toEqual([]);
+    // Nothing defaulted, dropped or rewritten: the job says every field.
+    expect(parsed.data).toEqual(sent);
+    expect(parsed.data!.items.map((each) => each.later)).toEqual([false, true]);
   });
 });
 
