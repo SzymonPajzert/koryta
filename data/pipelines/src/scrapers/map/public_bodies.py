@@ -34,15 +34,20 @@ The urzędy keep the region `offices.py` gives each of them, and its name, so
 that a place made from either table is the same place under the same name.
 `rule` says which of these decided `teryt`.
 
-`krs` is the row's own number, else the register's for its REGON
-(`KRSRegisterEntries`): a company the catalogue files without one is still the
-company the site may have a page for. `legal_form` and `ownership` are the GUS
-codes the catalogue prints before each form's name - "117" for a spółka z o.o.,
-"113" for a JST's property, 2xx for private - which is what tells a body that
-belongs in KRS, or in private hands, from one a place can be made for. A local
-unit - a REGON of fourteen digits, the first nine its parent's - is part of its
-parent, so it takes the parent's number, form and ownership where it has none:
-a company's branch in another town is still the company.
+`krs` is the live number the register (`KRSRegisterEntries`) gives the row's
+REGON, else the row's own: a company the catalogue files without one is still
+the company the site may have a page for, and the catalogue still gives some
+companies the number they had before a transformation, which the register has
+struck off. Where the register gives the REGON two numbers, the row keeps its
+own if it is one of them and has none if not, for an admin to place.
+
+`legal_form` and `ownership` are the GUS codes the catalogue prints before each
+form's name - "117" for a spółka z o.o., "113" for a JST's property, 2xx for
+private - which is what tells a body that belongs in KRS, or in private hands,
+from one a place can be made for. A local unit - a REGON of fourteen digits,
+the first nine its parent's - is part of its parent, so it takes the parent's
+number, form and ownership where it has none: a company's branch in another
+town is still the company.
 
 Names are in normal case by `offices.py`'s rule, with the town after a name
 that does not name it, as `display_name` does for a KRS company. Without the
@@ -161,10 +166,10 @@ class PublicBodies(Pipeline):
 def public_bodies(
     catalogue: pd.DataFrame,
     terc: pd.DataFrame,
-    register: dict[str, str] | None = None,
+    register: dict[str, frozenset[str]] | None = None,
 ) -> pd.DataFrame:
-    """The table, from the catalogue, TERC, and the register's KRS numbers by
-    REGON (`krs_by_regon`)."""
+    """The table, from the catalogue, TERC, and the live KRS numbers the
+    register gives each REGON (`krs_by_regon`)."""
     places = _Places(Units(terc))
     offices = _offices(catalogue, terc)
     bodies = [_Body.of(entry, places) for entry in _in_scope(catalogue)]
@@ -177,13 +182,13 @@ def public_bodies(
     return pd.DataFrame(rows, columns=COLUMNS).sort_values("regon", ignore_index=True)
 
 
-def krs_by_regon(ledger: pd.DataFrame | None) -> dict[str, str]:
-    """The register's KRS number for each REGON it gives exactly one.
+def krs_by_regon(ledger: pd.DataFrame | None) -> dict[str, frozenset[str]]:
+    """The live KRS numbers the register gives each REGON: one for a company,
+    two where it was registered again.
 
     The register writes a company's REGON as fourteen digits ending in zeros,
     the catalogue as nine, and a local unit's as fourteen of its own;
-    `_entity_regon` makes them meet. A REGON two numbers share - a company
-    registered again - says neither.
+    `_entity_regon` makes them meet.
     """
     if ledger is None or ledger.empty:
         return {}
@@ -192,7 +197,24 @@ def krs_by_regon(ledger: pd.DataFrame | None) -> dict[str, str]:
     for regon, krs in zip(answered["regon"], padded_krs(answered["krs"])):
         if isinstance(regon, str) and regon.strip() and krs:
             numbers[_entity_regon(regon)].add(krs)
-    return {regon: found.pop() for regon, found in numbers.items() if len(found) == 1}
+    return {regon: frozenset(found) for regon, found in numbers.items()}
+
+
+def _krs_number(own: str | None, live: frozenset[str]) -> str | None:
+    """A body's KRS number, from the catalogue's and the live ones the register
+    gives its REGON.
+
+    The register's one number wins: the catalogue still names companies the
+    register struck off when they were transformed, whose places a post must
+    not go to. The catalogue's stands where the register does not know the
+    REGON, or lists it among several. A REGON the register gives several other
+    numbers has none rather than a wrong one, for an admin to place.
+    """
+    if len(live) == 1:
+        return next(iter(live))
+    if not live or own in live:
+        return own
+    return None
 
 
 def _entity_regon(regon: str) -> str:
@@ -348,14 +370,17 @@ class _Body:
             if stated:
                 self.teryt, self.rule = stated, RULE_NAME
 
-    def row(self, register: dict[str, str]) -> dict[str, str | None]:
+    def row(self, register: dict[str, frozenset[str]]) -> dict[str, str | None]:
         entry = self.entry
         return {
             "regon": self.regon,
             "name": self.office_name or self.place_name(),
             "kind": self.kind,
             "nip": entry["NIP"].strip() or None,
-            "krs": _krs(entry["KRS"]) or register.get(_entity_regon(self.regon)),
+            "krs": _krs_number(
+                _krs(entry["KRS"]),
+                register.get(_entity_regon(self.regon), frozenset()),
+            ),
             "legal_form": _code(entry["Forma prawna"]),
             "ownership": _code(entry["Forma własności"]),
             "teryt": self.teryt,

@@ -167,7 +167,7 @@ def records(frame: pd.DataFrame) -> list[dict]:
     ]
 
 
-def table(*rows: list[str | None], register: dict[str, str] | None = None):
+def table(*rows: list[str | None], register: dict[str, frozenset[str]] | None = None):
     """The table for these catalogue rows, by name."""
     catalogue = pd.DataFrame(list(rows), columns=COLUMNS)
     bodies = public_bodies(catalogue, terc(), register)
@@ -449,15 +449,21 @@ def test_the_gmina_and_the_powiat_themselves_are_left_out():
     assert list(found) == ["Szkoła Podstawowa nr 4 (Słupsk)"]
 
 
-def test_the_rows_krs_number_is_kept_and_the_register_fills_in_a_missing_one():
+def test_the_registers_live_number_wins_over_the_catalogues():
     ledger = pd.DataFrame(
         [
             # The register writes a REGON as fourteen digits.
             {"krs": "123456", "status": STATUS_OK, "regon": "22000004800000"},
+            # Tarnogórski OSiR: the catalogue's 0000042676 was struck off in
+            # 2023 when the company was transformed, and this is its number now.
             {"krs": "1033744", "status": STATUS_OK, "regon": "00350398300000"},
             # Registered twice under one REGON: neither is said.
             {"krs": "0000000111", "status": STATUS_OK, "regon": "220000054"},
             {"krs": "0000000222", "status": STATUS_OK, "regon": "220000054"},
+            {"krs": "0000000444", "status": STATUS_OK, "regon": "220000077"},
+            {"krs": "0000000555", "status": STATUS_OK, "regon": "220000077"},
+            {"krs": "0000000666", "status": STATUS_OK, "regon": "220000083"},
+            {"krs": "0000000777", "status": STATUS_OK, "regon": "220000083"},
             # Struck off: the register no longer says.
             {"krs": "0000000333", "status": STATUS_STRUCK_OFF, "regon": "220000060"},
         ]
@@ -492,8 +498,38 @@ def test_the_rows_krs_number_is_kept_and_the_register_fills_in_a_missing_one():
             IN_SLUPSK,
             form=SPOLKA,
         ),
+        # The catalogue's number is one of the two the register gives.
+        body(
+            "CIEPŁOWNIA SŁUPSK SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+            "zakłady energii i energetyki cieplnej",
+            "220000077",
+            IN_SLUPSK,
+            krs="0000000555",
+            form=SPOLKA,
+        ),
+        # The register gives two others and cannot say which: none.
+        body(
+            "TRANSPORT SŁUPSK SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+            "zakłady komunikacji",
+            "220000083",
+            IN_SLUPSK,
+            krs="0000000888",
+            form=SPOLKA,
+        ),
+        # A REGON the register does not know keeps the catalogue's number.
+        body(
+            "PORT SŁUPSK SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+            "spółki",
+            "220000090",
+            IN_SLUPSK,
+            krs="0000000999",
+            form=SPOLKA,
+        ),
         register=krs_by_regon(ledger),
     )
+
+    def krs(name: str) -> str | None:
+        return found[f"{name} spółka z ograniczoną odpowiedzialnością"]["krs"]
 
     municipal = found["Zakład Gospodarki Komunalnej sp. z o.o. (Słupsk)"]
     assert (municipal["krs"], municipal["legal_form"], municipal["ownership"]) == (
@@ -501,17 +537,12 @@ def test_the_rows_krs_number_is_kept_and_the_register_fills_in_a_missing_one():
         "117",
         "113",
     )
-    assert (
-        found["Słupski Ośrodek Sportu spółka z ograniczoną odpowiedzialnością"]["krs"]
-        == "0000042676"
-    )
-    assert (
-        found["Wodociągi Słupsk spółka z ograniczoną odpowiedzialnością"]["krs"] is None
-    )
-    assert (
-        found["Energetyka Słupsk spółka z ograniczoną odpowiedzialnością"]["krs"]
-        is None
-    )
+    assert krs("Słupski Ośrodek Sportu") == "0001033744"
+    assert krs("Wodociągi Słupsk") is None
+    assert krs("Energetyka Słupsk") is None
+    assert krs("Ciepłownia Słupsk") == "0000000555"
+    assert krs("Transport Słupsk") is None
+    assert krs("Port Słupsk") == "0000000999"
 
 
 def test_a_local_unit_is_part_of_its_parents_company():
