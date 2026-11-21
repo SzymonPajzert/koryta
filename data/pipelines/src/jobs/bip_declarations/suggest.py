@@ -26,9 +26,10 @@ add it themselves. A handwritten band gets none.
    Where bodies share a name, the one nearest the declarant's unit is taken.
 3. A title starts a word: „zastępca dyrektora”, „Z-ca Naczelnika Wydziału”,
    „Główny Specjalista”. Its family is the one declarationEmploymentRoles.json
-   folds it into, as the site does (`roleFamilyOf`), and its chip the one of
-   that family whose label it names; any staff title is a „pracownik”. Titles
-   OCR glued together are split first: „ZASTĘPCAWÓJTAGMINY”.
+   folds it into, as the site does (`roleFamilyOf`; read through
+   `util.declaration_roles`), and its chip the one of that family whose label
+   it names; any staff title is a „pracownik”. Titles OCR glued together are
+   split first: „ZASTĘPCAWÓJTAGMINY”.
 4. Each body takes the first title after it, before the next body; where a
    mandate („Radny Rady Powiatu”), a contract or a pension comes first, or a
    title held at another kind of office („Członek Zarządu Powiatu” after a
@@ -50,14 +51,11 @@ mandate itself never suggested.
 
 from __future__ import annotations
 
-import json
 import re
 import unicodedata
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from functools import cache
-from pathlib import Path
 from typing import Any, cast
 
 from scrapers.map.offices import (
@@ -68,15 +66,13 @@ from scrapers.map.offices import (
 )
 from scrapers.map.public_bodies import PublicBodies
 from scrapers.stores import Context
-from util.polish import normalize_person_name
-
-#: The role chips, as the site reads them (shared/declarationEmployment.ts).
-ROLES_FILE = (
-    Path(__file__).resolve().parents[5]
-    / "frontend"
-    / "shared"
-    / "declarationEmploymentRoles.json"
+from util.declaration_roles import (
+    ROLES_FILE,  # noqa: F401 - the upload's tests find the site's files by it
+    RoleChip,
+    Roles,
+    read_roles,
 )
+from util.polish import normalize_person_name
 
 #: `MAX_SUGGESTIONS` in shared/declarationEmployment.ts.
 MAX_SUGGESTIONS = 4
@@ -171,94 +167,30 @@ def valid_regon(regon: str) -> bool:
 # -- role chips --------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class RoleChip:
-    id: str
-    label: str
-    #: elected, executive, managerial or staff; None for „Inne”.
-    kind: str | None
-    family: str | None
+def read_title(roles: Roles, title: str | None) -> tuple[str | None, RoleChip | None]:
+    """A title's family, as the roles file folds it (`Roles.family`), and its
+    chip: the one of that family whose label the title names, else the
+    family's only chip, else for a staff title the pracownik. No chip where
+    none fits the family, as for a „podsekretarz stanu”."""
+    family = roles.family(title)
+    if family is None:
+        return None, None
+    chips = [chip for chip in roles.chips if chip.family == family]
+    folded = roles.fold(title)
+    forms = [*_deputy_forms(folded), _without_deputy(folded)]
+    for anywhere in (False, True):
+        for form in forms:
+            found = _named_chip(chips, form.split(), anywhere)
+            if found:
+                return family, found
+    if len(chips) == 1:
+        return family, chips[0]
+    employee = roles.chip(EMPLOYEE_ROLE)
+    return family, employee if employee and employee.family == family else None
 
 
-@dataclass(frozen=True)
-class Roles:
-    """The chips and the families titles fold into, as
-    declarationEmploymentRoles.json has them."""
-
-    chips: tuple[RoleChip, ...]
-    prefixes: tuple[re.Pattern[str], ...]
-    families: tuple[tuple[str, tuple[re.Pattern[str], ...]], ...]
-    #: The kinds of institution each chip is offered at.
-    offered_at: Mapping[str, frozenset[str]]
-
-    def chip(self, chip_id: str) -> RoleChip | None:
-        return next((chip for chip in self.chips if chip.id == chip_id), None)
-
-    def family(self, title: str | None) -> str | None:
-        """`roleFamilyOf`: the family a title folds into; None for a mandate,
-        a contract or a bare „członek”."""
-        folded = self._cut(title)
-        if not folded:
-            return None
-        return next(
-            (
-                family
-                for family, patterns in self.families
-                if any(pattern.search(folded) for pattern in patterns)
-            ),
-            None,
-        )
-
-    def read(self, title: str | None) -> tuple[str | None, RoleChip | None]:
-        """A title's family, and its chip: the one of that family whose label
-        the title names, else the family's only chip, else for a staff title
-        the pracownik. No chip where none fits the family, as for a
-        „podsekretarz stanu”."""
-        family = self.family(title)
-        if family is None:
-            return None, None
-        chips = [chip for chip in self.chips if chip.family == family]
-        folded = self._cut(title)
-        forms = [*_deputy_forms(folded), _without_deputy(folded)]
-        for anywhere in (False, True):
-            for form in forms:
-                found = _named_chip(chips, form.split(), anywhere)
-                if found:
-                    return family, found
-        if len(chips) == 1:
-            return family, chips[0]
-        employee = self.chip(EMPLOYEE_ROLE)
-        return family, employee if employee and employee.family == family else None
-
-    def _cut(self, title: str | None) -> str:
-        folded = normalize_person_name(title)
-        for prefix in self.prefixes:
-            folded = prefix.sub("", folded, count=1)
-        return folded
-
-
-@cache
-def read_roles(path: Path = ROLES_FILE) -> Roles:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    offered: dict[str, set[str]] = defaultdict(set)
-    for institution, ids in data["institutions"].items():
-        for chip_id in ids:
-            offered[chip_id].add(institution)
-    return Roles(
-        chips=tuple(
-            RoleChip(role["id"], role["label"], role["kind"], role["family"])
-            for role in data["roles"]
-        ),
-        prefixes=tuple(re.compile(prefix) for prefix in data["prefixes"]),
-        families=tuple(
-            (family["id"], tuple(re.compile(p) for p in family["patterns"]))
-            for family in data["families"]
-        ),
-        offered_at={chip: frozenset(kinds) for chip, kinds in offered.items()},
-    )
-
-
-_DEPUTY = re.compile(r"^(zastepc\w*|z ca|zca) ")
+#: A deputy, as the roles file writes one: „zastępca”, „Z-ca”, „Z-cy”.
+_DEPUTY = re.compile(r"^(zastepc\w*|z ?c[ay]) ")
 
 
 def _deputy_forms(folded: str) -> list[str]:
@@ -1022,8 +954,6 @@ _TITLE_BEFORE = 3
 #: Wójta”, „funkcja - radny”. Within an item, „Kancelaria Prezydenta” holds no
 #: prezydent.
 _LEADS_INTO = ("stanowisk", "funkcj", "jako", "zatrudnion")
-#: „Z-cy Dyrektora” is the „Z-ca” of the chips' patterns, in the genitive.
-_DEPUTY_GENITIVE = re.compile(r"^(z ?)cy\b")
 
 
 @dataclass
@@ -1057,8 +987,8 @@ def _titles(band: _Band, roles: Roles, bodies: list[_Mention]) -> list[_Mention]
             word += 1
             continue
         segment = band.title(word)
-        phrase = _DEPUTY_GENITIVE.sub(r"\1ca", " ".join(segment))
-        family, chip = roles.read(phrase)
+        phrase = " ".join(segment)
+        family, chip = read_title(roles, phrase)
         after_post = word > 0 and band.words[word - 1].text.startswith("stanowisk")
         what = (
             # „na stanowisku nadleśniczego”: a title, if not one a chip names.
@@ -1189,8 +1119,8 @@ def _offices_of(roles: Roles, title: _Mention) -> set[str]:
 def _held_at(roles: Roles, title: _Mention, kind: str) -> bool:
     """Whether a title can be held at a body of that kind: a wójt only at an
     urząd, a „członek zarządu powiatu” only at a starostwo, and an executive
-    chip the card offers at offices alone (a doradca, a sekretarz) only at
-    one: a „doradca zawodowy” at a PUP is staff, not the wojewoda's adviser."""
+    chip the roles file offers at offices alone only at one: a school's
+    „sekretarz” is not a gmina's."""
     offices = _offices_of(roles, title)
     chip = title.chip
     if not offices and chip is not None and chip.kind == "executive":
