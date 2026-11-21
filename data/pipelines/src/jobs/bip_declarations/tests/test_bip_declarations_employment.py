@@ -17,7 +17,7 @@ import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
-from jobs.bip_declarations.cutter import LONG_SIDE, MAX_PNG_BYTES, Ocr
+from jobs.bip_declarations.cutter import LONG_SIDE, MAX_PNG_BYTES, Ocr, OcrLine, bounds
 from jobs.bip_declarations.employment import (
     NUMERAL,
     BandCut,
@@ -28,12 +28,15 @@ from jobs.bip_declarations.employment import (
     kinds_of,
     pack,
     printed,
+    signature_blocks,
     squash,
     text_lines,
 )
 from jobs.bip_declarations.reading import date_in, dnia_in, stan_na_in
 from jobs.bip_declarations.tests.synthetic_declarations import (
+    HEIGHT,
     SIGNATURE_X,
+    WIDTH,
     Drawn,
     council_file,
     employment_declaration,
@@ -150,6 +153,40 @@ def test_no_band_shows_an_electronic_signature_s_block(ocr, signed):
             beside += 1
             assert image[a:b, round(SIGNATURE_X * scale) :].min() >= 245, name
         assert beside, name
+
+
+def line(text: str, box: tuple[int, int, int, int]) -> OcrLine:
+    x0, y0, x1, y1 = box
+    return {
+        "box": [[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
+        "text": text,
+        "score": 0.99,
+        "words": None,
+    }
+
+
+def test_a_signature_line_across_the_page_takes_no_paragraph_with_it():
+    # A signing service's footer under section VIII's lines, set close.
+    body = [
+        line(
+            f"Dochod z tytulu umowy zlecenia nr {i}: 1 000,00 zl",
+            (140, y, 1500, y + 30),
+        )
+        for i, y in enumerate(range(1500, 1900, 40))
+    ]
+    footer = line(
+        "Dokument podpisany elektronicznie przez Jan Testowy dnia 24.04.2025",
+        (140, 1900, 1520, 1930),
+    )
+    lines = [*body, footer]
+    boxes = [bounds(each["box"]) for each in lines]
+    paper = np.full((HEIGHT, WIDTH), 250, dtype=np.uint8)
+
+    [block] = signature_blocks(lines, boxes, paper, 36.0)
+
+    assert block[1] <= boxes[-1][1] and block[3] >= boxes[-1][3]
+    held = [box for box in boxes[:-1] if (box[1] + box[3]) / 2 >= block[1]]
+    assert held == []
 
 
 def test_vii_starts_at_its_own_heading_not_at_section_iii(stopped):
