@@ -77,6 +77,13 @@ REQUEST_INTERVAL = 0.5
 #: a second. Waiting them out was more than half of one run's crawl.
 CRAWL_TIMEOUT = 10.0
 
+#: How every odpis served starts: 300 of 300 on file did on 2026-11-21.
+PDF_MAGIC = b"%PDF-"
+
+#: The title of the page the ministry serves with HTTP 200, in place of every
+#: answer, while its systems are down for maintenance.
+MAINTENANCE_PAGE = b"Przerwa techniczna"
+
 # Constants of the token generator, read off TokenEncoderService in the bundle.
 # The positions are arbitrary and have no structure to recover -- they are a
 # lookup table there and they are a lookup table here.
@@ -388,6 +395,9 @@ def fetch_odpis_pdf(
         entries and so carries everybody who has ever sat on the board;
         ``False`` for the *odpis aktualny*, which carries only those sitting
         now.
+
+    A 200 that is not a PDF raises `OdpisUnavailable` with status 200: it says
+    nothing about the company, and the ministry's maintenance page is one.
     """
     endpoint = "OdpisPelny/pdf" if full else "OdpisAktualny/pdf"
     encrypted = encrypt_krs(krs)
@@ -398,13 +408,25 @@ def fetch_odpis_pdf(
         timeout=timeout,
     )
     if response.status_code == 200:
-        return response.content
+        content = response.content
+        if content and not content.startswith(PDF_MAGIC):
+            raise OdpisUnavailable(
+                f"KRS {krs} register {register}: {not_a_pdf(content)}", status=200
+            )
+        return content
     if response.status_code in (400, 404):
         return None
     raise OdpisUnavailable(
         f"KRS {krs} register {register}: HTTP {response.status_code}",
         status=response.status_code,
     )
+
+
+def not_a_pdf(body: bytes) -> str:
+    """What a 200 that is not a PDF held, for the run's errors."""
+    if MAINTENANCE_PAGE in body:
+        return "HTTP 200 with the ministry's maintenance page (Przerwa techniczna)"
+    return f"HTTP 200 with {len(body):,} bytes that are not a PDF: {body[:40]!r}"
 
 
 def fetch_odpis_pdf_either(
