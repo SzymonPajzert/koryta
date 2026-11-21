@@ -24,7 +24,9 @@ signature's block ("PODPIS ZAUFANY", the signer's name, "Dokument podpisany
 elektronicznie") is painted white on every page a band is drawn from, and its
 lines are not read. A band whose lines read the declarant's first name or
 surname anyway, as a sole trader's firm on the employer's line does, is kept
-as `holds_name` and never sent; no word of it is masked.
+as `holds_name` and never sent; no word of it is masked. So is a band, as
+`holds_address`, whose surely read lines give a street address or a postal
+code, as that firm's address does.
 
 A band runs from its printed caption to the next one, read by RapidOCR with a
 few letters wrong, and on across a page break: a piece of each page, in order,
@@ -182,6 +184,15 @@ NEXT_DECLARATION = frozenset({"czesc_a", "name"})
 STAMP = re.compile(
     r"wp[l1ti|]?y[nw]|\bz\s?up\b|www\.|podpis(?!an)|kancelaria\s*og|\bl\.?\s?dz\b"
 )
+#: A street address in folded text: "ul.", "al.", "os." or "pl." and a name
+#: with its number ("ul. Polna 12a", "al. 3 Maja 5/7", "ul.Polna12" as OCR
+#: reads bold print), not a web address's ".pl".
+STREET = re.compile(
+    r"(?<![a-z0-9.])(?:ul|al|os|pl)\.\s*(?:\d{1,2}\s*)?[a-z]{2}[a-z.' -]{0,40}?\s*"
+    r"\d{1,4}(?!\d)"
+)
+#: A postal code, "00-950", not a day ("24-04-2025") or years ("2019-2024").
+POSTAL_CODE = re.compile(r"(?<!\d)\d{2}\s?[-–—]\s?\d{3}(?!\d)")
 #: Print a band's text leaves out when a line says nothing more.
 PRINTED: dict[str, tuple[str, ...]] = {
     "header": (),
@@ -653,8 +664,8 @@ class BandCut:
 
     band: str
     #: cut, or why not: no_stop, no_title, no_birth_line, no_caption,
-    #: no_heading, empty, unreadable; or holds_name, drawn but reading the
-    #: declarant's name, so never to be sent.
+    #: no_heading, empty, unreadable; or holds_name and holds_address, drawn
+    #: but reading the declarant's name or an address, so never to be sent.
     status: str = "cut"
     widen: int = 0
     dpi: int = 0
@@ -1188,6 +1199,13 @@ def holds_name(texts: Iterable[str], people: Iterable[tuple[str, str]]) -> bool:
     return False
 
 
+def holds_address(texts: Iterable[str]) -> bool:
+    """Whether lines read a street address or a postal code: the lines one
+    after another, as an address runs on to the next line."""
+    folded = fold(" ".join(texts))
+    return bool(STREET.search(folded) or POSTAL_CODE.search(folded))
+
+
 def header_dates(cut: BandCut, rows: list[Row]) -> None:
     """The header's "dnia" date: the date on the line over "(miejscowość)",
     else one after a "dnia"; and its "stanu na" date; each with its line's
@@ -1331,7 +1349,11 @@ def finish(
 ) -> BandCut:
     """Read a band, decide whether it is typed, and draw it. A band any line
     of which reads the declarant's name (`names`: first name and surname) is
-    `holds_name`: drawn and kept, never to be sent (decision on 2026-11-20)."""
+    `holds_name`: drawn and kept, never to be sent (decision on 2026-11-20).
+    So is one, as `holds_address`, whose lines read as surely as typed print,
+    or off a text layer, give a street address or a postal code: a
+    declarant's home address is not public. An office's own address is held
+    with it."""
     cut = BandCut(band, found.status, widen, notes=list(found.notes))
     if found.status != "cut":
         return cut
@@ -1379,6 +1401,10 @@ def finish(
             "nothing written under the birth date's line: the post may be on "
             "the birth date's line, which no band shows"
         )
+    # OCR's reading of handwriting is noise: only sure lines are looked at.
+    if holds_address(r.text for r in rows if r.score >= TYPED_SCORE):
+        cut.status = "holds_address"
+        cut.notes.append("a street address is read in it: never to be sent")
     if holds_name(shown, names):
         cut.status = "holds_name"
         cut.notes.append("the declarant's name is read in it: never to be sent")
