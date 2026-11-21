@@ -98,6 +98,7 @@ ROWS = {
         "przedszkola",
         "0101023",
     ),
+    "lo1": ("I Liceum Ogólnokształcące w Przykładowie", "szkoły średnie", "0101023"),
     # Far away, in towns whose stems sit inside everyday words of a band:
     # „kole” in „Szkoleń”, „koln” in „Szkolnictwa” (t read as l), „slaw” in
     # „Podstawowa”, „olec” and „leczn” in „Społecznej”, „slar” in „Starszy”.
@@ -304,6 +305,32 @@ def test_titles_glued_together_are_read_apart(bodies):
     assert rows(bodies, band, "010102") == [("pup", "zastepca_dyrektora")]
     band = ["Powiatowy Urząd Pracy w Przykładowie, na stanowisku Z-cy Dyrektora"]
     assert rows(bodies, band, "010102") == [("pup", "zastepca_dyrektora")]
+
+
+def test_a_title_running_into_a_body_is_that_bodys(bodies):
+    """Not the body before it: the declarant heads the GOPS, not the urząd."""
+    band = [
+        "Urząd Gminy Testowo, Kierownik Gminnego Ośrodka Pomocy Społecznej w Testowie"
+    ]
+    assert rows(bodies, band, "010101") == [("gops", "kierownik")]
+    band = [
+        "URZĄD GMINY TESTOWO",
+        "Nauczyciel w Szkole Podstawowej nr 5 w Przykładowie",
+    ]
+    assert rows(bodies, band, "010101") == [("sp5", "nauczyciel")]
+    band = ["Szkoła Podstawowa nr 5 w Przykładowie - Dyrektor Szkoły Podstawowej nr 5"]
+    assert rows(bodies, band, "010102") == [("sp5", "dyrektor")]
+    # Each line's title is its own body's, though the next line's name is
+    # found from the last letter of the title before it: „nauczycie|l” and
+    # „Liceum” read as „I Liceum”.
+    band = [
+        "Szkoła Podstawowa nr 5 w Przykładowie - nauczyciel",
+        "Liceum Ogólnokształcące w Przykładowie - pedagog",
+    ]
+    assert rows(bodies, band, "010102") == [
+        ("sp5", "nauczyciel"),
+        ("lo1", EMPLOYEE_ROLE),
+    ]
 
 
 def test_a_gmina_ending_in_wice_is_no_wicewojt(bodies):
@@ -528,6 +555,17 @@ def test_stamps_and_footers_are_never_suggested(bodies):
     assert rows(bodies, band, "010102") == [("um_przykladowo", EMPLOYEE_ROLE)]
     band = ["Wpłynęło dnia 30.04.2025", "Urząd Gminy Testowo - Wójt"]
     assert rows(bodies, band, "010101") == [("ug_testowo", "wojt")]
+
+
+@pytest.mark.parametrize(
+    "stamp",
+    [
+        "URZĄD GMINY TESTOWO Data wpływu 29.04.2024",
+        "Urząd Gminy Testowo, wpł. 29.04.2024 r.",
+    ],
+)
+def test_a_receipt_stamp_names_no_employer(bodies, stamp):
+    assert rows(bodies, [stamp, "nauczyciel"], "010101") == []
 
 
 def test_private_employers_are_never_suggested(bodies):

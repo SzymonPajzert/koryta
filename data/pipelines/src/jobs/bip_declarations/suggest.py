@@ -33,11 +33,13 @@ add it themselves. A handwritten band gets none.
    it names; any staff title is a „pracownik”. Titles OCR glued together are
    split first: „ZASTĘPCAWÓJTAGMINY”.
 4. Each body takes the first title after it, before the next body; where a
-   mandate („Radny Rady Powiatu”), a contract or a pension comes first, or a
+   mandate („Radny Rady Powiatu”), a contract, a pension or a post the line
+   says is over („były”, „do 31.08.2023”, „w latach”) comes first, or a
    title held at another kind of office („Członek Zarządu Powiatu” after a
    forestry directorate), the body gets no row; so too after „na stanowisku”
-   followed by a title no chip names. A body with nothing after it takes a
-   title that runs into it („Dyrektor Szkoły Podstawowej ...”). A title no
+   followed by a title no chip names. A title that runs into a body's name
+   („Dyrektor Szkoły Podstawowej ...”) is that body's, not the one before
+   it. A title no
    body took that starts an item names its own office where it can: a wójt
    or a burmistrz the urząd of the declarant's gmina, a wicestarosta or a
    „sekretarz powiatu” the starostwo of their powiat, a marszałek the urząd
@@ -758,9 +760,11 @@ class _Unit:
 
 # -- the band ----------------------------------------------------------------------
 
-#: A line a stamp or a footer printed: never a post.
+#: A line a stamp or a footer printed: never a post. „Wpłynęło”, „Data
+#: wpływu”, „Wpł.” are a receipt stamp's.
 _STAMP = re.compile(
-    r"wplyn|www|http|signform|podpis|pieczec|upowazn|(^|\s)z ?up(\s|$)|(^|\s)l ?dz\s"
+    r"wplyn|wplyw|(^|\s)wpl(\s|$)|www|http|signform|podpis|pieczec|upowazn|"
+    r"(^|\s)z ?up(\s|$)|(^|\s)l ?dz\s"
 )
 _SIGNED_FOR = re.compile(r"(^|\s)z ?up(\s|$)")
 #: The name signed under a „Z up.” stamp starts with a degree: „mgr inż. ...”.
@@ -1224,15 +1228,21 @@ def _title_of(
     mentions: list[_Mention], at: int, roles: Roles, kind: str
 ) -> _Mention | None:
     """The title the body at `at`, of that kind, is held in: the first one
-    after it, unless a mandate or something else comes first, or a title of
-    another office; else one that runs into it."""
+    after it, unless a mandate or something else comes first, a title of
+    another office, or one that runs into the next body's name („Urząd Gminy,
+    Kierownik Ośrodka Pomocy Społecznej”), which is that body's; else one
+    that runs into it."""
     body = mentions[at]
-    for mention in mentions[at + 1 :]:
+    for i, mention in enumerate(mentions[at + 1 :], at + 1):
         if mention.what == "body":
             break
         if mention.taken:
             continue
         if mention.what != "title" or not _held_at(roles, mention, kind):
+            return None
+        # A name found from a letter early is not one the title runs into.
+        later = next((m for m in mentions[i + 1 :] if m.what == "body"), None)
+        if later is not None and mention.end - later.start > _TITLE_BEFORE:
             return None
         mention.taken = True
         return mention
