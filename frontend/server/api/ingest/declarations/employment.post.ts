@@ -3,6 +3,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getUser, requireDatascience } from "~~/server/utils/auth";
 import {
+  closedFromThroughGate,
   countEmploymentMoves,
   employmentGate,
   employmentPriorityOf,
@@ -304,6 +305,7 @@ function bandChange(
     return {
       whole: {
         status: placed,
+        closedFrom: null,
         personId: personThroughGate(placed, gate, null),
         priority: priority ?? NO_PAGE_PRIORITY,
         // Spreads concurrent readers over the queue without offsets.
@@ -342,10 +344,13 @@ function bandChange(
   const replaced = unvoted || cutAgain;
   const status = replaced ? placed : statusThroughGate(was, gate.open);
   const personId = personThroughGate(status, gate, was.personId);
+  const closedFrom = closedFromThroughGate(was, status);
   const pictures = newPicture && replaced;
 
   const fields: Record<string, unknown> = {};
   if (status !== before.status) fields.status = status;
+  if (closedFrom !== (before.closedFrom ?? null))
+    fields.closedFrom = closedFrom;
   if (personId !== (before.personId ?? null)) fields.personId = personId;
   if (replaced && (pictures || before.typed !== sent.typed)) {
     fields.typed = sent.typed;

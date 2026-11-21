@@ -135,6 +135,7 @@ export function storedBand(
 /** What the gate reads of a band. */
 export type GatedBand = {
   status: EmploymentStatus;
+  closedFrom: EmploymentStatus | null;
   answerCount: number;
   applyState: EmploymentApplyState | null;
   personId: string | null;
@@ -148,6 +149,10 @@ export function gatedBand(band: StoredBand): GatedBand {
   const answers = Number(band.answerCount);
   return {
     status: STATUSES.has(band.status) ? band.status! : "waiting",
+    closedFrom:
+      STATUSES.has(band.closedFrom) && band.closedFrom !== "closed"
+        ? band.closedFrom!
+        : null,
     answerCount: Number.isFinite(answers) ? answers : 0,
     applyState: band.applyState ?? null,
     personId: typeof band.personId === "string" ? band.personId : null,
@@ -160,28 +165,45 @@ function written(applyState: EmploymentApplyState | null): boolean {
 }
 
 /**
- * Where a band goes when its gate is looked at again. A waiting band opens.
- * Once the crop no longer names one page, an open band closes - back to
- * waiting while no vote is on it, else withdrawn - and so does a settled one
- * nothing has been written from. A band put off for a newer declaration
- * (`later`) or waiting for a wider cut (`recut`) stays, for the upload to
- * place, and so does one written to the graph.
+ * Where a band goes when its gate is looked at again. A waiting band opens,
+ * and a closed one goes back to where it was. Once the crop no longer names
+ * one page, an open band nobody voted on waits again, and an answered one
+ * closes, as does a settled one nothing has been written from: closing keeps
+ * the answers, so a gate that breaks for a while, as when a second page born
+ * that day comes and goes, costs readers nothing. A band put off for a newer
+ * declaration (`later`) or waiting for a wider cut (`recut`) stays, for the
+ * upload to place, and so do one written to the graph and one an admin
+ * withdrew.
  */
 export function statusThroughGate(
   band: GatedBand,
   open: boolean,
 ): EmploymentStatus {
-  if (open) return band.status === "waiting" ? "open" : band.status;
+  if (open) {
+    if (band.status === "waiting") return "open";
+    if (band.status === "closed") return band.closedFrom ?? "open";
+    return band.status;
+  }
   switch (band.status) {
     case "open":
-      return band.answerCount > 0 ? "withdrawn" : "waiting";
+      return band.answerCount > 0 ? "closed" : "waiting";
     case "agreed":
     case "unreadable":
     case "disputed":
-      return written(band.applyState) ? band.status : "withdrawn";
+      return written(band.applyState) ? band.status : "closed";
     default:
       return band.status;
   }
+}
+
+/** What a band goes back to once it opens: kept while it stays `closed`,
+ * the status it closed from as it closes, and null for any other band. */
+export function closedFromThroughGate(
+  before: GatedBand,
+  status: EmploymentStatus,
+): EmploymentStatus | null {
+  if (status !== "closed") return null;
+  return before.status === "closed" ? before.closedFrom : before.status;
 }
 
 /** The page a band reads for: the gate's, none while the band waits, and
@@ -242,7 +264,8 @@ export async function countEmploymentMoves(
 
 /**
  * Opens a declaration's bands once its date crop names one page, and closes
- * them once it no longer does (`statusThroughGate`); an open band follows
+ * them once it no longer does, keeping what readers gave
+ * (`statusThroughGate`); an open band follows
  * its page through merges, and its `priority` follows the page's
  * publication. `matchPages` calls it after every comparison; the upload
  * places a band it stores by the same gate. A crop without bands costs one
@@ -272,8 +295,14 @@ export async function openEmploymentOf(
       const before = gatedBand(stored);
       const status = statusThroughGate(before, gate.open);
       const personId = personThroughGate(status, gate, before.personId);
-      if (status !== stored.status || personId !== (stored.personId ?? null)) {
+      const closedFrom = closedFromThroughGate(before, status);
+      if (
+        status !== stored.status ||
+        personId !== (stored.personId ?? null) ||
+        closedFrom !== (stored.closedFrom ?? null)
+      ) {
         update[`${field}.status`] = status;
+        update[`${field}.closedFrom`] = closedFrom;
         update[`${field}.personId`] = personId;
         update[`${field}.updatedAt`] = at;
       }
