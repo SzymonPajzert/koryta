@@ -324,6 +324,63 @@ export async function openEmploymentOf(
   return moves;
 }
 
+/**
+ * The sweep's second look: `openEmploymentOf` again over declarations whose
+ * date crop was found on a page born that day (`pageMatch` "same") while
+ * their employer line still waits, or is closed. Placing runs after every
+ * comparison, but nothing else comes back to a crop whose placing failed.
+ *
+ * At most `limit` crops, from `start` in the bands' own `rand` and round to
+ * it, so a sweep's look begins somewhere new: bands whose gate stays shut,
+ * as for two pages born that day, do not keep the rest from their turn.
+ * Never at the caller's expense. Returns how many bands moved.
+ */
+export async function placeEmploymentAgain(
+  db: Firestore,
+  now: Date,
+  { limit, start }: { limit: number; start: number },
+): Promise<number> {
+  const field = EMPLOYMENT_FIELDS.employer;
+  const rand = `${field}.rand`;
+  let ids: string[];
+  try {
+    const shut = db
+      .collection(EXTRACTS)
+      .where("status", "==", "agreed")
+      .where("pageMatch", "==", "same")
+      .where(`${field}.status`, "in", ["waiting", "closed"]);
+    const after = await shut
+      .where(rand, ">=", start)
+      .orderBy(rand)
+      .limit(limit)
+      .get();
+    const before =
+      after.size < limit
+        ? await shut
+            .where(rand, "<", start)
+            .orderBy(rand)
+            .limit(limit - after.size)
+            .get()
+        : null;
+    ids = [...after.docs, ...(before?.docs ?? [])].map((doc) => doc.id);
+  } catch (error) {
+    console.error("[declarations] finding employment to place failed", error);
+    return 0;
+  }
+  let moved = 0;
+  for (const id of ids) {
+    try {
+      moved += (await openEmploymentOf(db, id, now)).length;
+    } catch (error) {
+      console.error(
+        `[declarations] placing the employment reading of ${id} failed`,
+        error,
+      );
+    }
+  }
+  return moved;
+}
+
 /** `openEmploymentOf`, never at the caller's expense: a comparison of a date
  * with its pages stands whatever becomes of the declaration's other
  * readings. */

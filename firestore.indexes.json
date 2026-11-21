@@ -1225,6 +1225,28 @@
       ]
     },
     {
+      "collectionGroup": "declarationExtracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "pageMatch",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employment.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employment.rand",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "declarationPublications",
       "queryScope": "COLLECTION",
       "fields": [
