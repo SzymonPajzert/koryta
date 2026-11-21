@@ -313,7 +313,9 @@ def signature_blocks(
     """The electronic signatures' blocks on a page: each line that names one
     (`E_SIGNATURE`) with the lines of its column on the rows next to it, which
     name the signer, and the ink on their rows either side of them up to a gap
-    (the block's icon, a name too wide to read), with a margin."""
+    (the block's icon, a name too wide to read), with a margin. A line that
+    runs across the page, a signing service's footer, names its signer itself
+    and is a block alone: the text over it is not its column."""
     blocks: list[Box] = []
     for seed, line in enumerate(lines):
         if not names_a_signature(line["text"]):
@@ -322,13 +324,16 @@ def signature_blocks(
             continue
         x0, y0, x1, y1 = boxes[seed]
         members = {seed}
-        grew = True
+        grew = x1 - x0 < 0.4 * grey.shape[1]
         while grew:
             grew = False
             for i, box in enumerate(boxes):
                 width = max(1.0, box[2] - box[0])
                 column = min(x1, box[2]) - max(x0, box[0]) >= 0.5 * width
                 if i in members or not column:
+                    continue
+                # A block is a few lines tall, never a page's column of text.
+                if max(y1, box[3]) - min(y0, box[1]) > 8 * h:
                     continue
                 if box[1] <= y1 + 0.8 * h and box[3] >= y0 - 0.8 * h:
                     members.add(i)
