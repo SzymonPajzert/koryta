@@ -436,6 +436,18 @@ def test_any_public_bodys_name_is_written_the_way_polish_writes_it():
         ),
         "BRANŻOWA SZKOŁA I STOPNIA": "Branżowa Szkoła I Stopnia",
         "SZKOŁA MUZYCZNA I I II STOPNIA": "Szkoła Muzyczna I i II Stopnia",
+        # A lone I is a numeral after "nr", at the end and numbering an
+        # oddział in a town; elsewhere it is "and".
+        "LICEUM OGÓLNOKSZTAŁCĄCE NR I IM. JANA BAŻYŃSKIEGO W OSTRÓDZIE": (
+            "Liceum Ogólnokształcące nr I im. Jana Bażyńskiego w Ostródzie"
+        ),
+        "KOMENDA REJONOWA POLICJI WARSZAWA I": "Komenda Rejonowa Policji Warszawa I",
+        "ZAKŁAD UBEZPIECZEŃ SPOŁECZNYCH I ODDZIAŁ W WARSZAWIE": (
+            "Zakład Ubezpieczeń Społecznych I Oddział w Warszawie"
+        ),
+        "SAMORZĄDOWA SZKOŁA PODSTAWOWA I ODDZIAŁ PRZEDSZKOLNY W TOPOROWIE": (
+            "Samorządowa Szkoła Podstawowa i Oddział Przedszkolny w Toporowie"
+        ),
         'PRZEDSZKOLE NR 4 "POD TOPOLĄ"': 'Przedszkole nr 4 "Pod Topolą"',
         "DOM POMOCY SPOŁECZNEJ DLA DZIECI": "Dom Pomocy Społecznej dla Dzieci",
         "SZKOŁA PODSTAWOWA IM. J.H. DĄBROWSKIEGO": (
