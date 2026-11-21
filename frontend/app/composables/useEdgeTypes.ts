@@ -7,6 +7,7 @@ import {
   mdiDomainPlus,
   mdiMapMarkerRadiusOutline,
   mdiNewspaperPlus,
+  mdiOfficeBuildingOutline,
   mdiTagPlusOutline,
   mdiVoteOutline,
 } from "@mdi/js";
@@ -286,6 +287,9 @@ export type RelationChoice = {
   /** How it reads with this page as the subject. */
   verb: string;
   icon?: string;
+  /** Recorded against the institution the picked region's urząd is, rather
+   * than against the region - see `officeChoice`. */
+  viaOffice?: boolean;
 };
 
 /** Every relation that makes sense between the page you are on and the entity
@@ -338,4 +342,36 @@ export function relationChoices(
     seen.add(key);
     return true;
   });
+}
+
+/** A post in the urząd that runs a region, or in a unit under it.
+ *
+ * Offered beside the candidacy when a person is joined to a region, because
+ * "zastępca prezydenta Wejherowa" is a job in Wejherowo that the site had no
+ * way to record: the region was only ever something to stand for election in,
+ * and the urząd is in no register the pipelines read, so there was no company
+ * to pick either.
+ *
+ * Not an entry of `edgeTypeOptions`, which is what `relationChoices` reads for
+ * every pair - the article dialog among its callers. The edge this stores is an
+ * `employed` one to a place, and the region only says which place; anywhere
+ * that took the choice at face value would store the gmina as the employer.
+ *
+ * @param allowed narrows as it does for `relationChoices`: a section that is
+ * not about employment does not offer it.
+ */
+export function officeChoice(
+  nodeType: NodeType,
+  otherType: NodeType,
+  allowed?: edgeTypeExt[],
+): RelationChoice | undefined {
+  if (nodeType !== "person" || otherType !== "region") return undefined;
+  if (allowed && !allowed.includes("employed")) return undefined;
+  return {
+    edgeTypeExt: "employed",
+    direction: "outgoing",
+    verb: "pracował/a w urzędzie lub jednostce podległej",
+    icon: mdiOfficeBuildingOutline,
+    viaOffice: true,
+  };
 }
