@@ -13,10 +13,11 @@ import random
 from datetime import date
 
 import numpy as np
+import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
-from jobs.bip_declarations.cutter import MAX_PNG_BYTES, Ocr
+from jobs.bip_declarations.cutter import LONG_SIDE, MAX_PNG_BYTES, Ocr
 from jobs.bip_declarations.employment import (
     NUMERAL,
     BandCut,
@@ -284,8 +285,30 @@ def test_a_handwritten_band_comes_out_at_300_dpi(ocr, stopped):
     assert len(strip.png) <= MAX_PNG_BYTES
 
 
-def test_a_pdf_drawn_from_text_gives_its_text_layer(ocr):
-    data = typed_pdf(NAME, BORN, employer="Starostwo Powiatowe w Testowie")
+def rows_of(data: bytes, text: str) -> tuple[float, float]:
+    """The rows a text takes on a one-page PDF drawn at the cutter's 200 dpi,
+    by its text layer's boxes."""
+    page = pdfium.PdfDocument(data)[0]
+    layer = page.get_textpage()
+    found = layer.search(text).get_next()
+    assert found is not None, text
+    start, count = found
+    boxes = [layer.get_charbox(i) for i in range(start, start + count)]
+    height = page.get_size()[1]
+    scale = LONG_SIDE / max(page.get_size())
+    return (
+        (height - max(b[3] for b in boxes)) * scale,
+        (height - min(b[1] for b in boxes)) * scale,
+    )
+
+
+@pytest.mark.parametrize("leading", [None, 14, 12.65])
+def test_a_pdf_drawn_from_text_gives_its_text_layer(ocr, leading):
+    # As the form spaces it, and single-spaced: the employer's line right
+    # under the birth date's.
+    data = typed_pdf(
+        NAME, BORN, employer="Starostwo Powiatowe w Testowie", leading=leading
+    )
 
     cut = bands(cut_bands(data, [(0, 0)], ocr))
 
@@ -297,6 +320,11 @@ def test_a_pdf_drawn_from_text_gives_its_text_layer(ocr):
     )
     assert "Starostwo Powiatowe w Testowie" in employer.text
     assert NAME not in employer.text
+    assert BORN not in employer.text and BORN[-4:] not in employer.text
+    # The picture starts under the birth date's line, over the employer's.
+    [strip] = employer.strips
+    assert employer.dpi == 200
+    assert rows_of(data, BORN)[1] <= strip.top < rows_of(data, "Starostwo")[0]
     header = cut["header"]
     assert (header.stan_na, header.stan_na_score) == ("2023-12-31", 1.0)
     # One page: no section VII or VIII on it.

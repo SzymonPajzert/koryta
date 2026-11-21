@@ -103,10 +103,18 @@ def _escape(text: str) -> str:
 
 
 def typed_pdf(
-    name: str, born: str, place: str = "Testowie", employer: str = ""
+    name: str,
+    born: str,
+    place: str = "Testowie",
+    employer: str = "",
+    *,
+    leading: float | None = None,
 ) -> bytes:
     """Part A as a PDF drawn from text, in Helvetica: one page, no pictures,
-    with the employer typed over the dots when one is given."""
+    with the employer typed over the dots when one is given. `leading` sets
+    the lines from the birth date's down that many points apart, as a
+    single-spaced form does; without it they stand apart as on the form."""
+    step = leading or 0.0
     lines = [
         (200, 780, 14, "OSWIADCZENIE MAJATKOWE"),
         (250, 760, 11, "radnego gminy"),
@@ -116,12 +124,22 @@ def typed_pdf(
         (50, 520, 11, f"Ja, nizej podpisany(a), {name}"),
         (200, 505, 8, "(imiona i nazwisko oraz nazwisko rodowe)"),
         (50, 480, 11, f"urodzony(a) {born} w {place}"),
-        (50, 450, 11, "." * 95),
-        (215, 435, 8, "(miejsce zatrudnienia, stanowisko lub funkcja)"),
-        (50, 410, 8, "po zapoznaniu sie z przepisami ustawy z dnia 8 marca 1990 r."),
+        (50, 480 - step if leading else 450, 11, "." * 95),
+        (
+            215,
+            480 - 2 * step if leading else 435,
+            8,
+            "(miejsce zatrudnienia, stanowisko lub funkcja)",
+        ),
+        (
+            50,
+            480 - 3 * step if leading else 410,
+            8,
+            "po zapoznaniu sie z przepisami ustawy z dnia 8 marca 1990 r.",
+        ),
     ]
     if employer:
-        lines.append((120, 455, 11, employer))
+        lines.append((120, 480 - step if leading else 455, 11, employer))
     stream = "".join(
         f"BT /F1 {size} Tf {x} {y} Td ({_escape(text)}) Tj ET\n"
         for x, y, size, text in lines
