@@ -235,6 +235,21 @@ def test_a_surname_is_read_run_into_other_letters_too():
     assert holds_name(["Jan Lis"], [("Jan", "Lis")])
 
 
+def test_an_employer_band_with_nothing_written_in_it_is_empty(ocr):
+    # The post is on the birth date's line, which the band may not show; under
+    # it only the empty dots and the caption.
+    drawn = employment_declaration(
+        NAME, BORN, employer="Sekretarz Gminy", on_birth_line=True
+    )
+
+    cut = bands(cut_bands(drawn.pdf(), [(0, 0)], ocr))
+
+    employer = cut["employer"]
+    assert employer.status == "empty"
+    assert "birth date's line" in "; ".join(employer.notes)
+    assert employer.strips and employer.text == ""
+
+
 def test_a_handwritten_band_comes_out_at_300_dpi(ocr, stopped):
     drawn = employment_declaration(NAME, BORN, scribbled=True)
 

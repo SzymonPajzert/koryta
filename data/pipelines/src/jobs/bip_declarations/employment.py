@@ -11,7 +11,9 @@ file's next date page, due in this run or not, or at a page that reads
   prints one, the "dnia" line and any receipt stamp beside them, down to
   "Uwaga:" or "CZĘŚĆ A";
 - `employer`: from the first line under the birth date to the printed
-  "(miejsce zatrudnienia, stanowisko lub funkcja)" under the employer;
+  "(miejsce zatrudnienia, stanowisko lub funkcja)" under the employer; with
+  nothing written there, as where the post is on the birth date's line, which
+  no band shows, `empty`;
 - `vii`: section VII, from "W spółkach handlowych (nazwa, siedziba spółki)",
   which section III's shares in "spółkach handlowych" do not name, to VIII;
 - `viii`: section VIII, to the next heading: IX, X or "CZĘŚĆ B".
@@ -75,6 +77,7 @@ from jobs.bip_declarations.cutter import (
     has_label,
     kind_of,
     png,
+    strokes_in,
 )
 from jobs.bip_declarations.reading import (
     DECLARED_YEARS,
@@ -1289,6 +1292,19 @@ def inked(scan: PageScan, piece: Piece) -> bool:
     )
 
 
+def written_on(scan: PageScan, piece: Piece, printed: list[Box]) -> bool:
+    """Whether a piece holds a word besides its own print (`printed`, boxes in
+    its rows): a stroke as tall as a letter, which the dots of an empty line
+    are not, whether OCR read it or not."""
+    grey = scan.grey[piece.top : piece.bottom].copy()
+    margin = 0.15 * scan.h
+    for x0, y0, x1, y1 in printed:
+        rows = slice(int(max(0, y0 - margin)), int(y1 + margin) + 1)
+        grey[rows, int(max(0, x0 - margin)) : int(x1 + margin) + 1] = 255
+    region = (scan.left, 0, scan.right, grey.shape[0])
+    return strokes_in(grey, region, scan.h) > 0
+
+
 def finish(
     doc: Declaration,
     band: str,
@@ -1309,6 +1325,7 @@ def finish(
     shown: list[str] = []
     sources = set()
     pieces, written = [], []
+    blank_lines = True
     for n, piece in enumerate(found.pieces):
         scan = doc.page(piece.page)
         lines = written_lines(scan, piece.top, piece.bottom)
@@ -1320,6 +1337,9 @@ def finish(
         rows += read
         shown += said
         sources.add(source)
+        if source != "text_layer" and blank_lines:
+            own_print = [r.box for r in read if r.printed]
+            blank_lines = not written_on(scan, piece, own_print)
     content = [r for r in rows if not r.printed]
     digital = sources == {"text_layer"}
     cut.score = 1.0 if digital else min((r.score for r in content), default=0.0)
@@ -1334,6 +1354,14 @@ def finish(
     draw(doc, cut, pieces, written)
     if not cut.typed and cut.dpi == 200:
         cut.notes.append("a picture, not a PDF: nothing finer to draw")
+    if band == "employer" and not content and blank_lines:
+        # Readers would agree on „Brak” where the post was written elsewhere
+        # (decision on 2026-11-20): not sent.
+        cut.status = "empty"
+        cut.notes.append(
+            "nothing written under the birth date's line: the post may be on "
+            "the birth date's line, which no band shows"
+        )
     if holds_name(shown, names):
         cut.status = "holds_name"
         cut.notes.append("the declarant's name is read in it: never to be sent")
