@@ -40,15 +40,15 @@ add it themselves. A handwritten band gets none.
    forestry directorate), the body gets no row; so too after „na stanowisku”
    followed by a title no chip names. A title that runs into a body's name
    („Dyrektor Szkoły Podstawowej ...”) is that body's, not the one before
-   it. A title no
-   body took that starts an item names the office of the declarant's own
-   unit only for a post they can hold there: a wójt, a burmistrz or a
-   prezydent their urząd on their own declaration; a starosta, a
-   wicestarosta or a „członek zarządu powiatu” the starostwo, for a powiat
-   councillor; a marszałek, a wicemarszałek or a „członek zarządu
-   województwa” the urząd marszałkowski, for a sejmik's. Never a staff title
-   (a sekretarz, a skarbnik, a zastępca wójta, a naczelnik): a councillor
-   may not work in that office. Nor where the title names another place.
+   it. A title no body took that starts an item names the office of the
+   declarant's own unit only for a post they can hold there: a wójt, a
+   burmistrz or a prezydent their urząd on their own declaration; a
+   starosta, a wicestarosta or a „członek zarządu powiatu” the starostwo,
+   for a powiat councillor; a marszałek, a wicemarszałek or a „członek
+   zarządu województwa” the urząd marszałkowski, for a sejmik's. Never a
+   staff title (a sekretarz, a skarbnik, a zastępca wójta, a naczelnik): a
+   councillor may not work in that office. Nor where the title names another
+   place.
 5. Rows at the declarant's unit come first, at most four.
 
 What the 2026-11-20 pilot's classify.py learned is kept: OCR's letter swaps;
