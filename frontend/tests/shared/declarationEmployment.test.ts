@@ -10,6 +10,8 @@ import {
   employmentIngestSchema,
   employmentItemSchema,
   employmentPriority,
+  employmentSkipReasons,
+  entryGap,
   familyKind,
   institutionKinds,
   isBoardFamily,
@@ -448,6 +450,39 @@ describe("settleEmployment", () => {
       status: "agreed",
       rows: [{ family: "manager", role: null, other: null }],
     });
+  });
+
+  it("parks a row an entry cannot be written from", () => {
+    const agreed = (role: string | null, other: string | null = null) => ({
+      key: KEY_WICESTAROSTA,
+      employer: STAROSTWO,
+      family: "office_deputy",
+      role,
+      other,
+      start: null,
+      readers: 2,
+    });
+    expect(entryGap(agreed("wicestarosta"), "2024-12-31")).toBeNull();
+    expect(entryGap(agreed("wicestarosta"), null)).toBe("as_of_unsettled");
+    expect(entryGap(agreed(null), "2024-12-31")).toBe("role_unsettled");
+    expect(entryGap(agreed("inne", "rzecznik"), "2024")).toBe("other_role");
+    // The row's own gap first: the date is the whole reading's.
+    expect(entryGap(agreed(null), null)).toBe("role_unsettled");
+    for (const reason of ["as_of_unsettled", "role_unsettled", "other_role"]) {
+      expect(employmentSkipReasons).toContain(reason);
+    }
+
+    // What settling leaves: a chip of one family each, and no date.
+    const settled = settleEmployment([
+      read("a", [PREZES], { asOf: "2024-12-31" }),
+      read("b", [row(COMPANY, "czlonek_zarzadu")]),
+    ]);
+    expect(settled.status).toBe("agreed");
+    if (settled.status !== "agreed") return;
+    expect(entryGap(settled.rows[0]!, settled.asOf)).toBe("role_unsettled");
+    expect(
+      entryGap({ ...settled.rows[0]!, role: "prezes" }, settled.asOf),
+    ).toBe("as_of_unsettled");
   });
 
   it("settles „Stan na”, the kind and „od” field by field", () => {

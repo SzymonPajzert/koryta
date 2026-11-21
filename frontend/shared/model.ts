@@ -287,7 +287,10 @@ export interface Edge extends PageBase<EdgeType> {
  * taking up a post, on leaving it, or another. */
 export type DeclarationKind = "annual" | "start" | "end" | "other";
 
-/** One declaration's word on one post, from one band of its form. */
+/** One declaration's word on one post, from one band of its form. Written
+ * only with `role`, `roleId` and `as_of`: apply parks an agreed row without
+ * a settled chip or „Stan na”, or with „Inne”, on „Do ustalenia” instead
+ * (`entryGap` in shared/declarationEmployment.ts). */
 export type DeclaredPost = {
   /** The file on BIP when it was read. The key's sha256 outlives a moved url. */
   url: string;

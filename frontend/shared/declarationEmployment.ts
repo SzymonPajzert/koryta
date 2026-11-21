@@ -867,6 +867,9 @@ export type EmploymentApplyState = (typeof employmentApplyStates)[number];
  *   catalogue row the site does not create a place from: one in KRS, one
  *   whose ownership is private or not given, a name a place without KRS
  *   already has, or a contributor's draft with that REGON.
+ * - `other_role`, `role_unsettled`, `as_of_unsettled`: what an entry on an
+ *   edge needs is missing (`entryGap`): the role is „Inne”, readers agreed on
+ *   the post's family but not on its chip, or not on „Stan na”.
  */
 export const employmentSkipReasons = [
   "awaits_mayor_decision",
@@ -879,8 +882,33 @@ export const employmentSkipReasons = [
   "ownership_unknown",
   "name_taken",
   "place_draft",
+  "other_role",
+  "role_unsettled",
+  "as_of_unsettled",
 ] as const;
 export type EmploymentSkipReason = (typeof employmentSkipReasons)[number];
+
+/**
+ * Why an agreed row cannot be written as an entry on an edge, or null when
+ * it can. An entry carries its chip and „Stan na” (`DeclaredPost.role`,
+ * `roleId` and `as_of`), so apply parks a row without them on „Do
+ * ustalenia”: „Inne” (`other_role`), a chip readers did not agree on within
+ * the family (`role_unsettled`), then a „Stan na” they did not agree on
+ * (`as_of_unsettled`), which is the whole reading's. Whether readers type
+ * „Stan na” at all is still open, so settling never waits on it.
+ */
+export function entryGap(
+  row: Pick<AgreedEmploymentRow, "role">,
+  asOf: string | null,
+): Extract<
+  EmploymentSkipReason,
+  "other_role" | "role_unsettled" | "as_of_unsettled"
+> | null {
+  if (row.role === OTHER_ROLE) return "other_role";
+  if (!row.role || !CHIPS.has(row.role)) return "role_unsettled";
+  if (!asOf || !readingKind(asOf)) return "as_of_unsettled";
+  return null;
+}
 
 /** The machine's reading of a printed item. */
 export type EmploymentMachine = {
@@ -907,7 +935,7 @@ export type AgreedEmploymentRow = {
   employer: EmployerRef;
   family: string;
   /** The chip readers agreed on; null when they picked different chips of
-   * one family. */
+   * one family, and then no entry is written (`role_unsettled`). */
   role: string | null;
   /** „Inne” as written, when readers agreed on it. */
   other: string | null;
@@ -920,7 +948,8 @@ export type AgreedEmploymentRow = {
 export type EmploymentAgreed<Time = string> = {
   /** None: the line names no post, which says nothing of any other. */
   rows: AgreedEmploymentRow[];
-  /** „Stan na”, when readers agreed on it. */
+  /** „Stan na”, when readers agreed on it; without it no row is written
+   * (`as_of_unsettled`). */
   asOf: string | null;
   kind: DeclarationKind | null;
   readers: number;
