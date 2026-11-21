@@ -541,27 +541,38 @@ describe("settleEmployment", () => {
         read("b", [WICESTAROSTA]),
       ]).status,
     ).toBe("agreed");
+    const now = { imageHash: "new" };
     const voiceless = [
-      read("pipeline-declarations", [WICESTAROSTA]),
-      read("anon:x", [WICESTAROSTA], { votes: false }),
-      { uid: "c", verdict: "skip" } as const,
-      read("d", [WICESTAROSTA], { control: true }),
+      read("pipeline-declarations", [WICESTAROSTA], now),
+      read("anon:x", [WICESTAROSTA], { votes: false, ...now }),
+      { uid: "c", verdict: "skip", ...now } as const,
+      read("d", [WICESTAROSTA], { control: true, ...now }),
       read("e", [WICESTAROSTA], { imageHash: "old" }),
     ];
-    const open = settleEmployment([read("a", [WICESTAROSTA]), ...voiceless], {
-      imageHash: "new",
-    });
+    const open = settleEmployment(
+      [read("a", [WICESTAROSTA], now), ...voiceless],
+      now,
+    );
     expect(open.status).toBe("open");
     expect(open.tally.voices).toBe(1);
     expect(
       settleEmployment(
-        [
-          read("a", [WICESTAROSTA], { imageHash: "new" }),
-          read("b", [WICESTAROSTA], { imageHash: "new" }),
-        ],
-        { imageHash: "new" },
+        [read("a", [WICESTAROSTA], now), read("b", [WICESTAROSTA], now)],
+        now,
       ).status,
     ).toBe("agreed");
+  });
+
+  it("hears no answer without its picture once the band's is known", () => {
+    const answers = [
+      read("a", [WICESTAROSTA]),
+      read("b", [WICESTAROSTA], { imageHash: "new" }),
+    ];
+    const open = settleEmployment(answers, { imageHash: "new" });
+    expect(open.status).toBe("open");
+    expect(open.tally.voices).toBe(1);
+    // Votes settled where no picture is given, as in these tests.
+    expect(settleEmployment(answers).status).toBe("agreed");
   });
 });
 
@@ -743,7 +754,10 @@ describe("the upload", () => {
 });
 
 describe("answers", () => {
+  /** The picture the card showed. */
+  const imageHash = "c".repeat(64);
   const reading = {
+    imageHash,
     verdict: "read",
     rows: [
       {
@@ -774,6 +788,7 @@ describe("answers", () => {
     for (const regon of [REGON_B, REGON_LOCAL]) {
       expect(
         employmentAnswerSchema.safeParse({
+          imageHash,
           verdict: "read",
           rows: [{ employer: { regon }, role: "prezes", source: "typed" }],
         }).success,
@@ -783,14 +798,27 @@ describe("answers", () => {
 
   it("accepts „Brak”, „Nieczytelne” and a report without rows", () => {
     for (const verdict of ["none", "unreadable", "skip"]) {
-      expect(employmentAnswerSchema.safeParse({ verdict }).success).toBe(true);
+      expect(
+        employmentAnswerSchema.safeParse({ verdict, imageHash }).success,
+      ).toBe(true);
     }
     expect(
       employmentAnswerSchema.safeParse({
+        imageHash,
         verdict: "skip",
         flags: ["missing_part"],
       }).success,
     ).toBe(true);
+  });
+
+  it("refuses an answer without the picture it was given", () => {
+    for (const answer of [
+      { verdict: "none" },
+      { ...reading, imageHash: undefined },
+      { ...reading, imageHash: "old" },
+    ]) {
+      expect(employmentAnswerSchema.safeParse(answer).success).toBe(false);
+    }
   });
 
   it.each([
@@ -871,8 +899,11 @@ describe("answers", () => {
 
   it("refuses a date with „Brak”", () => {
     expect(
-      employmentAnswerSchema.safeParse({ verdict: "none", asOf: "2024" })
-        .success,
+      employmentAnswerSchema.safeParse({
+        imageHash,
+        verdict: "none",
+        asOf: "2024",
+      }).success,
     ).toBe(false);
   });
 });
