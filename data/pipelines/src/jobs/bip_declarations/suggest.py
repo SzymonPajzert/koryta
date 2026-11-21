@@ -30,8 +30,9 @@ add it themselves. A handwritten band gets none.
    „Główny Specjalista”. Its family is the one declarationEmploymentRoles.json
    folds it into, as the site does (`roleFamilyOf`; read through
    `util.declaration_roles`), and its chip the one of that family whose label
-   it names; any staff title is a „pracownik”. Titles OCR glued together are
-   split first: „ZASTĘPCAWÓJTAGMINY”.
+   it names; any staff title is a „pracownik”. A deputy takes a deputy's chip
+   or none, never its head's: a „Z-ca Naczelnika” gets no row. Titles OCR
+   glued together are split first: „ZASTĘPCAWÓJTAGMINY”.
 4. Each body takes the first title after it, before the next body; where a
    mandate („Radny Rady Powiatu”), a contract, a pension or a post the line
    says is over („były”, „do 31.08.2023”, „w latach”) comes first, or a
@@ -197,26 +198,49 @@ def read_title(roles: Roles, title: str | None) -> tuple[str | None, RoleChip | 
     """A title's family, as the roles file folds it (`Roles.family`), and its
     chip: the one of that family whose label the title names, else the
     family's only chip, else for a staff title the pracownik. No chip where
-    none fits the family, as for a „podsekretarz stanu”."""
+    none fits the family, as for a „podsekretarz stanu”, nor for a deputy
+    where no chip is a deputy's: a „Z-ca Naczelnika” is no naczelnik."""
     family = roles.family(title)
     if family is None:
         return None, None
     chips = [chip for chip in roles.chips if chip.family == family]
     folded = roles.fold(title)
-    forms = [*_deputy_forms(folded), _without_deputy(folded)]
+    head = _head_of(folded)
+    allowed = [chip for chip in chips if not _is_head(chip, head)]
     for anywhere in (False, True):
-        for form in forms:
-            found = _named_chip(chips, form.split(), anywhere)
+        for form in _deputy_forms(folded):
+            found = _named_chip(allowed, form.split(), anywhere)
             if found:
                 return family, found
     if len(chips) == 1:
-        return family, chips[0]
+        return family, chips[0] if allowed else None
     employee = roles.chip(EMPLOYEE_ROLE)
     return family, employee if employee and employee.family == family else None
 
 
 #: A deputy, as the roles file writes one: „zastępca”, „Z-ca”, „Z-cy”.
 _DEPUTY = re.compile(r"^(zastepc\w*|z ?c[ay]) ")
+
+
+def _head_of(folded: str) -> str:
+    """The head a deputy's title stands in for: „naczelnika” in „z-ca
+    naczelnika wydziału”, „przewodniczący” in „wiceprzewodniczący”; "" where
+    the title is no deputy's."""
+    deputy = _DEPUTY.match(folded)
+    if deputy:
+        rest = folded[deputy.end() :]
+    else:
+        rest = folded[4:] if folded.startswith("wice") else ""
+    return next(iter(rest.split()), "")
+
+
+def _is_head(chip: RoleChip, head: str) -> bool:
+    """Whether the chip is the head's a deputy stands in for, not a deputy's
+    own („zastępca dyrektora”, „wicestarosta”) nor a board's („rada
+    nadzorcza” for its wiceprzewodniczący)."""
+    first = normalize_person_name(chip.label).split()[0]
+    deputy = first.startswith("wice") or bool(_DEPUTY.match(f"{first} "))
+    return bool(head) and not deputy and head.startswith(_stem(first))
 
 
 def _deputy_forms(folded: str) -> list[str]:
@@ -229,12 +253,6 @@ def _deputy_forms(folded: str) -> list[str]:
     if folded.startswith("wice"):
         return [folded, f"zastepca {folded[4:].lstrip()}"]
     return [folded]
-
-
-def _without_deputy(folded: str) -> str:
-    """„Z-ca naczelnika wydziału” is a naczelnik where no chip is a deputy's."""
-    deputy = _DEPUTY.match(folded)
-    return folded[deputy.end() :] if deputy else folded
 
 
 def _stem(word: str) -> str:

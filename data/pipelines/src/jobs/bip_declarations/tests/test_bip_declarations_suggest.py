@@ -230,20 +230,34 @@ def test_every_chip_is_named_by_its_own_label():
 @pytest.mark.parametrize(
     ("title", "chip"),
     [
-        ("Z-ca Naczelnika Wydziału Inwestycji", "naczelnik"),
         ("p.o. Zastępcy Dyrektora Wydziału", "zastepca_dyrektora"),
+        ("Z-cy Dyrektora", "zastepca_dyrektora"),
         ("zastępca prezesa", "wiceprezes"),
         ("wicewójt", "zastepca_wojta"),
+        ("Zastępca Starosty", "wicestarosta"),
         ("Starszy Inspektor", EMPLOYEE_ROLE),
         ("nauczycielka", "nauczyciel"),
         ("Przewodnicząca Rady Nadzorczej", "rada_nadzorcza"),
+        ("Wiceprzewodniczący Rady Nadzorczej", "rada_nadzorcza"),
         ("komendant powiatowy", "dyrektor"),
         ("podsekretarz stanu", None),
+        # A deputy no chip is a deputy's gets none, never its head's.
+        ("Z-ca Naczelnika Wydziału Inwestycji", None),
+        ("Z-cy Naczelnika Wydziału", None),
+        ("Zastępca Kierownika Referatu", None),
+        ("zastępca komendanta", None),
     ],
 )
 def test_a_title_reads_as_the_chip_a_reader_would_pick(title, chip):
     _, found = read_title(read_roles(), title)
     assert (found.id if found else None) == chip
+
+
+def test_a_deputy_gets_no_row_where_no_chip_is_a_deputys(bodies):
+    band = ["Starostwo Powiatowe w Przykładowie - Z-ca Naczelnika Wydziału Testów"]
+    assert rows(bodies, band, "010100") == []
+    band = ["Urząd Miejski w Przykładowie - Zastępca Kierownika Referatu"]
+    assert rows(bodies, band, "010102") == []
 
 
 def test_a_regon_checks_as_the_site_checks_it():
