@@ -10,7 +10,8 @@ not depend on the fonts a machine has.
 `employment_declaration` draws a whole declaration for the employment cut: part
 A under a title with its list of functions and the "dnia" line, then sections
 VII and VIII on the next page, VIII running onto a third page or stopped by
-"CZĘŚĆ B". `Drawn` says where each thing went, for a test to hold a band
+"CZĘŚĆ B". `council_file` draws two declarations in one file, as a council
+publishes them. `Drawn` says where each thing went, for a test to hold a band
 against.
 """
 
@@ -338,4 +339,47 @@ def employment_declaration(
     y = page.text(y, "Zobowiazania pieniezne o wartosci powyzej 10 000 zlotych:")
     y = page.text(y, "nie dotyczy")
     _part_b(page, y + 60)
+    return drawn
+
+
+def council_file(name: str, born: str, *, other_label: str = "urodzona") -> Drawn:
+    """Two declarations in one file, as a council publishes them: the first
+    on pages 0-1, its part B left out, so nothing on page 1 ends it; the
+    second on pages 2-3, on another form, which prints no "CZĘŚĆ A" and names
+    its declarant under "Nazwisko i imię". `other_label` is that form's label
+    in front of the birth date ("Data urodzenia:" is none that OCR reads as
+    the date's label)."""
+    drawn = Drawn()
+    _part_a(drawn, name, born, "Urzad Gminy Testowo - Sekretarz Gminy", False)
+    page = _Page(drawn)
+    y = page.text(150, "III.", size=28)
+    page.lines(y, SECTION_III)
+    page.text(400, "VII.", size=28)
+    y = page.lines(450, SECTION_VII)
+    y = page.text(y + 40, "VIII.", size=28, name="viii")
+    y = page.lines(y, VIII_HEADING)
+    page.lines(y + 20, INCOME, name="income")
+    page = _Page(drawn)
+    page.text(110, "OSWIADCZENIE MAJATKOWE", size=40, x=540)
+    page.text(180, "radnej gminy", size=30, x=700)
+    page.text(330, "Testowo, dnia 20.04.2025 r.", x=1000)
+    page.text(375, "(miejscowosc)", size=20, x=1080)
+    page.text(450, "Uwaga:", size=26)
+    page.lines(495, NOTES, size=22)
+    page.text(1010, "Nazwisko i imie: Anna Druga", size=34, name="other_name")
+    page.text(1150, other_label + " " + "." * 30 + " w " + "." * 40, size=30)
+    page.text(1115, "01.02.1970", size=44, x=420, name="other_born")
+    page.text(1115, "Testowie", size=44, x=1020)
+    page.text(1215, "Szkola Podstawowa w Testowie - nauczycielka", size=40, x=300)
+    page.text(1300, "(miejsce zatrudnienia, stanowisko lub funkcja)", size=22, x=600)
+    page.text(
+        1400,
+        "po zapoznaniu sie z przepisami ustawy z dnia 8 marca 1990 r.",
+        size=22,
+    )
+    page.text(1560, "I.", size=28)
+    page.text(1610, "Zasoby pieniezne:", size=28)
+    page = _Page(drawn)
+    page.text(150, "VII.", size=28)
+    page.lines(200, SECTION_VII)
     return drawn

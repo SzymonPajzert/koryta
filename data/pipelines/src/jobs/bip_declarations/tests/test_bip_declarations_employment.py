@@ -31,6 +31,7 @@ from jobs.bip_declarations.employment import (
 from jobs.bip_declarations.reading import date_in, dnia_in, stan_na_in
 from jobs.bip_declarations.tests.synthetic_declarations import (
     Drawn,
+    council_file,
     employment_declaration,
     typed_pdf,
 )
@@ -206,6 +207,34 @@ def test_a_page_with_no_date_line_gives_no_employer_band(ocr):
     cut = bands(result)
     assert cut["employer"].status == "no_birth_line"
     assert cut["header"].status in ("no_stop", "no_title")
+
+
+def stays_out_of_the_next_declaration(drawn: Drawn, cut: dict[str, BandCut]) -> None:
+    other = drawn.at["other_name"][0]
+    assert "wynagrodzenie" in squash(cut["viii"].text)
+    for band in cut.values():
+        assert all(strip.page < other for strip in band.strips), band.band
+        assert "druga" not in squash(band.text), band.band
+        assert "1970" not in band.text, band.band
+
+
+def test_the_file_s_next_date_page_ends_a_declaration_though_it_is_not_due(ocr):
+    # `--items` and `--recut` cut one page of a council's file: the file's
+    # other date pages still end it. This form's label reads as no label.
+    drawn = council_file(NAME, BORN, other_label="Data urodzenia:")
+
+    cut = bands(cut_bands(drawn.pdf(), [(0, 0)], ocr, starts=[0, 2]))
+
+    stays_out_of_the_next_declaration(drawn, cut)
+
+
+def test_a_page_reading_the_birth_date_s_label_starts_another_declaration(ocr):
+    # No "CZĘŚĆ A" and no name's label of the kinds the cut knows over it.
+    drawn = council_file(NAME, BORN, other_label="urodzona")
+
+    cut = bands(cut_bands(drawn.pdf(), [(0, 0)], ocr))
+
+    stays_out_of_the_next_declaration(drawn, cut)
 
 
 # -- without OCR ----------------------------------------------------------------
