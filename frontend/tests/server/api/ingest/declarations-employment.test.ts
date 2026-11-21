@@ -1185,16 +1185,20 @@ describe("api/ingest/declarations/employment", () => {
         "edges.declared",
       ]),
     );
+    const indexes = config.indexes
+      .filter((index) => index.collectionGroup === "declarationExtracts")
+      .map((index) =>
+        index.fields.map((f) => `${f.fieldPath} ${f.order}`).join(", "),
+      );
     // The queue the band is read from.
-    expect(
-      config.indexes
-        .filter((index) => index.collectionGroup === "declarationExtracts")
-        .map((index) =>
-          index.fields.map((f) => `${f.fieldPath} ${f.order}`).join(", "),
-        ),
-    ).toContain(
+    expect(indexes).toContain(
       "employment.status ASCENDING, employment.priority ASCENDING, " +
         "employment.answerCount DESCENDING, employment.rand ASCENDING",
+    );
+    // The sweep's look at bands their placing missed.
+    expect(indexes).toContain(
+      "status ASCENDING, pageMatch ASCENDING, " +
+        "employment.status ASCENDING, employment.rand ASCENDING",
     );
   });
 });

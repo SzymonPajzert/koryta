@@ -8,7 +8,8 @@ import { publishLimitOf, type SweepResult } from "~~/shared/declarations";
 /**
  * What the job on predator calls after each upload of declaration crops:
  * compares again the settled readings that have not met their pages yet, or
- * whose pages had no birth date, and takes up the publication queue
+ * whose pages had no birth date, places again the readings of declarations'
+ * posts a comparison missed, and takes up the publication queue
  * (`sweepDeclarations`). Scoped like the upload, to the datascience group.
  * The pages it moved move in the people count.
  *

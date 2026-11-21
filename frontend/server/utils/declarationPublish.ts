@@ -77,7 +77,10 @@ import {
 import { isAutomatedUid, isPublicEmployment } from "~~/shared/stats";
 import { placeClashes } from "~~/shared/twoPlaces";
 import { recordAudit } from "./audit";
-import { openEmploymentQuietly } from "./declarationEmployment";
+import {
+  openEmploymentQuietly,
+  placeEmploymentAgain,
+} from "./declarationEmployment";
 import {
   EXTRACTS,
   PUBLICATIONS,
@@ -2084,6 +2087,10 @@ export async function matchAndDrain(
  * The ones compared again go least recently compared first: a crop compared
  * to no effect is stamped and goes to the back, so each sweep reaches others.
  *
+ * And it places again the readings of declarations' posts that a
+ * comparison's own placing missed (`placeEmploymentAgain`), starting from
+ * `random()` in their order.
+ *
  * Says which pages it compared, put back or took up (`touched`), for the
  * people count to move them.
  */
@@ -2091,7 +2098,7 @@ export async function sweepDeclarations(
   db: Firestore,
   now: Date,
   limit: number,
-  options: { batch?: number } = {},
+  options: { batch?: number; random?: () => number } = {},
 ): Promise<SweepResult & { touched: string[] }> {
   const size = options.batch ?? SWEEP_BATCH;
   const extracts = db.collection(EXTRACTS);
@@ -2133,12 +2140,17 @@ export async function sweepDeclarations(
     // Even when a comparison fails: those before it reached their people.
     await requeueQuietly(db, pagesNewlyReached(matched));
   }
+  const placed = await placeEmploymentAgain(db, now, {
+    limit: size,
+    start: (options.random ?? Math.random)(),
+  });
 
   const reverted = await restoreReverted(db, now);
   const drain = await drainPublications(db, now, limit);
   return {
     checked: unmatched.size + recheck.size,
     changed,
+    placed,
     reverted,
     drain,
     touched: pagesTouched({ matched, drain, reverted }),

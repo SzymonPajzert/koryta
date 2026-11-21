@@ -1247,6 +1247,9 @@ export type SweepResult = {
   checked: number;
   /** Crops whose comparison came out differently this time. */
   changed: number;
+  /** Bands of declarations' posts that moved when placed again by their
+   * gate: what a comparison's own placing missed. */
+  placed: number;
   reverted: {
     restored: string[];
     held: { personId: string; reason: PublicationHoldReason }[];

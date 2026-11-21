@@ -864,6 +864,70 @@ describe("matchPages and the declaration's employer line", () => {
     expect(state()).toBe(before);
     expect(read("stats/declaration_employment")).toBeUndefined();
   });
+
+  describe("the sweep", () => {
+    /** Her crop compared and matched to her page, and its employer line
+     * still waiting: the placing after the comparison failed. */
+    async function missed() {
+      kowalska();
+      stored.delete("edges/kowalska-job");
+      await matchPages(firestore, "kowalska-crop", NOON);
+      employerLine({ rand: 0.5 });
+    }
+
+    it("places again a band the comparison's placing missed", async () => {
+      await missed();
+
+      // From past it in `rand`, round to it.
+      const result = await sweepDeclarations(firestore, LATER, 0, {
+        random: () => 0.9,
+      });
+
+      expect(result.placed).toBe(1);
+      expect(line()).toMatchObject({
+        status: "open",
+        personId: "kowalska",
+        priority: 1,
+      });
+      expect(read("stats/declaration_employment")).toMatchObject({
+        employer: { waiting: 0, open: 1 },
+      });
+      const before = state();
+      expect(
+        (await sweepDeclarations(firestore, LATER, 0, { random: () => 0 }))
+          .placed,
+      ).toBe(0);
+      expect(state()).toBe(before);
+    });
+
+    it("takes the bands from a new place each time, past those still shut", async () => {
+      await missed();
+      // Another declaration of hers, compared when a second page born that
+      // day held both: its band stays shut whatever the sweep does.
+      put("declarationExtracts/shut-crop", {
+        ...read("declarationExtracts/kowalska-crop")!,
+        pageOutcomes: { kowalska: "held", "kowalska-2": "held" },
+        employment: { ...line(), rand: 0.1 },
+      });
+
+      const first = await sweepDeclarations(firestore, LATER, 0, {
+        batch: 1,
+        random: () => 0,
+      });
+      expect(first.placed).toBe(0);
+      expect(line()).toMatchObject({ status: "waiting" });
+
+      const next = await sweepDeclarations(firestore, LATER, 0, {
+        batch: 1,
+        random: () => 0.3,
+      });
+      expect(next.placed).toBe(1);
+      expect(line()).toMatchObject({ status: "open" });
+      expect(read("declarationExtracts/shut-crop")!.employment).toMatchObject({
+        status: "waiting",
+      });
+    });
+  });
 });
 
 const finds = () =>
