@@ -164,6 +164,26 @@ costs a request and a lookup rather than a revision on every company in the run.
 The filter is what saves the request; the endpoint is what guarantees the
 database is not touched.
 
+## Putting the urzędy on the regions
+
+The relation dialog names the urząd that runs a region from the rows its
+region node carries as `offices` (`frontend/shared/offices.ts`).
+`LocalGovernmentOffices` builds the table from the public bodies catalogue and
+TERC, and `--type region` sends it whole, in one request; the site gives each
+region node its rows, a powiat its gminy's too, and writes only the nodes
+whose rows changed:
+
+```bash
+uv run koryta LocalGovernmentOffices --output stderr 2> offices.jsonl
+uv run koryta_uploader --type region --submit \
+  --endpoint https://autopush.koryta.pl < offices.jsonl
+```
+
+The run ends by naming the regions the table has no urząd for, the rows left
+out for a REGON or NIP that fails its check digit, and the names the „Urząd"
+chip would not know. `--limit` and `--offset` are refused. Run it again when
+the catalogue or TERC changes, and after `create-region-nodes.ts` adds regions.
+
 ## The compressed mirror
 
 Pipelines that read a whole hostname prefix -- the KRS ones, off

@@ -31,8 +31,8 @@ UNPLACED_REPORTED = 20
 
 #: The job a `--submit` run of each type is reported under on
 #: koryta.pl/admin/procesy, and the unit its progress counts. `computeNodes`
-#: uploads nothing - it asks the site to recount - and `region` has no uploader
-#: of its own, so neither is reported.
+#: uploads nothing - it asks the site to recount - and `region` is the whole
+#: urzędy table in one request, so neither is reported.
 REPORTED_AS: dict[str, tuple[str, str]] = {
     "person": ("people_import", "osób"),
     "company": ("company_import", "firm"),
@@ -542,6 +542,8 @@ class Uploader:
             return ScoreUploader(args, tokens, session)
         if args.type == "computeNodes":
             return ComputeNodesUploader(args, tokens, session)
+        if args.type == "region":
+            return RegionUploader(args, tokens, session)
         return Uploader(args, tokens, session)
 
     def auth_headers(self) -> dict[str, str]:
@@ -1236,6 +1238,75 @@ class ComputeNodesUploader(Uploader):
             "\nFinished",
             file=sys.stderr,
         )
+
+
+#: What a row of the `LocalGovernmentOffices` table carries, and all of it
+#: `/api/ingest/region` takes.
+OFFICE_FIELDS = ("teryt", "region", "name", "regon", "nip")
+
+#: The parts of `/api/ingest/region`'s answer that name what it did not take,
+#: and how a line of the run's output says each.
+REGION_ANSWER_LISTS = (
+    ("without", "regions the table has no urząd for, left as they were"),
+    ("refused", "rows left out for a REGON or NIP that fails its check digit"),
+    ("unnamed", "urzędy whose name the „Urząd” chip would not know"),
+)
+
+
+class RegionUploader(Uploader):
+    """Sends the `LocalGovernmentOffices` table to `/api/ingest/region`.
+
+    The site gives every region node the rows the relation dialog answers it
+    with, which for a powiat are its gminy's as well, so the table goes up
+    whole, in one request, and the site works out what each node carries:
+
+        uv run koryta LocalGovernmentOffices --output stderr 2> offices.jsonl
+        uv run koryta_uploader --type region --submit < offices.jsonl
+
+    `--limit` and `--offset` are refused rather than passed on: a table cut
+    short would leave a powiat with some of its gminy and not the rest.
+    """
+
+    @typing.override
+    def submit_results(self, entities):
+        if self.args.limit is not None or self.args.offset:
+            raise SystemExit(
+                "--type region sends the whole table: --limit or --offset would "
+                "leave a powiat with some of its gminy and not the rest."
+            )
+        offices = [
+            {field: row.get(field) for field in OFFICE_FIELDS}
+            for row in entities
+            if isinstance(row, dict)
+            and row.get("teryt")
+            and row.get("name")
+            and row.get("regon")
+        ]
+        if len(offices) < len(entities):
+            print(
+                f"Skipping {len(entities) - len(offices)} lines that are not "
+                "rows of the table.",
+                file=sys.stderr,
+            )
+        url = f"{self.args.endpoint}/api/ingest/region"
+        print(f"Uploading {len(offices)} urzędy to {url}...", end=" ", file=sys.stderr)
+        resp = self.post(url, json.dumps({"offices": offices}, cls=NumpyEncoder))
+        if resp.status_code not in (200, 201):
+            print(f"FAILED ({resp.status_code}): {resp.text}", file=sys.stderr)
+            raise IngestRefused(resp.status_code, resp.text, {"rows": len(offices)})
+        print("  OK", file=sys.stderr)
+
+        answer = json_object(resp)
+        print(
+            f"Regions: {answer.get('regions')}, updated {answer.get('updated')}, "
+            f"already up to date {answer.get('unchanged')}.",
+            file=sys.stderr,
+        )
+        for key, what in REGION_ANSWER_LISTS:
+            part = answer.get(key)
+            if isinstance(part, dict) and part.get("count"):
+                named = ", ".join(str(name) for name in part.get("named") or [])
+                print(f"{part['count']} {what}: {named}", file=sys.stderr)
 
 
 def print_results(entities):
