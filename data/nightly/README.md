@@ -39,6 +39,7 @@ order, each with a time limit and its output in the night's log:
 | `tests`           | `pytest src/tests/pipelines` over the night's outputs                                                                                              |
 | `outputs`         | `pytest -m e2e src/tests/e2e`: the outputs against `baseline.json`                                                                                 |
 | `invariants`      | `pytest -m e2e src/tests/pipelines`: the database invariants, over tonight's export                                                                |
+| `regions`         | `koryta_region_import --max-new 100`: the regions the site lacks, that many at most a night, and every region's urzędy (below)                     |
 | `companies`       | the `people` command and `--companies-only`: the companies its people name that tonight's export has no page for                                   |
 | `people`          | `koryta_people_import --scope priority --max-uploads 100 --max-odpis-only-current 10 --max-rejestrio-current 50 --max-published 10 --refresh none` |
 | `company_updates` | `koryta_company_import --max-uploads 200 --max-renames 0`: what tonight's data changes on the companies the export has (below)                     |
@@ -355,6 +356,18 @@ many Poles carry each surname (`koryta_bip_declarations send-facts`); the site
 counts everybody then, and moves them between stages during the day as pages
 are published or readings settle (decision on 2026-11-17).
 
+Regions: every gmina is a region since 2026-11-22, and the 1,500 or so that
+had no node then come a portion a night (decision on 2026-11-22). The
+`regions` step sends `RegionPayloads` and the urzędy table
+(`LocalGovernmentOffices`) as the reprocess has just built them
+(`koryta_region_import`), and the site creates at most `--max-new-regions`
+(100) of the regions it lacks, parents first and then by code: each one a
+page, an `owns` edge from its powiat and the recounts the edge sets off. The
+step reads "partial" while some wait. Renames, and the urzędy of the regions
+already there, are not capped. With none missing, a night writes only what
+TERYT or the urzędy table changes. A bigger portion is
+`KORYTA_NIGHTLY_ARGS="--max-new-regions 300"` in `/etc/koryta/nightly.env`.
+
 A failed step does not end the night; the steps that depend on it are held:
 
 - `invariants` needs the export; `tests` and `outputs` the reprocess.
@@ -374,7 +387,9 @@ A failed step does not end the night; the steps that depend on it are held:
 - `companies` runs only when `people` may - skipped, not held, when it may
   not, so that a held night still names the people as what it held - and holds
   nothing back: the people go up however it went. `company_updates` the same,
-  after the people: it neither waits for them nor holds the scores.
+  after the people: it neither waits for them nor holds the scores. `regions`
+  the same, before both, so that a region it creates is there for the people's
+  candidacies.
 - `declarations` waits for nothing and holds nothing: a held night still moves
   the count. No part from predator yet, or no answer from the site - a 404
   included, before the site has the endpoint - is partial, and the next night

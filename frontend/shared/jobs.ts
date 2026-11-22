@@ -584,9 +584,27 @@ export const JOBS: readonly JobDefinition[] = [
       "Stan bierze się z pliku .overall_export_metadata, który eksport zapisuje na końcu.",
     ],
   },
-  // The night's imports, in its order: company_import on both sides of the
-  // people, then the scores. A night that holds the people back runs none of
-  // them, so they are night steps rather than jobs with a start to miss.
+  // The night's imports, in its order: the regions, company_import on both
+  // sides of the people, then the scores. A night that holds the people back
+  // runs none of them, so they are night steps rather than jobs with a start
+  // to miss.
+  {
+    id: "region_import",
+    kind: "scheduled",
+    title: "Import regionów",
+    summary:
+      "Regiony z TERYT i ich urzędy przez /api/ingest/region: tworzy brakujące, najwyżej 100 na noc, a urzędy zapisuje na wszystkich.",
+    runsOn:
+      "Krok nocy na VM koryta-nightly (koryta_nightly): „regions” przed firmami i osobami; ręcznie koryta_region_import",
+    command: "koryta_region_import --max-new 100",
+    scheduleNote: "Co noc, razem z importem osób",
+    nightStep: true,
+    heartbeatMinutes: 15,
+    notes: [
+      "Brakujące gminy (ok. 1500 w dniu 22.11.2026) dochodzą partiami; dopóki jakieś czekają, krok kończy się częściowo.",
+      "Limit zmienia --max-new-regions w KORYTA_NIGHTLY_ARGS na VM.",
+    ],
+  },
   {
     id: "company_import",
     kind: "scheduled",

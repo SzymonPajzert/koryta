@@ -192,7 +192,9 @@ for the next run. The run ends by naming what it created and renamed, what
 still waits, the regions the table has no urząd for, the rows left out for a
 REGON or NIP that fails its check digit, and the names the „Urząd" chip would
 not know. A second run writes nothing. `--limit` and `--offset` are refused.
-Run it again when TERYT, the catalogue or a company's owners change.
+The night does the same as its step `regions` (`koryta_region_import`, at most
+100 new regions a night), so a change in TERYT, the catalogue or a company's
+owners reaches the site the next night; see data/nightly/README.md.
 
 ## The compressed mirror
 

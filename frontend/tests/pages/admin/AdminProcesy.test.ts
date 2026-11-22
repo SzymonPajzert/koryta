@@ -340,6 +340,7 @@ describe("/admin/procesy", () => {
       "krs_register_owners",
       "compressor",
       "firestore_export",
+      "region_import",
       "company_import",
       "people_import",
       "score_import",
@@ -368,6 +369,7 @@ describe("/admin/procesy", () => {
       krs_scrape_free: "running",
       krs_scrape_paid: "failed",
       // Registered, and nothing in the overview for them.
+      region_import: "never",
       score_import: "never",
       extraction_import: "never",
       people_request: "never",
@@ -409,7 +411,7 @@ describe("/admin/procesy", () => {
         .join(" ");
     expect(stat("running")).toBe("1 w toku");
     expect(stat("ok")).toBe("3 działa");
-    expect(stat("never")).toBe("8 brak raportów");
+    expect(stat("never")).toBe("9 brak raportów");
     // Only the counts that happen to be non-zero beyond the three always shown.
     expect(page.find('[data-stat="stopped"]').exists()).toBe(false);
     expect(page.find('[data-stat="partial"]').exists()).toBe(false);
@@ -788,7 +790,7 @@ describe("/admin/procesy", () => {
     expect(page.text()).toContain(
       "Nie udało się odświeżyć procesów: serwer nie odpowiedział w 30 s",
     );
-    expect(page.findAll("[data-job]")).toHaveLength(15);
+    expect(page.findAll("[data-job]")).toHaveLength(16);
 
     await vi.advanceTimersByTimeAsync(60_000);
     await flushPromises();
@@ -802,7 +804,7 @@ describe("/admin/procesy", () => {
     await page.get("[data-jobs-refresh]").trigger("click");
     await flushPromises();
     expect(page.text()).toContain("Nie udało się odświeżyć procesów: offline");
-    expect(page.findAll("[data-job]")).toHaveLength(15);
+    expect(page.findAll("[data-job]")).toHaveLength(16);
   });
 
   it("says so when the first load fails", async () => {

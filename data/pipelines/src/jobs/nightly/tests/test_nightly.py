@@ -34,6 +34,7 @@ GOOD = {
     "koryta_krs_odpis": 0,
     "koryta_scrape_krs_paid": 0,
     "koryta": 0,
+    "koryta_region_import": 0,
     # The companies step runs the people import too, with one flag more.
     "koryta_people_import --companies-only": 0,
     "koryta_people_import": 0,
@@ -285,6 +286,7 @@ def test_a_good_night_runs_every_step_in_order_and_exits_0(world):
         "pytest tests",
         "pytest outputs",
         "pytest invariants",
+        "koryta_region_import",
         "koryta_people_import --companies-only",
         "koryta_people_import",
         "koryta_company_import",
@@ -586,6 +588,51 @@ def test_what_the_company_step_leaves_or_breaks_holds_nothing_after_it(world):
 
     assert world.steps()["company_updates"] == ("failed", "kod wyjścia 1")
     assert world.steps()["scores"] == ("succeeded", "")
+
+
+def test_the_regions_go_up_before_the_people_at_most_so_many_new_a_night(world):
+    night.main([])
+
+    argv, _ = world.command("koryta_region_import")
+    assert argv[argv.index("--max-new") + 1] == "100"
+
+    world.commands.clear()
+    world.objects.clear()
+    night.main(["--max-new-regions", "300"])
+
+    argv, _ = world.command("koryta_region_import")
+    assert argv[argv.index("--max-new") + 1] == "300"
+
+
+def test_a_held_upload_skips_the_regions_too(world):
+    world.export = STALE
+
+    night.main([])
+
+    assert world.steps()["regions"] == (
+        "skipped",
+        "pominięte - osoby wstrzymane: nie ma dzisiejszej kopii bazy",
+    )
+    assert "koryta_region_import" not in world.ran()
+
+
+def test_what_the_region_step_leaves_or_breaks_holds_nothing_after_it(world):
+    # Regions left for the next night, as every night is until none is missing.
+    world.codes["koryta_region_import"] = night.EXIT_TRY_LATER
+
+    assert night.main([]) == 0
+
+    assert world.steps()["regions"] == ("partial", "zostało na następny raz")
+    assert world.steps()["people"] == ("succeeded", "")
+
+    world.commands.clear()
+    world.objects.clear()
+    world.codes["koryta_region_import"] = 1
+
+    assert night.main([]) == night.EXIT_FAILED
+
+    assert world.steps()["regions"] == ("failed", "kod wyjścia 1")
+    assert world.steps()["people"] == ("succeeded", "")
 
 
 def test_the_scores_go_up_after_the_people_within_the_steps_time(world):

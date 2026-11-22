@@ -318,6 +318,10 @@ const COUNTER_LABELS: Record<string, string> = {
   new_pages_scored: "nowych stron z oceną",
   // extraction (extraction_import).
   articles: "artykułów",
+  // region (region_import): regions created and renamed, those past the
+  // night's cap, and the regions whose urzędy it updated (`updated`).
+  renamed: "przemianowanych",
+  waiting: "czekających",
 };
 
 /** The counter keys the jobs in this repository write, so a test can check

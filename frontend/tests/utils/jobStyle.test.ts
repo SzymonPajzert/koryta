@@ -159,6 +159,8 @@ describe("counters", () => {
       ...["uploaded", "failed", "skipped"],
       ...["written", "retracted", "unchanged", "new_pages", "new_pages_scored"],
       ...["articles", "facts"],
+      // koryta_region_import.
+      ...["created", "renamed", "waiting", "updated", "unchanged", "planned"],
       "facts",
     ];
     for (const key of written) {

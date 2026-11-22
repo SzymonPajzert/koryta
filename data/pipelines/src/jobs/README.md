@@ -177,6 +177,15 @@ creates a page - a company the export had - and after 20 refusals in a row; as p
 refused some. `--dry-run` builds and counts, signs in to nothing and writes nothing of its own. Runs nightly as the
 step `company_updates`, after the people - see [data/nightly/README.md](../../../nightly/README.md).
 
+## region_import
+1. Reads `RegionPayloads` and `LocalGovernmentOffices` as they are on disk - on the VM the night's reprocess built them minutes before - restored from the shared cache when missing, never rebuilt
+1. Sends both to `/api/ingest/region` in one request, as `koryta_uploader --type region --max-new` does by hand: the site creates at most `--max-new` (100) of the regions it lacks, parents first and then by code, renames a gmina whose shared name its payload replaces, and puts on every region its urzędy
+
+It reports as `region_import`: partial (exit 75) while regions wait for the next run, failed (exit 1) when the outputs
+cannot be read or the site refuses the upload. `--dry-run` reads and counts, and signs in to nothing. Runs nightly as
+the step `regions`, before the companies and the people, so that the 1,500 or so gminy with no node on 2026-11-22 come a
+portion a night - see [data/nightly/README.md](../../../nightly/README.md).
+
 ## score_import
 1. Rebuilds every scoring model (`analysis.scores`) over what is on disk - on the VM, what the night's reprocess has just built - rating the site's people as this morning's export has them, and the pages the people import created since: `KorytaPeopleCreated` folds them from its `sent/` parts, which name the page each person went to
 1. Reconciles each model's votes on the site with what it wrote last time (`util.firestore.Firestore.replace_scores`): a changed score is written, one it no longer gives taken back; a model that rates nobody is not uploaded, since reconciled it would take back every vote it has, and fails the run

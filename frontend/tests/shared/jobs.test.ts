@@ -1724,6 +1724,7 @@ describe("JOBS", () => {
     // of their own would read as missed on every such night.
     expect(JOBS.filter((job) => job.nightStep).map((job) => job.id)).toEqual([
       "compressor",
+      "region_import",
       "company_import",
       "people_import",
       "score_import",
