@@ -1,9 +1,9 @@
 """What `koryta_uploader --type region` sends to `/api/ingest/region`.
 
 The site creates the regions it lacks and works out which of the urzędy
-table's rows each region node carries - a powiat its gminy's as well - so what
-matters here is that both go up whole, as the pipelines wrote them, or not at
-all.
+table's rows each region node carries, so what matters here is that both go up
+whole, as the pipelines wrote them, or not at all, and that a cap on what it
+creates reaches it.
 """
 
 import json
@@ -53,15 +53,21 @@ def wrapped(payload: dict) -> dict:
 
 
 def uploader(
-    limit: int | None = None, offset: int = 0, status: int = 200
+    limit: int | None = None,
+    offset: int = 0,
+    status: int = 200,
+    max_new: int | None = None,
+    waiting: int = 0,
 ) -> RegionUploader:
-    """A region uploader whose requests never leave: `post` answers `status`."""
+    """A region uploader whose requests never leave: `post` answers `status`,
+    with `waiting` regions left for a later run."""
     instance = Uploader.create(
         MagicMock(
             endpoint="http://localhost:3000",
             type="region",
             limit=limit,
             offset=offset,
+            max_new=max_new,
         ),
         tokens=MagicMock(),
         session=MagicMock(),
@@ -69,7 +75,12 @@ def uploader(
     assert isinstance(instance, RegionUploader)
     response = MagicMock(status_code=status, text="refused")
     response.json.return_value = {
-        "regions": {"sent": 1, "unchanged": 0, "edges": 1},
+        "regions": {
+            "sent": 1,
+            "unchanged": 0,
+            "edges": 1,
+            "waiting": {"count": waiting, "named": ["1406113 Gmina Warka"][:waiting]},
+        },
         "offices": {"regions": 2, "updated": 2, "unchanged": 0},
     }
     instance.post = MagicMock(return_value=response)  # type: ignore[method-assign]
@@ -120,13 +131,34 @@ def test_only_the_fields_the_site_takes_go_and_other_lines_stay_behind():
 
 @pytest.mark.parametrize("cut", [{"limit": 10}, {"offset": 5}])
 def test_a_table_cut_short_is_not_sent(cut):
-    # A powiat carries its gminy's urzędy, so part of the table would leave
-    # some of them off its list.
+    # The lines are the regions and the urzędy table run together, so a cut
+    # by lines could leave a województwo with one of its two urzędy.
     instance = uploader(**cut)
 
     with pytest.raises(SystemExit):
         instance.submit_results([WEJHEROWO])
     instance.post.assert_not_called()  # type: ignore[attr-defined]
+
+
+def test_max_new_caps_what_the_site_creates(capsys):
+    instance = uploader(max_new=100, waiting=1)
+    instance.submit_results([wrapped(GMINA), WEJHEROWO])
+
+    _, body = sent(instance)
+    assert body["maxCreated"] == 100
+    assert instance.answer is not None
+    assert instance.answer["regions"]["waiting"]["count"] == 1
+    assert (
+        "1 regions left for a later run, past --max-new: 1406113 Gmina Warka"
+        in capsys.readouterr().err
+    )
+
+
+def test_without_max_new_the_site_creates_every_one():
+    instance = uploader()
+    instance.submit_results([wrapped(GMINA)])
+
+    assert "maxCreated" not in sent(instance)[1]
 
 
 def test_a_refused_upload_fails_the_run():

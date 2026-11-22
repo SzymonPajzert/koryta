@@ -321,7 +321,10 @@ const terytCode = z.string().regex(/^\d{2}(?:\d{2}(?:\d{3})?)?$/);
  *   `owns` edge from the region above. `replaces` names the one name a gmina
  *   is to be renamed from, where another gmina of its powiat shares it.
  * - `offices`, the whole LocalGovernmentOffices table, a row for each region
- *   an urząd serves (see `RegionOffice` in shared/offices.ts). */
+ *   an urząd serves (see `RegionOffice` in shared/offices.ts).
+ * - `maxCreated`, how many of the regions the site lacks this request may
+ *   create; the rest wait for the next one. The night creates them so many a
+ *   night (`koryta_region_import --max-new`). */
 export const regionRequestSchema = z
   .object({
     regions: z
@@ -354,6 +357,7 @@ export const regionRequestSchema = z
         }),
       )
       .default([]),
+    maxCreated: z.number().int().min(0).optional(),
   })
   .refine((body) => body.regions.length > 0 || body.offices.length > 0, {
     message: "Brak regionów i urzędów do zapisania.",

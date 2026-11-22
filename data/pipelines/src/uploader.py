@@ -32,7 +32,8 @@ UNPLACED_REPORTED = 20
 #: The job a `--submit` run of each type is reported under on
 #: koryta.pl/admin/procesy, and the unit its progress counts. `computeNodes`
 #: uploads nothing - it asks the site to recount - and `region` is the whole
-#: urzędy table in one request, so neither is reported.
+#: urzędy table in one request, so neither is reported; the night's
+#: `koryta_region_import` reports its own.
 REPORTED_AS: dict[str, tuple[str, str]] = {
     "person": ("people_import", "osób"),
     "company": ("company_import", "firm"),
@@ -404,6 +405,7 @@ class Args:
     limit: int | None
     offset: int | None
     model: str | None
+    max_new: int | None
 
 
 def parse_args() -> Args:
@@ -430,6 +432,13 @@ def parse_args() -> Args:
     )
     parser.add_argument(
         "--prod", action="store_true", help="Production mode (requires token auth)"
+    )
+    parser.add_argument(
+        "--max-new",
+        type=int,
+        help="For --type region: create at most N of the regions the site "
+        "lacks; the rest wait for the next run, as the night's region step "
+        "sends them.",
     )
     parser.add_argument(
         "--model",
@@ -1258,6 +1267,7 @@ REGION_ANSWER_LISTS = {
         ("orphaned", "regions created without an edge, their parent missing"),
         ("removed", "regions that were taken down, left so"),
         ("taken", "ids something else already has, left alone"),
+        ("waiting", "regions left for a later run, past --max-new"),
     ),
     "offices": (
         ("without", "regions the table has no urząd for, left as they were"),
@@ -1306,8 +1316,7 @@ class RegionUploader(Uploader):
 
     The site creates the regions it lacks - every gmina is one since
     2026-11-22 - and gives every region node the rows the relation dialog
-    answers it with, which for a powiat are its gminy's as well, so both go up
-    whole and the site works out the rest:
+    answers it with, so both go up whole and the site works out the rest:
 
         uv run koryta RegionPayloads --no-backup --refresh RegionPayloads \
             --output stderr 2> regions.jsonl
@@ -1315,17 +1324,23 @@ class RegionUploader(Uploader):
             2> offices.jsonl
         cat regions.jsonl offices.jsonl | uv run koryta_uploader --type region --submit
 
-    Either file alone works too. `--limit` and `--offset` are refused rather
-    than passed on: a table cut short would leave a powiat with some of its
-    gminy and not the rest.
+    Either file alone works too. `--max-new N` lets the site create at most N
+    of the regions it lacks, the rest waiting for the next run; the night's
+    step (`koryta_region_import`) sends them that way. `--limit` and
+    `--offset` are refused rather than passed on: they count lines, and the
+    lines are two tables run together, so a cut could leave a województwo
+    with one of its two urzędy.
     """
+
+    #: The site's answer to the last upload, for a job that reads its counts.
+    answer: dict | None = None
 
     @typing.override
     def submit_results(self, entities):
         if self.args.limit is not None or self.args.offset:
             raise SystemExit(
                 "--type region sends the whole table: --limit or --offset would "
-                "leave a powiat with some of its gminy and not the rest."
+                "cut it at a line. --max-new caps the regions it creates."
             )
         regions, offices, other = region_rows(entities)
         if other:
@@ -1340,7 +1355,10 @@ class RegionUploader(Uploader):
             end=" ",
             file=sys.stderr,
         )
-        body = {"regions": regions, "offices": offices}
+        body: dict[str, typing.Any] = {"regions": regions, "offices": offices}
+        max_new = getattr(self.args, "max_new", None)
+        if max_new is not None:
+            body["maxCreated"] = max_new
         resp = self.post(url, json.dumps(body, cls=NumpyEncoder))
         if resp.status_code not in (200, 201):
             print(f"FAILED ({resp.status_code}): {resp.text}", file=sys.stderr)
@@ -1352,6 +1370,7 @@ class RegionUploader(Uploader):
         print("  OK", file=sys.stderr)
 
         answer = json_object(resp)
+        self.answer = answer
         placed = answer.get("regions")
         if isinstance(placed, dict):
             print(

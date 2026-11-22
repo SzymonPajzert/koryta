@@ -83,8 +83,8 @@ type BatchWriter = ReturnType<typeof batchWriter>;
 /** Keep the site's regions in step with TERYT, and put on each the urzędy the
  * relation dialog answers it with.
  *
- * `koryta_uploader --type region` sends `RegionPayloads` and the
- * LocalGovernmentOffices table, either or both:
+ * `koryta_uploader --type region`, and the night's `koryta_region_import`,
+ * send `RegionPayloads` and the LocalGovernmentOffices table, either or both:
  *
  * - A region the site lacks is created, with the `owns` edge from the region
  *   above, as scripts/migrate/create-region-nodes.ts did. Every gmina is one
@@ -92,7 +92,12 @@ type BatchWriter = ReturnType<typeof batchWriter>;
  *   tier of them (decision on 2026-11-22). A region already there is matched
  *   by its TERYT code and kept as it is, except a gmina whose name is the one
  *   its payload `replaces` - one another gmina of its powiat shares, such as
- *   two "Gmina Wejherowo" - which takes the name with its kind.
+ *   two "Gmina Wejherowo" - which takes the name with its kind. `maxCreated`
+ *   caps how many it creates, parents first and then by code; the rest are
+ *   counted as waiting, for the next request. The night's step
+ *   (`koryta_region_import`) sends one each night, so the 1,500 or so gminy
+ *   and their edges reach the site a portion a night rather than at once
+ *   (decision on 2026-11-22).
  * - Every region node gets the urząd that runs it (`officesFor`): its own,
  *   or for a town's or the villages' half of a gmina the gmina's. They are
  *   kept on the nodes rather than shipped with the site (decision on
@@ -145,7 +150,14 @@ export default defineEventHandler(async (event) => {
   const writer = batchWriter(db);
   const regions =
     body.regions.length > 0
-      ? await placeRegions(db, writer, body.regions, stored, index)
+      ? await placeRegions(
+          db,
+          writer,
+          body.regions,
+          stored,
+          index,
+          body.maxCreated,
+        )
       : undefined;
   const offices =
     body.offices.length > 0
@@ -168,15 +180,16 @@ export default defineEventHandler(async (event) => {
   };
 });
 
-/** Create the regions the site lacks, and rename the gminy whose shared name
- * their payload replaces. A region created here carries its urzędy already,
- * and joins `stored`. */
+/** Create the regions the site lacks, at most `maxCreated` of them, and
+ * rename the gminy whose shared name their payload replaces. A region created
+ * here carries its urzędy already, and joins `stored`. */
 async function placeRegions(
   db: Firestore,
   writer: BatchWriter,
   payloads: RegionPayload[],
   stored: StoredRegion[],
   index: Map<string, RegionOffice[]>,
+  maxCreated?: number,
 ) {
   const byTeryt = new Map<string, StoredRegion>();
   for (const region of stored) {
@@ -187,8 +200,12 @@ async function placeRegions(
     }
   }
 
-  // Parents first: a gmina's powiat may be created by this same upload.
-  const ordered = [...payloads].sort((a, b) => a.teryt.length - b.teryt.length);
+  // Parents first: a gmina's powiat may be created by this same upload. Then
+  // by code, so that a capped upload takes the same ones whatever order the
+  // payloads came in, and the next one goes on from there.
+  const ordered = [...payloads].sort(
+    (a, b) => a.teryt.length - b.teryt.length || (a.teryt < b.teryt ? -1 : 1),
+  );
   const occupied = await existingNodeIds(
     db,
     ordered.filter((p) => !byTeryt.has(p.teryt)).map((p) => p.node_id),
@@ -199,6 +216,7 @@ async function placeRegions(
   const removed: string[] = [];
   const taken: string[] = [];
   const orphaned: string[] = [];
+  const waiting: string[] = [];
   let unchanged = 0;
   let edges = 0;
   for (const payload of ordered) {
@@ -222,6 +240,10 @@ async function placeRegions(
     if (occupied.has(payload.node_id)) {
       // Something else is filed under the id; it is not overwritten.
       taken.push(payload.node_id);
+      continue;
+    }
+    if (maxCreated !== undefined && created.length >= maxCreated) {
+      waiting.push(`${payload.teryt} ${payload.name}`);
       continue;
     }
 
@@ -271,6 +293,7 @@ async function placeRegions(
     orphaned: named(orphaned),
     removed: named(removed),
     taken: named(taken),
+    waiting: named(waiting),
   };
 }
 

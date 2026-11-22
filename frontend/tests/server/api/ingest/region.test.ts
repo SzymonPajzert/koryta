@@ -427,6 +427,78 @@ describe("POST /api/ingest/region", () => {
       });
     });
 
+    describe("with a cap on how many it creates", () => {
+      // Sent child first and out of code order: the cap takes the powiat,
+      // then the gminy by code.
+      const grojecki = [
+        payload("1406113", "Gmina Warka", "1406"),
+        payload("1406012", "Gmina Belsk Duży", "1406"),
+        payload("1406", "Powiat grójecki", "14"),
+      ];
+
+      beforeEach(() => {
+        store.nodes!.teryt14 = region("14");
+      });
+
+      it("creates no more than it may, parents first, and counts the rest as waiting", async () => {
+        const answer = await upload({ regions: grojecki, maxCreated: 2 });
+
+        expect(store.nodes!.teryt1406).toMatchObject({ teryt: "1406" });
+        expect(store.nodes!.teryt1406012).toMatchObject({ teryt: "1406012" });
+        expect(store.nodes!.teryt1406113).toBeUndefined();
+        expect(answer.regions).toMatchObject({
+          created: {
+            count: 2,
+            named: ["1406 Powiat grójecki", "1406012 Gmina Belsk Duży"],
+          },
+          waiting: { count: 1, named: ["1406113 Gmina Warka"] },
+          edges: 2,
+        });
+      });
+
+      it("goes on the next time from where it stopped", async () => {
+        await upload({ regions: grojecki, maxCreated: 2 });
+        writes = [];
+
+        const answer = await upload({ regions: grojecki, maxCreated: 2 });
+
+        expect(store.nodes!.teryt1406113).toMatchObject({ teryt: "1406113" });
+        expect(answer.regions).toMatchObject({
+          created: { count: 1, named: ["1406113 Gmina Warka"] },
+          unchanged: 2,
+          waiting: { count: 0 },
+        });
+      });
+
+      it("still renames and gives the regions there their urzędy at 0", async () => {
+        store.nodes!.teryt2215031 = region("2215031", {
+          name: "Gmina Wejherowo",
+        });
+
+        const answer = await upload({
+          regions: [
+            payload("2215031", "Gmina miejska Wejherowo", "2215", [
+              "Gmina Wejherowo",
+            ]),
+            payload("2215102", "Gmina wiejska Wejherowo", "2215"),
+          ],
+          offices: TABLE,
+          maxCreated: 0,
+        });
+
+        expect(store.nodes!.teryt2215102).toBeUndefined();
+        expect(store.nodes!.teryt2215031).toMatchObject({
+          name: "Gmina miejska Wejherowo",
+          offices: [WEJHEROWO],
+        });
+        expect(answer.regions).toMatchObject({
+          created: { count: 0 },
+          renamed: { count: 1 },
+          waiting: { count: 1, named: ["2215102 Gmina wiejska Wejherowo"] },
+        });
+      });
+    });
+
     it("creates a region whose parent the site lacks, without the edge", async () => {
       const answer = await upload({
         regions: [payload("0201011", "Gmina Bolesławiec", "0201")],
@@ -457,6 +529,9 @@ describe("POST /api/ingest/region", () => {
     ).rejects.toThrow();
     await expect(
       upload({ regions: [{ ...payload("22", "Pomorskie"), type: "place" }] }),
+    ).rejects.toThrow();
+    await expect(
+      upload({ regions: [payload("22", "Pomorskie")], maxCreated: -1 }),
     ).rejects.toThrow();
     expect(writes).toEqual([]);
   });

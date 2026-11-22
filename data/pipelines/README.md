@@ -185,12 +185,14 @@ cat regions.jsonl offices.jsonl | uv run koryta_uploader --type region --submit 
 The site creates the regions it lacks, with the `owns` edge from the region
 above; renames a gmina still carrying the name another gmina of its powiat
 shares to the name with its kind ("Gmina miejska Wejherowo"); and gives every
-region node its rows, a powiat its gminy's too, writing only the nodes that
-change. The run ends by naming what it created and renamed, the regions the
-table has no urząd for, the rows left out for a REGON or NIP that fails its
-check digit, and the names the „Urząd" chip would not know. A second run
-writes nothing. `--limit` and `--offset` are refused. Run it again when TERYT,
-the catalogue or a company's owners change.
+region node its own urząd, and a town's or the villages' half of a gmina the
+gmina's, writing only the nodes that change. `--max-new N` lets it create at
+most N of the regions it lacks, parents first and then by code; the rest wait
+for the next run. The run ends by naming what it created and renamed, what
+still waits, the regions the table has no urząd for, the rows left out for a
+REGON or NIP that fails its check digit, and the names the „Urząd" chip would
+not know. A second run writes nothing. `--limit` and `--offset` are refused.
+Run it again when TERYT, the catalogue or a company's owners change.
 
 ## The compressed mirror
 
