@@ -68,14 +68,20 @@ import {
 import { registerEntry } from "~~/shared/identifiers";
 import { CONTENT_CHANGED_AT } from "~~/shared/lastmod";
 import type { Edge, Note, NoteSource, Revision } from "~~/shared/model";
-import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
+import { approvedRevisionId, asArray, pageIsPublic } from "~~/shared/model";
 import { partyFloor, showsCandidacyAndPaidPost } from "~~/shared/partyFloor";
 import {
   latestPublishableRevision,
   normalizeUpdateTime,
 } from "~~/shared/revisions";
 import { isAutomatedUid, isPublicEmployment } from "~~/shared/stats";
-import { placeClashes } from "~~/shared/twoPlaces";
+import {
+  candidacyParties,
+  partiesOnlyFrom,
+  placeClashes,
+  runsElsewhere,
+  type Candidacy,
+} from "~~/shared/twoPlaces";
 import { recordAudit } from "./audit";
 import {
   EXTRACTS,
@@ -163,6 +169,9 @@ export type StoredPublication = {
   edges?: {
     published: string[];
     held: { id: string; reason: PublicationEdgeHold }[];
+    /** A namesake's runs this automation took off the page as it went up
+     * (`namesakeRuns`). */
+    removed?: string[];
   };
   /** When a sweep found the page a draft again after this automation had put
    * it up, and nobody on record had taken it down. */
@@ -1131,13 +1140,18 @@ async function claimHeld(
  *   counts the published ones, and a draft beside them is a namesake's record
  *   on the page - whose committee the pipeline adds to the page's parties. A
  *   candidacy a reviewer rejected is not the page's and is left out. 169 of
- *   the 2,492 dated drafts with a candidacy on 2026-10-29 are held for this.
+ *   the 2,492 dated drafts with a candidacy on 2026-10-29 were held for this,
+ *   266 on 2026-11-22. A clash the place of the declaration settles holds
+ *   nothing: the runs elsewhere are a namesake's, and come off the page as it
+ *   goes up (`namesakeRuns`). 232 of those 266 were such.
  *
  * Then the page goes up the way /api/nodes/publish puts it up: the import's
  * newest revision approved first, where the page has none approved or an
  * older one, in a commit of its own, then `published` with the audit row.
- * That commit also files „Inne” on a page that would go up naming no party
- * beside its candidacy and paid post (`partyFloor` in shared/partyFloor.ts).
+ * A namesake's runs come off first, in commits of their own. The page's commit
+ * takes off the parties only those runs named, and files „Inne” on a page
+ * that would go up naming no party beside its candidacy and paid post
+ * (`fileParties`, `partyFloor` in shared/partyFloor.ts).
  * `stats.isApproved` is left to the trigger in functions/src/nodes.ts, which
  * sets it on every change of visibility, as it does for that endpoint. The
  * relations follow in batches: the chosen candidacies as a reviewer's publish
@@ -1290,17 +1304,19 @@ export async function publishPage(
       reviewed.set(edge.id, "by_hand");
     }
   }
-  const chosenIds = new Set(chosen.map((edge) => edge.id));
-  const clashing = clashingCandidacies(
-    pageId,
-    elections.filter(
-      (edge) =>
-        chosenIds.has(edge.id) ||
-        !(edgeRevisions.get(edge.id) ?? []).some(
-          (each) => each.status === "rejected",
-        ),
-    ),
-  );
+  const considered = consideredCandidacies(elections, chosen, edgeRevisions);
+  let clashing = clashingCandidacies(pageId, considered);
+  // A clash the place of the declaration settles holds nothing: the runs
+  // elsewhere are a namesake's, and come off the page as it goes up.
+  let namesakes: StoredEdge[] = [];
+  if (!resumed && reviewed.size === 0 && clashing.size > 0) {
+    namesakes = namesakeRuns(pageId, considered, units, edgeRevisions) ?? [];
+    const gone = new Set(namesakes.map((edge) => edge.id));
+    clashing = clashingCandidacies(
+      pageId,
+      considered.filter((edge) => !gone.has(edge.id)),
+    );
+  }
   if (!resumed) {
     if (reviewed.size > 0) return held("candidacy_reviewed");
     if (clashing.size > 0) return held("two_places");
@@ -1332,8 +1348,11 @@ export async function publishPage(
   });
 
   let approvedRevision: string | null = null;
-  let floored = false;
+  let parties: FiledParties = { dropped: [], floored: false };
   if (!resumed) {
+    // In commits of their own, first: one that fails leaves a draft whose
+    // next pass finds the clash gone.
+    await removeNamesakeRuns(db, namesakes, namesakeReason(units));
     // Its own commit, before the one below, as in /api/nodes/publish: the
     // worst a failure in between leaves is a page approved and still hidden,
     // which the next pass recognises as this automation's (`keptHidden`). No
@@ -1356,9 +1375,14 @@ export async function publishPage(
       ...jobs.filter(({ data }) => pageIsPublic(data)),
       ...jobsToPublish,
     ].map(({ data }) => ({ ...data, published: true }));
-    floored =
-      partyFloor(page) !== null &&
-      (await fileOtherParty(db, batch, nodeRef, shown, companyNodes));
+    if (namesakes.length > 0 || partyFloor(page) !== null) {
+      parties = await fileParties(db, batch, nodeRef, {
+        shown,
+        companies: companyNodes,
+        candidacies: elections,
+        namesakes: new Set(namesakes.map((edge) => edge.id)),
+      });
+    }
     batch.update(nodeRef, {
       published: true,
       [CONTENT_CHANGED_AT]: now.toISOString(),
@@ -1398,9 +1422,14 @@ export async function publishPage(
   const at = Timestamp.fromDate(now);
   // What earlier passes put up stays on the record: a page put back after a
   // stale write finds its relations live already, and publishes none.
+  const removed = unique([
+    ...(publication?.edges?.removed ?? []),
+    ...namesakes.map((edge) => edge.id),
+  ]);
   const edgesRecord = {
     published: unique([...(publication?.edges?.published ?? []), ...published]),
     held: heldEdges,
+    ...(removed.length > 0 ? { removed } : {}),
   };
   await publicationRef.set(
     {
@@ -1423,7 +1452,14 @@ export async function publishPage(
   );
   console.info(
     `[declarations] published ${pageId} with ${published.length} relation(s), ` +
-      `${heldEdges.length} held${floored ? ", party Inne" : ""}`,
+      `${heldEdges.length} held` +
+      (namesakes.length > 0
+        ? `, ${namesakes.length} namesake run(s) taken off`
+        : "") +
+      (parties.dropped.length > 0
+        ? `, without ${parties.dropped.join(", ")}`
+        : "") +
+      (parties.floored ? ", party Inne" : ""),
   );
   return { status: "published", approvedRevision, edges: edgesRecord };
 }
@@ -1732,6 +1768,8 @@ type Unit = {
   level?: string;
   office: string;
   year: number;
+  /** „powiat tucholski”, as the crawler names the office's unit. */
+  unitName?: string;
 };
 
 /** The units the crops were filed for, each once. */
@@ -1752,8 +1790,13 @@ function unitsOf(extracts: readonly DocumentData[]): Unit[] {
  * filed under the powiat (a gmina's or a city's) or the województwo (the
  * sejmik), never under the gmina itself. */
 function regionOf(unit: Unit): string {
-  const digits = unit.level === "wojewodztwo" ? 2 : 4;
-  return `teryt${unit.teryt.slice(0, digits)}`;
+  return `teryt${placeOf(unit)}`;
+}
+
+/** The TERYT code of that region: the place a unit's declaration puts the
+ * person in. */
+function placeOf(unit: Unit): string {
+  return unit.teryt.slice(0, unit.level === "wojewodztwo" ? 2 : 4);
 }
 
 /** These ids' nodes, those that exist, read in chunks of 100. */
@@ -1844,6 +1887,17 @@ function writtenByPerson(revision: Revision): boolean {
   );
 }
 
+/** A stored candidacy of the page, as the two-places rule reads it. */
+function candidacyOn(pageId: string) {
+  return ({ data }: StoredEdge): Candidacy => ({
+    personId: pageId,
+    regionId: data.target,
+    startDate: data.start_date,
+    position: data.position,
+    byElection: data.by_election,
+  });
+}
+
 /** The ids of the candidacies among `rows` that put the person in two places
  * in one election - grouped by the election, the way the night counts them,
  * so a European run beside a local one in 2024 is two contests. Grouped by
@@ -1852,41 +1906,225 @@ export function clashingCandidacies(
   pageId: string,
   rows: readonly StoredEdge[],
 ): Set<string> {
-  const clashes = placeClashes(rows, ({ data }) => ({
-    personId: pageId,
-    regionId: data.target,
-    startDate: data.start_date,
-    position: data.position,
-    byElection: data.by_election,
-  }));
+  const clashes = placeClashes(rows, candidacyOn(pageId));
   return new Set(clashes.flatMap((clash) => clash.rows.map((row) => row.id)));
 }
 
-/** Files „Inne” in `batch` on a page that goes up naming no party while it
- * shows a candidacy and a paid public post (`partyFloor`). Whether it did.
- * The page is read again, for what the approval just before wrote on it. */
-async function fileOtherParty(
+/** The candidacies the two-places rule is asked about: all of the page's
+ * but those a reviewer rejected, which are not the person's - unless the
+ * declaration was filed for one. */
+function consideredCandidacies(
+  elections: readonly StoredEdge[],
+  chosen: readonly StoredEdge[],
+  edgeRevisions: ReadonlyMap<string, readonly Revision[]>,
+): StoredEdge[] {
+  const chosenIds = new Set(chosen.map((edge) => edge.id));
+  return elections.filter(
+    (edge) =>
+      chosenIds.has(edge.id) ||
+      !(edgeRevisions.get(edge.id) ?? []).some(
+        (each) => each.status === "rejected",
+      ),
+  );
+}
+
+/** The page's runs that stand in two places beside a run where its
+ * declarations were filed (`units`): a namesake's, which the page goes up
+ * without (decision on 2026-11-22). PKW records are attached to everybody
+ * they fit, so a common name brings other people's runs; the declaration,
+ * whose birth date is the page's, says which place is the person's.
+ *
+ * Null where that does not settle every clash (`runsElsewhere`), and where a
+ * run it would take off is not the import's alone: one that is live, or that
+ * somebody wrote or reviewed a version of. Those are a person's word, which
+ * the automation leaves to a reviewer. */
+function namesakeRuns(
+  pageId: string,
+  candidacies: readonly StoredEdge[],
+  units: readonly Unit[],
+  edgeRevisions: ReadonlyMap<string, readonly Revision[]>,
+): StoredEdge[] | null {
+  const candidacyOf = candidacyOn(pageId);
+  const runs = runsElsewhere(
+    placeClashes(candidacies, candidacyOf),
+    candidacyOf,
+    units.map(placeOf),
+  );
+  if (!runs) return null;
+  const personsWord = runs.some(
+    ({ id, data }) =>
+      pageIsPublic(data) ||
+      (edgeRevisions.get(id) ?? []).some(
+        (revision) =>
+          writtenByPerson(revision) ||
+          (!!revision.review_user && !isAutomatedUid(revision.review_user)),
+      ),
+  );
+  return personsWord ? null : runs;
+}
+
+/** The runs a pass would take off a draft held for two places now - none
+ * where no clash is left - or null where the place of its declarations does
+ * not settle its clashes, or the page is public or gone: what
+ * scripts/migrate/requeue-settled-two-places-holds.ts asks of each such hold.
+ * Read as `publishPage` reads them: the crops with the page's date, the
+ * candidacies they were filed for, the reviewers' word. */
+export async function namesakeRunsOnPage(
+  db: Firestore,
+  pageId: string,
+): Promise<string[] | null> {
+  const [publicationSnapshot, pageSnapshot] = await db.getAll(
+    db.collection(PUBLICATIONS).doc(pageId),
+    db.collection("nodes").doc(pageId),
+  );
+  const publication = publicationSnapshot?.data() as
+    StoredPublication | undefined;
+  const page = pageSnapshot?.data();
+  // A page publishPage would hold for being no page at all, or that is up.
+  if (
+    page?.type !== "person" ||
+    page.deleted === true ||
+    page.merged_into ||
+    pageIsPublic(page)
+  ) {
+    return null;
+  }
+  const units = unitsOf(
+    (await agreedExtracts(db, publication?.extractIds ?? [])).filter(
+      (extract) => agreedDay(extract) === birthDateOf(page),
+    ),
+  );
+  const elections = (
+    await db.collection("edges").where("source", "==", pageId).get()
+  ).docs
+    .map((doc) => ({ id: doc.id, data: doc.data() as Edge }))
+    .filter(
+      (edge) => edge.data.type === "election" && edge.data.deleted !== true,
+    );
+  const regions = await publicNodes(
+    db,
+    units.map((unit) => regionOf(unit)),
+  );
+  const choice = chooseCandidacies(elections, units, regions);
+  const edgeRevisions = await edgeRevisionsForMany(
+    db,
+    elections.map((edge) => edge.id),
+  );
+  const considered = consideredCandidacies(
+    elections,
+    "chosen" in choice ? choice.chosen : [],
+    edgeRevisions,
+  );
+  const runs = namesakeRuns(pageId, considered, units, edgeRevisions);
+  return runs && runs.map((edge) => edge.id);
+}
+
+/** Why a namesake's run came off the page, as its removal records it: the
+ * place the person's declarations say. */
+function namesakeReason(units: readonly Unit[]): string {
+  const places = unique(
+    units.flatMap((unit) => (unit.unitName ? [unit.unitName] : [])),
+  );
+  const reason =
+    "Imiennik. Oświadczenie majątkowe tej osoby jest z innego miejsca";
+  return places.length > 0 ? `${reason}: ${places.join(", ")}.` : `${reason}.`;
+}
+
+/** Takes a namesake's runs off the page the way an admin's removal does
+ * (/api/edges/delete): each kept with `deleted` and the reason, under an
+ * approved revision and an audit row, here in this automation's name. The
+ * people import leaves a removed run as it is when it sends the run again. */
+async function removeNamesakeRuns(
+  db: Firestore,
+  runs: readonly StoredEdge[],
+  reason: string,
+): Promise<void> {
+  for (let i = 0; i < runs.length; i += EDGE_PUBLISH_CHUNK) {
+    const batch = db.batch();
+    for (const { id, data } of runs.slice(i, i + EDGE_PUBLISH_CHUNK)) {
+      const edgeRef = db.collection("edges").doc(id);
+      // As /api/edges/delete: withheld from `stored`, so that this revision
+      // is the one that states them.
+      const {
+        deleted: _deleted,
+        delete_reason: _reason,
+        ...stored
+      } = data as DocumentData;
+      const { revisionRef } = createRevisionTransaction(
+        db,
+        batch,
+        actor,
+        edgeRef,
+        {
+          ...withoutInternalFields(data as DocumentData),
+          deleted: true,
+          delete_reason: reason,
+        },
+        { automatic: true, approve: true, published: false, stored },
+      );
+      recordAudit(
+        db,
+        {
+          action: "delete",
+          collection: "edges",
+          target_id: id,
+          revision_id: revisionRef.id,
+          user: DECLARATION_ACTOR,
+          reason,
+        },
+        batch,
+      );
+    }
+    await batch.commit();
+  }
+}
+
+/** What `fileParties` changed on the page's list. */
+type FiledParties = { dropped: string[]; floored: boolean };
+
+/** Files in `batch` the parties a page goes up naming, where they change:
+ * without those only the namesake's runs taken off it name
+ * (`partiesOnlyFrom`), and „Inne” where it would then name none while it
+ * shows a candidacy and a paid public post (`partyFloor`). A list a person
+ * set is theirs, and left as it is. The page is read again, for what the
+ * approval just before wrote on it. */
+async function fileParties(
   db: Firestore,
   batch: WriteBatch,
   nodeRef: DocumentReference,
-  shown: readonly Edge[],
-  companies: ReadonlyMap<string, DocumentData>,
-): Promise<boolean> {
-  if (!showsCandidacyAndPaidPost(shown, (id) => companies.get(id))) {
-    return false;
-  }
+  args: {
+    shown: readonly Edge[];
+    companies: ReadonlyMap<string, DocumentData>;
+    candidacies: readonly StoredEdge[];
+    namesakes: ReadonlySet<string>;
+  },
+): Promise<FiledParties> {
+  const none = { dropped: [], floored: false };
   const stored = (await nodeRef.get()).data();
-  const parties = stored ? partyFloor(stored) : null;
-  if (!stored || !parties) return false;
+  if (!stored || stored.partiesSource === "manual") return none;
+  const before = asArray(stored.parties as string[] | null);
+  const dropped = partiesOnlyFrom(
+    before,
+    args.candidacies,
+    ({ data }) => candidacyParties(data as unknown as DocumentData),
+    ({ id }) => args.namesakes.has(id),
+  );
+  const kept = before.filter((party) => !dropped.includes(party));
+  const floor = showsCandidacyAndPaidPost(args.shown, (id) =>
+    args.companies.get(id),
+  )
+    ? partyFloor({ parties: kept })
+    : null;
+  if (dropped.length === 0 && !floor) return none;
   createRevisionTransaction(
     db,
     batch,
     actor,
     nodeRef,
-    { ...withoutInternalFields(stored), parties },
+    { ...withoutInternalFields(stored), parties: floor ?? kept },
     { automatic: true, approve: true, stored },
   );
-  return true;
+  return { dropped, floored: !!floor };
 }
 
 /** Puts the relations up, `EDGE_PUBLISH_CHUNK` a commit. The ids that went

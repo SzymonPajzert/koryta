@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
+  candidacyParties,
   partiesOnlyFrom,
   placeClashes,
   placesAgree,
   regionTeryt,
+  runsElsewhere,
   yearsInPlace,
   type Candidacy,
 } from "../../shared/twoPlaces";
@@ -278,6 +280,132 @@ describe("yearsInPlace", () => {
  * publish dialog the rows /api/edges/byNode makes of them. A page the hold
  * keeps back for two places has to reach the dialog with the same runs
  * marked, or one confirm publishes the namesake's. */
+describe("runsElsewhere", () => {
+  /** The ids `places` take off a list, or null where they settle nothing. */
+  function elsewhere(rows: ReturnType<typeof run>[], places: string[]) {
+    const settled = runsElsewhere(
+      placeClashes(rows, (row) => row),
+      (row) => row,
+      places,
+    );
+    return settled && settled.map((row) => row.id);
+  }
+
+  it("takes off the runs outside the declaration's place", () => {
+    // Her declaration is from powiat gnieźnieński; a namesake stood in
+    // powiat kozienicki in 2002, and two more in 2006.
+    expect(
+      elsewhere(
+        [
+          run("gnieznienski-2002", "teryt3003", "2002-01-01"),
+          run("kozienicki-2002", "teryt1407", "2002-01-01"),
+          run("gnieznienski-2006", "teryt3003", "2006-01-01"),
+          run("tczewski-2006", "teryt2214", "2006-01-01"),
+          run("warszawa-2006", "teryt1465", "2006-01-01"),
+        ],
+        ["3003"],
+      ),
+    ).toEqual(["kozienicki-2002", "tczewski-2006", "warszawa-2006"]);
+  });
+
+  it("reads a run in a place containing hers as hers", () => {
+    // A sejmik run in wielkopolskie and a council run in another
+    // województwo, with her declaration from a powiat in wielkopolskie.
+    expect(
+      elsewhere(
+        [
+          run("sejmik-2018", "teryt30", "2018-01-01", { position: "Sejmik" }),
+          run("kozienicki-2018", "teryt1407", "2018-01-01"),
+        ],
+        ["3003"],
+      ),
+    ).toEqual(["kozienicki-2018"]);
+  });
+
+  it("leaves alone what clashes with nothing", () => {
+    expect(
+      elsewhere(
+        [
+          run("gnieznienski-2002", "teryt3003", "2002-01-01"),
+          run("kozienicki-2006", "teryt1407", "2006-01-01"),
+        ],
+        ["3003"],
+      ),
+    ).toEqual([]);
+  });
+
+  it("settles nothing where no side of a clash is in her place", () => {
+    expect(
+      elsewhere(
+        [
+          run("gnieznienski-2002", "teryt3003", "2002-01-01"),
+          run("kozienicki-2002", "teryt1407", "2002-01-01"),
+          run("tczewski-2006", "teryt2214", "2006-01-01"),
+          run("warszawa-2006", "teryt1465", "2006-01-01"),
+        ],
+        ["3003"],
+      ),
+    ).toBeNull();
+  });
+
+  it("settles nothing where both sides are in her places", () => {
+    // Declarations from two powiaty, one run in each.
+    expect(
+      elsewhere(
+        [
+          run("gnieznienski-2002", "teryt3003", "2002-01-01"),
+          run("kozienicki-2002", "teryt1407", "2002-01-01"),
+        ],
+        ["3003", "1407"],
+      ),
+    ).toBeNull();
+  });
+
+  it("settles nothing where her place holds both sides", () => {
+    // A sejmik declaration, and runs in two powiaty of its województwo
+    // beside a third elsewhere.
+    expect(
+      elsewhere(
+        [
+          run("gnieznienski-2018", "teryt3003", "2018-01-01"),
+          run("poznanski-2018", "teryt3021", "2018-01-01"),
+          run("kozienicki-2018", "teryt1407", "2018-01-01"),
+        ],
+        ["30"],
+      ),
+    ).toBeNull();
+  });
+
+  it("settles nothing without a place", () => {
+    expect(
+      elsewhere(
+        [
+          run("gnieznienski-2002", "teryt3003", "2002-01-01"),
+          run("kozienicki-2002", "teryt1407", "2002-01-01"),
+        ],
+        [],
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("candidacyParties", () => {
+  it("reads the committee's party and the ones PKW names, each once", () => {
+    expect(
+      candidacyParties({
+        type: "election",
+        party: "PSL",
+        member_parties: ["PSL"],
+        backing_parties: ["Polska 2050"],
+      }),
+    ).toEqual(["PSL", "Polska 2050"]);
+  });
+
+  it("reads nothing off another relation", () => {
+    expect(candidacyParties({ type: "employed", party: "PSL" })).toEqual([]);
+  });
+});
+
 describe("the hold and the publish dialog", () => {
   const stored = (
     id: string,

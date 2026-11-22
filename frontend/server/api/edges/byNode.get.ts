@@ -9,6 +9,7 @@ import {
   resolveEdgeEndpoints,
 } from "~~/server/utils/edgePublication";
 import { approvedRevisionId, pageIsPublic } from "~~/shared/model";
+import { candidacyParties } from "~~/shared/twoPlaces";
 import type { EdgeType } from "~~/shared/model";
 import { z } from "zod";
 
@@ -71,24 +72,12 @@ export type NodeRelations = {
   nodeParties: string[];
 };
 
-/** `candidacyParties`'s reading of one field: the strings in it. */
+/** The strings in one field: the page's parties as stored. */
 function strings(value: unknown): string[] {
   if (typeof value === "string") return value ? [value] : [];
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string" && !!item)
     : [];
-}
-
-/** The site's parties a candidacy gives the page it is on, each once. */
-function candidacyParties(edge: Record<string, unknown>): string[] {
-  if (edge.type !== "election") return [];
-  return [
-    ...new Set([
-      ...strings(edge.party),
-      ...strings(edge.member_parties),
-      ...strings(edge.backing_parties),
-    ]),
-  ];
 }
 
 const queryValidator = z.object({

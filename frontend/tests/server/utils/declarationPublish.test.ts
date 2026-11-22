@@ -6,6 +6,7 @@ import {
   inPeopleImportWindow,
   matchAndDrain,
   matchPages,
+  namesakeRunsOnPage,
   publishPage,
   readingsOfAnotherDay,
   recheckPublication,
@@ -1654,13 +1655,56 @@ describe("publishing a queued page", () => {
       await holds("candidacy_reviewed");
     });
 
-    it("whose draft candidacies stand in two places in one election", async () => {
+    it("whose draft candidacies stand in two places, neither of them hers", async () => {
       await queued();
-      // A namesake's run in another powiat in the same local election,
-      // attached as every uncontradicted PKW record is.
-      candidacy("kowalska-namesake", "kowalska", { target: "teryt0401" });
+      // Two namesakes' 2018 runs, attached as every uncontradicted PKW
+      // record is, and none of hers that year: her declaration says nothing
+      // about which, if either, is hers.
+      candidacy("kowalska-namesake", "kowalska", {
+        target: "teryt0401",
+        start_date: "2018-01-01",
+      });
+      candidacy("kowalska-namesake-2", "kowalska", {
+        target: "teryt1465",
+        position: "Rada miasta",
+        start_date: "2018-01-01",
+      });
       await holds("two_places");
       expect(read("edges/kowalska-namesake")!.published).toBe(false);
+      expect(read("edges/kowalska-namesake")!.deleted).toBeUndefined();
+    });
+
+    it("whose run elsewhere somebody has reviewed", async () => {
+      await queued();
+      candidacy("kowalska-namesake", "kowalska", { target: "teryt0401" });
+      put("revisions/rev-kowalska-namesake", {
+        ...read("revisions/rev-kowalska-namesake")!,
+        status: "approved",
+        review_user: "admin-uid",
+      });
+      await holds("two_places");
+      expect(read("edges/kowalska-namesake")!.deleted).toBeUndefined();
+    });
+
+    it("whose run elsewhere has a person's correction waiting", async () => {
+      await queued();
+      candidacy("kowalska-namesake", "kowalska", { target: "teryt0401" });
+      put("revisions/proposal-by-reader", {
+        ...revision("kowalska-namesake", "edges", { elected: false }),
+        update_user: "reader-uid",
+        update_automatic: false,
+        update_time: "2026-10-03T02:00:00.000Z",
+      });
+      await holds("two_places");
+      expect(read("edges/kowalska-namesake")!.deleted).toBeUndefined();
+    });
+
+    it("and takes no run off a page it holds", async () => {
+      await queued();
+      edit("nodes/wodociagi", { isPublic: false });
+      candidacy("kowalska-namesake", "kowalska", { target: "teryt0401" });
+      await holds("no_public_post");
+      expect(read("edges/kowalska-namesake")!.deleted).toBeUndefined();
     });
 
     it("with another declaration of hers read as another birth date", async () => {
@@ -1759,6 +1803,186 @@ describe("publishing a queued page", () => {
     expect(result.published).toEqual(["kowalska"]);
     expect(read("edges/kowalska-run")!.published).toBe(true);
     expect(read("edges/kowalska-namesake")!.published).toBe(false);
+  });
+
+  describe("a namesake's runs beside hers", () => {
+    /** The removals in the audit log. */
+    const removals = () =>
+      [...stored.entries()]
+        .filter(
+          ([path, row]) => path.startsWith("audit/") && row.action === "delete",
+        )
+        .map(([, row]) => row);
+    /** The revision that took the edge off. */
+    const removal = (id: string) =>
+      [...stored.entries()].find(
+        ([path, row]) =>
+          path.startsWith("revisions/") &&
+          row.node_id === id &&
+          (row.data as Data).deleted === true,
+      )?.[1];
+    const REASON =
+      "Imiennik. Oświadczenie majątkowe tej osoby jest z innego miejsca: " +
+      "Strzelin (gmina miejsko-wiejska).";
+
+    /** Her page with `content`, run with `run`, job and crop, queued. */
+    async function queuedWith(content: Data, run: Data = {}) {
+      person("kowalska", {}, content);
+      candidacy("kowalska-run", "kowalska", run);
+      job("kowalska-job", "kowalska", "wodociagi");
+      extract("kowalska-crop", { personIds: ["kowalska"] });
+      await matchPages(firestore, "kowalska-crop", NOON);
+    }
+
+    it("are taken off where her declaration was filed in the same election", async () => {
+      await queued();
+      // A namesake's council run in powiat aleksandrowski in 2024, attached
+      // as every uncontradicted PKW record is, beside hers in Strzelin.
+      candidacy("kowalska-namesake", "kowalska", { target: "teryt0401" });
+
+      const result = await drain();
+
+      expect(result.published).toEqual(["kowalska"]);
+      expect(read("edges/kowalska-run")!.published).toBe(true);
+      expect(read("edges/kowalska-namesake")).toMatchObject({
+        published: false,
+        deleted: true,
+        delete_reason: REASON,
+      });
+      expect(removal("kowalska-namesake")).toMatchObject({
+        status: "approved",
+        update_user: DECLARATION_ACTOR,
+        update_automatic: true,
+        review_user: DECLARATION_ACTOR,
+      });
+      expect(removals()).toEqual([
+        expect.objectContaining({
+          collection: "edges",
+          target_id: "kowalska-namesake",
+          user: DECLARATION_ACTOR,
+          reason: REASON,
+        }),
+      ]);
+      expect(read("declarationPublications/kowalska")).toMatchObject({
+        status: "published",
+        edges: {
+          published: ["kowalska-run", "kowalska-job"],
+          removed: ["kowalska-namesake"],
+        },
+      });
+    });
+
+    it("are taken off in another election she stood in at home", async () => {
+      await queued();
+      candidacy("kowalska-2018", "kowalska", { start_date: "2018-01-01" });
+      candidacy("kowalska-namesake", "kowalska", {
+        target: "teryt0401",
+        start_date: "2018-01-01",
+      });
+
+      expect((await drain()).published).toEqual(["kowalska"]);
+
+      expect(read("edges/kowalska-namesake")!.deleted).toBe(true);
+      // Hers stays a draft: her declaration was not filed for it.
+      expect(read("edges/kowalska-2018")!.published).toBe(false);
+      expect(read("edges/kowalska-2018")!.deleted).toBeUndefined();
+    });
+
+    it("take the party only they named with them", async () => {
+      await queuedWith({ parties: ["PO", "PiS"] }, { party: "PO" });
+      candidacy("kowalska-namesake", "kowalska", {
+        target: "teryt0401",
+        party: "PiS",
+      });
+
+      expect((await drain()).published).toEqual(["kowalska"]);
+
+      const page = read("nodes/kowalska")!;
+      expect(page.parties).toEqual(["PO"]);
+      expect(read((page.revision_id as { path: string }).path)).toMatchObject({
+        data: { parties: ["PO"] },
+        status: "approved",
+        update_user: DECLARATION_ACTOR,
+        update_automatic: true,
+      });
+    });
+
+    it("leave „Inne” where their party was the page's only one", async () => {
+      await queuedWith({ parties: ["PiS"] });
+      candidacy("kowalska-namesake", "kowalska", {
+        target: "teryt0401",
+        member_parties: ["PiS"],
+      });
+
+      await drain();
+
+      expect(read("nodes/kowalska")!.parties).toEqual(["Inne"]);
+    });
+
+    it("leave a party a run of hers names too", async () => {
+      await queuedWith({ parties: ["PiS"] }, { party: "PiS" });
+      candidacy("kowalska-namesake", "kowalska", {
+        target: "teryt0401",
+        party: "PiS",
+      });
+
+      await drain();
+
+      const page = read("nodes/kowalska")!;
+      expect(page.parties).toEqual(["PiS"]);
+      expect((page.revision_id as { path: string }).path).toBe(
+        "revisions/rev-kowalska",
+      );
+    });
+
+    it("are what a held page is asked for again", async () => {
+      await queued();
+      candidacy("kowalska-namesake", "kowalska", { target: "teryt0401" });
+
+      await expect(namesakeRunsOnPage(firestore, "kowalska")).resolves.toEqual([
+        "kowalska-namesake",
+      ]);
+      // Nothing written: the question only reads.
+      expect(read("edges/kowalska-namesake")!.deleted).toBeUndefined();
+
+      candidacy("kowalska-namesake-2", "kowalska", {
+        target: "teryt1465",
+        position: "Rada miasta",
+        start_date: "2018-01-01",
+      });
+      candidacy("kowalska-namesake-3", "kowalska", {
+        target: "teryt0401",
+        start_date: "2018-01-01",
+      });
+      // A 2018 clash with no side in Strzelin: nothing settles it.
+      await expect(namesakeRunsOnPage(firestore, "kowalska")).resolves.toBe(
+        null,
+      );
+    });
+
+    it("are none on a page whose clash is gone, and not asked of a public one", async () => {
+      await queued();
+      await expect(namesakeRunsOnPage(firestore, "kowalska")).resolves.toEqual(
+        [],
+      );
+      put("nodes/kowalska", { ...read("nodes/kowalska")!, published: true });
+      await expect(namesakeRunsOnPage(firestore, "kowalska")).resolves.toBe(
+        null,
+      );
+    });
+
+    it("leave a party list a person set", async () => {
+      await queuedWith({ parties: ["PiS"], partiesSource: "manual" });
+      candidacy("kowalska-namesake", "kowalska", {
+        target: "teryt0401",
+        party: "PiS",
+      });
+
+      expect((await drain()).published).toEqual(["kowalska"]);
+
+      expect(read("edges/kowalska-namesake")!.deleted).toBe(true);
+      expect(read("nodes/kowalska")!.parties).toEqual(["PiS"]);
+    });
   });
 
   describe("the paid public post it needs on the page", () => {
@@ -2978,6 +3202,20 @@ describe("what an admin does about a held page", () => {
       await expect(recheck()).resolves.toEqual({ outcome: "published" });
 
       expect(read("nodes/kowalska")!.published).toBe(true);
+    });
+
+    it("settles a two-places hold from before the place could settle it", async () => {
+      await queued();
+      candidacy("kowalska-namesake", "kowalska", { target: "teryt0401" });
+      edit("declarationPublications/kowalska", {
+        status: "held",
+        reason: "two_places",
+      });
+
+      await expect(recheck()).resolves.toEqual({ outcome: "published" });
+
+      expect(read("nodes/kowalska")!.published).toBe(true);
+      expect(read("edges/kowalska-namesake")!.deleted).toBe(true);
     });
 
     it("asks two pages again rather than take the record's word for it", async () => {

@@ -133,6 +133,62 @@ export function placeClashes<T>(
   return clashes;
 }
 
+/** The rows of `clashes` that stand outside `places`, where `places` say which
+ * side of every clash is the person's: the place of a declaration the person
+ * filed, whose birth date is the page's. The rows outside are then a
+ * namesake's, and come off the page (decision on 2026-11-22).
+ *
+ * Null where `places` do not settle every clash: a clash with no row in them,
+ * or every row in them, or rows in them that stand apart from each other - two
+ * powiaty of one województwo whose sejmik the declaration was filed for. Then
+ * nothing says which run is the person's, and a reviewer decides. */
+export function runsElsewhere<T>(
+  clashes: readonly PlaceClash<T>[],
+  candidacyOf: (row: T) => Candidacy | undefined,
+  places: readonly string[],
+): T[] | null {
+  const elsewhere: T[] = [];
+  for (const clash of clashes) {
+    const here: string[] = [];
+    for (const row of clash.rows) {
+      const teryt = regionTeryt(candidacyOf(row)?.regionId ?? "");
+      if (teryt && places.some((place) => placesAgree(teryt, place))) {
+        here.push(teryt);
+      } else {
+        elsewhere.push(row);
+      }
+    }
+    const together = here.every((a) => here.every((b) => placesAgree(a, b)));
+    if (here.length === 0 || here.length === clash.rows.length || !together) {
+      return null;
+    }
+  }
+  return elsewhere;
+}
+
+/** The strings in one field of an edge: a lone one, or those of a list. */
+function strings(value: unknown): string[] {
+  if (typeof value === "string") return value ? [value] : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && !!item)
+    : [];
+}
+
+/** The site's parties a candidacy gives the page it is on, each once: its
+ * committee's (`party`, which the pipeline leaves out for a coalition's), and
+ * the ones PKW says its candidate belonged to or was backed by. Empty for any
+ * other relation. */
+export function candidacyParties(edge: Record<string, unknown>): string[] {
+  if (edge.type !== "election") return [];
+  return [
+    ...new Set([
+      ...strings(edge.party),
+      ...strings(edge.member_parties),
+      ...strings(edge.backing_parties),
+    ]),
+  ];
+}
+
 /** The years in which the person stood in a place that agrees with `regionId`,
  * from all of `rows` - the hint for which side of a clash is theirs.
  *
