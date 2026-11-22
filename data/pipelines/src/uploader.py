@@ -1078,7 +1078,8 @@ class PersonUploader(CompanyUploader):
         print(
             f"\n{total} candidacies were not placed. `expected` is an election "
             "PKW published no constituency mapping for; the rest are worth a "
-            "look - `no-region` means the region node is not there yet.",
+            "look - `no-region` names a code no region node has, a fault since "
+            "every gmina is one (2026-11-22).",
             file=sys.stderr,
         )
         for label, count in self.unplaced.most_common(UNPLACED_REPORTED):

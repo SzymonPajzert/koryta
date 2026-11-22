@@ -657,11 +657,12 @@ async function createElection(
   }
   const regionId = await lookupNode(ctx, "teryt", election.teryt);
   if (!regionId) {
-    // Every gmina and Warsaw dzielnica has a region node since the region
-    // upload (`koryta_uploader --type region`, 2026-11-22); a code that
-    // resolves to none is a part of a gmina no company names, or a region the
-    // upload has not reached yet.
-    console.warn(
+    // Every województwo, powiat, gmina and Warsaw dzielnica has a region node
+    // since the region upload (`koryta_uploader --type region`, 2026-11-22),
+    // so a code that resolves to none is a fault to look at - a code no region
+    // carries, or a region the upload has not reached - and is logged as an
+    // error, not a warning (decision on 2026-11-22).
+    console.error(
       `No region node for TERYT ${election.teryt} (${election.election_type} ${election.election_year ?? "?"})`,
     );
     return { unplaced: unplaced(election, "no-region", false) };

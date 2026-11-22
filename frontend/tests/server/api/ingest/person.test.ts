@@ -2048,13 +2048,20 @@ describe("api/ingest/person, a candidacy the site cannot place", () => {
     ]);
   });
 
-  it("keeps the person when the region node does not exist yet", async () => {
+  it("keeps the person, and logs an error, when no region node has the code", async () => {
+    // Every region has a node since the region upload, so this is a fault to
+    // look at in the logs, not a gap to wait out.
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     newPersonWith(
       [{ election_type: "Samorząd", election_year: "2024", teryt: "9999" }],
       missing,
     );
 
     const result = await handler({} as any);
+    expect(logged).toHaveBeenCalledWith(
+      "No region node for TERYT 9999 (Samorząd 2024)",
+    );
+    logged.mockRestore();
 
     expect(result.status).toBe("ok");
     expect(result.unplacedElections).toEqual([
