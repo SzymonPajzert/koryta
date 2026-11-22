@@ -137,6 +137,10 @@ EXTRACTION_FACT_TYPES = {
 # each scoring model votes under its own uid containing this word.
 PIPELINE_USER = "pipeline"
 
+# Where this model has scored a node, its score is all the models add to the
+# node's `interesting`: `PUBLISH_CHANCE_MODEL` in frontend/shared/stats.ts.
+PUBLISH_CHANCE_MODEL = "pipeline-publishable"
+
 
 def sample(items, limit: int = 10) -> list:
     """A short, stable excerpt for an assertion message."""
@@ -263,12 +267,17 @@ def compute_vote_stats(votes: list[dict]) -> dict:
     snapshot - and the functions redeploy that keeps it current - those nodes
     are genuinely stale, and this reports them.
 
-    Human votes sum and the scoring models contribute only their best, which is
-    what keeps a new model from rescaling a number the site sorts and buckets
-    on. See `computeVoteStats` for why.
+    Human votes sum and the scoring models add one number, which is what keeps
+    a new model from rescaling a number the site sorts and buckets on. In
+    `interesting` that number is the publication chance where its model has
+    scored the node, and the best model score where it has not (decision on
+    2026-11-20, `pipelineContribution`); in any other category it is the best
+    score. See `computeVoteStats` for why.
     """
     aggregate: dict = {"interesting": 0, "quality": 0, "humanVoted": False}
     pipeline_best: dict = {}
+    # Each model's `interesting` score, by uid, as `models` keeps it.
+    models: dict = {}
     # By uid, as the site counts it: one person voting in two categories on the
     # same node is one voter. A vote carrying no uid still sets `humanVoted` and
     # still cannot be counted, which is the site's behaviour too.
@@ -279,7 +288,8 @@ def compute_vote_stats(votes: list[dict]) -> dict:
             aggregate["humanVoted"] = True
             if vote.get("userUid"):
                 humans.add(str(vote["userUid"]))
-        for category, value in (vote.get("categoryVotes") or {}).items():
+        category_votes = vote.get("categoryVotes") or {}
+        for category, value in category_votes.items():
             if from_pipeline:
                 current = pipeline_best.get(category)
                 pipeline_best[category] = (
@@ -287,8 +297,18 @@ def compute_vote_stats(votes: list[dict]) -> dict:
                 )
             else:
                 aggregate[category] = (aggregate.get(category) or 0) + value
+        interesting = category_votes.get("interesting")
+        if (
+            from_pipeline
+            and isinstance(interesting, (int, float))
+            and not isinstance(interesting, bool)
+        ):
+            models[str(vote.get("userUid"))] = interesting
     for category, best in pipeline_best.items():
-        aggregate[category] = (aggregate.get(category) or 0) + best
+        contribution = best
+        if category == "interesting" and models:
+            contribution = models.get(PUBLISH_CHANCE_MODEL, max(models.values()))
+        aggregate[category] = (aggregate.get(category) or 0) + contribution
     if humans:
         aggregate["humanCount"] = len(humans)
     return aggregate
