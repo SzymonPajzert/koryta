@@ -11,10 +11,12 @@ import {
   findEdges,
   findEdge,
   isSameRun,
+  isVerdictRemoval,
   misfiledRunOf,
   misfiledSejmikRunOf,
   namesOffice,
   preferredCopy,
+  removedAsSomebodyElses,
   unnamedLocal,
   withRecordedFacts,
   type EdgeCopy,
@@ -899,5 +901,67 @@ describe("unnamedLocal", () => {
     expect(unnamedLocal({ ...bare, start_date: "2018-01-01" })).toBe(true);
     // 2024 held the European election too.
     expect(unnamedLocal({ ...bare, start_date: "2024-01-01" })).toBe(false);
+  });
+});
+
+describe("isVerdictRemoval", () => {
+  it("reads a namesake's run and a reviewer's no as somebody else's", () => {
+    expect(isVerdictRemoval("Imiennik. Oświadczenie majątkowe...")).toBe(true);
+    expect(isVerdictRemoval("zła osoba")).toBe(true);
+  });
+
+  it("reads a duplicate, a merge and a retraction as saying nothing", () => {
+    expect(isVerdictRemoval("duplikat")).toBe(false);
+    expect(isVerdictRemoval("Duplikat: ta sama kandydatura")).toBe(false);
+    expect(isVerdictRemoval("Scalenie stron: to samo mówi")).toBe(false);
+    expect(isVerdictRemoval("wycofane automatycznie")).toBe(false);
+    expect(isVerdictRemoval("  ")).toBe(false);
+    expect(isVerdictRemoval(undefined)).toBe(false);
+  });
+});
+
+describe("removedAsSomebodyElses", () => {
+  const run = (fields: Record<string, unknown>) => ({
+    source: "kowalska",
+    target: "teryt0401",
+    type: "election" as const,
+    position: "Rada gminy",
+    start_date: "2024-01-01",
+    ...fields,
+  });
+  const removed = run({ deleted: true, delete_reason: "zła osoba" });
+
+  it("is any run of that election there", () => {
+    expect(removedAsSomebodyElses(run({ position: "Wójt" }), [removed])).toBe(
+      true,
+    );
+  });
+
+  it("is not a run of another election there", () => {
+    expect(
+      removedAsSomebodyElses(run({ start_date: "2018-01-01" }), [removed]),
+    ).toBe(false);
+    expect(
+      removedAsSomebodyElses(run({ position: "Parlament Europejski" }), [
+        removed,
+      ]),
+    ).toBe(false);
+  });
+
+  it("is not where a live run of the election is left, or the removal was a duplicate's", () => {
+    expect(
+      removedAsSomebodyElses(run({}), [removed, run({ position: "Wójt" })]),
+    ).toBe(false);
+    expect(
+      removedAsSomebodyElses(run({}), [
+        { ...removed, delete_reason: "duplikat" },
+      ]),
+    ).toBe(false);
+  });
+
+  it("is never a job", () => {
+    expect(
+      removedAsSomebodyElses({ ...run({}), type: "employed" }, [removed]),
+    ).toBe(false);
   });
 });

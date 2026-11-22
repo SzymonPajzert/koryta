@@ -353,8 +353,10 @@ export type UnplacedElection = {
   teryt?: string;
   /** `no-teryt`: the payload named no region. `no-region`: it named one the
    * site has no node for. `rejected`: the row was not usable at all - an
-   * election type the site does not have, or a write that failed. */
-  reason: "no-teryt" | "no-region" | "rejected";
+   * election type the site does not have, or a write that failed. `removed`:
+   * the page had a run in this place and election taken off as somebody
+   * else's (`removedAsSomebodyElses` in server/utils/edges.ts). */
+  reason: "no-teryt" | "no-region" | "rejected" | "removed";
   /** Whether this is a known gap rather than something to look into. See
    * `expectedMissingRegion` in `server/api/ingest/person.post.ts`. */
   expected: boolean;

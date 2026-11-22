@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import type { Edge } from "~~/shared/model";
-import { electionKind, electionKindsIn } from "../../shared/electionDays";
+import {
+  candidacyElection,
+  electionKind,
+  electionKindsIn,
+} from "../../shared/electionDays";
 
 /** What kind of assertion an edge type makes, which is what decides when two of
  * them are the same fact.
@@ -185,6 +189,54 @@ function restates(type: string | undefined, name: string): boolean {
 }
 
 export type EdgeLike = Partial<Edge> & Pick<Edge, "source" | "target" | "type">;
+
+/** How a removal starts that says nothing about whose a relation is: the same
+ * run stored twice, a page merge folding a copy into the one it repeated, the
+ * half-surname tier taking its own match back. `NOT_A_VERDICT` in
+ * data/pipelines/src/scrapers/koryta/download.py is the pipeline's copy. */
+const NOT_A_VERDICT = ["duplikat", "scalenie stron", "wycofane automatycznie"];
+
+/** Whether a relation's removal says it is somebody else's: a reason, and none
+ * of `NOT_A_VERDICT` (decision on 2026-11-22). */
+export function isVerdictRemoval(reason: unknown): boolean {
+  if (typeof reason !== "string") return false;
+  const text = reason.trim().toLowerCase();
+  return (
+    text !== "" && !NOT_A_VERDICT.some((prefix) => text.startsWith(prefix))
+  );
+}
+
+/** Whether the page has had a run in this candidacy's place and election taken
+ * off as somebody else's (`isVerdictRemoval`) and has no live one left there,
+ * among the `stored` candidacies between the person and the region. Such a
+ * run is a namesake's whatever its office, committee or result say: the
+ * pipeline no longer attaches that place's PKW runs to the person
+ * (`PeopleMerged`), and the ingest neither writes nor proposes one. */
+export function removedAsSomebodyElses(
+  edge: EdgeLike,
+  stored: Iterable<Record<string, unknown>>,
+): boolean {
+  if (edge.type !== "election") return false;
+  const election = candidacyElection(
+    edge.start_date,
+    edge.position,
+    edge.by_election,
+  );
+  if (!election) return false;
+  const there = [...stored].filter(
+    (copy) =>
+      candidacyElection(
+        copy.start_date as string | undefined,
+        copy.position as string | undefined,
+        copy.by_election as boolean | undefined,
+      ) === election,
+  );
+  return (
+    there.some(
+      (copy) => copy.deleted === true && isVerdictRemoval(copy.delete_reason),
+    ) && !there.some((copy) => copy.deleted !== true)
+  );
+}
 
 /** Fields whose stored spelling varies without the fact varying.
  *

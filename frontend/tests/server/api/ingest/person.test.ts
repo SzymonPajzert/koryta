@@ -489,6 +489,91 @@ describe("api/ingest/person", () => {
       };
     }
 
+    describe("in a place the page had a run taken off as somebody else's", () => {
+      const NAMESAKE =
+        "Imiennik. Oświadczenie majątkowe tej osoby jest z innego miejsca: Strzelin.";
+      const removedRun = {
+        ...storedCandidacy,
+        position: "Rada gminy",
+        deleted: true,
+        delete_reason: NAMESAKE,
+      };
+
+      it("is neither written nor proposed, whatever office it names", async () => {
+        // The namesake's mayoral run in the gmina whose council run the
+        // declarations automation took off the page.
+        personWithStoredEdges([removedRun]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_type: "Wójt",
+            election_year: "2024",
+            committee: "KWW Nasza Gmina",
+          }),
+        );
+
+        const result = await handler({} as any);
+
+        expect(result.unplacedElections).toEqual([
+          {
+            election_type: "Wójt",
+            election_year: "2024",
+            teryt: "1465",
+            reason: "removed",
+            expected: false,
+          },
+        ]);
+        expect(createRevisionTransaction).not.toHaveBeenCalled();
+        expect(proposeRevisionTransaction).not.toHaveBeenCalled();
+      });
+
+      it("goes in as before in another year", async () => {
+        personWithStoredEdges([removedRun]);
+        mockReadBody.mockResolvedValue(
+          payload({ election_type: "Rada gminy", election_year: "2018" }),
+        );
+
+        const result = await handler({} as any);
+
+        expect(result).not.toHaveProperty("unplacedElections");
+        expect(createRevisionTransaction).toHaveBeenCalledTimes(1);
+      });
+
+      it("goes in as before beside a live run there", async () => {
+        personWithStoredEdges([
+          removedRun,
+          { ...storedCandidacy, position: "Wójt" },
+        ]);
+        mockReadBody.mockResolvedValue(
+          payload({ election_type: "Wójt", election_year: "2024" }),
+        );
+
+        const result = await handler({} as any);
+
+        expect(result).not.toHaveProperty("unplacedElections");
+      });
+
+      it("goes in as before where the removal was a duplicate's", async () => {
+        personWithStoredEdges([
+          { ...removedRun, delete_reason: "Duplikat: ta sama kandydatura" },
+        ]);
+        mockReadBody.mockResolvedValue(
+          payload({
+            election_type: "Rada gminy",
+            election_year: "2024",
+            committee: "KWW Nasza Gmina",
+          }),
+        );
+
+        const result = await handler({} as any);
+
+        expect(result).not.toHaveProperty("unplacedElections");
+        // The removed copy takes the restatement, and nothing is offered
+        // against it.
+        expect(createRevisionTransaction).not.toHaveBeenCalled();
+        expect(proposeRevisionTransaction).not.toHaveBeenCalled();
+      });
+    });
+
     it("writes the result onto a candidacy already stored without one", async () => {
       // What the backfill turns on: `elected` is set on 15 of the 15,696
       // stored candidacies, and every one of the rest was written before the

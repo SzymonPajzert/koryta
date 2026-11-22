@@ -22,6 +22,7 @@ import {
   misfiledRunOf,
   misfiledSejmikRunOf,
   preferredCopy,
+  removedAsSomebodyElses,
   unnamedLocal,
   withRecordedFacts,
   type EdgeLike,
@@ -706,9 +707,13 @@ async function createElection(
   // An unrecognised committee is usually a one-gmina KWW and harmless, but it
   // is also where a newly-worded national committee hides, so those wait.
   const vouched = election.party_from_committee ?? false;
-  const { edgeId, created, published } =
+  const outcome =
     (await moveMisfiledCandidacy(ctx, edgeData, election.teryt, vouched)) ??
     (await findEdgeOrCreate(ctx, edgeData, vouched));
+  if (outcome.removed) {
+    return { unplaced: unplaced(election, "removed", false) };
+  }
+  const { edgeId, created, published } = outcome;
   if (!edgeId) {
     console.error(
       `Failed to place ${election.election_type} ${election.election_year ?? "?"} in ${regionId}`,
@@ -1355,6 +1360,11 @@ async function findEdgeOrCreate(
     ctx.db,
     edge,
   );
+  // A run in a place and election the page had taken off as somebody else's
+  // goes nowhere: not onto the removed copy, not beside it.
+  if (removedAsSomebodyElses(edge, documents.values())) {
+    return { edgeId: "", created: false, published: false, removed: true };
+  }
 
   let existing: string | undefined;
   let candidate: { id: string; stored: Record<string, unknown> } | undefined;
@@ -1416,6 +1426,11 @@ async function findEdgeOrCreate(
   // the concurrent employments would.
   if (candidate) {
     ctx.claimedEdgeIds.set(candidate.id, identity);
+    // A removed copy takes the row and nothing more: whoever removed it said
+    // what it is, and a proposal against it would only wait in the queue.
+    if (candidate.stored.deleted === true) {
+      return { edgeId: candidate.id, created: false, published: false };
+    }
     const edgeRef = ctx.db.collection("edges").doc(candidate.id);
     const enriched = enrichedEdge(
       withoutInternalFields(candidate.stored),
@@ -1545,6 +1560,9 @@ type EdgeOutcome = {
    * for its first review that `approveWaitingEdge` approved. False for an
    * edge already live, which nothing here changed the visibility of. */
   published: boolean;
+  /** Not placed at all, `edgeId` empty: a candidacy in a place and election
+   * the page had taken off as somebody else's (`removedAsSomebodyElses`). */
+  removed?: boolean;
 };
 
 /** Writes onto a stored edge what the row says about the same episode and the
