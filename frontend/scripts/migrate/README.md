@@ -94,6 +94,12 @@ itself from the PKD codes on the node. That could not survive the mapping
 moving to Python: keeping it would have meant a second copy of the answer in
 TypeScript, which is the thing the move was for.
 
+`requeue-settled-two-places-holds.ts` puts back in the publication queue the
+drafts held for two places that the place of their declarations now settles,
+which `publishPage` then publishes without the namesake's runs. A hold is not
+asked again on its own, so run it after anything that can settle one: a run
+taken off by hand, a crop read from another place.
+
 Everything above still applies to these: the dry run reports, a clean run
 writes nothing, and it takes `--prod --commit` to touch production.
 
