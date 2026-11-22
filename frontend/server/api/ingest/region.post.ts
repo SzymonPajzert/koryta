@@ -14,7 +14,7 @@ import { isValidNip, isValidRegon } from "#shared/identifiers";
 import {
   indexOffices,
   isOfficeName,
-  officesOn,
+  officesFor,
   type RegionOffice,
 } from "#shared/offices";
 
@@ -93,15 +93,15 @@ type BatchWriter = ReturnType<typeof batchWriter>;
  *   by its TERYT code and kept as it is, except a gmina whose name is the one
  *   its payload `replaces` - one another gmina of its powiat shares, such as
  *   two "Gmina Wejherowo" - which takes the name with its kind.
- * - Every region node gets the table's rows the dialog answers it with
- *   (`officesOn`): its own urząd, a town's or the villages' half of a gmina
- *   the gmina's, and a powiat its gminy's as well. They are kept on the nodes
- *   rather than shipped with the site (decision on 2026-11-22). Only a node
- *   whose rows changed is written; a region the table has no row for keeps
- *   what it has, and is counted. A row whose REGON or NIP fails its check
- *   digit is left out, since a place proposed from it would be refused, and a
- *   name `isOfficeName` does not know is counted: the person page would show
- *   that urząd without its „Urząd" chip.
+ * - Every region node gets the urząd that runs it (`officesFor`): its own,
+ *   or for a town's or the villages' half of a gmina the gmina's. They are
+ *   kept on the nodes rather than shipped with the site (decision on
+ *   2026-11-22). Only a node whose rows changed is written; a region the
+ *   table has no row for keeps what it has, and is counted. A row whose
+ *   REGON or NIP fails its check digit is left out, since a place proposed
+ *   from it would be refused, and a name `isOfficeName` does not know is
+ *   counted: the person page would show that urząd without its „Urząd"
+ *   chip.
  *
  * The same gate as the other ingests. No revision: a region and its urzędy
  * are TERYT's and the register's, not a claim anybody argues about, and
@@ -226,7 +226,7 @@ async function placeRegions(
     }
 
     const ref = db.collection("nodes").doc(payload.node_id);
-    const offices = officesOn(index, payload.teryt);
+    const offices = officesFor(index, payload.teryt);
     await writer.set(
       ref,
       withSeededNodeStats({
@@ -302,7 +302,7 @@ async function placeOffices(
   const without: string[] = [];
   for (const region of stored) {
     if (region.deleted) continue;
-    const offices = region.teryt ? officesOn(index, region.teryt) : [];
+    const offices = region.teryt ? officesFor(index, region.teryt) : [];
     if (offices.length === 0) {
       without.push(region.teryt || region.id);
       continue;

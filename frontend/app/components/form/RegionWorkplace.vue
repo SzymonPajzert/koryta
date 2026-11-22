@@ -31,23 +31,13 @@
       data-testid="region-workplace-options"
     >
       <template v-for="office in offices" :key="office.regon">
-        <div
-          v-if="office === firstGmina"
-          class="text-caption text-medium-emphasis mt-2"
-          data-testid="region-workplace-gminy"
-        >
-          Urzędy gmin w tym powiecie
-        </div>
         <v-radio
           :value="office.regon"
           :data-testid="`region-workplace-office-${office.regon}`"
         >
           <template #label>
             <div class="py-1">
-              <div v-if="office.gmina" class="text-body-2 font-weight-medium">
-                {{ office.gmina }}
-              </div>
-              <div :class="office.gmina ? 'text-caption' : 'text-body-2'">
+              <div class="text-body-2">
                 {{ office.node?.name ?? office.name }}
               </div>
               <!-- Only the exception is said: adding the urząd with the
@@ -66,18 +56,6 @@
         data-testid="region-workplace-other"
       />
     </v-radio-group>
-
-    <!-- The region search only knows the gminy the site has a node for, which
-         is a minority of them; a powiat lists every one of its gminy's urzędy
-         above, so it is the way to the rest. -->
-    <div
-      v-if="!loading && !firstGmina"
-      class="text-caption text-medium-emphasis mt-1"
-      data-testid="region-workplace-powiat-hint"
-    >
-      Nie ma gminy na liście regionów? Wybierz jej powiat - pokażemy urzędy
-      wszystkich jego gmin.
-    </div>
 
     <FormEntityPicker
       v-if="picked === OTHER"
@@ -103,8 +81,8 @@
  * This asks the one question that turns the region into a place - offering
  * the urząd the register names for it first, since that is where a wójt, a
  * burmistrz, a prezydent or their deputy works, and a search over every place
- * for anything else the gmina runs. A powiat offers the urzędy of its gminy
- * after its own, since most gminy have no region to pick.
+ * for anything else the gmina runs. Every gmina is a region to pick, so a
+ * region offers its own urząd only (decision on 2026-11-22).
  */
 import { computed, ref, watch } from "vue";
 import type { Link, NodeType } from "~~/shared/model";
@@ -152,9 +130,9 @@ async function load(regionId: string) {
   } finally {
     if (regionId === props.regionId) {
       loading.value = false;
-      // The urząd when there is exactly one, which is every gmina: it is what
-      // the question is almost always about. A województwo has two, a powiat
-      // lists its gminy's beside the starostwo, and nothing is assumed.
+      // The urząd when there is exactly one, which is every gmina and powiat:
+      // it is what the question is almost always about. A województwo has
+      // two, and nothing is assumed.
       picked.value =
         offices.value.length === 1
           ? offices.value[0]!.regon
@@ -166,9 +144,6 @@ async function load(regionId: string) {
 }
 
 watch(() => props.regionId, load, { immediate: true });
-
-/** Where a powiat's list of its gminy's urzędy starts, after its own. */
-const firstGmina = computed(() => offices.value.find((o) => o.gmina));
 
 function onCreated(created: Link<NodeType>) {
   createdIds.value = new Set([...createdIds.value, created.id]);

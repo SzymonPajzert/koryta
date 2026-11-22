@@ -9,12 +9,12 @@ import { POWIAT, powiatOffices, withUrzad } from "./fixtures/regionOffices";
  * „Dodaj powiązanie”, the urzędy it offers, what it says when it finds none,
  * and the row the post leaves on the page.
  *
- * Opole is in the seed with its TERYT code, so its urząd comes from the shipped
- * table through the real endpoint. A powiat with gminy is not, so the search
- * that finds Powiat wejherowski and the urzędy it lists are answered from
- * ./fixtures/regionOffices.ts, and so is the saved row: added to the graph the
- * person page asks for, because a relation really written here would still be
- * on Piotr Wiśniewski's page when relation-sources.spec.ts photographs it.
+ * Opole is in the seed with its TERYT code and its urząd, so that comes through
+ * the real endpoint. Powiat wejherowski is not, so the search that finds it and
+ * its starostwo are answered from ./fixtures/regionOffices.ts, and so is the
+ * saved row: added to the graph the person page asks for, because a relation
+ * really written here would still be on Piotr Wiśniewski's page when
+ * relation-sources.spec.ts photographs it.
  *
  * Signed in as the seed's reader on Piotr Wiśniewski (4). The dialog scrolls
  * inside itself, so it is photographed in a window tall enough for all of it.
@@ -85,7 +85,7 @@ test.describe(
       await expectFitsThePhone(page, testInfo);
     });
 
-    test("powiazanie-urzedy-powiatu", async ({ page }, testInfo) => {
+    test("powiazanie-urzad-powiatu", async ({ page }, testInfo) => {
       test.setTimeout(120_000);
       await page.route("**/api/search**", async (route) => {
         const q = new URL(route.request().url()).searchParams.get("q");
@@ -97,16 +97,21 @@ test.describe(
       await page.route(`**/api/nodes/${POWIAT.id}/offices`, (route) =>
         route.fulfill({ json: powiatOffices }),
       );
-      const dialog = await openDialog(page, 2000);
+      const dialog = await openDialog(page, 1400);
       await pickRegion(page, POWIAT.name);
       await chooseOffice(page);
-      // The starostwo and the ten gminy's urzędy, none picked in advance.
+      // The starostwo alone, picked: each gmina's urząd is its own region's.
       await expect(
         dialog.locator('[data-testid^="region-workplace-office-"]'),
-      ).toHaveCount(11);
+      ).toHaveCount(1);
+      await expect(
+        dialog
+          .getByTestId("region-workplace-office-191686414")
+          .locator("input"),
+      ).toBeChecked();
       await settle(page);
 
-      await expect(dialog).toHaveScreenshot("powiazanie-urzedy-powiatu.png");
+      await expect(dialog).toHaveScreenshot("powiazanie-urzad-powiatu.png");
       await expectFitsThePhone(page, testInfo);
     });
 

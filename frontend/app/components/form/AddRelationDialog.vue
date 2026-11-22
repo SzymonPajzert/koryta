@@ -309,11 +309,10 @@ watch(other, () => {
  * A place proposed on the way - the urząd from the register, or a unit the
  * contributor added from the search - is seated in the region it was reached
  * through, which is the one thing about it the proposal form cannot say. For
- * an urząd the server says which region that is - its own gmina where the
- * site has a node for it, so that one picked out of a powiat's list lands in
- * its gmina, and the region picked where the site has none. The urząd goes in
- * under the register's name and numbers, so the next person to be given a
- * post in the same town finds it by its REGON rather than adding it again. */
+ * an urząd the server says which region that is: the region picked, or for a
+ * town's or the villages' half of a gmina the gmina. The urząd goes in under
+ * the register's name and numbers, so the next person to be given a post in
+ * the same town finds it by its REGON rather than adding it again. */
 async function workplaceId(pick: RegionWorkplace, regionId: string) {
   if ("place" in pick) {
     if (pick.created) await seat(regionId, pick.place.id);

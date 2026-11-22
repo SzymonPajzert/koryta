@@ -10,10 +10,11 @@
  *
  * The table is the output of the `LocalGovernmentOffices` pipeline in
  * data/pipelines. It is kept on the region nodes rather than shipped with the
- * site (decision on 2026-11-22): each node carries, as `offices`, the rows the
- * dialog answers it with - its own urząd, and for a powiat its gminy's too.
- * `koryta_uploader --type region` sends the table to /api/ingest/region, which
- * gives each node its rows (`officesOn`).
+ * site (decision on 2026-11-22): each node carries, as `offices`, the urząd
+ * that runs it (`officesFor`). Every gmina is a region of its own, so no region
+ * answers for another's urząd: a powiat offers its starostwo, a gmina its urząd
+ * (decision on 2026-11-22). `koryta_uploader --type region` sends the table to
+ * /api/ingest/region, which gives each node its rows.
  */
 import { normalizeNip, normalizeRegon } from "./identifiers";
 
@@ -23,8 +24,7 @@ export type RegionOffice = {
    * województwo, four for a powiat, seven for a gmina. */
   teryt: string;
   /** TERC's name for the region, as TERC writes it: "Wejherowo",
-   * "wejherowski", "POMORSKIE". The only name there is for a gmina the site
-   * has no region node for, which is most of them. */
+   * "wejherowski", "POMORSKIE". */
   region: string | null;
   name: string;
   regon: string;
@@ -38,13 +38,9 @@ export type RegionOfficeOption = RegionOffice & {
   /** The place already on the site under this REGON, when there is one - the
    * one to record the post against, rather than proposing a second copy. */
   node: { id: string; name: string } | null;
-  /** Which gmina's urząd it is, where it is offered as one of the gminy of
-   * the powiat asked about - "Gmina wiejska Wejherowo" - and null for the
-   * region's own office. See `officeChoices`. */
-  gmina: string | null;
-  /** The region a place proposed for the office is seated in: the office's
-   * own region where the site has a node for it, and otherwise the region
-   * asked about, which is at least the powiat around it. */
+  /** The region a place proposed for the office is seated in: the region
+   * asked about, or for a town's or the villages' half of a gmina the gmina
+   * whose urząd it is. */
   seatId: string;
 };
 
@@ -84,18 +80,12 @@ export function indexOffices(
   return index;
 }
 
-/** TERYT's RODZ, the last digit of a gmina's code, for the kinds of gmina the
- * table lists - and what the dialog calls each. */
+/** TERYT's RODZ, the last digit of a gmina's code, for a gmina miejsko-wiejska. */
 const RODZ_MIEJSKO_WIEJSKA = "3";
-const GMINA_KINDS: Record<string, string> = {
-  "1": "Gmina miejska",
-  "2": "Gmina wiejska",
-  [RODZ_MIEJSKO_WIEJSKA]: "Gmina miejsko-wiejska",
-  "8": "Dzielnica",
-};
 
-/** The offices listed under a region's code - one for a gmina or a powiat,
- * the marszałek's and the wojewoda's for a województwo.
+/** The urząd that runs a region: what its node carries, and what the relation
+ * dialog offers for it. One for a gmina or a powiat, the marszałek's and the
+ * wojewoda's for a województwo.
  *
  * TERYT splits a gmina miejsko-wiejska into a town and the villages around it
  * - Warka is 1406113, and 1406114 the town, 1406115 the rest - and the site
@@ -112,76 +102,6 @@ export function officesFor(
     return index.get(`${teryt.slice(0, 6)}${RODZ_MIEJSKO_WIEJSKA}`) ?? [];
   }
   return [];
-}
-
-/** Which gmina an office is listed for, the way the dialog tells a powiat's
- * gminy apart: "Gmina wiejska Wejherowo" beside "Gmina miejska Wejherowo".
- *
- * With the kind, since the town and the villages around it are often two
- * gminy of one name and one powiat, each with its own urząd - which is also
- * why the name alone would not do. */
-export function gminaLabel(office: RegionOffice): string {
-  const kind = GMINA_KINDS[office.teryt.slice(6)] ?? "Gmina";
-  return office.region ? `${kind} ${office.region}` : kind;
-}
-
-/** The urzędy of the gminy inside a powiat - and in Warsaw of its dzielnice -
- * in the order of their gmina's name. Nothing for a code that is not a
- * powiat's. */
-export function gminaOfficesIn(
-  index: Map<string, RegionOffice[]>,
-  powiat: string,
-): RegionOffice[] {
-  if (!/^\d{4}$/.test(powiat)) return [];
-  const found: RegionOffice[] = [];
-  for (const [teryt, offices] of index) {
-    if (teryt.length === 7 && teryt.startsWith(powiat)) found.push(...offices);
-  }
-  return found.sort(
-    (a, b) =>
-      (a.region ?? "").localeCompare(b.region ?? "", "pl") ||
-      a.teryt.localeCompare(b.teryt),
-  );
-}
-
-/** What the relation dialog offers for a region: its own offices, and for a
- * powiat the urzędy of every gmina in it after them, each office once.
- *
- * The gminy are there because the site has a region node for only some of
- * them - those KRS names as the owner of a company - so for most a contributor
- * cannot pick the gmina itself, and the powiat's own office, the starostwo, is
- * not where a wójt or a burmistrz works. The powiat is always there to pick.
- * A województwo does not list its gminy: seventy to three hundred is not a
- * list anybody picks from, and every one of them is in some powiat.
- *
- * Once, because a city that is its own powiat has its urząd listed under both
- * codes. */
-export function officeChoices(
-  index: Map<string, RegionOffice[]>,
-  teryt: string,
-): { office: RegionOffice; gmina: string | null }[] {
-  const own = officesFor(index, teryt);
-  const seen = new Set(own.map((office) => office.regon));
-  const gminy = gminaOfficesIn(index, teryt).filter((office) => {
-    if (seen.has(office.regon)) return false;
-    seen.add(office.regon);
-    return true;
-  });
-  return [
-    ...own.map((office) => ({ office, gmina: null })),
-    ...gminy.map((office) => ({ office, gmina: gminaLabel(office) })),
-  ];
-}
-
-/** The rows a region node carries as `offices`, out of the whole table: the
- * ones `officeChoices` reads for its code. Its own, or for a town's or the
- * villages' half of a gmina the gmina's, and for a powiat the urzędy of its
- * gminy too. Nothing for a code the table does not answer. */
-export function officesOn(
-  index: Map<string, RegionOffice[]>,
-  teryt: string,
-): RegionOffice[] {
-  return [...officesFor(index, teryt), ...gminaOfficesIn(index, teryt)];
 }
 
 /** What to propose for an office the site has no place for yet, as

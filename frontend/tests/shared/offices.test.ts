@@ -1,12 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
-  gminaLabel,
   indexOffices,
   isOfficeName,
-  officeChoices,
   officeProposal,
   officesFor,
-  officesOn,
   storedOffices,
   type RegionOffice,
 } from "../../shared/offices";
@@ -119,7 +116,15 @@ describe("storedOffices", () => {
 });
 
 describe("officesFor", () => {
-  const index = indexOffices([WEJHEROWO, ...POMORSKIE, WARKA]);
+  const index = indexOffices([
+    WEJHEROWO,
+    WEJHEROWO_WIEJSKA,
+    STAROSTWO,
+    CHOCZEWO,
+    ...POMORSKIE,
+    ...OPOLE,
+    WARKA,
+  ]);
 
   it("finds a gmina's urząd by its code", () => {
     expect(officesFor(index, "2215031").map((office) => office.name)).toEqual([
@@ -131,9 +136,23 @@ describe("officesFor", () => {
     expect(officesFor(index, "22")).toHaveLength(2);
   });
 
+  it("tells a town's urząd from the one of the villages around it", () => {
+    // Two gminy of one name in one powiat, each a region with its own urząd.
+    expect(officesFor(index, "2215102")).toEqual([WEJHEROWO_WIEJSKA]);
+  });
+
+  it("gives a powiat its starostwo and none of its gminy's urzędy", () => {
+    // Every gmina is a region of its own (decision on 2026-11-22).
+    expect(officesFor(index, "2215")).toEqual([STAROSTWO]);
+  });
+
+  it("gives a city that is its own powiat its urząd once at each level", () => {
+    expect(officesFor(index, "1661")).toEqual([OPOLE[0]]);
+    expect(officesFor(index, "1661011")).toEqual([OPOLE[1]]);
+  });
+
   it("has nothing for a region it does not list", () => {
-    // The rural gmina of the same name is another region, with another urząd.
-    expect(officesFor(index, "2215102")).toEqual([]);
+    expect(officesFor(index, "2215052")).toEqual([]);
     expect(officesFor(index, "")).toEqual([]);
   });
 
@@ -152,100 +171,6 @@ describe("officesFor", () => {
     // gmina's.
     expect(officesFor(index, "1406111")).toEqual([]);
     expect(officesFor(index, "1406")).toEqual([]);
-  });
-});
-
-describe("gminaLabel", () => {
-  it("tells a town from the villages around it of the same name", () => {
-    expect(gminaLabel(WEJHEROWO)).toBe("Gmina miejska Wejherowo");
-    expect(gminaLabel(WEJHEROWO_WIEJSKA)).toBe("Gmina wiejska Wejherowo");
-  });
-
-  it("calls a Warsaw dzielnica a dzielnica", () => {
-    expect(gminaLabel(MOKOTOW)).toBe("Dzielnica Mokotów");
-  });
-
-  it("falls back to the kind without the region's name", () => {
-    expect(gminaLabel({ ...WEJHEROWO, region: null })).toBe("Gmina miejska");
-  });
-});
-
-describe("officeChoices", () => {
-  const index = indexOffices([
-    WEJHEROWO_WIEJSKA,
-    STAROSTWO,
-    WEJHEROWO,
-    CHOCZEWO,
-    ...POMORSKIE,
-    ...OPOLE,
-  ]);
-  const listed = (teryt: string) =>
-    officeChoices(index, teryt).map(({ office, gmina }) => [
-      office.name,
-      gmina,
-    ]);
-
-  it("lists a powiat's gminy after its starostwo, each by its name", () => {
-    // Most gminy have no region node to pick, and the starostwo is not where
-    // a wójt or a burmistrz works.
-    expect(listed("2215")).toEqual([
-      ["Starostwo Powiatowe w Wejherowie", null],
-      ["URZĄD GMINY CHOCZEWO", "Gmina wiejska Choczewo"],
-      ["Urząd Miejski w Wejherowie", "Gmina miejska Wejherowo"],
-      ["Urząd Gminy Wejherowo", "Gmina wiejska Wejherowo"],
-    ]);
-  });
-
-  it("lists a city that is its own powiat's urząd once", () => {
-    expect(listed("1661")).toEqual([["URZĄD MIASTA OPOLA", null]]);
-  });
-
-  it("lists only a gmina's own urząd", () => {
-    expect(listed("2215031")).toEqual([["Urząd Miejski w Wejherowie", null]]);
-  });
-
-  it("does not list a województwo's gminy", () => {
-    expect(listed("22").map(([, gmina]) => gmina)).toEqual([null, null]);
-  });
-});
-
-describe("officesOn", () => {
-  const index = indexOffices([
-    WEJHEROWO_WIEJSKA,
-    STAROSTWO,
-    WEJHEROWO,
-    CHOCZEWO,
-    ...POMORSKIE,
-    ...OPOLE,
-    WARKA,
-    MOKOTOW,
-  ]);
-
-  it("gives a powiat its starostwo and the urzędy of its gminy", () => {
-    expect(officesOn(index, "2215")).toEqual([
-      STAROSTWO,
-      CHOCZEWO,
-      WEJHEROWO,
-      WEJHEROWO_WIEJSKA,
-    ]);
-  });
-
-  it("gives a town's half of a gmina the gmina's urząd", () => {
-    expect(officesOn(index, "1406114")).toEqual([WARKA]);
-  });
-
-  it("gives a województwo its own two and none of its gminy", () => {
-    expect(officesOn(index, "22")).toEqual(POMORSKIE);
-  });
-
-  it("is all the dialog needs to answer each region as the table would", () => {
-    const codes = ["22", "2215", "2215031", "2215102", "1406114", "1661"];
-    for (const teryt of [...codes, "1661011", "1465058", "2215052"]) {
-      const carried = indexOffices(officesOn(index, teryt));
-      expect(officeChoices(carried, teryt)).toEqual(
-        officeChoices(index, teryt),
-      );
-    }
   });
 });
 

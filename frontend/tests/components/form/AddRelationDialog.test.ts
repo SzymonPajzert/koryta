@@ -319,35 +319,35 @@ describe("AddRelationDialog", () => {
       regon: "000526251",
       nip: "5882155172",
       node: null,
-      gmina: null,
       seatId: "teryt2215031",
     };
-    /** Wejherowo's offices as its powiat lists them: the starostwo, then the
-     * town's urząd - which has a region node to be seated in - and the
-     * villages', which has none and is seated in the powiat. */
-    const powiatOffices: RegionOfficeOption[] = [
-      {
-        teryt: "2215",
-        region: "wejherowski",
-        name: "Starostwo Powiatowe w Wejherowie",
-        regon: "191686414",
-        nip: "5881831062",
-        node: null,
-        gmina: null,
-        seatId: "teryt2215",
-      },
-      { ...urzad, gmina: "Gmina miejska Wejherowo" },
-      {
-        teryt: "2215102",
-        region: "Wejherowo",
-        name: "Urząd Gminy Wejherowo",
-        regon: "000545113",
-        nip: "5881007736",
-        node: null,
-        gmina: "Gmina wiejska Wejherowo",
-        seatId: "teryt2215",
-      },
-    ];
+    /** The powiat's answer: its starostwo alone, since every gmina is a region
+     * to pick for its own urząd. */
+    const starostwo: RegionOfficeOption = {
+      teryt: "2215",
+      region: "wejherowski",
+      name: "Starostwo Powiatowe w Wejherowie",
+      regon: "191686414",
+      nip: "5881831062",
+      node: null,
+      seatId: "teryt2215",
+    };
+    /** The town's half of Warka, which has a node of its own: it is answered
+     * with the gmina's urząd, seated in the gmina. */
+    const miastoWarka: Link<NodeType> = {
+      id: "teryt1406114",
+      type: "region",
+      name: "Miasto Warka",
+    };
+    const urzadWarki: RegionOfficeOption = {
+      teryt: "1406113",
+      region: "Warka",
+      name: "Urząd Miejski w Warce",
+      regon: "000526624",
+      nip: "7971385756",
+      node: null,
+      seatId: "teryt1406113",
+    };
 
     /** The server, as far as this flow talks to it: the offices of the
      * region, a proposal for a new place, and relations. */
@@ -357,7 +357,10 @@ describe("AddRelationDialog", () => {
           return { offices: [{ ...urzad, node }] };
         }
         if (url === "/api/nodes/teryt2215/offices") {
-          return { offices: powiatOffices };
+          return { offices: [starostwo] };
+        }
+        if (url === "/api/nodes/teryt1406114/offices") {
+          return { offices: [urzadWarki] };
         }
         if (url === "/api/revisions/create") {
           return { id: "rev-1", node_id: "urzad-new" };
@@ -515,20 +518,10 @@ describe("AddRelationDialog", () => {
       expect(wrapper.emitted("added")).toHaveLength(1);
     });
 
-    it("says a gmina missing from the regions is reached through its powiat", async () => {
-      serve(null);
-      const wrapper = mountDialog();
-      await chooseOffice(wrapper);
-
-      expect(
-        document.querySelector('[data-testid="region-workplace-powiat-hint"]')
-          ?.textContent,
-      ).toContain("Wybierz jej powiat");
-    });
-
-    it("lists a powiat's gminy by name after its starostwo, picking none", async () => {
-      // Most gminy have no region node, so the powiat is the way to them -
-      // and the starostwo is not where a wójt or a burmistrz works.
+    it("offers a powiat its starostwo alone, picked", async () => {
+      // Every gmina is a region of its own, so a gmina's urząd is found by
+      // picking the gmina, not listed under its powiat (decision on
+      // 2026-11-22).
       serve(null);
       const wrapper = mountDialog();
       await chooseOffice(wrapper, powiat);
@@ -536,45 +529,31 @@ describe("AddRelationDialog", () => {
       const list = document.querySelector(
         '[data-testid="region-workplace-options"]',
       )!.textContent!;
-      const order = [
-        "Starostwo Powiatowe w Wejherowie",
-        "Urzędy gmin w tym powiecie",
-        "Gmina miejska Wejherowo",
-        "Gmina wiejska Wejherowo",
-      ].map((text) => list.indexOf(text));
-      expect(order.every((at) => at >= 0)).toBe(true);
-      expect(order).toEqual([...order].sort((a, b) => a - b));
-      expect(
-        powiatOffices.map((office) => officeOption(office.regon).checked),
-      ).toEqual([false, false, false]);
-      expect(submitButton().disabled).toBe(true);
-      // The list already is what the hint would send them to.
-      expect(
-        document.querySelector('[data-testid="region-workplace-powiat-hint"]'),
-      ).toBeNull();
+      expect(list).toContain("Starostwo Powiatowe w Wejherowie");
+      expect(list).not.toContain("Urząd Miejski w Wejherowie");
+      expect(officeOption(starostwo.regon).checked).toBe(true);
+      expect(submitButton().disabled).toBe(false);
     });
 
-    it("seats a gmina's urząd picked from the powiat where the server says", async () => {
+    it("seats a town's half's urząd in its gmina, where the server says", async () => {
       serve(null);
       const wrapper = mountDialog();
-      await chooseOffice(wrapper, powiat);
-      officeOption("000526251").click();
-      await flushPromises();
+      await chooseOffice(wrapper, miastoWarka);
       await submit();
 
       expect(writes()).toEqual([
         [
           "/api/revisions/create",
           expect.objectContaining({
-            name: "Urząd Miejski w Wejherowie",
-            regonNumber: "000526251",
+            name: "Urząd Miejski w Warce",
+            regonNumber: "000526624",
           }),
         ],
-        // In the town's own region rather than in the powiat it was picked
-        // from, since the site has one.
+        // In the gmina whose urząd it is, rather than in the half it was
+        // picked from.
         [
           "/api/edges/create",
-          { type: "seat", source: "teryt2215031", target: "urzad-new" },
+          { type: "seat", source: "teryt1406113", target: "urzad-new" },
         ],
         [
           "/api/edges/create",

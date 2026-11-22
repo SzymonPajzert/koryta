@@ -201,8 +201,8 @@ describe("POST /api/ingest/region", () => {
 
       expect(officesWritten()).toEqual({
         teryt22: POMORSKIE,
-        // The starostwo, then the urzędy of the powiat's gminy.
-        teryt2215: [STAROSTWO, WEJHEROWO, WEJHEROWO_WIEJSKA],
+        // A powiat its starostwo alone: every gmina is a region of its own.
+        teryt2215: [STAROSTWO],
         teryt2215031: [WEJHEROWO],
         // The town's half of Warka is run by the gmina's urząd.
         teryt1406114: [WARKA],
@@ -259,22 +259,23 @@ describe("POST /api/ingest/region", () => {
       const answer = await upload({
         offices: [
           ...TABLE,
-          { ...WEJHEROWO_WIEJSKA, teryt: "2215092", regon: "000542699" },
-          { ...WEJHEROWO_WIEJSKA, teryt: "2215072", nip: "5881136021" },
+          {
+            ...WEJHEROWO,
+            name: "Urząd z błędnym REGON-em",
+            regon: "000526252",
+          },
+          { ...POMORSKIE[0]!, nip: "5831066123" },
         ],
       });
 
-      expect(officesWritten().teryt2215).toEqual([
-        STAROSTWO,
-        WEJHEROWO,
-        WEJHEROWO_WIEJSKA,
-      ]);
+      expect(officesWritten().teryt2215031).toEqual([WEJHEROWO]);
+      expect(officesWritten().teryt22).toEqual(POMORSKIE);
       expect(answer.offices).toMatchObject({
         refused: {
           count: 2,
           named: [
-            "2215092 Urząd Gminy Wejherowo",
-            "2215072 Urząd Gminy Wejherowo",
+            "2215031 Urząd z błędnym REGON-em",
+            "22 Pomorski Urząd Wojewódzki w Gdańsku",
           ],
         },
       });

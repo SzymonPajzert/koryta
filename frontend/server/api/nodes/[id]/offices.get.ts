@@ -8,7 +8,7 @@ import { getUser } from "~~/server/utils/auth";
 import { approvedRevisionId } from "~~/shared/model";
 import {
   indexOffices,
-  officeChoices,
+  officesFor,
   storedOffices,
   type RegionOffices,
 } from "~~/shared/offices";
@@ -19,9 +19,8 @@ import {
  * "in" a region: the answer is never the region, it is the office - so this
  * names it, with the REGON a new place for it would carry, and looks that
  * REGON up among the places so that the second person to be given a post in
- * Wejherowo is filed under the same urząd as the first. For a powiat it names
- * the urzędy of the gminy in it as well - see `officeChoices` - and says for
- * each where a place proposed for it would be seated.
+ * Wejherowo is filed under the same urząd as the first. Only the region's own
+ * urząd: every gmina is a region to pick (decision on 2026-11-22).
  *
  * Signed in only, like the dialog. Not cached: a place proposed a minute ago
  * has to be found now, or the next contributor proposes it again.
@@ -41,32 +40,27 @@ export default defineEventHandler(async (event): Promise<RegionOffices> => {
   }
 
   const teryt = typeof data.teryt === "string" ? data.teryt : "";
-  // The region carries the rows it is answered with, a powiat its gminy's too.
-  const choices = officeChoices(
-    indexOffices(storedOffices(data.offices)),
-    teryt,
-  );
-  if (choices.length === 0) return { offices: [] };
+  // The region carries the urząd that runs it.
+  const offices = officesFor(indexOffices(storedOffices(data.offices)), teryt);
+  if (offices.length === 0) return { offices: [] };
 
-  // The region's own offices are seated in it, so only the codes a powiat's
-  // list reaches beyond it - and the gmina of a town's half - are looked up.
-  const codes = new Set(choices.map(({ office }) => office.teryt));
+  // A region's own urząd is seated in it. Only a town's or the villages' half
+  // of a gmina is answered with another region's, its gmina's, which is
+  // looked up to seat the urząd there.
+  const codes = new Set(offices.map((office) => office.teryt));
   codes.delete(teryt);
   const [places, regions] = await Promise.all([
     placesByRegon(
       db,
-      choices.map(({ office }) => office.regon),
+      offices.map((office) => office.regon),
     ),
     regionsByTeryt(db, [...codes]),
   ]);
 
   return {
-    offices: choices.map(({ office, gmina }) => ({
+    offices: offices.map((office) => ({
       ...office,
       node: places.get(office.regon) ?? null,
-      gmina,
-      // Most gminy have no node, and a place seated nowhere is found by no
-      // region filter - the powiat around it is the nearest thing there is.
       seatId: regions.get(office.teryt) ?? id,
     })),
   };

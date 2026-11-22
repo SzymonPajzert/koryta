@@ -60,13 +60,6 @@ const WEJHEROWO = {
   regon: "000526251",
   nip: "5882155172",
 };
-const WEJHEROWO_WIEJSKA = {
-  teryt: "2215102",
-  region: "Wejherowo",
-  name: "Urząd Gminy Wejherowo",
-  regon: "000545113",
-  nip: "5881007736",
-};
 const POMORSKIE = [
   {
     teryt: "22",
@@ -113,8 +106,7 @@ describe("GET /api/nodes/[id]/offices", () => {
         name: "Powiat wejherowski",
         teryt: "2215",
         published: true,
-        // The starostwo, and the urzędy of the powiat's gminy.
-        offices: [STAROSTWO, WEJHEROWO, WEJHEROWO_WIEJSKA],
+        offices: [STAROSTWO],
       },
       teryt22: {
         type: "region",
@@ -149,7 +141,6 @@ describe("GET /api/nodes/[id]/offices", () => {
         regon: "000526251",
         nip: "5882155172",
         node: null,
-        gmina: null,
         seatId: "teryt2215031",
       },
     ]);
@@ -269,42 +260,17 @@ describe("GET /api/nodes/[id]/offices", () => {
     ]);
   });
 
-  it("offers a powiat's gminy after its starostwo, seated where they can be", async () => {
+  it("answers a powiat with its starostwo alone, seated in it", async () => {
+    // Every gmina is a region to pick for its own urząd (decision on
+    // 2026-11-22).
     const { offices } = await call("teryt2215");
 
-    expect(
-      offices.map(({ name, gmina, seatId }) => ({ name, gmina, seatId })),
-    ).toEqual([
-      {
-        name: "Starostwo Powiatowe w Wejherowie",
-        gmina: null,
-        seatId: "teryt2215",
-      },
-      // The town has a region node, so its urząd goes there...
-      {
-        name: "Urząd Miejski w Wejherowie",
-        gmina: "Gmina miejska Wejherowo",
-        seatId: "teryt2215031",
-      },
-      // ...and the villages around it have none, so theirs goes in the powiat.
-      {
-        name: "Urząd Gminy Wejherowo",
-        gmina: "Gmina wiejska Wejherowo",
-        seatId: "teryt2215",
-      },
+    expect(offices.map(({ name, seatId }) => ({ name, seatId }))).toEqual([
+      { name: "Starostwo Powiatowe w Wejherowie", seatId: "teryt2215" },
     ]);
-    // One query for the places and one for the gminy's regions.
+    // The places for the REGON, and no other region to look up.
     expect(queries).toEqual([
-      {
-        collection: "nodes",
-        field: "regonNumber",
-        values: ["191686414", "000526251", "000545113"],
-      },
-      {
-        collection: "nodes",
-        field: "teryt",
-        values: ["2215031", "2215102"],
-      },
+      { collection: "nodes", field: "regonNumber", values: ["191686414"] },
     ]);
   });
 
