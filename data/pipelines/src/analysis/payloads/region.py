@@ -1,3 +1,4 @@
+import collections
 import json
 from typing import Any
 
@@ -8,21 +9,30 @@ from analysis.interesting import Companies
 from scrapers.map.teryt import Regions
 from scrapers.stores import Context, Pipeline
 
+#: TERYT's RODZ - the last digit of a seven-digit code - of a gmina, and the
+#: words that name one by its kind where a town and its villages share a name.
+GMINA_KINDS = {"1": "Gmina miejska", "2": "Gmina wiejska", "3": "Gmina miejsko-wiejska"}
+
+#: RODZ of a Warsaw dzielnica, which has an urząd of its own like a gmina.
+DZIELNICA = "8"
+
+#: The parts of a gmina - the town (4) and the villages (5) of a gmina
+#: miejsko-wiejska, and the delegatury of four cities (9) - and how each is
+#: named. They have no urząd of their own.
+PART_NAMES = {"4": "Miasto {}", "5": "Obszar wiejski {}", "9": "{}"}
+
 
 class RegionPayloads(Pipeline):
-    """The region nodes the site needs, which is not every region there is.
+    """The region nodes the site needs.
 
-    Wojewodztwa and powiaty are emitted whole - 16 and 380 - because a company's
-    seat is recorded at powiat level and every one of them is used. Gminy are
-    not: TERYT has 2,479 real ones and the site would fetch the whole collection
-    into the browser to draw a table, so only the gminy something actually
-    points at are emitted.
+    Every województwo, powiat and gmina, and every Warsaw dzielnica: 16, 380,
+    2,479 and 18. Until 2026-11-22 only the gminy something pointed at had a
+    node, 985 of them; a gmina's urząd was otherwise reached only through its
+    powiat, which made a second tier of gminy (decision on 2026-11-22).
 
-    What points at them is ownership. The register names a gmina as the owner of
-    1,191 companies, and until those names were resolved to their own TERYT code
-    there was nothing to point anywhere. `Companies` carries the resolved codes
-    on `parents`, so the set of gminy worth a node is read off there: 706 of the
-    2,479, against the 9 the site had.
+    The parts of a gmina are emitted only when something points at one, and
+    what points at them is ownership: the register names one as the owner of a
+    company, and `Companies` carries the resolved codes on `parents`.
     """
 
     filename = "region_payloads"
@@ -31,7 +41,8 @@ class RegionPayloads(Pipeline):
     companies: Companies
 
     def gminy_owning_a_company(self, ctx: Context) -> frozenset[str]:
-        """Every gmina-level TERYT code named as an owner of some company."""
+        """Every gmina-level TERYT code named as an owner of some company,
+        which is what makes a part of a gmina worth a node."""
         companies_df = self.companies.read_or_process(ctx)
         referenced: set[str] = set()
         for parents in companies_df.get("parents", []):
@@ -47,15 +58,16 @@ class RegionPayloads(Pipeline):
         return frozenset(referenced)
 
     def process(self, ctx: Context) -> pd.DataFrame:
-        keep_gminy = self.gminy_owning_a_company(ctx)
+        keep_parts = self.gminy_owning_a_company(ctx)
         regions_df = self.regions.read_or_process(ctx)
+        shared = shared_gmina_names(regions_df)
         # TODO type this correctly
         payloads: list[dict[str, Any]] = []
         regions_df["id_str"] = regions_df["id"].astype(str)
         regions_df["id_len"] = regions_df["id"].astype(str).str.len()
         regions_df = regions_df.sort_values("id_len")
         for _, row in regions_df.iterrows():
-            r_payload = map_region_payload(row, keep_gminy)
+            r_payload = map_region_payload(row, keep_parts, shared)
             if r_payload:
                 payloads.append(
                     {
@@ -75,28 +87,52 @@ class RegionPayloads(Pipeline):
         return df
 
 
+def shared_gmina_names(regions_df: pd.DataFrame) -> frozenset[tuple[str, str]]:
+    """The (powiat, name) of every name two gminy of one powiat share - a town
+    and the villages around it, 143 times in TERYT: Wejherowo the town and
+    Wejherowo the gmina wiejska, both in powiat wejherowski."""
+    counts = collections.Counter(
+        (code[:4], str(name))
+        for code, name in zip(regions_df["id"].astype(str), regions_df["name"])
+        if len(code) == 7 and code[6] in GMINA_KINDS
+    )
+    return frozenset(key for key, count in counts.items() if count > 1)
+
+
 def map_region_payload(
-    row: pd.Series, keep_gminy: frozenset[str] = frozenset()
+    row: pd.Series,
+    keep_parts: frozenset[str] = frozenset(),
+    shared: frozenset[tuple[str, str]] = frozenset(),
 ) -> dict[str, Any] | None:
     """One region's ingest payload, or None if the site has no use for it.
 
-    Anything below powiat level is dropped unless it is in `keep_gminy`. TERYT's
-    3,952 gmina rows include the miasto and obszar-wiejski halves of every
-    miejsko-wiejska and Warsaw's dzielnice, none of which owns anything, and the
-    region collection is fetched unpaginated by the browser.
+    A gmina is "Gmina <name>", or "Gmina miejska <name>" and the like where
+    another gmina of its powiat has the same name (decision on 2026-11-22). Such
+    a payload says, in `replaces`, the shared name it is to take over from, so
+    the ingest renames a node that carries it and no other name. A dzielnica is
+    "<name> (Warszawa)", as the ones already on the site are. A part of a gmina
+    is emitted only when it is in `keep_parts`.
     """
-    id_str_raw = str(row["id"])
-    if len(id_str_raw) > 4 and id_str_raw not in keep_gminy:
-        return None
-
-    name = str(row["name"])
     id_str = str(row["id"])
+    name = str(row["name"])
+    replaces: list[str] = []
     if len(id_str) == 2:
         name = f"Województwo {name}"
-    elif len(id_str) == 4 and name.lower() == name:
-        name = f"Powiat {name}"
-    elif len(id_str) == 7:
-        name = f"Gmina {name}"
+    elif len(id_str) == 4:
+        if name.lower() == name:
+            name = f"Powiat {name}"
+    elif len(id_str) == 7 and id_str[6] in GMINA_KINDS:
+        if (id_str[:4], name) in shared:
+            replaces = [f"Gmina {name}"]
+            name = f"{GMINA_KINDS[id_str[6]]} {name}"
+        else:
+            name = f"Gmina {name}"
+    elif len(id_str) == 7 and id_str[6] == DZIELNICA:
+        name = f"{name} (Warszawa)"
+    elif len(id_str) == 7 and id_str[6] in PART_NAMES and id_str in keep_parts:
+        name = PART_NAMES[id_str[6]].format(name)
+    else:
+        return None
 
     node_id = f"teryt{id_str}"
 
@@ -115,6 +151,8 @@ def map_region_payload(
         "name": name,
         "teryt": id_str,
     }
+    if replaces:
+        payload["replaces"] = replaces
 
     parent_id = row.get("parent_id")
     if parent_id and str(parent_id) != "nan" and str(parent_id) != "None":

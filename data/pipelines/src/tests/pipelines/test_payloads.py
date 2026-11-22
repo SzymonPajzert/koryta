@@ -341,6 +341,64 @@ def test_upload_payloads_region_shape(mock_ctx):
     assert edge["type"] == "owns"
 
 
+def test_every_gmina_is_a_region_named_by_its_kind_only_where_a_name_is_shared(
+    mock_ctx,
+):
+    """Every gmina and dzielnica, whether anything points at it or not; the
+    parts of a gmina only when the register names one as an owner."""
+    pipeline = Pipeline.create(RegionPayloads)
+    pipeline.companies = MockPipeline(
+        {"krs": ["1"], "name": ["Wodociągi"], "parents": [[{"teryt": "1406114"}]]}
+    )
+
+    def row(code: str, name: str, parent: str | None) -> dict:
+        return {"id": code, "name": name, "type": "region", "parent_id": parent}
+
+    pipeline.regions = MockPipeline(
+        [
+            row("22", "POMORSKIE", None),
+            row("2215", "wejherowski", "22"),
+            row("2215011", "Reda", "2215"),
+            # A town and the villages around it, one name, one powiat.
+            row("2215031", "Wejherowo", "2215"),
+            row("2215102", "Wejherowo", "2215"),
+            row("1406113", "Warka", "1406"),
+            row("1406114", "Warka", "1406"),
+            row("1406115", "Warka", "1406"),
+            row("1465058", "Mokotów", "1465"),
+            row("0264029", "Wrocław-Fabryczna", "0264"),
+        ]
+    )
+
+    result_df = pipeline.process(mock_ctx)
+    payloads = {
+        payload["teryt"]: payload
+        for payload in (json.loads(text) for text in result_df["payload"])
+    }
+
+    assert {code: payload["name"] for code, payload in payloads.items()} == {
+        "22": "Województwo POMORSKIE",
+        "2215": "Powiat wejherowski",
+        "2215011": "Gmina Reda",
+        "2215031": "Gmina miejska Wejherowo",
+        "2215102": "Gmina wiejska Wejherowo",
+        "1406113": "Gmina Warka",
+        # A company names the town as its owner; nothing names the villages.
+        "1406114": "Miasto Warka",
+        "1465058": "Mokotów (Warszawa)",
+    }
+    # The two Wejherowo take over the name they shared, and nothing else does.
+    assert payloads["2215031"]["replaces"] == ["Gmina Wejherowo"]
+    assert payloads["2215102"]["replaces"] == ["Gmina Wejherowo"]
+    assert "replaces" not in payloads["2215011"]
+    assert payloads["2215102"]["edge"] == {
+        "edge_id": "edge_teryt2215_teryt2215102_owns",
+        "source": "teryt2215",
+        "target": "teryt2215102",
+        "type": "owns",
+    }
+
+
 def test_upload_payloads_company_shape(mock_ctx, monkeypatch):
     """A company payload carries the categories the site stores.
 
