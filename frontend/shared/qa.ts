@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "oswiadczenia-imiennik-z-innego-miejsca",
+    title: "Oświadczenie rozstrzyga kandydatury w dwóch miejscach naraz",
+    description:
+      "Gdy kandydatury strony wypadają w dwóch miejscach w jednych wyborach, a oświadczenie majątkowe jest z jednego z nich, automat usuwa kandydatury z drugiego jako imiennika, z partią, którą dawały tylko one, i publikuje stronę. Wstrzymana zostaje tylko strona, której oświadczenie tego nie rozstrzyga.",
+    steps: [
+      "Na /admin/oswiadczenia w „Wstrzymane publikacje” wybierz powód „kandydatura w dwóch miejscach naraz”: zostają tylko osoby, u których żadna albo każda strona sporu jest w miejscu oświadczenia.",
+      "Otwórz /admin/rewizje/<id> osoby opublikowanej w ten sposób: kandydatura z innego miejsca ma stan „Usunięte”, a jej partia, jeśli dawała ją tylko ona, zniknęła ze strony.",
+    ],
+    link: "/admin/oswiadczenia",
+    area: "admin",
+  },
+  {
     id: "kolejka-imie-prowadzi-do-strony-osoby",
     title: "Imię w kolejce prowadzi na stronę osoby",
     description:

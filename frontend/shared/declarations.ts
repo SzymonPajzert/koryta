@@ -1196,8 +1196,10 @@ export type PageMatch = "same" | "different" | "no_date";
  * page went up, for what came in between: a reviewer's rejection
  * (`rejected`), a person's version waiting (`by_hand`), or a run elsewhere in
  * the same election (`two_places`). Before the page is up, each of those holds
- * the whole page. `needs_split` is every relation of a page marked as two
- * people after it went up. */
+ * the whole page - except a run elsewhere that the place of the declaration
+ * shows to be a namesake's, which comes off the page as it goes up
+ * (`namesakeRuns` in server/utils/declarationPublish.ts). `needs_split` is
+ * every relation of a page marked as two people after it went up. */
 export type PublicationEdgeHold =
   | "company_draft"
   | "approved_hidden"
