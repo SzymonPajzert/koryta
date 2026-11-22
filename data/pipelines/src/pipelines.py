@@ -47,6 +47,7 @@ from scrapers.koryta.download import (
     KorytaNodes,
     KorytaNotes,
     KorytaPeople,
+    KorytaRemovedCandidacies,
     KorytaVotes,
 )
 from scrapers.krs.censored import KRSCensoredPeople
@@ -122,6 +123,7 @@ PIPELINES = [
     KorytaNotes,
     KorytaPeople,
     KorytaPeopleCreated,
+    KorytaRemovedCandidacies,
     KorytaVotes,
     NamesCountByRegion,
     PeopleEnriched,

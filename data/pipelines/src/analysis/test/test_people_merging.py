@@ -17,6 +17,7 @@ from analysis.people import (
 from analysis.people_koryta_merged import PeopleKorytaMerged
 from analysis.people_pkw_merged import people_pkw_merged
 from analysis.people_wiki_merged import people_wiki_merged
+from scrapers.koryta.download import CURRENT_DATE
 from scrapers.stores import Context, ProcessPolicy
 from scrapers.stores.file import VersionedBackup
 from scrapers.test_tree import MockIO, MockNLP, MockRejestrIO, MockUtils, MockWeb
@@ -1533,7 +1534,7 @@ def test_a_cold_run_restores_what_the_merge_reads_and_still_merges(
     """`koryta_scrape_krs_free`'s crash, end to end.
 
     Rebuilding PeopleMerged where none of its inputs is on disk restores all
-    six from the shared cache. The surname counts came back with integer codes
+    seven from the shared cache. The surname counts came back with integer codes
     and the merge died on the first candidate with no voivodeship. The site's
     register ids come back as text only while some page has none; once every
     page is linked they would have come back as integers too.
@@ -1575,6 +1576,9 @@ def test_a_cold_run_restores_what_the_merge_reads_and_still_merges(
                     {"first_name": "maria", "count": 300, "p": 0.03},
                 ]
             ),
+            f"removed_candidacies_{CURRENT_DATE}": pd.DataFrame(
+                [removed("another-page", "0401", "2024")]
+            ),
         }
     )
     cold = Context(
@@ -1599,3 +1603,200 @@ def test_a_cold_run_restores_what_the_merge_reads_and_still_merges(
     # The restore writes the counts back to disk as the cache holds them.
     restored = shared.written["names_count_by_region/names_count_by_region.jsonl"]
     assert '"teryt":"02"' in restored
+
+
+def pkw_in(
+    first: str, last: str, birth_year: int, powiat: str, years=("2024",)
+) -> dict:
+    """One PKW record standing in `powiat`, as `pkw_person` but placed."""
+    person = pkw_person(first, last, birth_year, years=years)
+    for election in person["elections"]:
+        election.update(
+            teryt_candidacy_wojewodztwo=powiat[:2],
+            teryt_candidacy_powiat=powiat,
+            teryt_wojewodztwo=[powiat[:2]],
+            teryt_powiat=[powiat],
+        )
+    person["teryt_wojewodztwo"] = [powiat[:2]]
+    person["teryt_powiat"] = [powiat]
+    return person
+
+
+def removed(koryta_id: str, teryt: str, year: str, kind: str | None = "local"):
+    """A candidacy taken off a page as somebody else's
+    (`KorytaRemovedCandidacies`)."""
+    return {
+        "koryta_id": koryta_id,
+        "teryt": teryt,
+        "year": year,
+        "kind": kind,
+        "reason": "Imiennik. Oświadczenie majątkowe tej osoby jest z innego miejsca.",
+    }
+
+
+def match_with_page(
+    ctx, krs: list[dict], pkw: list[dict], pages: list[dict], removals: list[dict]
+) -> pd.DataFrame:
+    """`match_pkw` with pages on the site and candidacies taken off them."""
+    return people_merged(
+        ctx,
+        pd.DataFrame(krs),
+        pd.DataFrame(
+            columns=[
+                "first_name",
+                "last_name",
+                "second_name",
+                "birth_year",
+                "birth_date",
+                "full_name",
+                "source",
+                "is_polityk",
+                "wiki_score",
+            ]
+        ),
+        pd.DataFrame(pkw),
+        pd.DataFrame(pages, columns=KORYTA_COLUMNS),
+        pd.DataFrame(columns=["last_name", "teryt", "count"]),
+        pd.DataFrame(columns=["first_name", "p"]),
+        pd.DataFrame(removals),
+    )
+
+
+def candidacy_places(result: pd.DataFrame, krs_row: int = 0) -> list[str]:
+    elections = result["elections"].iloc[krs_row]
+    if elections is None or elections is pd.NA:
+        return []
+    return sorted(str(e["teryt_candidacy_powiat"]) for e in elections)
+
+
+def test_a_candidacy_taken_off_the_page_takes_its_record_off_the_person(ctx):
+    """Anna Kowalska's declaration is from powiat strzeliński; a namesake's
+    2024 run in powiat aleksandrowski came off her page. The namesake's
+    record stops being hers, so the night sends her neither the run nor its
+    committee's party again (decision on 2026-11-22)."""
+    result = match_with_page(
+        ctx,
+        [krs_person("anna", "kowalska", "1979-07-15")],
+        [
+            pkw_in("anna", "kowalska", 1979, "0217"),
+            pkw_in("anna", "kowalska", 1979, "0401"),
+        ],
+        [koryta_person("Anna Kowalska", "kowalska", rejestrio_id="1")],
+        [removed("kowalska", "0401", "2024")],
+    )
+
+    assert candidacy_places(result) == ["0217"]
+
+
+def test_a_removal_leaves_the_record_with_everybody_else_it_fits(ctx):
+    """One record is one human, but which one is for each page to say: the
+    other Anna Kowalska, born the same year, keeps the run her namesake's page
+    took off."""
+    other = krs_person("anna", "kowalska", "1979-03-01")
+    other["rejestrio_id"] = ["2"]
+    result = match_with_page(
+        ctx,
+        [krs_person("anna", "kowalska", "1979-07-15"), other],
+        [
+            pkw_in("anna", "kowalska", 1979, "0217"),
+            pkw_in("anna", "kowalska", 1979, "0401"),
+        ],
+        [koryta_person("Anna Kowalska", "kowalska", rejestrio_id="1")],
+        [removed("kowalska", "0401", "2024")],
+    )
+
+    by_entry = {
+        tuple(row["rejestrio_id"]): sorted(
+            str(e["teryt_candidacy_powiat"]) for e in row["elections"]
+        )
+        for _, row in result.iterrows()
+    }
+    assert by_entry == {("1",): ["0217"], ("2",): ["0217", "0401"]}
+
+
+@pytest.mark.parametrize(
+    "removal",
+    [
+        pytest.param(removed("kowalska", "0401", "2018"), id="another-year"),
+        pytest.param(removed("kowalska", "1465", "2024"), id="another-place"),
+        pytest.param(
+            removed("kowalska", "0401", "2024", kind="european"),
+            id="another-election",
+        ),
+        pytest.param(removed("another-page", "0401", "2024"), id="another-page"),
+    ],
+)
+def test_a_removal_elsewhere_or_in_another_year_takes_nothing_off(ctx, removal):
+    result = match_with_page(
+        ctx,
+        [krs_person("anna", "kowalska", "1979-07-15")],
+        [
+            pkw_in("anna", "kowalska", 1979, "0217"),
+            pkw_in("anna", "kowalska", 1979, "0401"),
+        ],
+        [koryta_person("Anna Kowalska", "kowalska", rejestrio_id="1")],
+        [removal],
+    )
+
+    assert candidacy_places(result) == ["0217", "0401"]
+
+
+def test_a_removal_with_no_office_matches_any_election_of_its_year(ctx):
+    result = match_with_page(
+        ctx,
+        [krs_person("anna", "kowalska", "1979-07-15")],
+        [
+            pkw_in("anna", "kowalska", 1979, "0217"),
+            pkw_in("anna", "kowalska", 1979, "0401"),
+        ],
+        [koryta_person("Anna Kowalska", "kowalska", rejestrio_id="1")],
+        [removed("kowalska", "0401", "2024", kind=None)],
+    )
+
+    assert candidacy_places(result) == ["0217"]
+
+
+def test_a_removal_keeps_the_record_s_runs_where_the_person_stood(ctx):
+    """PKW's national runs are undated, so namesakes' Sejm and Senate runs
+    pool into one record: Marek Szczepański's PO Sejm runs in pomorskie and a
+    namesake's Senate run in śląskie. Taking the Senate run off his page takes
+    that place's runs off him, not his own."""
+    pooled = pkw_in("marek", "szczepański", 1973, "22", years=("2005", "2011"))
+    senate = dict(pooled["elections"][1])
+    senate.update(
+        teryt_candidacy_wojewodztwo="24",
+        teryt_candidacy_powiat="24",
+        teryt_wojewodztwo=["24"],
+        teryt_powiat=["24"],
+        election_type="senatu",
+    )
+    for run in pooled["elections"]:
+        run["election_type"] = "sejmu"
+    pooled["elections"].append(senate)
+    result = match_with_page(
+        ctx,
+        [krs_person("marek", "szczepański", "1973-10-05")],
+        [pooled],
+        [koryta_person("Marek Szczepański", "szczepanski", rejestrio_id="1")],
+        [removed("szczepanski", "24", "2011", kind="parliament")],
+    )
+
+    assert sorted(
+        (str(e["teryt_candidacy_powiat"]), str(e["election_year"]))
+        for e in result["elections"].iloc[0]
+    ) == [("22", "2005"), ("22", "2011")]
+
+
+def test_a_sejmik_run_is_matched_where_the_payload_files_it(ctx):
+    """PKW gives a sejmik run the powiat code „XX00”, which the payload files
+    under the województwo."""
+    sejmik = pkw_in("anna", "kowalska", 1979, "0400")
+    result = match_with_page(
+        ctx,
+        [krs_person("anna", "kowalska", "1979-07-15")],
+        [pkw_in("anna", "kowalska", 1979, "0217"), sejmik],
+        [koryta_person("Anna Kowalska", "kowalska", rejestrio_id="1")],
+        [removed("kowalska", "04", "2024")],
+    )
+
+    assert candidacy_places(result) == ["0217"]

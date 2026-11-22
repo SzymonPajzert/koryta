@@ -331,7 +331,8 @@ CREATING = (NEW_HIRE, ODPIS_ONLY_CURRENT, REJESTRIO_CURRENT, DECLARED, NEW)
 #: The sources, each read afresh: `PeopleKRS` (rejestr.io - the newest crawl
 #: of every company), `KrsOdpisSeats` and `KrsOdpisEntries` (the odpisy pełne
 #: `krs_odpis` fetches), `CompaniesKRS` (api-krs, which the nightly free scrape
-#: writes, and rejestr.io's companies) and `KorytaPeople` (who is on the site).
+#: writes, and rejestr.io's companies), `KorytaPeople` (who is on the site) and
+#: `KorytaRemovedCandidacies` (the candidacies its pages say are somebody else's).
 #:
 #: And everything between them and the payloads, named rather than left to
 #: follow: an output missing on disk is restored from the newest backup in the
@@ -356,6 +357,7 @@ DEFAULT_REFRESH = (
     "KrsOdpisEntries",
     "CompaniesKRS",
     "KorytaPeople",
+    "KorytaRemovedCandidacies",
     "PeopleKRSCombined",
     "PeopleKRSMerged",
     "PeopleKorytaMerged",

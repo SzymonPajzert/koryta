@@ -9,6 +9,7 @@ from analysis.people_pkw_merged import PeoplePKWMerged
 from analysis.people_wiki_merged import PeopleWikiMerged
 from analysis.utils import read_enriched
 from analysis.utils.names import FirstNameFreq, NamesCountByRegion
+from scrapers.koryta.download import REMOVED_COLUMNS, KorytaRemovedCandidacies
 from scrapers.krs.list import CompaniesKRS
 from scrapers.krs.odpis_people import print_rows
 from scrapers.map.teryt import Teryt
@@ -158,6 +159,7 @@ class PeopleMerged(Pipeline):
     people_koryta: PeopleKorytaMerged
     names_count_by_region: NamesCountByRegion
     first_name_freq: FirstNameFreq
+    removed_candidacies: KorytaRemovedCandidacies
 
     def process(self, ctx: Context):
         return people_merged(
@@ -168,6 +170,7 @@ class PeopleMerged(Pipeline):
             self.people_koryta.read_or_process(ctx),
             self.names_count_by_region.read_or_process(ctx),
             self.first_name_freq.read_or_process(ctx),
+            self.removed_candidacies.read_or_process(ctx),
         )
 
 
@@ -179,8 +182,18 @@ def people_merged(
     koryta_people,  # noqa: F841
     names_count_by_region_table,  # noqa: F841
     first_name_freq_table,  # noqa: F841
+    removed_candidacies: pd.DataFrame | None = None,
 ):
     con = ctx.con
+    # The candidacies taken off a page as somebody else's
+    # (`KorytaRemovedCandidacies`); none where the caller has no export.
+    removed_table = (
+        pd.DataFrame(columns=REMOVED_COLUMNS)
+        if removed_candidacies is None
+        else removed_candidacies.reindex(columns=REMOVED_COLUMNS).astype(object)
+    )
+    # A kind read back off disk as NaN is no kind, which matches any election.
+    removed_table = removed_table.where(removed_table.notna(), None)  # noqa: F841
     con.create_function(
         "unique_probability",
         unique_probability,
@@ -221,6 +234,28 @@ def people_merged(
     con.execute(
         "CREATE OR REPLACE TEMP MACRO surname_key(name) AS "
         "trim(regexp_replace(name, '[ –-]+', ' ', 'g'))"
+    )
+    # Where a PKW candidacy was stood and in which kind of election, as a
+    # payload files it (`candidacy_teryt`, a sejmik's „XX00” as „XX”) and as
+    # the site names its election (`electionKind` in shared/electionDays.ts).
+    con.execute(
+        "CREATE OR REPLACE TEMP MACRO pkw_place_code(code) AS "
+        "CASE WHEN length(code) = 4 AND ends_with(code, '00') "
+        "THEN code[1:2] ELSE code END"
+    )
+    con.execute(
+        "CREATE OR REPLACE TEMP MACRO pkw_run_place(run) AS pkw_place_code(coalesce("
+        "nullif(CAST(run.teryt_candidacy_powiat AS VARCHAR), ''), "
+        "nullif(CAST(run.teryt_candidacy_wojewodztwo AS VARCHAR), ''), "
+        "CAST(run.teryt_powiat[1] AS VARCHAR), "
+        "CAST(run.teryt_wojewodztwo[1] AS VARCHAR)))"
+    )
+    con.execute(
+        "CREATE OR REPLACE TEMP MACRO pkw_election_kind(kind) AS CASE "
+        "WHEN lower(kind) IN ('sejmu', 'senatu', 'sejm', 'senat') THEN 'parliament' "
+        "WHEN lower(kind) IN ('europarlamentu', 'parlament europejski') "
+        "THEN 'european' "
+        "WHEN starts_with(lower(kind), 'samorz') THEN 'local' END"
     )
 
     print("--- Imported table sizes ---")
@@ -342,6 +377,94 @@ def people_merged(
         )
         WHERE wiki_second_name IS NOT NULL
     ),
+    koryta_candidates AS (
+        -- Every page this person could already be, and how it was reached.
+        --
+        -- The register id is an identity and a name is not, so the two are kept
+        -- apart rather than or-ed into one similarity score: 170 pages shared a
+        -- register id with another page and 36 had had a second person's
+        -- written over them, all of it because a name was being treated as
+        -- though it identified somebody.
+        --
+        -- From the KRS person, once each. Joined from `krs_pkw_wiki` it came
+        -- once per PKW candidate, and a person PKW has twice - Andrzej
+        -- Wyszyński, entry 1291534, as two silent records born 1954 and 1955 -
+        -- counted as two candidates for his own page, which `koryta_match`
+        -- then refused as not unique.
+        SELECT
+            k.krs_row,
+            ko.koryta_id,
+            ko.full_name as koryta_name,
+            coalesce(ko.rejestrio_id, '') != ''
+                AND list_contains(k.rejestrio_id, ko.rejestrio_id) as by_register
+        FROM krs_numbered k
+        JOIN koryta_people ko ON (
+            (coalesce(ko.rejestrio_id, '') != ''
+                AND list_contains(k.rejestrio_id, ko.rejestrio_id))
+            OR (
+                -- Only for a page carrying no register link at all - 868 of
+                -- them. Where the page has one and it is somebody else's, that
+                -- is a different person however alike the two are spelled, and
+                -- letting the name overrule it is the mistake being undone.
+                --
+                -- Coalesced on both sides of the OR: an unlinked page stores
+                -- NULL, and SQL answers NULL to `= ''` and to `!= ''` alike, so
+                -- without this such a page satisfies neither branch and drops
+                -- out of the join altogether - losing exactly the people the
+                -- name fallback is here for.
+                coalesce(ko.rejestrio_id, '') = ''
+                AND jaro_winkler_similarity(k.first_name, ko.first_name) > 0.95
+                AND (
+                    jaro_winkler_similarity(k.last_name, ko.last_name) > 0.95
+                    OR jaro_winkler_similarity(k.last_name, ko.tail_name) > 0.95
+                )
+                -- Nor where the page stores the day its person was born and
+                -- the register gives this one another: a name is what
+                -- namesakes share. Krzysztof Hetman's page, the PSL MEP born
+                -- 1974-06-27, was the only candidate of entry 1203566, a
+                -- Krzysztof Hetman born 1963-10-10, and the 2026-10-10 payload
+                -- was planned to link the live page to him. A page storing
+                -- only a year is held to the year; one storing no date, as
+                -- 375 of the 378 unlinked pages matched that day do, still
+                -- matches by the name.
+                AND coalesce(
+                    starts_with(
+                        CAST(k.birth_date AS VARCHAR),
+                        CAST(ko.birth_date AS VARCHAR)
+                    ),
+                    true
+                )
+            )
+        )
+    ),
+    koryta_match AS (
+        -- The register tier if this person reached one, the name tier
+        -- otherwise, and in either case only where exactly one page fits.
+        --
+        -- Two pages a name cannot choose between are two pages this must not
+        -- choose between: the id travels into the payload and the ingest writes
+        -- to whatever it names, so a wrong one does not make a duplicate, it
+        -- overwrites somebody. Same judgement, and the same shape, as
+        -- `wiki_match` above - which refuses for the milder reason that it
+        -- would hang the wrong biography on a page.
+        --
+        -- Unique BOTH ways for a name match, which one-page-per-person is not.
+        -- Measured against the 2026-08-29 export: 87 pages were each the only
+        -- candidate for several different people at once - six Jerzy
+        -- Kaczmareks, born between 1943 and 1968, all reaching the one page of
+        -- that name, and a "Tomasz Zielinski" page reaching a Tomasz Dzielinski
+        -- as well. Sending the id for all six would have written six careers
+        -- onto one page: not a duplicate but a collapse, and the very thing the
+        -- register id was carried to stop.
+        --
+        -- The register tier is exempt, and has to be. Two KRS rows carrying one
+        -- register id are one human whom `create_people_table` split in two, so
+        -- both belong on the one page - which is the answer, not the hazard.
+        SELECT * FROM koryta_candidates
+        QUALIFY by_register = bool_or(by_register) OVER (PARTITION BY krs_row)
+            AND count(*) OVER (PARTITION BY krs_row, by_register) = 1
+            AND (by_register OR count(*) OVER (PARTITION BY koryta_id) = 1)
+    ),
     pkw_candidates AS (
         -- Every PKW record this KRS person could be, with how much of the name
         -- actually agreed.
@@ -371,6 +494,7 @@ def people_merged(
         -- A year-only article does not speak here: the year rules out almost
         -- nobody.
         SELECT
+            row_number() OVER () as candidate_row,
             k.krs_row,
             k.birth_year as krs_birth_year,
             p.*,
@@ -401,6 +525,47 @@ def people_merged(
                             CAST(p.second_name AS VARCHAR), w.wiki_second_name
                         ))))
     ),
+    detached AS (
+        -- Where the person's page says a record is somebody else's: a place
+        -- one of its candidacies was taken off the page in, by a reviewer or
+        -- by the declarations automation as a namesake's, and not as a
+        -- duplicate or in a page merge (`KorytaRemovedCandidacies`). Matched
+        -- on the place, the year and the kind of election, as the payload
+        -- filed the run.
+        SELECT c.candidate_row, list(DISTINCT pkw_run_place(c.run)) AS places
+        FROM (
+            SELECT candidate_row, krs_row, unnest(elections) AS run
+            FROM pkw_candidates
+        ) c
+        JOIN koryta_match km USING (krs_row)
+        JOIN removed_table r
+            ON r.koryta_id = km.koryta_id
+            AND r.year = CAST(c.run.election_year AS VARCHAR)
+            AND r.teryt = pkw_run_place(c.run)
+            AND (r.kind IS NULL OR r.kind = pkw_election_kind(c.run.election_type))
+        GROUP BY c.candidate_row
+    ),
+    pkw_detached AS (
+        -- The record without its runs in such a place, every year of them:
+        -- the part of it that is one human, as `split_records_by_place`
+        -- splits a record standing in two places (decision on 2026-11-22). A
+        -- record of no other place goes; one that also stood where the person
+        -- did keeps those runs, which PKW's undated national records pool
+        -- across namesakes - Marek Szczepański's PO Sejm runs in pomorskie
+        -- with a namesake's Senate run in śląskie. Only for this person:
+        -- everybody else the record fits keeps all of it.
+        SELECT
+            c.* REPLACE (
+                CASE WHEN d.places IS NULL THEN c.elections
+                ELSE list_filter(
+                    c.elections,
+                    run -> NOT list_contains(d.places, pkw_run_place(run))
+                ) END AS elections
+            ),
+            d.places IS NOT NULL AS was_detached
+        FROM pkw_candidates c
+        LEFT JOIN detached d USING (candidate_row)
+    ),
     pkw_match AS (
         -- Which of those to believe: every one of them. A record nothing above
         -- says is somebody else - no middle name the person's contradicts, no
@@ -414,8 +579,9 @@ def people_merged(
         -- career away, while silence that left several records took none of
         -- them: 2,843 people on 2026-10-07, 7,199 records between them. Which
         -- candidacies are whose is the reviewers' to judge on the page, where
-        -- removing one is how they say so.
-        SELECT * FROM pkw_candidates
+        -- removing one is how they say so (`pkw_detached`).
+        SELECT * EXCLUDE (candidate_row, was_detached) FROM pkw_detached
+        WHERE NOT was_detached OR len(elections) > 0
     ),
     pkw_attached AS (
         -- One row per person, as a page has one. The record that fits best
@@ -541,94 +707,6 @@ def people_merged(
             w.wiki_score,
         FROM krs_pkw kp
         LEFT JOIN wiki_kept w USING (krs_row)
-    ),
-    koryta_candidates AS (
-        -- Every page this person could already be, and how it was reached.
-        --
-        -- The register id is an identity and a name is not, so the two are kept
-        -- apart rather than or-ed into one similarity score: 170 pages shared a
-        -- register id with another page and 36 had had a second person's
-        -- written over them, all of it because a name was being treated as
-        -- though it identified somebody.
-        --
-        -- From the KRS person, once each. Joined from `krs_pkw_wiki` it came
-        -- once per PKW candidate, and a person PKW has twice - Andrzej
-        -- Wyszyński, entry 1291534, as two silent records born 1954 and 1955 -
-        -- counted as two candidates for his own page, which `koryta_match`
-        -- then refused as not unique.
-        SELECT
-            k.krs_row,
-            ko.koryta_id,
-            ko.full_name as koryta_name,
-            coalesce(ko.rejestrio_id, '') != ''
-                AND list_contains(k.rejestrio_id, ko.rejestrio_id) as by_register
-        FROM krs_numbered k
-        JOIN koryta_people ko ON (
-            (coalesce(ko.rejestrio_id, '') != ''
-                AND list_contains(k.rejestrio_id, ko.rejestrio_id))
-            OR (
-                -- Only for a page carrying no register link at all - 868 of
-                -- them. Where the page has one and it is somebody else's, that
-                -- is a different person however alike the two are spelled, and
-                -- letting the name overrule it is the mistake being undone.
-                --
-                -- Coalesced on both sides of the OR: an unlinked page stores
-                -- NULL, and SQL answers NULL to `= ''` and to `!= ''` alike, so
-                -- without this such a page satisfies neither branch and drops
-                -- out of the join altogether - losing exactly the people the
-                -- name fallback is here for.
-                coalesce(ko.rejestrio_id, '') = ''
-                AND jaro_winkler_similarity(k.first_name, ko.first_name) > 0.95
-                AND (
-                    jaro_winkler_similarity(k.last_name, ko.last_name) > 0.95
-                    OR jaro_winkler_similarity(k.last_name, ko.tail_name) > 0.95
-                )
-                -- Nor where the page stores the day its person was born and
-                -- the register gives this one another: a name is what
-                -- namesakes share. Krzysztof Hetman's page, the PSL MEP born
-                -- 1974-06-27, was the only candidate of entry 1203566, a
-                -- Krzysztof Hetman born 1963-10-10, and the 2026-10-10 payload
-                -- was planned to link the live page to him. A page storing
-                -- only a year is held to the year; one storing no date, as
-                -- 375 of the 378 unlinked pages matched that day do, still
-                -- matches by the name.
-                AND coalesce(
-                    starts_with(
-                        CAST(k.birth_date AS VARCHAR),
-                        CAST(ko.birth_date AS VARCHAR)
-                    ),
-                    true
-                )
-            )
-        )
-    ),
-    koryta_match AS (
-        -- The register tier if this person reached one, the name tier
-        -- otherwise, and in either case only where exactly one page fits.
-        --
-        -- Two pages a name cannot choose between are two pages this must not
-        -- choose between: the id travels into the payload and the ingest writes
-        -- to whatever it names, so a wrong one does not make a duplicate, it
-        -- overwrites somebody. Same judgement, and the same shape, as
-        -- `wiki_match` above - which refuses for the milder reason that it
-        -- would hang the wrong biography on a page.
-        --
-        -- Unique BOTH ways for a name match, which one-page-per-person is not.
-        -- Measured against the 2026-08-29 export: 87 pages were each the only
-        -- candidate for several different people at once - six Jerzy
-        -- Kaczmareks, born between 1943 and 1968, all reaching the one page of
-        -- that name, and a "Tomasz Zielinski" page reaching a Tomasz Dzielinski
-        -- as well. Sending the id for all six would have written six careers
-        -- onto one page: not a duplicate but a collapse, and the very thing the
-        -- register id was carried to stop.
-        --
-        -- The register tier is exempt, and has to be. Two KRS rows carrying one
-        -- register id are one human whom `create_people_table` split in two, so
-        -- both belong on the one page - which is the answer, not the hazard.
-        SELECT * FROM koryta_candidates
-        QUALIFY by_register = bool_or(by_register) OVER (PARTITION BY krs_row)
-            AND count(*) OVER (PARTITION BY krs_row, by_register) = 1
-            AND (by_register OR count(*) OVER (PARTITION BY koryta_id) = 1)
     ),
     all_sources AS (
         SELECT

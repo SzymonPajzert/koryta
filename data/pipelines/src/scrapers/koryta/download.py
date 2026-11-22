@@ -393,6 +393,101 @@ class KorytaPublished(Pipeline):
         return pd.DataFrame({"id": ids}, columns=["id"])
 
 
+#: How a removal that says nothing about whose a candidacy is starts: the same
+#: run stored twice, a page merge folding a copy into the one it repeated, the
+#: half-surname tier taking its own match back. Any other removal says the
+#: candidacy is somebody else's.
+NOT_A_VERDICT = ("duplikat", "scalenie stron", "wycofane automatycznie")
+
+
+def is_verdict(reason: object) -> bool:
+    """Whether a candidacy's removal says it is not the person's: a reason that
+    is none of `NOT_A_VERDICT`. One with no reason says nothing."""
+    if _missing(reason):
+        return False
+    text = str(reason).strip().lower()
+    return bool(text) and not text.startswith(NOT_A_VERDICT)
+
+
+def _election_kind(position: object) -> str | None:
+    """Which election a stored office was in, as `electionKind` in
+    frontend/shared/electionDays.ts names it; None for a candidacy stored
+    without one, which could be either election of its year."""
+    if _missing(position) or not str(position).strip():
+        return None
+    office = str(position).strip()
+    if office in ("Sejm", "Senat"):
+        return "parliament"
+    if office == "Parlament Europejski":
+        return "european"
+    return "local"
+
+
+REMOVED_COLUMNS = ["koryta_id", "teryt", "year", "kind", "reason"]
+
+
+def removed_candidacies(edges: pd.DataFrame) -> pd.DataFrame:
+    """The candidacies taken off a person's page as somebody else's, one row
+    each: the page, the TERYT code of the region it was filed under, its year
+    and the kind of its election.
+
+    What `PeopleMerged` takes a PKW record off the person by (decision on
+    2026-11-22): a reviewer's removal, or the declarations automation's of a
+    namesake's run (reason „Imiennik. ...”), but not a duplicate's or a page
+    merge's (`is_verdict`)."""
+    rows = []
+    for edge in edges.to_dict(orient="records"):
+        deleted = edge.get("deleted")
+        if edge.get("type") != "election" or _missing(deleted) or not deleted:
+            continue
+        if not is_verdict(edge.get("delete_reason")):
+            continue
+        target = str(edge.get("target") or "")
+        start = edge.get("start_date")
+        if not target.startswith("teryt") or _missing(start) or not str(start):
+            continue
+        rows.append(
+            {
+                "koryta_id": str(edge.get("source")),
+                "teryt": target[len("teryt") :],
+                "year": str(start)[:4],
+                "kind": _election_kind(edge.get("position")),
+                "reason": str(edge.get("delete_reason")).strip(),
+            }
+        )
+    return pd.DataFrame(rows, columns=REMOVED_COLUMNS, dtype=object)
+
+
+class KorytaRemovedCandidacies(Pipeline):
+    """`removed_candidacies` of the export of `date`.
+
+    Named after the day, as `KorytaPeople` is, and rebuilt with it by every
+    people run (`DEFAULT_REFRESH` in jobs/people_import), so that a removal
+    reaches the merge the night after it is made."""
+
+    dtype = {name: str for name in REMOVED_COLUMNS}
+    date: str
+
+    def __init__(self, date: str | None = None) -> None:
+        super().__init__()
+        self.date = date or CURRENT_DATE
+
+    @memoized_property
+    def filename(self) -> str:
+        return f"removed_candidacies_{self.date}"
+
+    def process(self, ctx: Context):
+        df, date_read = FirestoreCollection.latest_on_or_before(
+            ctx, "edges", "election", self.date
+        )
+        removed = removed_candidacies(df)
+        print(
+            f"Candidacies removed as somebody else's in the {date_read} export: "
+            f"{len(removed)} of {len(df)}"
+        )
+        return removed
+
+
 class KorytaCompanies(Pipeline[KorytaCompany]):
     """Lists companies (place nodes) already submitted to koryta.pl.
 
