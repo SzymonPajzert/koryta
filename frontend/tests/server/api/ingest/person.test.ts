@@ -4,6 +4,7 @@ import {
   proposeRevisionTransaction,
 } from "../../../../server/utils/revisions";
 import { edgeDocumentId, type EdgeLike } from "../../../../server/utils/edges";
+import { logger } from "firebase-functions/logger";
 import handler from "../../../../server/api/ingest/person.post";
 import { generateChunksLower } from "../../../../shared/search";
 
@@ -65,6 +66,10 @@ vi.mock("firebase-admin/firestore", () => ({
     }
   },
   FieldValue: { delete: () => "<deleted>" },
+}));
+
+vi.mock("firebase-functions/logger", () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock("firebase-admin/app", () => ({
@@ -2051,17 +2056,16 @@ describe("api/ingest/person, a candidacy the site cannot place", () => {
   it("keeps the person, and logs an error, when no region node has the code", async () => {
     // Every region has a node since the region upload, so this is a fault to
     // look at in the logs, not a gap to wait out.
-    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     newPersonWith(
       [{ election_type: "Samorząd", election_year: "2024", teryt: "9999" }],
       missing,
     );
 
     const result = await handler({} as any);
-    expect(logged).toHaveBeenCalledWith(
+    expect(logger.error).toHaveBeenCalledWith(
       "No region node for TERYT 9999 (Samorząd 2024)",
+      { teryt: "9999", election_type: "Samorząd", election_year: "2024" },
     );
-    logged.mockRestore();
 
     expect(result.status).toBe("ok");
     expect(result.unplacedElections).toEqual([
