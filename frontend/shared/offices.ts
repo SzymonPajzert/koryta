@@ -12,6 +12,8 @@
  * data/pipelines. It is kept on the region nodes rather than shipped with the
  * site (decision on 2026-11-22): each node carries, as `offices`, the rows the
  * dialog answers it with - its own urząd, and for a powiat its gminy's too.
+ * `koryta_uploader --type region` sends the table to /api/ingest/region, which
+ * gives each node its rows (`officesOn`).
  */
 import { normalizeNip, normalizeRegon } from "./identifiers";
 
@@ -169,6 +171,17 @@ export function officeChoices(
     ...own.map((office) => ({ office, gmina: null })),
     ...gminy.map((office) => ({ office, gmina: gminaLabel(office) })),
   ];
+}
+
+/** The rows a region node carries as `offices`, out of the whole table: the
+ * ones `officeChoices` reads for its code. Its own, or for a town's or the
+ * villages' half of a gmina the gmina's, and for a powiat the urzędy of its
+ * gminy too. Nothing for a code the table does not answer. */
+export function officesOn(
+  index: Map<string, RegionOffice[]>,
+  teryt: string,
+): RegionOffice[] {
+  return [...officesFor(index, teryt), ...gminaOfficesIn(index, teryt)];
 }
 
 /** What to propose for an office the site has no place for yet, as

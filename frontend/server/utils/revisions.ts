@@ -124,6 +124,10 @@ export const INTERNAL_FIELDS = new Set([
   // there back onto the node whenever an old revision was re-approved,
   // restoring a stale date over the live one.
   "content_changed_at",
+  // A region's urzędy, written by /api/ingest/region from the register's
+  // table (see shared/offices.ts). No revision states them, and one written
+  // over the region must not drop them.
+  "offices",
 ]);
 
 /** The existing node's fields, to layer a partial update on top of.

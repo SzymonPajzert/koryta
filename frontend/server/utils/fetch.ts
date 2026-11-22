@@ -91,19 +91,24 @@ export function applyPartiesFilter(
   return query;
 }
 
-/** A node document's fields, less the search index. Mutates and returns
- * `data`, which is always a fresh `doc.data()`.
+/** A node document's fields, less the search index and a region's urzędy.
+ * Mutates and returns `data`, which is always a fresh `doc.data()`.
  *
  * `nameChunksLower` is every prefix of every word of the name, written by the
  * `onNodeWritten` trigger so /api/search can match on it with
  * `array-contains` - a query, which never needs the field handed back. Nothing
  * outside the server reads it, and it went out with every node anyway: 59% of
  * the bytes of `/api/nodes?type=place`, and a share of every graph, table and
- * entity response. */
+ * entity response.
+ *
+ * `offices` is what /api/nodes/<region>/offices answers from, which reads the
+ * document itself. A powiat's lists every urząd of its gminy, and the region
+ * list the browser fetches whole would carry them all. */
 export function dropSearchIndex(
   data: FirebaseFirestore.DocumentData,
 ): FirebaseFirestore.DocumentData {
   delete data.nameChunksLower;
+  delete data.offices;
   return data;
 }
 

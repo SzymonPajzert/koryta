@@ -71,6 +71,7 @@ export const skippedChangeFields = new Set([
   "needs_split",
   "nameChunksLower",
   "content_changed_at",
+  "offices",
 ]);
 
 /** How each proposable field reads in Polish.

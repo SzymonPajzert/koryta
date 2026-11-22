@@ -347,6 +347,26 @@ describe("createRevisionTransaction", () => {
       );
     });
 
+    it("keeps a region's urzędy, which no revision states", () => {
+      // /api/ingest/region writes them beside the revisions, so an edit of the
+      // region must not take away what the relation dialog answers from.
+      const region = {
+        ...stored,
+        offices: [
+          {
+            teryt: "2215",
+            region: "wejherowski",
+            name: "Starostwo Powiatowe w Wejherowie",
+            regon: "191686414",
+            nip: "5881831062",
+          },
+        ],
+      };
+      expect(targetWrite({ approve: true, stored: region }).offices).toEqual(
+        region.offices,
+      );
+    });
+
     it("keeps the page's visibility without being told it", () => {
       // The caller says what changed, not who may see it.
       expect(targetWrite({ approve: true, stored }).published).toBe(true);

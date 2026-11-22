@@ -6,6 +6,7 @@ import {
   officeChoices,
   officeProposal,
   officesFor,
+  officesOn,
   storedOffices,
   type RegionOffice,
 } from "../../shared/offices";
@@ -205,6 +206,46 @@ describe("officeChoices", () => {
 
   it("does not list a województwo's gminy", () => {
     expect(listed("22").map(([, gmina]) => gmina)).toEqual([null, null]);
+  });
+});
+
+describe("officesOn", () => {
+  const index = indexOffices([
+    WEJHEROWO_WIEJSKA,
+    STAROSTWO,
+    WEJHEROWO,
+    CHOCZEWO,
+    ...POMORSKIE,
+    ...OPOLE,
+    WARKA,
+    MOKOTOW,
+  ]);
+
+  it("gives a powiat its starostwo and the urzędy of its gminy", () => {
+    expect(officesOn(index, "2215")).toEqual([
+      STAROSTWO,
+      CHOCZEWO,
+      WEJHEROWO,
+      WEJHEROWO_WIEJSKA,
+    ]);
+  });
+
+  it("gives a town's half of a gmina the gmina's urząd", () => {
+    expect(officesOn(index, "1406114")).toEqual([WARKA]);
+  });
+
+  it("gives a województwo its own two and none of its gminy", () => {
+    expect(officesOn(index, "22")).toEqual(POMORSKIE);
+  });
+
+  it("is all the dialog needs to answer each region as the table would", () => {
+    const codes = ["22", "2215", "2215031", "2215102", "1406114", "1661"];
+    for (const teryt of [...codes, "1661011", "1465058", "2215052"]) {
+      const carried = indexOffices(officesOn(index, teryt));
+      expect(officeChoices(carried, teryt)).toEqual(
+        officeChoices(index, teryt),
+      );
+    }
   });
 });
 

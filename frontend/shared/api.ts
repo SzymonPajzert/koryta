@@ -310,6 +310,26 @@ export type PersonRequest = {
   reportUnplacedEmployments?: boolean;
 };
 
+/** What `koryta_uploader --type region` sends to /api/ingest/region: the
+ * whole LocalGovernmentOffices table, a row for each region an urząd serves
+ * (see `RegionOffice` in shared/offices.ts). The code is a województwo's two
+ * digits, a powiat's four or a gmina's seven. */
+export const regionRequestSchema = z.object({
+  offices: z
+    .array(
+      z.object({
+        teryt: z.string().regex(/^\d{2}(?:\d{2}(?:\d{3})?)?$/),
+        region: z.string().nullable(),
+        name: z.string().min(1),
+        regon: z.string().min(1),
+        nip: z.string().nullable(),
+      }),
+    )
+    .min(1),
+});
+
+export type RegionRequest = z.infer<typeof regionRequestSchema>;
+
 /** One row of the request, as the ingest answers it: the node the row named
  * and the edge it landed on.
  *
