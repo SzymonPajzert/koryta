@@ -164,25 +164,33 @@ costs a request and a lookup rather than a revision on every company in the run.
 The filter is what saves the request; the endpoint is what guarantees the
 database is not touched.
 
-## Putting the urzędy on the regions
+## Uploading the regions and their urzędy
 
-The relation dialog names the urząd that runs a region from the rows its
-region node carries as `offices` (`frontend/shared/offices.ts`).
-`LocalGovernmentOffices` builds the table from the public bodies catalogue and
-TERC, and `--type region` sends it whole, in one request; the site gives each
-region node its rows, a powiat its gminy's too, and writes only the nodes
-whose rows changed:
+`--type region` keeps the site's regions in step with TERYT and puts on each
+the urzędy the relation dialog names (`offices`, read by
+`frontend/shared/offices.ts`). `RegionPayloads` lists the regions: every
+województwo, powiat, gmina and Warsaw dzielnica, and a part of a gmina only
+when a company names it as an owner. `LocalGovernmentOffices` builds the
+urzędy table from the public bodies catalogue and TERC. Both go up whole, in
+one request:
 
 ```bash
-uv run koryta LocalGovernmentOffices --output stderr 2> offices.jsonl
-uv run koryta_uploader --type region --submit \
-  --endpoint https://autopush.koryta.pl < offices.jsonl
+uv run koryta RegionPayloads --no-backup --refresh RegionPayloads \
+  --output stderr 2> regions.jsonl
+uv run koryta LocalGovernmentOffices --no-backup --output stderr 2> offices.jsonl
+cat regions.jsonl offices.jsonl | uv run koryta_uploader --type region --submit \
+  --endpoint https://autopush.koryta.pl
 ```
 
-The run ends by naming the regions the table has no urząd for, the rows left
-out for a REGON or NIP that fails its check digit, and the names the „Urząd"
-chip would not know. `--limit` and `--offset` are refused. Run it again when
-the catalogue or TERC changes, and after `create-region-nodes.ts` adds regions.
+The site creates the regions it lacks, with the `owns` edge from the region
+above; renames a gmina still carrying the name another gmina of its powiat
+shares to the name with its kind ("Gmina miejska Wejherowo"); and gives every
+region node its rows, a powiat its gminy's too, writing only the nodes that
+change. The run ends by naming what it created and renamed, the regions the
+table has no urząd for, the rows left out for a REGON or NIP that fails its
+check digit, and the names the „Urząd" chip would not know. A second run
+writes nothing. `--limit` and `--offset` are refused. Run it again when TERYT,
+the catalogue or a company's owners change.
 
 ## The compressed mirror
 
