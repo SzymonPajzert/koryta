@@ -1,5 +1,6 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getApp } from "firebase-admin/app";
+import { logger } from "firebase-functions/logger";
 import { getUser, requireDatascience } from "~~/server/utils/auth";
 import {
   createRevisionTransaction,
@@ -657,11 +658,19 @@ async function createElection(
   }
   const regionId = await lookupNode(ctx, "teryt", election.teryt);
   if (!regionId) {
-    // 985 gminy have a region node because they own something; a code that
-    // resolves to none is one `RegionPayloads` has not reached yet, and it
-    // will be there on a later run.
-    console.warn(
+    // Every województwo, powiat, gmina and Warsaw dzielnica has a region node
+    // since the region upload (`koryta_uploader --type region`, 2026-11-22),
+    // so a code that resolves to none is a fault to look at - a code no region
+    // carries, or a region the upload has not reached - and is logged as an
+    // error, not a warning (decision on 2026-11-22). Through the logger: Cloud
+    // Run gives plain console text no severity at all.
+    logger.error(
       `No region node for TERYT ${election.teryt} (${election.election_type} ${election.election_year ?? "?"})`,
+      {
+        teryt: election.teryt,
+        election_type: election.election_type,
+        election_year: election.election_year ?? null,
+      },
     );
     return { unplaced: unplaced(election, "no-region", false) };
   }

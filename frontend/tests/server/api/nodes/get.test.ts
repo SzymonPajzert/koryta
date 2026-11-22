@@ -215,4 +215,13 @@ describe("GET /api/nodes/[id]", () => {
     nodes["person-1"]!.nameChunksLower = ["a", "an", "anna"];
     expect((await call()).node).not.toHaveProperty("nameChunksLower");
   });
+
+  // A region's urzędy are for /api/nodes/<region>/offices, which reads the
+  // document itself.
+  it("leaves the urzędy a region carries out of the page", async () => {
+    nodes["person-1"]!.offices = [
+      { teryt: "2215", name: "Starostwo Powiatowe w Wejherowie" },
+    ];
+    expect((await call()).node).not.toHaveProperty("offices");
+  });
 });

@@ -310,6 +310,61 @@ export type PersonRequest = {
   reportUnplacedEmployments?: boolean;
 };
 
+/** A województwo's two digits, a powiat's four or a gmina's seven. */
+const terytCode = z.string().regex(/^\d{2}(?:\d{2}(?:\d{3})?)?$/);
+
+/** What `koryta_uploader --type region` sends to /api/ingest/region, either
+ * part or both:
+ *
+ * - `regions`, the regions the site should have, as `RegionPayloads` describes
+ *   them: every województwo, powiat, gmina and Warsaw dzielnica, with the
+ *   `owns` edge from the region above. `replaces` names the one name a gmina
+ *   is to be renamed from, where another gmina of its powiat shares it.
+ * - `offices`, the whole LocalGovernmentOffices table, a row for each region
+ *   an urząd serves (see `RegionOffice` in shared/offices.ts).
+ * - `maxCreated`, how many of the regions the site lacks this request may
+ *   create; the rest wait for the next one. The night creates them so many a
+ *   night (`koryta_region_import --max-new`). */
+export const regionRequestSchema = z
+  .object({
+    regions: z
+      .array(
+        z.object({
+          node_id: z.string().regex(/^teryt\d+$/),
+          type: z.literal("region"),
+          name: z.string().min(1),
+          teryt: terytCode,
+          edge: z
+            .object({
+              edge_id: z.string(),
+              source: z.string().regex(/^teryt\d+$/),
+              target: z.string(),
+              type: z.literal("owns"),
+            })
+            .optional(),
+          replaces: z.array(z.string()).optional(),
+        }),
+      )
+      .default([]),
+    offices: z
+      .array(
+        z.object({
+          teryt: terytCode,
+          region: z.string().nullable(),
+          name: z.string().min(1),
+          regon: z.string().min(1),
+          nip: z.string().nullable(),
+        }),
+      )
+      .default([]),
+    maxCreated: z.number().int().min(0).optional(),
+  })
+  .refine((body) => body.regions.length > 0 || body.offices.length > 0, {
+    message: "Brak regionów i urzędów do zapisania.",
+  });
+
+export type RegionRequest = z.infer<typeof regionRequestSchema>;
+
 /** One row of the request, as the ingest answers it: the node the row named
  * and the edge it landed on.
  *

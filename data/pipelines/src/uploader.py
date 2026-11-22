@@ -31,8 +31,9 @@ UNPLACED_REPORTED = 20
 
 #: The job a `--submit` run of each type is reported under on
 #: koryta.pl/admin/procesy, and the unit its progress counts. `computeNodes`
-#: uploads nothing - it asks the site to recount - and `region` has no uploader
-#: of its own, so neither is reported.
+#: uploads nothing - it asks the site to recount - and `region` is the whole
+#: urzędy table in one request, so neither is reported; the night's
+#: `koryta_region_import` reports its own.
 REPORTED_AS: dict[str, tuple[str, str]] = {
     "person": ("people_import", "osób"),
     "company": ("company_import", "firm"),
@@ -404,6 +405,7 @@ class Args:
     limit: int | None
     offset: int | None
     model: str | None
+    max_new: int | None
 
 
 def parse_args() -> Args:
@@ -430,6 +432,13 @@ def parse_args() -> Args:
     )
     parser.add_argument(
         "--prod", action="store_true", help="Production mode (requires token auth)"
+    )
+    parser.add_argument(
+        "--max-new",
+        type=int,
+        help="For --type region: create at most N of the regions the site "
+        "lacks; the rest wait for the next run, as the night's region step "
+        "sends them.",
     )
     parser.add_argument(
         "--model",
@@ -542,6 +551,8 @@ class Uploader:
             return ScoreUploader(args, tokens, session)
         if args.type == "computeNodes":
             return ComputeNodesUploader(args, tokens, session)
+        if args.type == "region":
+            return RegionUploader(args, tokens, session)
         return Uploader(args, tokens, session)
 
     def auth_headers(self) -> dict[str, str]:
@@ -1076,7 +1087,8 @@ class PersonUploader(CompanyUploader):
         print(
             f"\n{total} candidacies were not placed. `expected` is an election "
             "PKW published no constituency mapping for; the rest are worth a "
-            "look - `no-region` means the region node is not there yet.",
+            "look - `no-region` names a code no region node has, a fault since "
+            "every gmina is one (2026-11-22).",
             file=sys.stderr,
         )
         for label, count in self.unplaced.most_common(UNPLACED_REPORTED):
@@ -1236,6 +1248,154 @@ class ComputeNodesUploader(Uploader):
             "\nFinished",
             file=sys.stderr,
         )
+
+
+#: What a row of the `LocalGovernmentOffices` table carries, and all of it
+#: `/api/ingest/region` takes.
+OFFICE_FIELDS = ("teryt", "region", "name", "regon", "nip")
+
+#: What a `RegionPayloads` payload carries, and all of it `/api/ingest/region`
+#: takes.
+REGION_FIELDS = ("node_id", "type", "name", "teryt", "edge", "replaces")
+
+#: The lists in `/api/ingest/region`'s answer, under its `regions` and
+#: `offices`, and how a line of the run's output says each.
+REGION_ANSWER_LISTS = {
+    "regions": (
+        ("created", "regions created"),
+        ("renamed", "gminy renamed to the name with their kind"),
+        ("orphaned", "regions created without an edge, their parent missing"),
+        ("removed", "regions that were taken down, left so"),
+        ("taken", "ids something else already has, left alone"),
+        ("waiting", "regions left for a later run, past --max-new"),
+    ),
+    "offices": (
+        ("without", "regions the table has no urząd for, left as they were"),
+        ("refused", "rows left out for a REGON or NIP that fails its check digit"),
+        ("unnamed", "urzędy whose name the „Urząd” chip would not know"),
+    ),
+}
+
+
+def region_rows(entities) -> tuple[list[dict], list[dict], int]:
+    """The region payloads and the urzędy table's rows among the lines read,
+    and how many lines were neither.
+
+    `RegionPayloads` wraps each payload as a JSON string in its `payload`
+    column; the table's rows come as they are.
+    """
+    regions: list[dict] = []
+    offices: list[dict] = []
+    other = 0
+    for row in entities:
+        if not isinstance(row, dict):
+            other += 1
+            continue
+        if isinstance(row.get("payload"), str):
+            try:
+                row = json.loads(row["payload"])
+            except ValueError:
+                row = None
+            if not isinstance(row, dict):
+                other += 1
+                continue
+        if row.get("type") == "region" and row.get("node_id"):
+            regions.append(
+                {key: row[key] for key in REGION_FIELDS if row.get(key) is not None}
+            )
+        elif row.get("teryt") and row.get("name") and row.get("regon"):
+            offices.append({key: row.get(key) for key in OFFICE_FIELDS})
+        else:
+            other += 1
+    return regions, offices, other
+
+
+class RegionUploader(Uploader):
+    r"""Sends `RegionPayloads` and the `LocalGovernmentOffices` table to
+    `/api/ingest/region`, in one request.
+
+    The site creates the regions it lacks - every gmina is one since
+    2026-11-22 - and gives every region node the rows the relation dialog
+    answers it with, so both go up whole and the site works out the rest:
+
+        uv run koryta RegionPayloads --no-backup --refresh RegionPayloads \
+            --output stderr 2> regions.jsonl
+        uv run koryta LocalGovernmentOffices --no-backup --output stderr \
+            2> offices.jsonl
+        cat regions.jsonl offices.jsonl | uv run koryta_uploader --type region --submit
+
+    Either file alone works too. `--max-new N` lets the site create at most N
+    of the regions it lacks, the rest waiting for the next run; the night's
+    step (`koryta_region_import`) sends them that way. `--limit` and
+    `--offset` are refused rather than passed on: they count lines, and the
+    lines are two tables run together, so a cut could leave a województwo
+    with one of its two urzędy.
+    """
+
+    #: The site's answer to the last upload, for a job that reads its counts.
+    answer: dict | None = None
+
+    @typing.override
+    def submit_results(self, entities):
+        if self.args.limit is not None or self.args.offset:
+            raise SystemExit(
+                "--type region sends the whole table: --limit or --offset would "
+                "cut it at a line. --max-new caps the regions it creates."
+            )
+        regions, offices, other = region_rows(entities)
+        if other:
+            print(
+                f"Skipping {other} lines that are neither a region nor a row of "
+                "the urzędy table.",
+                file=sys.stderr,
+            )
+        url = f"{self.args.endpoint}/api/ingest/region"
+        print(
+            f"Uploading {len(regions)} regions and {len(offices)} urzędy to {url}...",
+            end=" ",
+            file=sys.stderr,
+        )
+        body: dict[str, typing.Any] = {"regions": regions, "offices": offices}
+        max_new = getattr(self.args, "max_new", None)
+        if max_new is not None:
+            body["maxCreated"] = max_new
+        resp = self.post(url, json.dumps(body, cls=NumpyEncoder))
+        if resp.status_code not in (200, 201):
+            print(f"FAILED ({resp.status_code}): {resp.text}", file=sys.stderr)
+            raise IngestRefused(
+                resp.status_code,
+                resp.text,
+                {"regions": len(regions), "rows": len(offices)},
+            )
+        print("  OK", file=sys.stderr)
+
+        answer = json_object(resp)
+        self.answer = answer
+        placed = answer.get("regions")
+        if isinstance(placed, dict):
+            print(
+                f"Regions: {placed.get('sent')} sent, {placed.get('unchanged')} "
+                f"already there, {placed.get('edges')} edges written.",
+                file=sys.stderr,
+            )
+        urzedy = answer.get("offices")
+        if isinstance(urzedy, dict):
+            print(
+                f"Urzędy: on {urzedy.get('regions')} regions, updated "
+                f"{urzedy.get('updated')}, already up to date "
+                f"{urzedy.get('unchanged')}.",
+                file=sys.stderr,
+            )
+        for part, lists in REGION_ANSWER_LISTS.items():
+            for key, what in lists:
+                listed = (answer.get(part) or {}).get(key)
+                if isinstance(listed, dict) and listed.get("count"):
+                    names = [str(name) for name in listed.get("named") or []]
+                    more = ", ..." if listed["count"] > len(names) else ""
+                    print(
+                        f"{listed['count']} {what}: {', '.join(names)}{more}",
+                        file=sys.stderr,
+                    )
 
 
 def print_results(entities):

@@ -14,10 +14,13 @@ import { getFirestore } from "firebase-admin/firestore";
  * with the seven-character `WOJ+POW+GMI+RODZ` id the nine existing ones already
  * use - but nothing consumed it. `koryta_uploader` has no `region` branch:
  * `--type region` falls through to the base `Uploader`, whose `TYPE_URLS` is
- * empty, so `submit_entity` raises `NotImplementedError`. There is no
- * `/api/ingest/region` either. Whatever created the 405 nodes on production
- * predates the current uploader, and nothing has posted a region payload since
- * before `data/scrapers` was renamed.
+ * empty, so `submit_entity` raises `NotImplementedError`. (Since 2026-11-22
+ * `koryta_uploader --type region` does this job through `/api/ingest/region`,
+ * every gmina, renames and urzędy included; once that has run on production,
+ * this script's dry run reports nothing left and it moves to archive/.)
+ * Whatever created the 405 nodes on production predates the current uploader,
+ * and nothing has posted a region payload since before `data/scrapers` was
+ * renamed.
  *
  * So this reads the pipeline's answer from a file, the way
  * `apply-company-categories.ts` does, rather than inventing an API surface for

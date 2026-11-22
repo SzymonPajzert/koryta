@@ -17,6 +17,9 @@
                                       # the register's backlog too, not only
                                       # the day's new registrations
     koryta_nightly --company-dry-run  # count the companies' changes; send none
+    koryta_nightly --max-new-regions 300
+                                      # more of the missing gminy created
+                                      # tonight
 
 The steps, in order (`STEPS`):
 
@@ -52,6 +55,11 @@ The steps, in order (`STEPS`):
     tests       the pipeline tests over those outputs (src/tests/pipelines)
     outputs     the outputs against their baseline (src/tests/e2e)
     invariants  the database invariants over tonight's export
+    regions     koryta_region_import: the regions the site lacks, at most
+                --max-new-regions (100) a night, parents first and then by
+                code, and every region's urzędy; every gmina is a region since
+                2026-11-22, and the 1,500 or so that had no node come a
+                portion a night (decision on 2026-11-22)
     companies   koryta_people_import as the people step runs it, with
                 --companies-only: the companies the people it is about to
                 send name that tonight's export has no page for, created
@@ -118,7 +126,9 @@ night; only the steps that depend on it are held:
   the people as what it held - and holds nothing back itself: the people go
   up whatever it did, and the uploader still creates on the way a company it
   could not. `company_updates` the same: after the people, which it neither
-  waits for nor holds, as nothing it sends is anything they read.
+  waits for nor holds, as nothing it sends is anything they read. `regions`
+  the same, and before them, so that a region it creates is there for their
+  candidacies.
 
 `declarations` holds nothing back, and nothing holds it: the facts are
 predator's, the list is the newest there is, and the site counts with its pages
@@ -525,6 +535,9 @@ STEPS = (
     Step("tests", "testy", 45),
     Step("outputs", "wyniki", 20),
     Step("invariants", "niezmienniki", 30),
+    # Two outputs read from disk and one request: 2,890 regions and their
+    # edges took 2 s on the emulator stack on 2026-11-22.
+    Step("regions", "regiony", 10),
     # The people's plan, a minute and a half on 2026-10-14, and a request per
     # company: 16 that night.
     Step("companies", "firmy", 20),
@@ -1143,7 +1156,7 @@ class Night:
             return "wstrzymane: brak kopii bazy"
         if step.name in ("tests", "outputs") and not self.came_through("reprocess"):
             return "wstrzymane: potoki się nie przeliczyły"
-        if step.name in ("companies", "company_updates") and (
+        if step.name in ("regions", "companies", "company_updates") and (
             held := self.why_not_upload()
         ):
             # Skipped, not held: what the night held is the people.
@@ -1539,6 +1552,14 @@ class Night:
             argv.append("--fill-rejestrio-current")
         return argv
 
+    def step_regions(self, step: Step) -> tuple[str, str, int | None]:
+        argv = [
+            bin_path("koryta_region_import"),
+            "--max-new",
+            str(self.args.max_new_regions),
+        ]
+        return self.judge_job(*self.process(step, argv))
+
     def step_companies(self, step: Step) -> tuple[str, str, int | None]:
         argv = [*self.people_argv(step), "--companies-only"]
         return self.judge_job(*self.process(step, argv))
@@ -1672,6 +1693,9 @@ class Night:
             "tests": "pytest src/tests/pipelines",
             "outputs": "pytest -m e2e src/tests/e2e",
             "invariants": "pytest -m e2e src/tests/pipelines (tonight's export)",
+            "regions": "koryta_region_import --max-new "
+            f"{self.args.max_new_regions}: the regions the site lacks, that many "
+            "at most, and every region's urzędy",
             "companies": f"{people} --companies-only: the companies the people "
             "step's people name that the export has no page for, created first",
             "people": people,
@@ -1944,6 +1968,15 @@ def parser() -> argparse.ArgumentParser:
         "name; past it the page keeps the name it shows. Default: "
         "%(default)s: of the 3 renames waiting on 2026-11-11, 2 were the "
         "pipelines' slips.",
+    )
+    parser.add_argument(
+        "--max-new-regions",
+        type=positive_int,
+        default=100,
+        help="Regions the night creates at most, parents first and then by "
+        "code; the rest wait for the next night. Every gmina is a region "
+        "since 2026-11-22, and the 1,500 or so with no node come a portion a "
+        "night (decision on 2026-11-22). Default: %(default)s.",
     )
     parser.add_argument(
         "--company-dry-run",

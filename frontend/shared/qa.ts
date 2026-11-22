@@ -59,6 +59,20 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "zatrudnienie-w-urzedzie-regionu",
+    title:
+      "Na stronie osoby można dodać stanowisko w urzędzie gminy, powiatu lub województwa",
+    description:
+      "Po wybraniu regionu w „Dodaj powiązanie” jest teraz, obok kandydowania, „pracował/a”. Podpowiadamy urząd tego regionu z numerem REGON, a jeśli nie ma go jeszcze w bazie, dodajemy go jako propozycję razem z powiązaniem.",
+    steps: [
+      "Na stronie osoby kliknij „Dodaj powiązanie”, wyszukaj „Gmina miejska Wejherowo” i wybierz „pracował/a” - ma się pokazać Urząd Miejski w Wejherowie z numerem REGON.",
+      "Wpisz stanowisko, np. „zastępca prezydenta”, i zapisz - po odświeżeniu urząd ma być na liście powiązań tej osoby, z etykietą „Urząd”.",
+      "Wybierz „Powiat wejherowski” - ma być tylko Starostwo Powiatowe w Wejherowie. Urząd gminy, np. „Gmina wiejska Choczewo”, pokazuje się po wybraniu tej gminy.",
+    ],
+    area: "contributor",
+    fixes: ["a4osK51MCaYodiebX6Fg"],
+  },
+  {
     id: "kolejka-imie-prowadzi-do-strony-osoby",
     title: "Imię w kolejce prowadzi na stronę osoby",
     description:

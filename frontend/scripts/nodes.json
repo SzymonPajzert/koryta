@@ -149,6 +149,22 @@
     "name": "Województwo Pomorskie",
     "type": "region",
     "teryt": "22",
+    "offices": [
+      {
+        "teryt": "22",
+        "region": "POMORSKIE",
+        "name": "Pomorski Urząd Wojewódzki w Gdańsku",
+        "regon": "000514242",
+        "nip": "5831066122"
+      },
+      {
+        "teryt": "22",
+        "region": "POMORSKIE",
+        "name": "Urząd Marszałkowski Województwa Pomorskiego w Gdańsku",
+        "regon": "191686443",
+        "nip": "5832569948"
+      }
+    ],
     "revision_id": "teryt22",
     "stats": {
       "nodeGroupSize": 1,
@@ -174,6 +190,22 @@
     "name": "Województwo Łódzkie",
     "type": "region",
     "teryt": "10",
+    "offices": [
+      {
+        "teryt": "10",
+        "region": "ŁÓDZKIE",
+        "name": "Łódzki Urząd Wojewódzki w Łodzi",
+        "regon": "004308002",
+        "nip": "7251028465"
+      },
+      {
+        "teryt": "10",
+        "region": "ŁÓDZKIE",
+        "name": "Urząd Marszałkowski Województwa Łódzkiego",
+        "regon": "472071715",
+        "nip": "7251708148"
+      }
+    ],
     "revision_id": "teryt10",
     "stats": {
       "nodeGroupSize": 1
@@ -233,6 +265,15 @@
     "name": "Opole",
     "type": "region",
     "teryt": "1661",
+    "offices": [
+      {
+        "teryt": "1661",
+        "region": "Opole",
+        "name": "Urząd Miasta Opola",
+        "regon": "000584805",
+        "nip": "7540024002"
+      }
+    ],
     "revision_id": "opole-powiat",
     "stats": {
       "isApproved": true,

@@ -41,6 +41,14 @@ Colour values never go here. They live in `frontend/shared/colors.ts`.
   go behind the (i) bubble that `PageSection` offers (`#info`), not into the
   page's flow. This comes from the UX reports of the reader Szymon asked to be
   prioritised (2026-09-09). Adopted 2026-10-14.
+- **Fewest words that work.** A label, chip or alert says what its context
+  does not already say, and the outcome rather than the mechanism. The urząd
+  choice in „Dodaj powiązanie” is „pracował/a”, because the line above it
+  names the region, and a lookup that came back empty says „Nie znaleziono
+  urzędów w regionie, dodaj ręcznie”. Szymon: "Just „pracował/a”. You have a
+  tendency to be too verbose, please save it to memory to look into this (and
+  to the design notes in the skill)" (2026-11-11, board round
+  zatrudnienie-w-urzedzie-r1).
 - **A person with no party is grey on the graph**, not blue (2026-10-09,
   report wg0ZscDc).
 - **A party a logged-out reader is not shown** is a chip in its place, as
