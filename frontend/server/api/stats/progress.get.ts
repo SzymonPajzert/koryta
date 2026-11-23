@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { buildStructuralFilterOps } from "~~/server/utils/nodeFilters";
+import { readMatching } from "~~/server/utils/nodeScan";
+import { logger } from "firebase-functions/logger";
 import {
   combineProgressCounts,
   scanProgress,
@@ -100,10 +102,12 @@ async function countProgress(
     });
   } catch (error) {
     if ((error as { code?: number }).code === 9) {
-      console.warn(
-        "[stats/progress] falling back to the scan - a composite index this " +
-          "needs is not deployed yet:",
-        (error as Error).message,
+      // The functions logger, so the line carries a WARNING severity on Cloud
+      // Run; console.warn lands there with none.
+      logger.warn(
+        "[stats/progress] falling back to the scan: a composite index this " +
+          "needs is not deployed yet",
+        { error: (error as Error).message },
       );
       return null;
     }
@@ -139,25 +143,22 @@ export default defineCachedEventHandler(
       if (counted) return counted;
     }
 
-    // Fetch all people once and filter in memory: the counts need several
-    // overlapping predicates, and the in-memory ops never hit missing-index
-    // or multiple-array-filter limits of Firestore queries.
+    // Read the people the filters can match, then apply every filter in
+    // memory: the counts need several overlapping predicates, and Firestore
+    // applies only the filters it has indexes for. This used to read every
+    // person for any filter, 26,783 of them on 2026-11-23; a województwo or a
+    // sector is now asked in chunks and reads only the people tied to it.
     //
-    // Projected down to the leaf fields actually read, because that scan is
-    // the whole cost of this endpoint - 6077 documents as of the July 2026
-    // export, on every cache miss, for every distinct combination of filters.
-    // Asking for the `stats` map whole pulled 4.18 MB; the counters alone are
-    // 0.55 MB, and a place filter, which needs the target-id arrays too, 2.0
-    // MB. Against the emulator over loopback that was ~600 ms down to ~350;
-    // the read count does not change, but the bytes do.
-    const snapshot = await db
-      .collection("nodes")
-      .where("type", "==", "person")
-      .select(...new Set([...COUNTER_FIELDS, ...fields]))
-      .get();
+    // Projected down to the leaf fields actually read. Asking for the `stats`
+    // map whole pulled 4.18 MB on the July 2026 export; the counters alone
+    // were 0.55 MB. The read count does not change, but the bytes do.
+    const { docs } = await readMatching(db, ops, {
+      label: "stats/progress",
+      select: [...new Set([...COUNTER_FIELDS, ...fields])],
+    });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let nodes: any[] = snapshot.docs.map((doc) => doc.data());
+    let nodes: any[] = docs.map((doc) => doc.data());
     for (const op of ops) {
       nodes = op.applyMem(nodes);
     }

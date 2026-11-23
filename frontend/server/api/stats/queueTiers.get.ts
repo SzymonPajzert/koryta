@@ -1,4 +1,5 @@
 import { getFirestore } from "firebase-admin/firestore";
+import { logger } from "firebase-functions/logger";
 import { queueTiers, type QueueTier } from "~~/shared/queueTiers";
 
 /** One difficulty tier, as /pomoc renders it. */
@@ -89,11 +90,11 @@ export default defineCachedEventHandler(
           // which no filter matches. Both answer "unknown", which the card
           // renders as no number rather than as none left to do.
           if ((error as { code?: number }).code === 9) {
-            console.warn(
-              "[stats/queueTiers] no index for tier %d yet: %s",
-              tier,
-              (error as Error).message,
-            );
+            // The functions logger, so the line carries a WARNING severity on
+            // Cloud Run; console.warn lands there with none.
+            logger.warn(`[stats/queueTiers] no index for tier ${tier} yet`, {
+              error: (error as Error).message,
+            });
             return { tier, toCheck: null, examples: [] };
           }
           throw error;
