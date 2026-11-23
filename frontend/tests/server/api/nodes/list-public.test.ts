@@ -23,6 +23,8 @@ const { state, mockCollection } = vi.hoisted(() => {
     fsQuery[method] = () => fsQuery;
   }
   fsQuery.get = async () => ({ docs: state.docs });
+  // `placeNames` reads the companies a page names by id; none is stored here.
+  fsQuery.doc = (id: string) => ({ id });
   fsQuery.count = () => ({
     get: async () => ({ data: () => ({ count: state.docs.length }) }),
   });
@@ -30,7 +32,15 @@ const { state, mockCollection } = vi.hoisted(() => {
 });
 
 vi.mock("firebase-admin/firestore", () => ({
-  getFirestore: () => ({ collection: mockCollection }),
+  getFirestore: () => ({
+    collection: mockCollection,
+    getAll: async (...refs: unknown[]) =>
+      refs
+        .filter((ref): ref is { id: string } =>
+          Boolean((ref as { id?: string } | null)?.id),
+        )
+        .map((ref) => ({ id: ref.id, data: () => undefined })),
+  }),
   Filter: { where: vi.fn(), or: vi.fn() },
 }));
 // A bearer header is a signed in reader, for both of the ways the route asks.

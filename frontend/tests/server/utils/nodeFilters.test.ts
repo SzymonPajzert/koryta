@@ -766,25 +766,64 @@ describe("matchedTargets", () => {
 });
 
 describe("placeNames", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockFetchNodes.mockResolvedValue({
-      pgz: { name: "POLSKA GRUPA ZBROJENIOWA (Radom)", visibility: true },
-      szkic: { name: "SPÓŁKA W SZKICU", visibility: false },
-    });
-  });
+  /** Stored nodes `getAll` answers from, as the field mask leaves them. */
+  const stored: Record<string, Record<string, unknown>> = {
+    pgz: {
+      type: "place",
+      name: "POLSKA GRUPA ZBROJENIOWA (Radom)",
+      published: true,
+    },
+    szkic: { type: "place", name: "SPÓŁKA W SZKICU", published: false },
+    scalona: { type: "place", name: "SCALONA", published: true, deleted: true },
+    osoba: { type: "person", name: "Anna Nowak", published: true },
+  };
+  const getAll = vi.fn(async (...refs: unknown[]) =>
+    refs
+      .filter(
+        (ref): ref is { id: string } =>
+          typeof ref === "object" && ref !== null && "id" in ref,
+      )
+      .map((ref) => ({ id: ref.id, data: () => stored[ref.id] })),
+  );
+  const namesDb = {
+    collection: () => ({ doc: (id: string) => ({ id }) }),
+    getAll,
+  } as unknown as FirebaseFirestore.Firestore;
+
+  beforeEach(() => getAll.mockClear());
 
   it("names the places, each once, and skips what is not a place", async () => {
-    expect(await placeNames(["pgz", "teryt26", "pgz"], true)).toEqual({
-      pgz: "POLSKA GRUPA ZBROJENIOWA (Radom)",
-    });
+    expect(
+      await placeNames(
+        namesDb,
+        ["pgz", "teryt26", "pgz", "osoba", "brak"],
+        true,
+      ),
+    ).toEqual({ pgz: "POLSKA GRUPA ZBROJENIOWA (Radom)" });
+    // One read of the ids asked about, never the whole place list; regions
+    // are not looked up at all.
+    expect(getAll).toHaveBeenCalledTimes(1);
+    const asked = getAll.mock.calls[0]!.filter(
+      (ref) => typeof ref === "object" && ref !== null && "id" in ref,
+    ) as { id: string }[];
+    expect(asked.map((ref) => ref.id)).toEqual(["pgz", "osoba", "brak"]);
+    expect(mockFetchNodes).not.toHaveBeenCalledWith("place");
   });
 
-  it("names a draft only to a reader who may see drafts", async () => {
-    expect(await placeNames(["pgz", "szkic"], false)).toEqual({
+  it("reads nothing when the page names only regions", async () => {
+    expect(await placeNames(namesDb, ["teryt26", "teryt2601"], false)).toEqual(
+      {},
+    );
+    expect(getAll).not.toHaveBeenCalled();
+  });
+
+  it("names a draft only to a reader who may see drafts, and a merged page to nobody", async () => {
+    expect(
+      await placeNames(namesDb, ["pgz", "szkic", "scalona"], false),
+    ).toEqual({
       pgz: "POLSKA GRUPA ZBROJENIOWA (Radom)",
     });
-    expect(await placeNames(["szkic"], true)).toEqual({
+    expect(await placeNames(namesDb, ["szkic", "scalona"], true)).toEqual({
       szkic: "SPÓŁKA W SZKICU",
     });
   });
