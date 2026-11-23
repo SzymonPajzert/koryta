@@ -8,8 +8,7 @@ import type { DatabaseStats } from "../../../server/api/stats/database.get";
  * the case the page has to survive: the endpoint is a census of the whole
  * database behind a six-hour cache, so a cold miss under load is the one way
  * this landing page loses its numbers. */
-let response: Pick<DatabaseStats, "nodes" | "edges" | "generatedAt"> | null =
-  null;
+let response: Pick<DatabaseStats, "nodes" | "generatedAt"> | null = null;
 
 registerEndpoint("/api/stats/database", () => {
   if (!response) throw new Error("stats unavailable");
@@ -19,7 +18,7 @@ registerEndpoint("/api/stats/database", () => {
 /** The measured shape of prod on 2026-09-14, cut down to the fields the page
  * picks. Real numbers rather than round ones, because what is being asserted is
  * that they come out declined and grouped - "10 348 osob", not "10348 osoby". */
-function stats(): Pick<DatabaseStats, "nodes" | "edges" | "generatedAt"> {
+function stats(): Pick<DatabaseStats, "nodes" | "generatedAt"> {
   return {
     generatedAt: "2026-09-14T06:30:00.000Z",
     nodes: {
@@ -29,7 +28,6 @@ function stats(): Pick<DatabaseStats, "nodes" | "edges" | "generatedAt"> {
       articles: 627,
       regions: 1389,
     },
-    edges: 49036,
   };
 }
 
@@ -65,7 +63,6 @@ describe("/eksploruj", () => {
       "explore-way-szpitale",
       "explore-way-statystyki",
       "explore-way-autograf",
-      "explore-way-graf",
       "explore-way-tematy",
       "explore-way-zrodla",
     ]);
@@ -85,7 +82,6 @@ describe("/eksploruj", () => {
       { href: "/eksploruj/szpitale", heading: true },
       { href: "/eksploruj/statystyki", heading: true },
       { href: "/eksploruj/autograf", heading: true },
-      { href: "/graf", heading: true },
       { href: "/tematy", heading: true },
       { href: "/zrodla", heading: true },
     ]);
@@ -112,7 +108,6 @@ describe("/eksploruj", () => {
       "explore-way-statystyki": "17 292 strony w serwisie",
       // pl-PL groups from five digits (CLDR minimumGroupingDigits 2)
       "explore-way-autograf": "4928 instytucji i spółek",
-      "explore-way-graf": "49 036 powiązań",
       "explore-way-tematy": null,
       "explore-way-zrodla": "627 artykułów",
     });
@@ -149,7 +144,7 @@ describe("/eksploruj", () => {
     response = null;
     const wrapper = await mountSuspended(EksplorujPage);
 
-    expect(wrapper.findAll("[data-testid^='explore-way-']")).toHaveLength(9);
+    expect(wrapper.findAll("[data-testid^='explore-way-']")).toHaveLength(8);
     // No dash, no "undefined", no empty count line: a card with no figure to
     // show simply has none.
     expect(wrapper.findAll(".way__count")).toHaveLength(0);

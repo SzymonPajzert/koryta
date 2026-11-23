@@ -59,6 +59,15 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "eksploruj-bez-karty-grafu",
+    title: "Na /eksploruj nie ma już karty „Graf połączeń”",
+    description:
+      "Karta otwierała /graf bez wybranej instytucji, gdzie był tylko napis „Wybierz miejsce”. Graf instytucji dalej otwiera przycisk „Graf połączeń” na jej stronie.",
+    steps: ["Otwórz /eksploruj: jest osiem kart, bez „Graf połączeń”."],
+    link: "/eksploruj",
+    area: "public",
+  },
+  {
     id: "kolejka-imie-prowadzi-do-strony-osoby",
     title: "Imię w kolejce prowadzi na stronę osoby",
     description:
