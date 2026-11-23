@@ -1,5 +1,12 @@
-import { getFirestore } from "firebase-admin/firestore";
-import { editorFreshCachedEventHandler } from "~~/server/utils/handlers";
+import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import {
+  editorFreshCachedEventHandler,
+  wantsLatest,
+} from "~~/server/utils/handlers";
+import {
+  storedAggregate,
+  warsawSixHourWindow,
+} from "~~/server/utils/storedAggregate";
 import { wojewodztwoOf } from "~~/shared/teryt";
 import {
   buildHospitalStats,
@@ -65,8 +72,10 @@ function chunked<T>(values: T[], size: number): T[][] {
  *    The sixteen województwo nodes are then fetched by derived id (`teryt14`)
  *    for their names.
  *
- * Nothing here depends on who is asking, and behind the six-hour cache the
- * whole thing runs a few dozen times a day at most.
+ * Nothing here depends on who is asking. It is counted once per six-hour
+ * Warsaw window for each backend and stored in `stats`, which every instance
+ * reads (see `server/utils/storedAggregate.ts`); an editor asking for the
+ * latest still gets a fresh count.
  *
  * `editorFresh` rather than the plain cached wrapper, because the six hours are
  * held in two places and only one of them is ours: the wrapper emits
@@ -78,144 +87,14 @@ function chunked<T>(values: T[], size: number): T[][] {
  * the only thing the CDN honours.
  */
 export default editorFreshCachedEventHandler(
-  async (): Promise<HospitalStats> => {
+  async (event): Promise<HospitalStats> => {
     const db = getFirestore("koryta-pl");
-
-    const placesSnap = await db
-      .collection("nodes")
-      .where("type", "==", "place")
-      .select(
-        "name",
-        "categories",
-        "legalForm",
-        "supervisoryOrgan",
-        "isPublic",
-        "published",
-        "deleted",
-      )
-      .get();
-    const places: HospitalPlaceRow[] = placesSnap.docs.map((doc) => ({
-      ...(doc.data() as Omit<HospitalPlaceRow, "id">),
-      id: doc.id,
-    }));
-
-    // Narrowed before the edge reads: this filter is what decides how many `in`
-    // queries the next step costs, and it is far cheaper to apply it here than to
-    // fetch the edges of every institution in the database.
-    const hospitalIds = places
-      .filter(isPublicHospital)
-      .map((place) => place.id);
-
-    const edges: BoardEdgeRow[] = [];
-    for (const chunk of chunked(hospitalIds, IN_CHUNK)) {
-      const snap = await db
-        .collection("edges")
-        .where("target", "in", chunk)
-        .where("type", "==", "employed")
-        .select("source", "target", "name", "end_date", "published", "deleted")
-        .get();
-      for (const doc of snap.docs) edges.push(doc.data() as BoardEdgeRow);
-    }
-
-    const personIds = [...new Set(edges.map((edge) => edge.source))].filter(
-      (id): id is string => !!id,
-    );
-    const people: BoardPersonRow[] = [];
-    for (const chunk of chunked(personIds, GET_ALL_CHUNK)) {
-      const snaps = await db.getAll(
-        ...chunk.map((id) => db.collection("nodes").doc(id)),
-        // A person node carries their whole biography; all this needs is the
-        // party, so `fetchNodesByIds` - which reads the documents whole - is
-        // deliberately not reused here.
-        { fieldMask: ["name", "parties", "published", "deleted"] },
-      );
-      for (const snap of snaps) {
-        if (!snap.exists) continue;
-        people.push({ ...(snap.data() as BoardPersonRow), id: snap.id });
-      }
-    }
-
-    // Where each hospital sits. Only the hospitals are asked about, so this is
-    // five `in` queries rather than a read of the region collection.
-    const seatEdges: { source?: string; target?: string; deleted?: unknown }[] =
-      [];
-    for (const chunk of chunked(hospitalIds, IN_CHUNK)) {
-      const snap = await db
-        .collection("edges")
-        .where("target", "in", chunk)
-        .where("type", "==", "seat")
-        .select("source", "target", "deleted")
-        .get();
-      for (const doc of snap.docs) seatEdges.push(doc.data());
-    }
-
-    const regionIds = [
-      ...new Set(
-        seatEdges
-          .filter((edge) => edge.deleted !== true && !!edge.source)
-          .map((edge) => edge.source as string),
-      ),
-    ];
-    const regionTeryt = new Map<string, string>();
-    for (const chunk of chunked(regionIds, GET_ALL_CHUNK)) {
-      const snaps = await db.getAll(
-        ...chunk.map((id) => db.collection("nodes").doc(id)),
-        { fieldMask: ["teryt"] },
-      );
-      for (const snap of snaps) {
-        const teryt = snap.get("teryt");
-        if (typeof teryt === "string" && teryt) regionTeryt.set(snap.id, teryt);
-      }
-    }
-
-    // The most specific claim wins, the way `regionsByPlaceId` resolves it: a
-    // powiat beats the województwo around it. A longer TERYT is a finer region.
-    const placeTeryt = new Map<string, string>();
-    for (const edge of seatEdges) {
-      if (edge.deleted === true || !edge.source || !edge.target) continue;
-      const teryt = regionTeryt.get(edge.source);
-      if (!teryt) continue;
-      const held = placeTeryt.get(edge.target);
-      if (held && held.length >= teryt.length) continue;
-      placeTeryt.set(edge.target, teryt);
-    }
-    for (const place of places) {
-      const teryt = placeTeryt.get(place.id);
-      if (teryt) place.regionTeryt = teryt;
-    }
-
-    // Names for the sixteen. Region node ids are `teryt<code>`, so these are
-    // exact document reads rather than a query over the collection.
-    const wojCodes = [
-      ...new Set(
-        [...placeTeryt.values()]
-          .map((teryt) => wojewodztwoOf(teryt))
-          .filter((code): code is string => !!code),
-      ),
-    ];
-    const wojewodztwoNames: Record<string, string> = {};
-    for (const chunk of chunked(wojCodes, GET_ALL_CHUNK)) {
-      const snaps = await db.getAll(
-        ...chunk.map((code) => db.collection("nodes").doc(`teryt${code}`)),
-        { fieldMask: ["name", "teryt"] },
-      );
-      for (const snap of snaps) {
-        const name = snap.get("name");
-        const teryt = snap.get("teryt");
-        if (typeof name === "string" && typeof teryt === "string") {
-          wojewodztwoNames[teryt] = name;
-        }
-      }
-    }
-
-    const now = new Date();
-    return buildHospitalStats({
-      places,
-      edges,
-      people,
-      generatedAt: now.toISOString(),
-      today: now.toISOString().slice(0, 10),
-      wojewodztwoNames,
+    if (await wantsLatest(event)) return countHospitals(db);
+    return storedAggregate({
+      db,
+      name: "hospitalStats",
+      period: warsawSixHourWindow(),
+      compute: () => countHospitals(db),
     });
   },
   {
@@ -233,3 +112,140 @@ export default editorFreshCachedEventHandler(
     editorMaxAge: 300,
   },
 );
+
+async function countHospitals(db: Firestore): Promise<HospitalStats> {
+  const placesSnap = await db
+    .collection("nodes")
+    .where("type", "==", "place")
+    .select(
+      "name",
+      "categories",
+      "legalForm",
+      "supervisoryOrgan",
+      "isPublic",
+      "published",
+      "deleted",
+    )
+    .get();
+  const places: HospitalPlaceRow[] = placesSnap.docs.map((doc) => ({
+    ...(doc.data() as Omit<HospitalPlaceRow, "id">),
+    id: doc.id,
+  }));
+
+  // Narrowed before the edge reads: this filter is what decides how many `in`
+  // queries the next step costs, and it is far cheaper to apply it here than to
+  // fetch the edges of every institution in the database.
+  const hospitalIds = places.filter(isPublicHospital).map((place) => place.id);
+
+  const edges: BoardEdgeRow[] = [];
+  for (const chunk of chunked(hospitalIds, IN_CHUNK)) {
+    const snap = await db
+      .collection("edges")
+      .where("target", "in", chunk)
+      .where("type", "==", "employed")
+      .select("source", "target", "name", "end_date", "published", "deleted")
+      .get();
+    for (const doc of snap.docs) edges.push(doc.data() as BoardEdgeRow);
+  }
+
+  const personIds = [...new Set(edges.map((edge) => edge.source))].filter(
+    (id): id is string => !!id,
+  );
+  const people: BoardPersonRow[] = [];
+  for (const chunk of chunked(personIds, GET_ALL_CHUNK)) {
+    const snaps = await db.getAll(
+      ...chunk.map((id) => db.collection("nodes").doc(id)),
+      // A person node carries their whole biography; all this needs is the
+      // party, so `fetchNodesByIds` - which reads the documents whole - is
+      // deliberately not reused here.
+      { fieldMask: ["name", "parties", "published", "deleted"] },
+    );
+    for (const snap of snaps) {
+      if (!snap.exists) continue;
+      people.push({ ...(snap.data() as BoardPersonRow), id: snap.id });
+    }
+  }
+
+  // Where each hospital sits. Only the hospitals are asked about, so this is
+  // five `in` queries rather than a read of the region collection.
+  const seatEdges: { source?: string; target?: string; deleted?: unknown }[] =
+    [];
+  for (const chunk of chunked(hospitalIds, IN_CHUNK)) {
+    const snap = await db
+      .collection("edges")
+      .where("target", "in", chunk)
+      .where("type", "==", "seat")
+      .select("source", "target", "deleted")
+      .get();
+    for (const doc of snap.docs) seatEdges.push(doc.data());
+  }
+
+  const regionIds = [
+    ...new Set(
+      seatEdges
+        .filter((edge) => edge.deleted !== true && !!edge.source)
+        .map((edge) => edge.source as string),
+    ),
+  ];
+  const regionTeryt = new Map<string, string>();
+  for (const chunk of chunked(regionIds, GET_ALL_CHUNK)) {
+    const snaps = await db.getAll(
+      ...chunk.map((id) => db.collection("nodes").doc(id)),
+      { fieldMask: ["teryt"] },
+    );
+    for (const snap of snaps) {
+      const teryt = snap.get("teryt");
+      if (typeof teryt === "string" && teryt) regionTeryt.set(snap.id, teryt);
+    }
+  }
+
+  // The most specific claim wins, the way `regionsByPlaceId` resolves it: a
+  // powiat beats the województwo around it. A longer TERYT is a finer region.
+  const placeTeryt = new Map<string, string>();
+  for (const edge of seatEdges) {
+    if (edge.deleted === true || !edge.source || !edge.target) continue;
+    const teryt = regionTeryt.get(edge.source);
+    if (!teryt) continue;
+    const held = placeTeryt.get(edge.target);
+    if (held && held.length >= teryt.length) continue;
+    placeTeryt.set(edge.target, teryt);
+  }
+  for (const place of places) {
+    const teryt = placeTeryt.get(place.id);
+    if (teryt) place.regionTeryt = teryt;
+  }
+
+  // Names for the sixteen. Region node ids are `teryt<code>`, so these are
+  // exact document reads rather than a query over the collection.
+  const wojCodes = [
+    ...new Set(
+      [...placeTeryt.values()]
+        .map((teryt) => wojewodztwoOf(teryt))
+        .filter((code): code is string => !!code),
+    ),
+  ];
+  const wojewodztwoNames: Record<string, string> = {};
+  for (const chunk of chunked(wojCodes, GET_ALL_CHUNK)) {
+    const snaps = await db.getAll(
+      ...chunk.map((code) => db.collection("nodes").doc(`teryt${code}`)),
+      { fieldMask: ["name", "teryt"] },
+    );
+    for (const snap of snaps) {
+      const name = snap.get("name");
+      const teryt = snap.get("teryt");
+      if (typeof name === "string" && typeof teryt === "string") {
+        wojewodztwoNames[teryt] = name;
+      }
+    }
+  }
+
+  const now = new Date();
+  return buildHospitalStats({
+    places,
+    edges,
+    people,
+    generatedAt: now.toISOString(),
+    today: now.toISOString().slice(0, 10),
+    wojewodztwoNames,
+  });
+}

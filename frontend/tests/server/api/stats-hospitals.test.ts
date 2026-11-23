@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import handler from "../../../server/api/stats/hospitals.get";
 
 type QueryCall = {
@@ -7,27 +7,53 @@ type QueryCall = {
   selects: string[];
 };
 
-const { queries, mockGetAll, nodeDocs, edgeDocs, personDocs } = vi.hoisted(
-  () => {
-    const globals = globalThis as Record<string, unknown>;
-    globals.defineEventHandler = (fn: unknown) => fn;
+const {
+  queries,
+  mockGetAll,
+  nodeDocs,
+  edgeDocs,
+  personDocs,
+  statsDocs,
+  mockWantsLatest,
+} = vi.hoisted(() => {
+  const globals = globalThis as Record<string, unknown>;
+  globals.defineEventHandler = (fn: unknown) => fn;
 
-    return {
-      queries: [] as QueryCall[],
-      mockGetAll: vi.fn(),
-      nodeDocs: [] as { id: string; data: () => unknown }[],
-      edgeDocs: [] as { id: string; data: () => unknown }[],
-      personDocs: [] as Record<string, unknown>[],
-    };
-  },
-);
+  return {
+    queries: [] as QueryCall[],
+    mockGetAll: vi.fn(),
+    nodeDocs: [] as { id: string; data: () => unknown }[],
+    edgeDocs: [] as { id: string; data: () => unknown }[],
+    personDocs: [] as Record<string, unknown>[],
+    /** `stats` documents, where the answer is stored for six hours. */
+    statsDocs: new Map<string, Record<string, unknown>>(),
+    mockWantsLatest: vi.fn(async () => false),
+  };
+});
 
 vi.mock("firebase-admin/firestore", () => {
+  const statsDoc = (id: string) => ({
+    id,
+    get: async () => ({
+      exists: statsDocs.has(id),
+      data: () => statsDocs.get(id),
+    }),
+  });
+  const batch = () => {
+    const writes: [string, Record<string, unknown>][] = [];
+    return {
+      set: (ref: { id: string }, data: Record<string, unknown>) =>
+        writes.push([ref.id, data]),
+      commit: async () => {
+        for (const [id, data] of writes) statsDocs.set(id, data);
+      },
+    };
+  };
   const collection = (name: string) => {
     const call: QueryCall = { collection: name, wheres: [], selects: [] };
     queries.push(call);
     const query: Record<string, unknown> = {
-      doc: (id: string) => ({ id }),
+      doc: (id: string) => (name === "stats" ? statsDoc(id) : { id }),
       where: (...args: unknown[]) => {
         call.wheres.push(args);
         return query;
@@ -55,8 +81,14 @@ vi.mock("firebase-admin/firestore", () => {
     };
     return query;
   };
-  return { getFirestore: () => ({ collection, getAll: mockGetAll }) };
+  return {
+    getFirestore: () => ({ collection, getAll: mockGetAll, batch }),
+  };
 });
+
+vi.mock("firebase-functions/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 // The handler is wrapped in nitro's cache; here it runs straight through.
 // Recorded rather than merely stubbed: which wrapper this endpoint uses is the
@@ -78,6 +110,7 @@ vi.mock("~~/server/utils/handlers", () => ({
     wrappedWith.push("editorFreshCachedEventHandler");
     return fn;
   },
+  wantsLatest: mockWantsLatest,
 }));
 
 const call = () =>
@@ -89,6 +122,8 @@ beforeEach(() => {
   nodeDocs.length = 0;
   edgeDocs.length = 0;
   personDocs.length = 0;
+  statsDocs.clear();
+  mockWantsLatest.mockResolvedValue(false);
   // A `DocumentSnapshot`, not a bag with the fields on it: the handler reads
   // the region documents through `snap.get(field)`, which is how a `fieldMask`
   // read is meant to be unpacked, and a mock without it threw rather than
@@ -209,5 +244,65 @@ describe("/api/stats/hospitals", () => {
     expect(queries.map((q) => q.collection)).toEqual(["nodes"]);
     expect(mockGetAll).not.toHaveBeenCalled();
     expect(stats).toMatchObject({ hospitals: 0, paid: { seats: 0 } });
+  });
+
+  describe("stored once per backend and six-hour window", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      vi.useRealTimers();
+    });
+
+    beforeEach(() => {
+      vi.stubEnv("K_SERVICE", "prod");
+      vi.stubEnv("K_REVISION", "prod-build-001");
+      vi.useFakeTimers();
+      // 12:30 in Warsaw.
+      vi.setSystemTime(new Date("2026-11-23T11:30:00Z"));
+      nodeDocs.push({
+        id: "h1",
+        data: () => ({
+          type: "place",
+          name: "Szpital Powiatowy sp. z o.o.",
+          categories: ["szpitale"],
+          isPublic: true,
+          published: true,
+          supervisoryOrgan: "rada_nadzorcza",
+        }),
+      });
+    });
+
+    /** Reads of the place nodes, which is what a count costs. */
+    const placeScans = () =>
+      queries.filter((q) => q.collection === "nodes").length;
+
+    it("counts once, and every later instance reads the stored answer", async () => {
+      const first = await call();
+      expect(placeScans()).toBe(1);
+      expect(statsDocs.get("hospitalStats_prod")).toMatchObject({
+        key: "prod-build-001|2026-11-23T12",
+      });
+
+      expect(await call()).toEqual(first);
+      expect(placeScans()).toBe(1);
+    });
+
+    it("counts afresh for an editor asking for the latest", async () => {
+      await call();
+      // Whatever is stored, an editor gets what the database says now.
+      const stored = statsDocs.get("hospitalStats_prod")!;
+      statsDocs.set("hospitalStats_prod", {
+        ...stored,
+        json: JSON.stringify({ hospitals: 99 }),
+      });
+      mockWantsLatest.mockResolvedValue(true);
+
+      const fresh = await call();
+
+      expect(placeScans()).toBe(2);
+      expect(fresh).toMatchObject({ hospitals: 1 });
+      expect(statsDocs.get("hospitalStats_prod")!.json).toBe(
+        JSON.stringify({ hospitals: 99 }),
+      );
+    });
   });
 });
