@@ -5,7 +5,9 @@ runConfig:
   maxInstances: 10
   # concurrency: 80
   # cpu: 1
-  memoryMiB: 1024
+  # 2048 by decision on 2026-11-23: at 1024 instances were killed for memory
+  # 3-13 times a day, mostly by scans of every person doc.
+  memoryMiB: 2048
 
 # Environment variables and secrets.
 # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
