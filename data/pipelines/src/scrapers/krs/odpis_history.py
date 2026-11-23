@@ -177,8 +177,15 @@ class ParsedCache:
             return None
         return kept["rows"], kept["problem"]
 
+    def refuses(self, parsed: Parsed) -> bool:
+        """Whether `keeps` turns these rows down."""
+        return not self.keeps(self._rows(parsed))
+
+    def _rows(self, parsed: Parsed) -> list[dict[str, typing.Any]]:
+        return [{c: row.get(c) for c in self.columns} for row in parsed[0]]
+
     def put(self, odpis: odpis_files.StoredOdpis, parsed: Parsed) -> None:
-        rows = [{c: row.get(c) for c in self.columns} for row in parsed[0]]
+        rows = self._rows(parsed)
         if not self.keeps(rows):
             return
         try:
@@ -205,6 +212,10 @@ def parse_stored(
     (CPU 75%, three workers on four vCPUs). A hand run like it looks hung.
     Any edit to the code `parser_version` reads does the same to both
     pipelines.
+
+    A document whose rows `cache` would refuse is left out and reported like
+    an unreadable one: on 2026-11-23 two cells of one new odpis, holding an
+    11-digit run, failed the whole night.
     """
     results: dict[str, Parsed] = {}
     for krs in sorted(stored):
@@ -214,6 +225,8 @@ def parse_stored(
     print(f"  {len(results):,} odpisy parsed before, {len(todo):,} to parse")
     progress = Progress(len(todo), "odpisy parsed")
     for doc, parsed in parse_each(documents(ctx, todo), parse):
+        if cache.refuses(parsed):
+            parsed = [], f"{doc.krs} ({doc.register}): refused by the PESEL check"
         results[doc.krs] = parsed
         cache.put(todo[doc.krs], parsed)
         progress.step()

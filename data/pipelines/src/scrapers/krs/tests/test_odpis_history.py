@@ -306,6 +306,30 @@ def test_a_seat_holding_a_pesel_is_not_kept():
     assert cache.get(odpis) is None
 
 
+def test_an_odpis_whose_seats_hold_an_eleven_digit_run_is_left_out(monkeypatch, capsys):
+    monkeypatch.setattr(odpis_history, "pesel_salt", lambda: SALT)
+    seats_of = odpis_history.seats_of
+    parsed: list[str] = []
+
+    def leaky(doc, salt):
+        parsed.append(doc.krs)
+        rows, problem = seats_of(doc, salt=salt)
+        if doc.krs == "0000000031":
+            rows = [{**row, "funkcja": f"PREZES {PRESIDENT}"} for row in rows]
+        return rows, problem
+
+    monkeypatch.setattr(odpis_history, "seats_of", leaky)
+    ctx = FakeContext(held(krs="31") | held())
+
+    df = odpis_history.KrsOdpisSeats().process(ctx)
+
+    assert set(df["krs"]) == {"0000000029"}
+    assert PRESIDENT not in df.to_csv()
+    assert "0000000031 (P): refused by the PESEL check" in capsys.readouterr().out
+    odpis_history.KrsOdpisSeats().process(ctx)
+    assert sorted(parsed) == ["0000000029", "0000000031"], "kept, not parsed again"
+
+
 # ------------------------------------------------- saying how far it has got
 class Clock:
     """A clock that moves only when told to."""
