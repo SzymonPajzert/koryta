@@ -30,6 +30,7 @@ from scrapers.krs.odpis_pdf import (
     stated_on,
     unread_person_rubryki,
 )
+from util import pesel as pesel_util
 
 
 def pesel(first_ten: str) -> str:
@@ -401,7 +402,9 @@ def test_a_seat_held_by_a_body_has_a_regon_and_no_birth_date(people):
     assert shareholder.sex is None
 
 
-def foreign_board(identifier: str) -> str:
+def foreign_board(
+    identifier: str, given: str = "ZDRAVKA", surname: str = "DEMETER BUBALO"
+) -> str:
     """A board of one, whose identifier field reads `identifier`."""
     return f"""
 Dział 2
@@ -418,11 +421,11 @@ Dane osób wchodzących w skład organu
 1.Nazwisko / Nazwa lub Firma
 4
 -
-DEMETER BUBALO
+{surname}
 2.Imiona
 4
 -
-ZDRAVKA
+{given}
 3.Numer PESEL/REGON lub data
 urodzenia
 4
@@ -466,6 +469,25 @@ def test_no_pesel_is_ever_carried_on_the_record(people):
         for value in (person.surname, person.given_names, person.funkcja or ""):
             for number in (BOARD_FORMER, BOARD_CURRENT, SUPERVISOR, PROXY):
                 assert number not in value
+
+
+@pytest.mark.parametrize(
+    ("surname", "given"),
+    [
+        ("DEMETER BUBALO", f"ZDRAVKA {BOARD_CURRENT}"),
+        (f"DEMETER BUBALO {BOARD_CURRENT}", "ZDRAVKA"),
+    ],
+    ids=["given names", "surname"],
+)
+def test_a_pesel_typed_into_a_name_is_taken_out_of_it(surname, given):
+    """KRS 0000060753 printed a board member's given names as "<imię> <PESEL>"
+    (2026-11-23). The name loses the number; the identifier still gives the
+    record its fingerprint and birth date."""
+    board = foreign_board(f"{BOARD_CURRENT}, ------", given=given, surname=surname)
+    [person] = parse_people(board, krs="1", salt="s")
+    assert person.full_name == "ZDRAVKA DEMETER BUBALO"
+    assert person.pesel_fingerprint == pesel_util.fingerprint(BOARD_CURRENT, "s")
+    assert person.birth_date == "1970-02-08"
 
 
 def test_a_pesel_written_into_a_free_text_field_is_redacted(people):

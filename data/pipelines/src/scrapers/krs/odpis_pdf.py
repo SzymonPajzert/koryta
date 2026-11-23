@@ -659,6 +659,18 @@ def _redact_pesels(
     return _ELEVEN_DIGITS.sub(replace, value)
 
 
+def _name_only(value: str) -> str:
+    """A name with any 11-digit run taken out of it.
+
+    The register prints what was typed into its form: KRS 0000060753 gives one
+    board member's ``2.Imiona`` as ``<imię> <PESEL>``, the same number its
+    identifier field holds (2026-11-23). Unlike in `funkcja`, no fingerprint
+    takes the number's place: the identifier gives the record one already, and
+    a digest in a name would be shown as part of the name.
+    """
+    return re.sub(r"\s+", " ", _ELEVEN_DIGITS.sub(" ", value)).strip()
+
+
 def parse_people(
     text: str,
     krs: str,
@@ -734,8 +746,8 @@ def parse_people(
                         else None
                     ),
                     position=position,
-                    surname=surname.value,
-                    given_names=given.value if given else "",
+                    surname=_name_only(surname.value),
+                    given_names=_name_only(given.value) if given else "",
                     funkcja=_redact_pesels(
                         funkcja.value if funkcja and funkcja.value else None,
                         salt,
