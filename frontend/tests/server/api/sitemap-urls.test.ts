@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import handler from "../../../server/api/_sitemap-urls/[source]";
 import { SITEMAP_NODE_TYPES } from "../../../shared/lastmod";
 
@@ -30,6 +30,44 @@ const { mockFetchNodes, cacheOptions, posts } = vi.hoisted(() => {
 });
 
 vi.mock("~~/server/utils/fetch", () => ({ fetchNodes: mockFetchNodes }));
+
+/** `stats` documents, where a list is stored for a six-hour window. */
+const { stats } = vi.hoisted(() => ({
+  stats: new Map<string, Record<string, unknown>>(),
+}));
+
+vi.mock("firebase-admin/firestore", () => {
+  const ref = (id: string) => ({
+    id,
+    get: async () => ({
+      exists: stats.has(id),
+      data: () => stats.get(id),
+    }),
+  });
+  const db = {
+    collection: (name: string) => {
+      if (name !== "stats") throw new Error(`read of ${name}`);
+      return { doc: ref };
+    },
+    getAll: async (...refs: { id: string }[]) =>
+      Promise.all(refs.map((r) => ref(r.id).get())),
+    batch: () => {
+      const writes: [string, Record<string, unknown>][] = [];
+      return {
+        set: (r: { id: string }, data: Record<string, unknown>) =>
+          writes.push([r.id, data]),
+        commit: async () => {
+          for (const [id, data] of writes) stats.set(id, data);
+        },
+      };
+    },
+  };
+  return { getFirestore: () => db };
+});
+
+vi.mock("firebase-functions/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 // Blog posts reach the sitemap through Nuxt Content, which has no database
 // here; the tests hand it the posts.
@@ -63,6 +101,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockFetchNodes.mockResolvedValue({});
   posts.length = 0;
+  stats.clear();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.useRealTimers();
 });
 
 describe("/api/_sitemap-urls/[source]", () => {
@@ -219,5 +263,82 @@ describe("/api/_sitemap-urls/[source]", () => {
       "person",
     );
     expect(key(event("place"))).toBe("place");
+  });
+
+  describe("stored once per backend and six-hour window", () => {
+    function onCloudRun(build = "prod-build-001") {
+      vi.stubEnv("K_SERVICE", "prod");
+      vi.stubEnv("K_REVISION", build);
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      // 12:30 in Warsaw.
+      vi.setSystemTime(new Date("2026-11-23T11:30:00Z"));
+      nodesByType({
+        p1: { type: "person", name: "Jan Kowalski", published: true },
+        c1: { type: "place", name: "Orlen", published: true },
+      });
+    });
+
+    it("reads the nodes once, and every later instance the stored list", async () => {
+      onCloudRun();
+
+      const first = await call("person");
+      expect(stats.get("sitemapUrls_person_prod")).toMatchObject({
+        key: "prod-build-001|2026-11-23T12",
+        parts: 1,
+      });
+
+      mockFetchNodes.mockClear();
+      expect(await call("person")).toEqual(first);
+      expect(mockFetchNodes).not.toHaveBeenCalled();
+    });
+
+    it("keeps one list per page type", async () => {
+      onCloudRun();
+
+      for (const type of SITEMAP_NODE_TYPES) await call(type);
+
+      expect([...stats.keys()].sort()).toEqual([
+        "sitemapUrls_article_prod",
+        "sitemapUrls_person_prod",
+        "sitemapUrls_place_prod",
+      ]);
+    });
+
+    it("builds the list again in the next window", async () => {
+      onCloudRun();
+      await call("person");
+
+      vi.setSystemTime(new Date("2026-11-23T17:00:00Z"));
+      mockFetchNodes.mockClear();
+      await call("person");
+
+      expect(mockFetchNodes.mock.calls).toEqual([["person"]]);
+      expect(stats.get("sitemapUrls_person_prod")!.key).toBe(
+        "prod-build-001|2026-11-23T18",
+      );
+    });
+
+    it("stores nothing for the blog, which reads no database", async () => {
+      onCloudRun();
+      posts.push({ path: "/blog/nowy", date: "2026-10-01", title: "Nowy" });
+
+      await call("blog");
+
+      expect(stats.size).toBe(0);
+    });
+
+    it("builds the list on every call off Cloud Run", async () => {
+      vi.stubEnv("K_SERVICE", "");
+      vi.stubEnv("K_REVISION", "");
+
+      await call("person");
+      await call("person");
+
+      expect(mockFetchNodes).toHaveBeenCalledTimes(2);
+      expect(stats.size).toBe(0);
+    });
   });
 });

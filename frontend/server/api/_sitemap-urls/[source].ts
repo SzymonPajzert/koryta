@@ -8,6 +8,10 @@ import {
 import type { NodeType } from "~~/shared/model";
 import { listedPosts } from "~~/shared/blog";
 import { blogPosts } from "~~/server/utils/blog";
+import {
+  storedAggregate,
+  warsawSixHourWindow,
+} from "~~/server/utils/storedAggregate";
 
 export type SitemapEntry = { loc: string; lastmod?: string };
 
@@ -36,7 +40,12 @@ export type SitemapEntry = { loc: string; lastmod?: string };
  *
  * `fetchNodes` has an hour-long cache of its own, but only per Cloud Run
  * instance, and a sitemap fetch is exactly the request most likely to land on
- * a cold one.
+ * a cold one. So a type's list is built once per six-hour Warsaw window for
+ * each backend and stored in `stats`, which every instance reads (see
+ * `server/utils/storedAggregate.ts`). /api/nodes/[id]/url asks for every list,
+ * and on a cold instance that was a read of every person, article and company.
+ * The companies' list is the large one: 11,587 urls and 1.4 MB of JSON on
+ * 2026-11-20, two documents.
  *
  * `<lastmod>` added nothing to that bill, and that is a choice about where the
  * work happens rather than luck. Every way of computing the date here has to
@@ -52,7 +61,13 @@ export default defineCachedEventHandler(
   async (event): Promise<SitemapEntry[]> => {
     const source = getRouterParam(event, "source");
     if (source === "blog") return blogUrls(event);
-    if (isSitemapNodeType(source)) return nodeUrls(source);
+    if (isSitemapNodeType(source)) {
+      return storedAggregate({
+        name: `sitemapUrls_${source}`,
+        period: warsawSixHourWindow(),
+        compute: () => nodeUrls(source),
+      });
+    }
     throw createError({
       statusCode: 404,
       message: `No sitemap source ${String(source)}`,
