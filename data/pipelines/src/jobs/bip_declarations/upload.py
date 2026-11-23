@@ -41,7 +41,12 @@ from typing import Any
 
 import requests
 
-from jobs.bip_declarations.reading import birth_window, in_windows, name_matches
+from jobs.bip_declarations.reading import (
+    birth_window,
+    in_windows,
+    name_matches,
+    name_tokens,
+)
 from scrapers.stores import (
     BipDeclarationStore,
     DeclarationCropRow,
@@ -139,6 +144,12 @@ class _File:
     council: bool
 
 
+def _person(row: PersonRow) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Who a candidacy is, by the words of the name: PKW spells one surname
+    „Gołębiowska - Jarek” in one election and „Gołębiowska-Jarek” in another."""
+    return tuple(name_tokens(row.first_name)), tuple(name_tokens(row.last_name))
+
+
 def _by_first_name(file: _File) -> bool:
     """Whether a link that named the file's person gave their first name, not
     their surname alone: 19 of the first 500 crops were a relative's
@@ -178,9 +189,7 @@ def _served(
         if key in people
         and name_matches(name, people[key].first_name, people[key].last_name)
     ]
-    persons = {
-        (people[k].first_name.lower(), people[k].last_name.lower()) for k in keys
-    }
+    persons = {_person(people[k]) for k in keys}
     if len(persons) != 1:
         return [], False, None
     return keys, False, True
@@ -251,7 +260,7 @@ def extract_records(
         files.setdefault(link.sha256, _File(link.sha256, [], False)).links.append(link)
     for file in files.values():
         named = {
-            (people[k].first_name.lower(), people[k].last_name.lower())
+            _person(people[k])
             for k in {link.key for link in file.links if link.named}
             if k in people
         }

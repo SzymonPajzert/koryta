@@ -274,6 +274,60 @@ def test_a_file_named_by_first_name_goes_whatever_the_name_read(store):
     assert jan["machine"]["nameMatches"] is False
 
 
+SHA_DOUBLE = "d" * 64  # Maria's declaration
+# One person: PKW spelled her surname one way in 2018 and another in 2024.
+MARIA_2018 = person("6" * 16, "Maria", "KOWALSKA - NOWAK", 2018, 47, ["maria-page"])
+MARIA_2024 = person("7" * 16, "Maria", "KOWALSKA-NOWAK", 2024, 53, ["maria-page"])
+
+
+def with_marias_file(
+    store: MemoryBipDeclarationStore, links: list[DeclarationLink]
+) -> MemoryBipDeclarationStore:
+    store.people += [MARIA_2018, MARIA_2024]
+    store.link_rows += links
+    store.files[SHA_DOUBLE] = DeclarationFile(
+        SHA_DOUBLE, "bip.testowo.example", "", "b.tar.gz", "kowalska-nowak.pdf"
+    )
+    store.record_cut(
+        DeclarationCutRow(SHA_DOUBLE, 1, "cut"),
+        [crop(SHA_DOUBLE, 0, "handwritten", "", "Maria Kowalska-Nowak")],
+    )
+    return store
+
+
+def test_a_surname_spelled_two_ways_is_one_persons_file(store):
+    with_marias_file(
+        store,
+        [
+            link(MARIA_2018.key, SHA_DOUBLE, True),
+            link(MARIA_2024.key, SHA_DOUBLE, True),
+        ],
+    )
+
+    maria = by_id(plan(store)[1])[f"{SHA_DOUBLE}-p0"]
+
+    assert maria["candidacies"] == [MARIA_2018.key, MARIA_2024.key]
+    assert maria["linkNamed"] is True
+    assert maria["outcome"] == "crop"
+
+
+def test_a_councils_page_goes_to_one_person_whose_surname_is_spelled_two_ways(store):
+    with_marias_file(
+        store,
+        [
+            link(MARIA_2018.key, SHA_DOUBLE, False),
+            link(MARIA_2024.key, SHA_DOUBLE, False),
+            link(ANNA.key, SHA_DOUBLE, False),
+        ],
+    )
+
+    maria = by_id(plan(store)[1])[f"{SHA_DOUBLE}-p0"]
+
+    assert maria["candidacies"] == [MARIA_2018.key, MARIA_2024.key]
+    assert maria["linkNamed"] is False
+    assert maria["machine"]["nameMatches"] is True
+
+
 class FakeSite:
     """Takes every request, skipping what `skip` names, and keeps them all."""
 
