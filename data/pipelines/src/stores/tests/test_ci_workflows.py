@@ -35,6 +35,7 @@ WORKFLOWS = _workflows()
 #: the cache's version is a hash of the patterns, so a restore listing them
 #: otherwise finds nothing the save wrote.
 OPEN_WEB_DOWNLOADS = [
+    "data/pipelines/downloaded/*.blob",
     "data/pipelines/downloaded/*.csv",
     "data/pipelines/downloaded/*.txt",
     "data/pipelines/downloaded/*.xls",

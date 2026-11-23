@@ -171,6 +171,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: |
+            data/pipelines/downloaded/*.blob
             data/pipelines/downloaded/*.csv
             data/pipelines/downloaded/*.txt
             data/pipelines/downloaded/*.xls
@@ -318,6 +319,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: |
+            data/pipelines/downloaded/*.blob
             data/pipelines/downloaded/*.csv
             data/pipelines/downloaded/*.txt
             data/pipelines/downloaded/*.xls
