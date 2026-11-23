@@ -7,7 +7,7 @@ import { pageTag } from "./pageTags";
 /** /eksploruj prints the day its counts were made, and the server makes them,
  * so a shot of the page as the server sends it changes every day. Drawn in the
  * browser from this census instead, it stays the same. */
-const STATS: Pick<DatabaseStats, "nodes" | "edges" | "generatedAt"> = {
+const STATS: Pick<DatabaseStats, "nodes" | "generatedAt"> = {
   generatedAt: "2026-09-14T06:30:00.000Z",
   nodes: {
     total: 17292,
@@ -16,7 +16,6 @@ const STATS: Pick<DatabaseStats, "nodes" | "edges" | "generatedAt"> = {
     articles: 627,
     regions: 1389,
   },
-  edges: 49036,
 };
 
 test(

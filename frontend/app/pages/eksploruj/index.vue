@@ -67,7 +67,6 @@ import {
   mdiCakeVariantOutline,
   mdiChartBoxOutline,
   mdiChartDonut,
-  mdiGraphOutline,
   mdiHospitalBuilding,
   mdiNewspaperVariantOutline,
   mdiTableLarge,
@@ -107,7 +106,7 @@ useSeoMeta({
  * That is also why there is no second call here: any number these cards do not
  * get from this response is left off the card rather than fetched.
  *
- * `pick` because the response is far bigger than the five figures used below -
+ * `pick` because the response is far bigger than the four figures used below -
  * the people, notes and vote breakdowns and the publication buckets would
  * otherwise all be serialised into the html payload of a landing page.
  *
@@ -116,7 +115,7 @@ useSeoMeta({
  * under it.
  */
 const { data: stats } = await useFetch<DatabaseStats>("/api/stats/database", {
-  pick: ["nodes", "edges", "generatedAt"],
+  pick: ["nodes", "generatedAt"],
 });
 
 type Way = {
@@ -222,20 +221,8 @@ const ways = computed<Way[]>(() => {
         " i spółek",
       ),
     },
-    {
-      key: "graf",
-      to: "/graf",
-      icon: mdiGraphOutline,
-      title: "Graf połączeń",
-      description:
-        "Sieć ludzi i instytucji. Klikasz w osobę, a graf dorysowuje jej otoczenie.",
-      count: counted(
-        stats.value?.edges,
-        "powiązanie",
-        "powiązania",
-        "powiązań",
-      ),
-    },
+    // No card for /graf: without a `?miejsce=` it has nothing to draw, and
+    // every company page links its own graph (decision on 2026-11-23).
     {
       key: "tematy",
       to: "/tematy",
