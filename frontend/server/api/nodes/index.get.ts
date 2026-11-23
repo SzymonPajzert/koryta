@@ -17,6 +17,12 @@ import {
   type NodeFilterOp,
 } from "~~/server/utils/nodeFilters";
 import {
+  isIndexError,
+  ListMemo,
+  readMatching,
+  warnMissingIndex,
+} from "~~/server/utils/nodeScan";
+import {
   editorFreshCachedEventHandler,
   wantsLatest,
 } from "~~/server/utils/handlers";
@@ -101,6 +107,160 @@ function publicNodes<N extends { visibility?: boolean }>(
   );
 }
 
+type NodeRow = { id: string; [field: string]: any };
+
+function approvedOp(approved: boolean): NodeFilterOp {
+  return {
+    applyFs: (q) => q.where("stats.isApproved", "==", approved),
+    applyMem: (nodes) => nodes.filter((n) => n.stats?.isApproved === approved),
+    fields: ["stats.isApproved"],
+    name: "visibility",
+    base: true,
+  };
+}
+
+function humanVotedOp(voted: boolean): NodeFilterOp {
+  return {
+    applyFs: (q) => q.where("stats.votes.humanVoted", "==", voted),
+    applyMem: (nodes) =>
+      nodes.filter((n) => n.stats?.votes?.humanVoted === voted),
+    fields: ["stats.votes.humanVoted"],
+    name: "hideVoted",
+  };
+}
+
+function buildSortOp(
+  sortBy: string,
+  desc: boolean,
+  signedIn: boolean,
+): NodeFilterOp {
+  let sortField = sortBy;
+  if (sortField === "experience") {
+    sortField = signedIn
+      ? "stats.edges.all.experienceMonths"
+      : "stats.edges.approved.experienceMonths";
+  } else if (sortField === "latestEmploymentStart") {
+    sortField = signedIn
+      ? "stats.edges.all.latestEmploymentStart"
+      : "stats.edges.approved.latestEmploymentStart";
+  } else if (sortField === "notesCount") {
+    sortField = "stats.notesCount";
+  } else if (sortField === "factsCount") {
+    sortField = "stats.factsCount";
+  } else if (sortField === "visibility") {
+    sortField = "stats.isApproved";
+  } else if (sortField.startsWith("votes.")) {
+    sortField = `stats.votes.${sortField.split(".")[1]}`;
+  }
+
+  const direction = desc ? "desc" : "asc";
+  return {
+    applyFs: (q) => q.orderBy(sortField, direction),
+    applyMem: (nodes) => {
+      return [...nodes].sort((a, b) => {
+        const getVal = (obj: any, path: string) =>
+          path.split(".").reduce((o, i) => o?.[i], obj);
+        const valA = getVal(a, sortField);
+        const valB = getVal(b, sortField);
+
+        if (valA === valB) return 0;
+        if (valA === undefined || valA === null)
+          return direction === "desc" ? 1 : -1;
+        if (valB === undefined || valB === null)
+          return direction === "desc" ? -1 : 1;
+
+        const res = valA > valB ? 1 : -1;
+        return direction === "desc" ? -res : res;
+      });
+    },
+    fields: [sortField],
+    name: "sort",
+  };
+}
+
+function toNodeRow(doc: FirebaseFirestore.QueryDocumentSnapshot): NodeRow {
+  const data = dropSearchIndex(doc.data());
+  if (data.revision_id) {
+    if (typeof data.revision_id.path === "string") {
+      data.revision_id = data.revision_id.path;
+    } else if (
+      data.revision_id._path &&
+      Array.isArray(data.revision_id._path.segments)
+    ) {
+      data.revision_id = data.revision_id._path.segments.join("/");
+    }
+  }
+  return { id: doc.id, ...data, visibility: pageIsPublic(data) };
+}
+
+/** A page merged away keeps its document - `deleted: true`, `merged_into`,
+ * see server/utils/merge.ts - so its url still resolves and the votes and
+ * revisions filed against it still hang off something. `pageIsPublic` takes
+ * it off the public site, and that was assumed to be enough; it is not.
+ * `visibility=private` means `stats.isApproved == false`, which is exactly
+ * the bucket a tombstone falls into, so to a logged-in editor all 171
+ * people merged on 2026-08-31 were still rows in /eksploruj/tabela.
+ *
+ * In memory rather than in the query because Firestore cannot express it:
+ * `deleted` is absent on the other 15,597 nodes, so neither `== false` nor
+ * `!= true` matches them, and a mem-only op here would push the sort and
+ * every structural filter out of their indexes - reading all 8,277
+ * unpublished people to serve a page of ten. The price is that when the
+ * query did run indexed, the page can come back a row short and `total`
+ * still counts the tombstones. That is 171 in 8,277, which is the cheaper
+ * of the two errors by a wide margin. */
+function notMergedAway(node: NodeRow): boolean {
+  return (node as { deleted?: boolean }).deleted !== true;
+}
+
+/** The page and the count straight from Firestore, or null when it has no
+ * index for the query and the list has to be put together in memory. */
+async function readIndexedPage(
+  db: FirebaseFirestore.Firestore,
+  ops: NodeFilterOp[],
+  sortOp: NodeFilterOp | undefined,
+  query: Query,
+): Promise<{ rows: NodeRow[]; total: number } | null> {
+  let fsQuery: FirebaseFirestore.Query = db.collection("nodes");
+  for (const op of ops) {
+    fsQuery = op.applyFs(fsQuery);
+  }
+  if (sortOp) {
+    fsQuery = sortOp.applyFs(fsQuery);
+  }
+  try {
+    const [snap, countSnap] = await Promise.all([
+      paginate(fsQuery, query).get(),
+      fsQuery.count().get(),
+    ]);
+    return {
+      rows: snap.docs.map(toNodeRow).filter(notMergedAway),
+      total: countSnap.data().count,
+    };
+  } catch (error) {
+    if (!isIndexError(error)) throw error;
+    warnMissingIndex("api/nodes", sortOp ? [...ops, sortOp] : ops, error);
+    return null;
+  }
+}
+
+/** Public lists put together in memory, for ten minutes: the home map's
+ * województwo lists are read a page at a time, and each page was a fresh read
+ * of every person, 3.79M of prod's 9.7M large reads on the morning of
+ * 2026-11-23. A newly published person can take that long to join a list. */
+const publicLists = new ListMemo<NodeRow>(10 * 60 * 1000, 15_000);
+
+const PAGING = new Set(["page", "limit", "sortBy", "sortDesc"]);
+
+/** What a public list holds, whatever page of it or order is asked. */
+function listKey(query: Query): string {
+  return JSON.stringify(
+    Object.entries(query)
+      .filter(([key]) => !PAGING.has(key))
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+  );
+}
+
 export default defineEventHandler(async (event) => {
   const query = await getValidatedQuery(event, (q) => queryValidator.parse(q));
 
@@ -126,7 +286,6 @@ export default defineEventHandler(async (event) => {
     const user = await getUser(event).catch(() => null);
     const db = getFirestore("koryta-pl");
 
-    type Op = NodeFilterOp;
     const edgeScope = user ? "all" : "approved";
     const { ops, empty, targetIds } = await buildStructuralFilterOps(
       db,
@@ -137,13 +296,14 @@ export default defineEventHandler(async (event) => {
       return { nodes: {}, total: 0 };
     }
 
-    // First, so the missing-index fallback below, which moves ops into memory
-    // from the end, never trades a one-document read for the whole type.
+    // First, so the missing-index fallback, which moves ops into memory from
+    // the end, never trades a one-document read for the whole type.
     const id = query.id;
     if (id) {
       ops.unshift({
         applyFs: (q) => q.where(FieldPath.documentId(), "==", id),
         applyMem: (nodes) => nodes.filter((n) => n.id === id),
+        name: "id",
       });
     }
 
@@ -151,171 +311,51 @@ export default defineEventHandler(async (event) => {
       if (query.visibility === "private") {
         return { nodes: {}, total: 0 };
       }
-      ops.push({
-        applyFs: (q) => q.where("stats.isApproved", "==", true),
-        applyMem: (nodes) => nodes.filter((n) => n.stats?.isApproved === true),
-      });
-    } else {
-      if (query.visibility === "public") {
-        ops.push({
-          applyFs: (q) => q.where("stats.isApproved", "==", true),
-          applyMem: (nodes) =>
-            nodes.filter((n) => n.stats?.isApproved === true),
-        });
-      } else if (query.visibility === "private") {
-        ops.push({
-          applyFs: (q) => q.where("stats.isApproved", "==", false),
-          applyMem: (nodes) =>
-            nodes.filter((n) => n.stats?.isApproved === false),
-        });
-      }
+      ops.push(approvedOp(true));
+    } else if (query.visibility === "public") {
+      ops.push(approvedOp(true));
+    } else if (query.visibility === "private") {
+      ops.push(approvedOp(false));
     }
 
     if (query.hideVoted === "no_votes") {
-      ops.push({
-        applyFs: (q) => q.where("stats.votes.humanVoted", "==", false),
-        applyMem: (nodes) =>
-          nodes.filter((n) => n.stats?.votes?.humanVoted === false),
-      });
+      ops.push(humanVotedOp(false));
     } else if (query.hideVoted === "has_votes") {
-      ops.push({
-        applyFs: (q) => q.where("stats.votes.humanVoted", "==", true),
-        applyMem: (nodes) =>
-          nodes.filter((n) => n.stats?.votes?.humanVoted === true),
-      });
+      ops.push(humanVotedOp(true));
     }
 
-    if (query.sortBy) {
-      let sortField = query.sortBy;
-      if (sortField === "experience") {
-        sortField = user
-          ? "stats.edges.all.experienceMonths"
-          : "stats.edges.approved.experienceMonths";
-      } else if (sortField === "latestEmploymentStart") {
-        sortField = user
-          ? "stats.edges.all.latestEmploymentStart"
-          : "stats.edges.approved.latestEmploymentStart";
-      } else if (sortField === "notesCount") {
-        sortField = "stats.notesCount";
-      } else if (sortField === "factsCount") {
-        sortField = "stats.factsCount";
-      } else if (sortField === "visibility") {
-        sortField = "stats.isApproved";
-      } else if (sortField.startsWith("votes.")) {
-        sortField = `stats.votes.${sortField.split(".")[1]}`;
+    const sortOp = query.sortBy
+      ? buildSortOp(query.sortBy, query.sortDesc === "true", !!user)
+      : undefined;
+
+    let nodesArray: NodeRow[];
+    let total: number;
+    const indexed = ops.some((op) => op.memoryOnly)
+      ? null
+      : await readIndexedPage(db, ops, sortOp, query);
+    if (indexed) {
+      ({ rows: nodesArray, total } = indexed);
+    } else {
+      let rows = user ? undefined : publicLists.get(listKey(query));
+      if (!rows) {
+        const { docs } = await readMatching(db, ops, { label: "api/nodes" });
+        rows = docs.map(toNodeRow);
+        for (const op of ops) {
+          rows = op.applyMem(rows);
+        }
+        rows = rows.filter(notMergedAway);
+        // Signed-in readers read back their own votes and publications from
+        // these lists, so only the public ones are kept.
+        if (!user) publicLists.set(listKey(query), rows);
       }
-
-      const direction = query.sortDesc === "true" ? "desc" : "asc";
-      ops.push({
-        applyFs: (q) => q.orderBy(sortField, direction),
-        applyMem: (nodes) => {
-          return [...nodes].sort((a, b) => {
-            const getVal = (obj: any, path: string) =>
-              path.split(".").reduce((o, i) => o?.[i], obj);
-            const valA = getVal(a, sortField);
-            const valB = getVal(b, sortField);
-
-            if (valA === valB) return 0;
-            if (valA === undefined || valA === null)
-              return direction === "desc" ? 1 : -1;
-            if (valB === undefined || valB === null)
-              return direction === "desc" ? -1 : 1;
-
-            const res = valA > valB ? 1 : -1;
-            return direction === "desc" ? -res : res;
-          });
-        },
-      });
-    }
-
-    let executedSuccessfully = false;
-    const fsOps = [...ops];
-    const memOps: Op[] = [];
-    let snapshot: FirebaseFirestore.QuerySnapshot | null = null;
-    let total = 0;
-
-    while (!executedSuccessfully) {
-      try {
-        let fsQuery: FirebaseFirestore.Query = db.collection("nodes");
-        for (const op of fsOps) {
-          fsQuery = op.applyFs(fsQuery);
-        }
-
-        if (memOps.length === 0) {
-          const paginatedQuery = paginate(fsQuery, query);
-          const [snap, countSnap] = await Promise.all([
-            paginatedQuery.get(),
-            fsQuery.count().get(),
-          ]);
-          snapshot = snap;
-          total = countSnap.data().count;
-        } else {
-          snapshot = await fsQuery.get();
-        }
-        executedSuccessfully = true;
-      } catch (e: any) {
-        if (
-          e.code === 9 ||
-          (e.message && e.message.toLowerCase().includes("index"))
-        ) {
-          if (fsOps.length === 0) {
-            throw e;
-          }
-          const dropped = fsOps.pop();
-          if (dropped) {
-            memOps.unshift(dropped);
-          }
-        } else {
-          throw e;
-        }
+      if (sortOp) {
+        rows = sortOp.applyMem(rows);
       }
-    }
-
-    let nodesArray = snapshot!.docs.map((doc) => {
-      const data = dropSearchIndex(doc.data());
-      if (data.revision_id) {
-        if (typeof data.revision_id.path === "string") {
-          data.revision_id = data.revision_id.path;
-        } else if (
-          data.revision_id._path &&
-          Array.isArray(data.revision_id._path.segments)
-        ) {
-          data.revision_id = data.revision_id._path.segments.join("/");
-        }
-      }
-      return { id: doc.id, ...data, visibility: pageIsPublic(data) };
-    });
-
-    for (const op of memOps) {
-      nodesArray = op.applyMem(nodesArray);
-    }
-
-    // A page merged away keeps its document - `deleted: true`, `merged_into`,
-    // see server/utils/merge.ts - so its url still resolves and the votes and
-    // revisions filed against it still hang off something. `pageIsPublic` takes
-    // it off the public site, and that was assumed to be enough; it is not.
-    // `visibility=private` means `stats.isApproved == false`, which is exactly
-    // the bucket a tombstone falls into, so to a logged-in editor all 171
-    // people merged on 2026-08-31 were still rows in /eksploruj/tabela.
-    //
-    // In memory rather than in the query because Firestore cannot express it:
-    // `deleted` is absent on the other 15,597 nodes, so neither `== false` nor
-    // `!= true` matches them, and a mem-only op here would push the sort and
-    // every structural filter out of their indexes - reading all 8,277
-    // unpublished people to serve a page of ten. The price is that when the
-    // query did run indexed, the page can come back a row short and `total`
-    // still counts the tombstones. That is 171 in 8,277, which is the cheaper
-    // of the two errors by a wide margin.
-    nodesArray = nodesArray.filter(
-      (node) => (node as { deleted?: boolean }).deleted !== true,
-    );
-
-    if (memOps.length > 0) {
-      total = nodesArray.length;
+      total = rows.length;
       const page = query.page || 1;
-      const limit = query.limit || nodesArray.length;
+      const limit = query.limit || rows.length;
       const offset = (page - 1) * limit;
-      nodesArray = nodesArray.slice(offset, offset + limit);
+      nodesArray = rows.slice(offset, offset + limit);
     }
 
     const nodesRecord: Record<string, unknown> = {};

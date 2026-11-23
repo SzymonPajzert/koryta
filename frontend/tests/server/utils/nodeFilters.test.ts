@@ -194,29 +194,65 @@ describe("buildStructuralFilterOps, teryt filter", () => {
     expect(empty).toBe(true);
   });
 
-  it("runs in memory once the region set is too big for array-contains-any", async () => {
+  it("hands a region set too big for one array-contains-any to chunked queries", async () => {
     const { ops } = await buildStructuralFilterOps(
       db,
       { teryt: "14" },
       "approved",
     );
-    // Four regions sit in województwo 14, which fits Firestore's ten value
-    // limit, so the filter can still be pushed down.
+    // Four regions sit in województwo 14, which fits one query.
     expect(ops[0]!.applyFs(stubQuery())).toEqual({
       field: "stats.edges.approved.targetNodeIds",
       op: "array-contains-any",
       value: ["teryt14", "teryt1425", "teryt1465", "teryt1465011"],
     });
+    expect(ops[0]!.wide).toBeUndefined();
 
-    const many = Object.fromEntries(
-      Array.from({ length: 12 }, (_, i) => [
-        `teryt14${String(i).padStart(2, "0")}`,
-        { teryt: `14${String(i).padStart(2, "0")}`, name: `Powiat ${i}` },
-      ]),
+    const region = (i: number) => `14${String(i).padStart(2, "0")}`;
+    const many = (n: number) =>
+      Object.fromEntries(
+        Array.from({ length: n }, (_, i) => [
+          `teryt${region(i)}`,
+          { teryt: region(i), name: `Powiat ${i}` },
+        ]),
+      );
+
+    // Firestore takes 30 values in one array-contains-any.
+    mockFetchNodes.mockResolvedValue(many(30));
+    const fits = await buildStructuralFilterOps(
+      db,
+      { teryt: "14" },
+      "approved",
     );
-    mockFetchNodes.mockResolvedValue(many);
+    expect(fits.ops[0]!.wide).toBeUndefined();
+    expect(fits.ops[0]!.applyFs(stubQuery())).toMatchObject({
+      op: "array-contains-any",
+    });
+
+    mockFetchNodes.mockResolvedValue(many(31));
     const big = await buildStructuralFilterOps(db, { teryt: "14" }, "approved");
     expect(() => big.ops[0]!.applyFs(stubQuery())).toThrowError(/index/);
+    expect(big.ops[0]!.memoryOnly).toBe(true);
+    expect(big.ops[0]!.wide).toEqual({
+      field: "stats.edges.approved.targetNodeIds",
+      values: Object.keys(many(31)),
+    });
+  });
+
+  it("hands the region set to chunked queries when a party holds the array slot", async () => {
+    const { ops } = await buildStructuralFilterOps(
+      db,
+      { teryt: "14", parties: "PiS" },
+      "approved",
+    );
+    const teryt = ops.find((op) => op.name === "teryt")!;
+    expect(teryt.memoryOnly).toBe(true);
+    expect(teryt.wide?.values).toEqual([
+      "teryt14",
+      "teryt1425",
+      "teryt1465",
+      "teryt1465011",
+    ]);
   });
 
   it("honours the currentlyEmployed scope when filtering by województwo", async () => {
