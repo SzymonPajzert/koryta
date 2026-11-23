@@ -23,6 +23,8 @@ REGON_PUBLIC_IDENTITY = "REGON_PUBLIC_OWNERSHIP_ID"
 TREASURY_STAKE = "PROKURATORIA_SPOLKI_SKARBU_PANSTWA"
 #: A foundation or association a public body set up - see `PUBLIC_FOUNDERS`.
 PUBLIC_FOUNDER = "PUBLIC_FOUNDER"
+#: An association whose members are all public bodies - see `PUBLIC_MEMBERS`.
+PUBLIC_MEMBER = "PUBLIC_MEMBERS"
 
 #: Prokuratoria Generalna's "Wykaz spółek z udziałem Skarbu Państwa", as of
 #: 2026-06-30: dane.gov.pl dataset 1198, a new resource each quarter, CC BY 4.0.

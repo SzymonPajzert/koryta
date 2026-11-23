@@ -152,6 +152,25 @@ export default defineEventHandler(async (event) => {
   ) {
     revisionData.isPublic = body.is_public;
   }
+  // Whether a seat here is paid, with the reason, on the same terms: a person
+  // who read the statute outranks the pipelines. The empty string is the
+  // pipelines withdrawing an answer of their own, so it clears the pair.
+  if (
+    body.paid_seats !== undefined &&
+    revisionData.paidSeatsSource !== "manual"
+  ) {
+    if (body.paid_seats === "") {
+      delete revisionData.paidSeats;
+      delete revisionData.paidSeatsReason;
+    } else {
+      revisionData.paidSeats = body.paid_seats === "paid";
+      if (body.paid_seats_reason) {
+        revisionData.paidSeatsReason = body.paid_seats_reason;
+      } else {
+        delete revisionData.paidSeatsReason;
+      }
+    }
+  }
 
   const batch = db.batch();
   // `CompaniesPayloads` re-submits every company the site already has, and most

@@ -7,7 +7,7 @@ import { resolve } from "path";
 
 import { generateChunksLower } from "../shared/search";
 import { computeEdgeStats } from "../shared/stats";
-import { bodyIsPaidPost } from "../shared/companyBodies";
+import { unpaidSeatsByPlace, type SeatPay } from "../shared/companyBodies";
 import type { Edge } from "../shared/model";
 
 import nodes from "./nodes.json";
@@ -81,15 +81,15 @@ function edgeStatsBySource(
   nodesById: Record<string, Record<string, unknown>>,
   allEdges: Record<string, unknown>[],
 ): Record<string, ReturnType<typeof computeEdgeStats>> {
-  const publicPlaceIds = new Set<string>();
-  const unpaidSeatPlaceIds = new Set<string>();
-  for (const [id, node] of Object.entries(nodesById)) {
-    if (node.type !== "place") continue;
-    if (node.isPublic === true) publicPlaceIds.add(id);
-    if (!bodyIsPaidPost(node.supervisoryBody as string | undefined)) {
-      unpaidSeatPlaceIds.add(id);
-    }
-  }
+  const places = Object.entries(nodesById).filter(
+    ([, node]) => node.type === "place",
+  );
+  const publicPlaceIds = new Set(
+    places.filter(([, node]) => node.isPublic === true).map(([id]) => id),
+  );
+  const unpaidSeats = unpaidSeatsByPlace(
+    places.map(([id, node]) => [id, node as SeatPay] as const),
+  );
 
   // Keyed by target across the whole fixture rather than per source node, which
   // is the same thing to `computeEdgeStats` - it only ever looks up the targets
@@ -110,7 +110,7 @@ function edgeStatsBySource(
       allEdges.filter((e) => e.source === source) as unknown as Edge[],
       publicPlaceIds,
       transitiveTargets,
-      unpaidSeatPlaceIds,
+      unpaidSeats,
       source,
     );
   }

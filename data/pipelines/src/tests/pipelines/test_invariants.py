@@ -36,7 +36,11 @@ import zoneinfo
 
 import pytest
 
-from analysis.bip_people_of_interest import UNPAID_BODIES, names_a_supervisory_seat
+from analysis.bip_people_of_interest import (
+    UNPAID_BODIES,
+    names_a_supervisory_seat,
+    seat_answer,
+)
 from analysis.payloads.site import (
     DISTRICT_OFFICES,
     ELECTION_YEARS,
@@ -3086,12 +3090,15 @@ def test_a_party_list_a_person_pinned_is_changed_only_by_a_person(
 
 def paid_public_post(edge: dict, company: dict | None) -> bool:
     """`isPublicEmployment` in frontend/shared/stats.ts: an `employed` edge at a
-    company the register shows the public sector owns, and not a seat on an
-    organ nobody is paid to sit on."""
+    company the register shows the public sector owns, not at one whose statute
+    pays nobody, and not a seat on an organ nobody is paid to sit on."""
     if edge.get("type") != "employed" or not company:
         return False
     if company.get("isPublic") is not True:
         return False
+    paid = seat_answer(company.get("paidSeats"))
+    if paid is not None:
+        return paid
     unpaid = company.get("supervisoryBody") in UNPAID_BODIES
     return not (unpaid and names_a_supervisory_seat(edge.get("name")))
 

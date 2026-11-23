@@ -1,6 +1,11 @@
 import type { NodeStats, VoteDocument, Note, Edge } from "./model";
 import { pageIsPublic } from "./model";
-import { bodyIsPaidPost, namesASupervisorySeat } from "./companyBodies";
+import {
+  postIsPaid,
+  unpaidSeats as unpaidSeatsAt,
+  type SeatPay,
+  type UnpaidSeats,
+} from "./companyBodies";
 import {
   candidacyElection,
   electionResultKey,
@@ -274,25 +279,27 @@ export function computeVoteStats(
  * could establish is left out too, so these numbers are a floor rather than a
  * count. See `Company.isPublic` for why that gap exists.
  *
- * `unpaidSeatPlaceIds` takes out the seats that are not posts. A samodzielny
+ * `unpaidSeats` takes out the posts that are not jobs. A samodzielny
  * publiczny zakład opieki zdrowotnej is supervised by a rada społeczna, whose
  * members are delegates of the founding authority and are not paid for sitting
  * on it — so it is out for the same reason a private employer is, and 892 such
  * seats are stored across 238 hospitals. Which places those are is a claim
  * about the institution (`Company.supervisoryBody`); which of a person's edges
  * are seats on that organ rather than jobs at it is a claim about the role, so
- * both have to hold. See `shared/companyBodies.ts`.
+ * both have to hold. An institution whose statute pays nobody for any seat
+ * (`Company.paidSeats`) has every post taken out. See
+ * `shared/companyBodies.ts`.
  */
 function publicEmployment(
   edges: Edge[],
   publicPlaceIds: ReadonlySet<string>,
-  unpaidSeatPlaceIds: ReadonlySet<string>,
+  unpaidSeats: ReadonlyMap<string, UnpaidSeats>,
 ): Edge[] {
   return edges.filter(
     (e) =>
       e.type === "employed" &&
       publicPlaceIds.has(e.target) &&
-      !(unpaidSeatPlaceIds.has(e.target) && namesASupervisorySeat(e.name)),
+      postIsPaid(e.name, unpaidSeats.get(e.target)),
   );
 }
 
@@ -308,17 +315,16 @@ function publicEmployment(
  *
  * Both halves of the unpaid-seat claim have to hold, as above: what supervises
  * the institution (`Company.supervisoryBody`), and a role that names a seat on
- * that organ rather than a job at the place.
+ * that organ rather than a job at the place. Where the institution's own
+ * statute pays nobody (`Company.paidSeats`), no role there is a post.
  */
 export function isPublicEmployment(
   edge: Pick<Edge, "type" | "target" | "name">,
-  company: { isPublic?: boolean; supervisoryBody?: string } | undefined | null,
+  company: ({ isPublic?: boolean } & SeatPay) | undefined | null,
 ): boolean {
   if (edge.type !== "employed") return false;
   if (company?.isPublic !== true) return false;
-  return !(
-    !bodyIsPaidPost(company.supervisoryBody) && namesASupervisorySeat(edge.name)
-  );
+  return postIsPaid(edge.name, unpaidSeatsAt(company));
 }
 
 /** The general elections a node stood in, each once, in a stable order - see
@@ -363,11 +369,11 @@ export function computeEdgeStats(
   nodeEdges: Edge[],
   publicPlaceIds: ReadonlySet<string>,
   transitiveTargets: Record<string, string[]> = {},
-  /** Places whose supervisory organ is one nobody is paid to sit on. Defaults
-   * to none, so a caller that has not worked them out keeps the numbers it
-   * computed before this existed rather than silently dropping seats it cannot
-   * classify. */
-  unpaidSeatPlaceIds: ReadonlySet<string> = new Set(),
+  /** Places where some or all posts are not jobs (`unpaidSeatsByPlace`).
+   * Defaults to none, so a caller that has not worked them out keeps the
+   * numbers it computed before this existed rather than silently dropping
+   * seats it cannot classify. */
+  unpaidSeats: ReadonlyMap<string, UnpaidSeats> = new Map(),
   /** The node these are the edges of, so its elections count only the
    * candidacies it stood in - see `candidacyElections`. */
   nodeId?: string,
@@ -385,15 +391,11 @@ export function computeEdgeStats(
   const liveEdges = nodeEdges.filter((e) => e.deleted !== true);
 
   const approvedEdges = liveEdges.filter((e) => pageIsPublic(e));
-  const publicEdges = publicEmployment(
-    liveEdges,
-    publicPlaceIds,
-    unpaidSeatPlaceIds,
-  );
+  const publicEdges = publicEmployment(liveEdges, publicPlaceIds, unpaidSeats);
   const publicApprovedEdges = publicEmployment(
     approvedEdges,
     publicPlaceIds,
-    unpaidSeatPlaceIds,
+    unpaidSeats,
   );
 
   const allTargetNodeIds = [
@@ -472,7 +474,7 @@ export function computeNodeStats(
   nodeVotes: VoteDocument[],
   publicPlaceIds: ReadonlySet<string>,
   transitiveTargets: Record<string, string[]> = {},
-  unpaidSeatPlaceIds: ReadonlySet<string> = new Set(),
+  unpaidSeats: ReadonlyMap<string, UnpaidSeats> = new Map(),
   /** Extracted facts matched to this node, counted by the caller - the facts
    * live in a collection this module never reads. Zero rather than absent when
    * there are none: the field has to be on the document for `orderBy
@@ -493,7 +495,7 @@ export function computeNodeStats(
       nodeEdges,
       publicPlaceIds,
       transitiveTargets,
-      unpaidSeatPlaceIds,
+      unpaidSeats,
       nodeId,
     ),
   };

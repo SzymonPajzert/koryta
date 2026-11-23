@@ -324,6 +324,37 @@ def day_of(value: typing.Any) -> str | None:
     return text or None
 
 
+#: Stored yes-or-no fields whose `false` is an answer rather than the unset
+#: `field` reads it as: `paidSeats` false says nobody is paid for a seat.
+ANSWER_FIELDS = frozenset({"paidSeats"})
+
+
+def _answer(value: typing.Any) -> bool | None:
+    """A stored yes or no, where absent and NaN are no answer and `false` is
+    one: unlike `field`, which reads `false` as unset."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    return bool(value)
+
+
+def _pay_changes(
+    data: typing.Mapping[str, typing.Any], payload: typing.Mapping[str, typing.Any]
+) -> bool:
+    """Whether the payload's answer on pay would change the node: the ingest
+    leaves a person's answer alone, reads "" as a deletion of the answer and
+    its reason, and absent as no answer, which `false` is not."""
+    paid = payload.get("paid_seats")
+    if paid is None or data.get("paidSeatsSource") == "manual":
+        return False
+    if paid == "":
+        return _answer(data.get("paidSeats")) is not None or bool(
+            data.get("paidSeatsReason")
+        )
+    return _answer(data.get("paidSeats")) != (paid == "paid") or (
+        data.get("paidSeatsReason") or ""
+    ) != (payload.get("paid_seats_reason") or "")
+
+
 def field(edge: typing.Mapping[str, typing.Any], name: str) -> typing.Any:
     """One writer's "unset" read as another's.
 
@@ -630,7 +661,17 @@ def _records(df: pd.DataFrame) -> list[dict]:
     records = []
     for raw in df.to_dict(orient="records"):
         row = {str(key): value for key, value in raw.items()}
-        records.append({k: v for k, v in row.items() if field(row, k) is not None})
+        records.append(
+            {
+                k: v
+                for k, v in row.items()
+                if (
+                    _answer(v) is not None
+                    if k in ANSWER_FIELDS
+                    else field(row, k) is not None
+                )
+            }
+        )
     return sorted(records, key=lambda record: str(record.get("id", "")))
 
 
@@ -1192,7 +1233,7 @@ class SiteSnapshot:
                     return True
             elif current != value:
                 return True
-        return False
+        return _pay_changes(data, payload)
 
     def _owner_changes(
         self, company_id: str, payload: typing.Mapping[str, typing.Any]

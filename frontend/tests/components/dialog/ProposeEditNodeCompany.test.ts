@@ -119,3 +119,58 @@ describe("DialogProposeEditNode on a company", () => {
     });
   });
 });
+
+describe("DialogProposeEditNode on whether a company's seats are paid", () => {
+  /** A union of powiaty the pipelines answered from its statute. */
+  const zpp = () => ({
+    id: "zpp",
+    type: "place",
+    name: "Związek Powiatów Polskich",
+    krsNumber: "0000094303",
+    isPublic: true,
+    paidSeats: false,
+    paidSeatsReason: "Statut, § 12 ust. 2: funkcje pełnione honorowo",
+  });
+
+  const reasonField = () =>
+    overlay()?.querySelector<HTMLTextAreaElement>(
+      '[data-testid="paid-seats-reason"] textarea',
+    );
+
+  it("brings the stored answer and its reason", async () => {
+    const wrapper = await mount(zpp());
+    await open(wrapper);
+
+    expect(select("Wynagrodzenie za funkcje").textContent).toContain(
+      "Bez wynagrodzenia",
+    );
+    expect(reasonField()?.value).toBe(
+      "Statut, § 12 ust. 2: funkcje pełnione honorowo",
+    );
+  });
+
+  it("sends the answer back unchanged on an edit of something else", async () => {
+    // The server pins it as a person's answer only when it changed.
+    const wrapper = await mount(zpp());
+    await open(wrapper);
+
+    await submit();
+
+    expect(sent()).toMatchObject({
+      node_id: "zpp",
+      paidSeats: false,
+      paidSeatsReason: "Statut, § 12 ust. 2: funkcje pełnione honorowo",
+    });
+  });
+
+  it("leaves an unanswered company unanswered", async () => {
+    const wrapper = await mount(pge());
+    await open(wrapper);
+
+    expect(reasonField()).toBeNull();
+    await submit();
+
+    expect(sent()).not.toHaveProperty("paidSeats");
+    expect(sent()).not.toHaveProperty("paidSeatsReason");
+  });
+});

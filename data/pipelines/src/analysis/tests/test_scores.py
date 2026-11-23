@@ -1,5 +1,6 @@
 """The scoring models, and the shared rules about who is worth scoring."""
 
+import dataclasses
 import datetime
 
 import pandas as pd
@@ -21,7 +22,7 @@ from analysis.scores import base as scores_base
 from analysis.scores.base import (
     FULL_RANGE,
     QUEUE_THRESHOLD,
-    RADA_SPOLECZNA_ONLY_CEILING,
+    UNPAID_SEATS_ONLY_CEILING,
     Candidacy,
     CompanyFacts,
     Employment,
@@ -29,7 +30,7 @@ from analysis.scores.base import (
     Population,
     ScoreRange,
     banded_scores,
-    demote_rada_spoleczna_only,
+    demote_unpaid_seats_only,
     person_key,
     rejestr_io_id,
 )
@@ -310,17 +311,17 @@ class TestRadaSpolecznaCeiling:
 
     def held(self, posts, scores):
         pop = population(posts, seeds={}, companies=self.COMPANIES)
-        return demote_rada_spoleczna_only(scores, pop)
+        return demote_unpaid_seats_only(scores, pop)
 
     def test_the_ceiling_is_under_the_queue(self):
-        assert RADA_SPOLECZNA_ONLY_CEILING is not None
-        assert RADA_SPOLECZNA_ONLY_CEILING < QUEUE_THRESHOLD
+        assert UNPAID_SEATS_ONLY_CEILING is not None
+        assert UNPAID_SEATS_ONLY_CEILING < QUEUE_THRESHOLD
 
     def test_a_seat_on_a_rada_spoleczna_alone_is_held_under_the_queue(self):
         posts = {"Anna": [self.post("hospital")], "Beata": [self.post("hospital")]}
 
         assert self.held(posts, {"Anna": 5, "Beata": 1}) == {
-            "Anna": RADA_SPOLECZNA_ONLY_CEILING,
+            "Anna": UNPAID_SEATS_ONLY_CEILING,
             "Beata": 1,
         }
 
@@ -337,7 +338,7 @@ class TestRadaSpolecznaCeiling:
     def test_a_post_nobody_showed_to_be_public_does_not(self):
         posts = {"Anna": [self.post("hospital"), self.post("club", role="Zarząd")]}
 
-        assert self.held(posts, {"Anna": 5}) == {"Anna": RADA_SPOLECZNA_ONLY_CEILING}
+        assert self.held(posts, {"Anna": 5}) == {"Anna": UNPAID_SEATS_ONLY_CEILING}
 
     def test_a_spolkas_supervisory_board_is_not_a_rada_spoleczna(self):
         posts = {"Anna": [self.post("spolka")], "Beata": [self.post("unknown")]}
@@ -345,7 +346,7 @@ class TestRadaSpolecznaCeiling:
         assert self.held(posts, {"Anna": 5, "Beata": 4}) == {"Anna": 5, "Beata": 4}
 
     def test_the_rule_turns_off(self, monkeypatch):
-        monkeypatch.setattr(scores_base, "RADA_SPOLECZNA_ONLY_CEILING", None)
+        monkeypatch.setattr(scores_base, "UNPAID_SEATS_ONLY_CEILING", None)
         posts = {"Anna": [self.post("hospital")]}
 
         assert self.held(posts, {"Anna": 5}) == {"Anna": 5}
@@ -364,9 +365,39 @@ class TestRadaSpolecznaCeiling:
 
         # Turnover is floored at the queue: Anna's 5 is held under it.
         assert dict(zip(output["name"], output["score"])) == {
-            "Anna": RADA_SPOLECZNA_ONLY_CEILING,
+            "Anna": UNPAID_SEATS_ONLY_CEILING,
             "Beata": QUEUE_THRESHOLD,
         }
+
+    def test_a_post_where_the_statute_pays_nobody_alone_is_held(self):
+        companies = {
+            **self.COMPANIES,
+            "zwiazek": CompanyFacts(
+                name="Związek gmin", teryt="1465", is_public=True, paid_seats=False
+            ),
+        }
+        posts = {
+            "Anna": [self.post("zwiazek", role="Zarząd")],
+            "Beata": [self.post("zwiazek", role="Zarząd"), self.post("spolka")],
+        }
+        pop = population(posts, seeds={}, companies=companies)
+
+        assert demote_unpaid_seats_only({"Anna": 5, "Beata": 5}, pop) == {
+            "Anna": UNPAID_SEATS_ONLY_CEILING,
+            "Beata": 5,
+        }
+
+    def test_a_rada_spoleczna_its_statute_pays_is_not_held(self):
+        companies = {
+            "hospital": dataclasses.replace(
+                self.COMPANIES["hospital"], paid_seats=True
+            ),
+        }
+        pop = population(
+            {"Anna": [self.post("hospital")]}, seeds={}, companies=companies
+        )
+
+        assert demote_unpaid_seats_only({"Anna": 5}, pop) == {"Anna": 5}
 
     def test_the_legal_form_is_read_off_the_register(self):
         scorer = model(PeopleScoresCapture)
@@ -400,7 +431,7 @@ class TestRadaSpolecznaCeiling:
 
         assert result.companies["0000000001"].supervisory_body == RADA_SPOLECZNA
         assert result.companies["0000000002"].supervisory_body == ""
-        assert result.holds_only_rada_spoleczna_seats("Anna")
+        assert result.holds_only_unpaid_seats("Anna")
 
 
 class TestPagesCreatedSinceTheExport:
@@ -1296,8 +1327,9 @@ class TestArticlePoints:
     """What one article is worth, given the facts it carries."""
 
     def test_the_strongest_fact_decides_the_article(self):
-        assert article_points(["affair_involvement"]) == (
-            FACT_TYPE_POINTS["affair_involvement"]
+        assert (
+            article_points(["affair_involvement"])
+            == (FACT_TYPE_POINTS["affair_involvement"])
         )
         # The affair decides it; the party membership only adds the extra-fact
         # increment on top.

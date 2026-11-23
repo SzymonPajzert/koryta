@@ -7,6 +7,9 @@ import {
   namesASupervisorySeat,
   supervisoryOrganTitle,
   displayRole,
+  unpaidSeats,
+  postIsPaid,
+  unpaidSeatsByPlace,
 } from "../../shared/companyBodies";
 
 /** This module is the site's *vocabulary* of supervisory organs.
@@ -67,6 +70,61 @@ describe("bodyIsPaidPost", () => {
     expect(bodyIsPaidPost(null)).toBe(true);
     expect(bodyIsPaidPost("")).toBe(true);
     expect(bodyIsPaidPost("komisja-rewizyjna")).toBe(true);
+  });
+});
+
+describe("unpaidSeats", () => {
+  it("takes out every post where the statute pays nobody", () => {
+    expect(unpaidSeats({ paidSeats: false })).toBe("all");
+    expect(
+      unpaidSeats({ paidSeats: false, supervisoryBody: "rada-spoleczna" }),
+    ).toBe("all");
+  });
+
+  it("keeps every post where the statute pays, a rada społeczna's too", () => {
+    expect(
+      unpaidSeats({ paidSeats: true, supervisoryBody: "rada-spoleczna" }),
+    ).toBe(undefined);
+  });
+
+  it("falls back to the legal form's rule where nobody has said", () => {
+    expect(unpaidSeats({ supervisoryBody: "rada-spoleczna" })).toBe(
+      "supervisory",
+    );
+    expect(unpaidSeats({ supervisoryBody: "rada-nadzorcza" })).toBe(undefined);
+    expect(unpaidSeats({})).toBe(undefined);
+    expect(unpaidSeats(undefined)).toBe(undefined);
+  });
+});
+
+describe("postIsPaid", () => {
+  it("drops any role where every post is unpaid", () => {
+    expect(postIsPaid("Zarząd", "all")).toBe(false);
+    expect(postIsPaid("Rada Nadzorcza", "all")).toBe(false);
+  });
+
+  it("drops only the organ's seats where only those are", () => {
+    expect(postIsPaid("Rada Nadzorcza", "supervisory")).toBe(false);
+    expect(postIsPaid("Zarząd", "supervisory")).toBe(true);
+  });
+
+  it("keeps everything elsewhere", () => {
+    expect(postIsPaid("Rada Nadzorcza", undefined)).toBe(true);
+  });
+});
+
+describe("unpaidSeatsByPlace", () => {
+  it("lists only the places with an unpaid post", () => {
+    const found = unpaidSeatsByPlace([
+      ["szpital", { supervisoryBody: "rada-spoleczna" }],
+      ["zwiazek", { paidSeats: false }],
+      ["spolka", {}],
+      ["placeless", undefined],
+    ]);
+    expect([...found]).toEqual([
+      ["szpital", "supervisory"],
+      ["zwiazek", "all"],
+    ]);
   });
 });
 

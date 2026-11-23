@@ -58,7 +58,7 @@ export async function pagesWithAPublicPost(
   await inParallel(chunksOf(targets, 100), IN_PARALLEL, async (chunk) => {
     const snapshots = await db.getAll(
       ...chunk.map((id) => db.collection("nodes").doc(id)),
-      { fieldMask: ["isPublic", "supervisoryBody"] },
+      { fieldMask: ["isPublic", "supervisoryBody", "paidSeats"] },
     );
     for (const snapshot of snapshots) {
       if (snapshot.exists) companies.set(snapshot.id, snapshot.data() ?? {});

@@ -443,6 +443,45 @@ def test_a_public_post_is_a_paid_one_at_a_public_company():
     }
 
 
+def test_no_post_counts_where_the_statute_pays_nobody():
+    # A union of gminas whose statute pays nobody, and a hospital whose statute
+    # pays its rada społeczna: the export leaves `paidSeats` NaN elsewhere.
+    nodes = pd.concat(
+        [
+            site_nodes(),
+            pd.DataFrame(
+                [
+                    {
+                        "id": "zwiazek",
+                        "type": "place",
+                        "isPublic": True,
+                        "supervisoryBody": None,
+                        "paidSeats": False,
+                    },
+                    {
+                        "id": "szpital-platny",
+                        "type": "place",
+                        "isPublic": True,
+                        "supervisoryBody": "rada-spoleczna",
+                        "paidSeats": True,
+                    },
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    edges = pd.DataFrame(
+        [
+            job("mayor", "zwiazek", name="Zarząd"),
+            job("auditor", "zwiazek", name="Rada Nadzorcza"),
+            job("paid-council", "szpital-platny", name="Rada Społeczna"),
+            job("unpaid", "szpital", name="Członek Rady Społecznej"),
+            job("ended", "spolka"),
+        ]
+    )
+    assert pages_with_a_public_post(nodes, edges) == {"paid-council", "ended"}
+
+
 def test_flags_read_off_disk_as_numbers_and_text():
     nodes = site_nodes().astype({"isPublic": object})
     nodes.loc[nodes.id == "spolka", "isPublic"] = "True"
