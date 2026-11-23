@@ -381,7 +381,11 @@ export default defineEventHandler(async (event) => {
         nodes: nodesRecord,
         total,
         matched,
-        matchedPlaces: await placeNames(Object.values(matched).flat(), !!user),
+        matchedPlaces: await placeNames(
+          db,
+          Object.values(matched).flat(),
+          !!user,
+        ),
       };
     }
 

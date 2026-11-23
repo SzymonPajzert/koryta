@@ -3,7 +3,7 @@
 
 import { applyPartiesFilter, fetchNodes } from "~~/server/utils/fetch";
 import { ARRAY_ANY_LIMIT } from "~~/server/utils/nodeScan";
-import { asArray } from "~~/shared/model";
+import { asArray, pageIsPublic } from "~~/shared/model";
 import { isInWojewodztwo, isWojewodztwoTeryt } from "~~/shared/teryt";
 import { electionResultKey, type ElectionResult } from "~~/shared/electionDays";
 
@@ -476,15 +476,27 @@ export function matchedTargets(
  * that brought them in, and needs the name to do it. Region ids are skipped,
  * and so are drafts for a reader who may not see them. */
 export async function placeNames(
+  db: FirebaseFirestore.Firestore,
   ids: string[],
   showDrafts: boolean,
 ): Promise<Record<string, string>> {
-  const places = await fetchNodes("place");
+  // Read by id, the few a page names: the whole place list is 11,985
+  // documents, and a fresh instance read it for the first list it served,
+  // 743k reads on 2026-11-23 alone. Region ids are never places.
+  const wanted = [...new Set(ids)].filter((id) => !id.startsWith("teryt"));
+  if (wanted.length === 0) return {};
+  const snapshots = await db.getAll(
+    ...wanted.map((id) => db.collection("nodes").doc(id)),
+    { fieldMask: ["type", "name", "published", "deleted"] },
+  );
   const names: Record<string, string> = {};
-  for (const id of new Set(ids)) {
-    const place = places[id];
-    if (!place?.name || (!showDrafts && !place.visibility)) continue;
-    names[id] = place.name;
+  for (const snapshot of snapshots) {
+    const place = snapshot.data();
+    if (place?.type !== "place" || typeof place.name !== "string") continue;
+    // Merged away is gone for every reader, as `fetchNodes` has it.
+    if (place.deleted === true) continue;
+    if (!showDrafts && !pageIsPublic(place)) continue;
+    names[snapshot.id] = place.name;
   }
   return names;
 }
