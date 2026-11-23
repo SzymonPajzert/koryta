@@ -521,7 +521,10 @@ STEPS = (
     # Nothing to do on most nights, a few git calls. The first night after it
     # landed rebuilds all six, PeoplePKW perhaps after downloading PKW's files.
     Step("rebuild_held", "stałe potoki", 30),
-    Step("reprocess", "potoki", 150),
+    # 68 to 100 minutes on most nights. Re-parsing every stored odpis, after
+    # any change to the code `parser_version` reads, adds about 70 (decision on
+    # 2026-11-23).
+    Step("reprocess", "potoki", 210),
     Step("tests", "testy", 45),
     Step("outputs", "wyniki", 20),
     Step("invariants", "niezmienniki", 30),
