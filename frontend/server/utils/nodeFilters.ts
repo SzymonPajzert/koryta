@@ -2,6 +2,7 @@
 // TODO remove this and fix the typing
 
 import { applyPartiesFilter, fetchNodes } from "~~/server/utils/fetch";
+import { ARRAY_ANY_LIMIT } from "~~/server/utils/nodeScan";
 import { asArray } from "~~/shared/model";
 import { isInWojewodztwo, isWojewodztwoTeryt } from "~~/shared/teryt";
 import { electionResultKey, type ElectionResult } from "~~/shared/electionDays";
@@ -26,6 +27,17 @@ export type NodeFilterOp = {
    * the projection reads back as undefined and the filter silently drops
    * everything. Callers that fetch whole documents can ignore it. */
   fields?: string[];
+  /** What the op filters on, for the logs. */
+  name?: string;
+  /** `applyFs` always throws: the op runs in memory only. */
+  memoryOnly?: boolean;
+  /** An equality filter that goes into every query `readMatching` makes,
+   * including each of the chunked ones: the type, and whether published. */
+  base?: boolean;
+  /** An array-contains-any too wide for one query, which `readMatching` asks
+   * as several queries of `ARRAY_ANY_LIMIT` values instead of reading the
+   * whole type. */
+  wide?: { field: string; values: string[] };
 };
 
 export type StructuralQuery = {
@@ -92,6 +104,7 @@ function memOnly(applyMem: NodeFilterOp["applyMem"]): NodeFilterOp {
       throw new Error("index: filter not supported in Firestore query");
     },
     applyMem,
+    memoryOnly: true,
   };
 }
 
@@ -135,6 +148,8 @@ export async function buildStructuralFilterOps(
       applyFs: (q) => q.where("type", "==", query.type),
       applyMem: (nodes) => nodes.filter((n) => n.type === query.type),
       fields: ["type"],
+      name: "type",
+      base: true,
     });
   }
 
@@ -162,6 +177,7 @@ export async function buildStructuralFilterOps(
           return false;
         }),
       fields: ["parties"],
+      name: "parties",
     });
   }
 
@@ -219,7 +235,10 @@ export async function buildStructuralFilterOps(
     if (placeIds.length === 0) {
       return result(true);
     }
-    ops.push(targetNodesOp(placeIds, query, edgeScope, arrayFilterUsed));
+    ops.push({
+      ...targetNodesOp(placeIds, query, edgeScope, arrayFilterUsed),
+      name: "place",
+    });
     targetIds = placeIds;
     arrayFilterUsed = true;
   }
@@ -229,7 +248,10 @@ export async function buildStructuralFilterOps(
     if (regionIds.length === 0) {
       return result(true);
     }
-    ops.push(targetNodesOp(regionIds, query, edgeScope, arrayFilterUsed));
+    ops.push({
+      ...targetNodesOp(regionIds, query, edgeScope, arrayFilterUsed),
+      name: "teryt",
+    });
     targetIds = [...(targetIds ?? []), ...regionIds];
     // Every op that consumes the array-filter slot has to claim it, or the
     // next filter below - the election - reads a stale false.
@@ -245,6 +267,7 @@ export async function buildStructuralFilterOps(
           (n) => n.stats?.edges?.[edgeScope]?.currentlyEmployed === true,
         ),
       fields: [field],
+      name: "currentlyEmployed",
     });
   }
 
@@ -259,6 +282,7 @@ export async function buildStructuralFilterOps(
           return typeof val === "string" && val >= minDate;
         }),
       fields: [field],
+      name: "minEmploymentDate",
     });
   }
 
@@ -269,6 +293,7 @@ export async function buildStructuralFilterOps(
       applyMem: (nodes) =>
         nodes.filter((n) => (n.stats?.votes?.interesting ?? 0) >= minVotes),
       fields: ["stats.votes.interesting"],
+      name: "minVotes",
     });
   }
 
@@ -283,6 +308,7 @@ export async function buildStructuralFilterOps(
       applyMem: (nodes) =>
         nodes.filter((n) => n.stats?.queueTier === queueTier),
       fields: ["stats.queueTier"],
+      name: "queueTier",
     });
   }
 
@@ -308,12 +334,13 @@ export async function buildStructuralFilterOps(
     // offers fit, and picking every one of them never reads each person into
     // memory to compare.
     ops.push(
-      arrayFilterUsed || elections.length > 30
-        ? { ...memOnly(applyMem), fields: [field] }
+      arrayFilterUsed || elections.length > ARRAY_ANY_LIMIT
+        ? { ...memOnly(applyMem), fields: [field], name: "election" }
         : {
             applyFs: (q) => q.where(field, "array-contains-any", elections),
             applyMem,
             fields: [field],
+            name: "election",
           },
     );
     // Nothing reads this today, but every op that consumes the array-filter
@@ -469,17 +496,24 @@ function targetNodesOp(
   edgeScope: "all" | "approved",
   arrayFilterUsed: boolean,
 ): NodeFilterOp {
+  const wanted = new Set(placeIds);
   const applyMem = (nodes: any[]) =>
     nodes.filter((n) =>
       memTargets(n, edgeScope, query.currentlyEmployed).some((id) =>
-        placeIds.includes(id),
+        wanted.has(id),
       ),
     );
   const arrayField = edgeTargetsField(edgeScope, query.currentlyEmployed);
 
-  // array-contains-any accepts at most 10 values
-  if (arrayFilterUsed || placeIds.length > 10) {
-    return { ...memOnly(applyMem), fields: [arrayField] };
+  // A województwo is 48-144 regions and a sector up to 1,254 companies, so
+  // most of these do not fit one query. `readMatching` asks them in chunks:
+  // the people of one województwo rather than every person.
+  if (arrayFilterUsed || placeIds.length > ARRAY_ANY_LIMIT) {
+    return {
+      ...memOnly(applyMem),
+      fields: [arrayField],
+      wide: { field: arrayField, values: placeIds },
+    };
   }
   return {
     applyFs: (q) => q.where(arrayField, "array-contains-any", placeIds),
