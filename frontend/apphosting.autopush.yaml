@@ -2,7 +2,7 @@
 # time with this file winning. App Hosting picks it by the backend's
 # *environment name*, not by its id, so it does nothing until that name is set
 # to `autopush` (console: App Hosting > autopush > Settings > Environment).
-# prod keeps the base file's 1 GiB for as long as its own name is not this one.
+# prod keeps the base file's 2 GiB for as long as its own name is not this one.
 #
 # More memory because POST /api/stats/computeNodes holds the whole database in
 # memory: 942 MB peak RSS against the 2026-09-23 export, and it dies on a
