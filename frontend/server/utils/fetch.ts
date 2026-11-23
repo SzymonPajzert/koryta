@@ -9,6 +9,7 @@ import {
   pageIsPublic,
 } from "~~/shared/model";
 import { candidacyDay } from "~~/shared/electionDays";
+import { isWojewodztwoMarker } from "~~/shared/teryt";
 import { getFirestore, Filter } from "firebase-admin/firestore";
 import { z } from "zod";
 
@@ -110,8 +111,13 @@ export function dropSearchIndex(
 /** How many ids a stored list holds, read tolerantly: `sanitizeFirestoreData`
  * stores a list written from inside another as a map with numbered keys. */
 function idCount(value: unknown): number {
-  if (Array.isArray(value)) return value.length;
-  return value && typeof value === "object" ? Object.keys(value).length : 0;
+  const ids = Array.isArray(value)
+    ? value
+    : value && typeof value === "object"
+      ? Object.values(value)
+      : [];
+  // The województwo markers are not something a node is tied to.
+  return ids.filter((id) => !isWojewodztwoMarker(id)).length;
 }
 
 /** A node document as somebody who may not see drafts is to be shown it: its

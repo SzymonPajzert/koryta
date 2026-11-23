@@ -1,3 +1,5 @@
+import { isWojewodztwoMarker } from "~~/shared/teryt";
+
 /** The part of a node's stats the "log in to see more" banner reads, typed to
  * what either kind of reader is actually sent. */
 type EdgeStatsLike = {
@@ -23,5 +25,8 @@ export function hiddenTargetCount(stats: EdgeStatsLike | undefined): number {
   const all = edges?.all?.targetNodeIds;
   const approved = edges?.approved?.targetNodeIds;
   if (!all || !approved) return 0;
-  return Math.max(0, all.length - approved.length);
+  // The województwo markers are not something a node is tied to.
+  const count = (ids: unknown[]) =>
+    ids.filter((id) => !isWojewodztwoMarker(id)).length;
+  return Math.max(0, count(all) - count(approved));
 }

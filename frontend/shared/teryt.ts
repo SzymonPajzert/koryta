@@ -5,6 +5,30 @@
  * powiat's code always starts with its województwo's code.
  */
 
+/** What a target list names a województwo by: `woj:14`. */
+export const WOJEWODZTWO_MARKER = "woj:";
+
+/** `ids`, and after them the województwo of every region among them as a
+ * marker, `woj:14`, so that one array-contains finds the people of a
+ * województwo where its 48-144 regions take several queries (decision on
+ * 2026-11-23). The code comes off the id, so no lookup is needed: all 1,389
+ * region nodes on the 2026-11-23 export follow the rule above. A marker rather
+ * than the województwo's own node id, so that what counts the ids a node is
+ * tied to (`hiddenTargets`) does not count it. */
+export function withWojewodztwa(ids: string[]): string[] {
+  const markers = new Set<string>();
+  for (const id of ids) {
+    const code = /^teryt(\d{2})/.exec(id)?.[1];
+    if (code) markers.add(`${WOJEWODZTWO_MARKER}${code}`);
+  }
+  return markers.size === 0 ? ids : [...ids, ...markers];
+}
+
+/** A `withWojewodztwa` marker rather than a node id. */
+export function isWojewodztwoMarker(id: unknown): boolean {
+  return typeof id === "string" && id.startsWith(WOJEWODZTWO_MARKER);
+}
+
 export function isWojewodztwoTeryt(teryt: string): boolean {
   return /^\d{2}$/.test(teryt);
 }

@@ -1,0 +1,1 @@
+../../shared/teryt.ts

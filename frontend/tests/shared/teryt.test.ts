@@ -7,7 +7,45 @@ import {
   regionFilterOptions,
   powiatOf,
   terytCoversPowiat,
+  withWojewodztwa,
+  isWojewodztwoMarker,
 } from "../../shared/teryt";
+
+describe("withWojewodztwa", () => {
+  it("adds the województwo of every region, each once, after the ids", () => {
+    expect(
+      withWojewodztwa([
+        "company",
+        "teryt1465",
+        "teryt1465011",
+        "teryt1261",
+        "teryt14",
+      ]),
+    ).toEqual([
+      "company",
+      "teryt1465",
+      "teryt1465011",
+      "teryt1261",
+      "teryt14",
+      "woj:14",
+      "woj:12",
+    ]);
+  });
+
+  it("leaves a list with no region as it was", () => {
+    const ids = ["company", "person"];
+    expect(withWojewodztwa(ids)).toBe(ids);
+    expect(withWojewodztwa([])).toEqual([]);
+  });
+});
+
+describe("isWojewodztwoMarker", () => {
+  it("tells a marker from a node id", () => {
+    expect(isWojewodztwoMarker("woj:14")).toBe(true);
+    expect(isWojewodztwoMarker("teryt14")).toBe(false);
+    expect(isWojewodztwoMarker(14)).toBe(false);
+  });
+});
 
 describe("isWojewodztwoTeryt", () => {
   it("accepts two digit codes only", () => {

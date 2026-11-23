@@ -266,6 +266,45 @@ describe("shared/stats.ts", () => {
       expect(stats.approved.targetNodeIds).toEqual(["node2", "node4"]);
     });
 
+    it("names the województwo of every region a node is tied to, in each list", () => {
+      const edges: Edge[] = [
+        // A run in Warsaw, published, and a hidden one in Kraków.
+        { target: "teryt1465", type: "election", published: true } as Edge,
+        { target: "teryt1261", type: "election" } as Edge,
+        // A current job at a company seated in a Radom gmina.
+        {
+          target: "company1",
+          type: "employed",
+          published: true,
+          start_date: "2020-01-01",
+        } as Edge,
+      ];
+
+      const stats = computeEdgeStats(edges, new Set(["company1"]), {
+        company1: ["teryt1425011"],
+      });
+
+      expect(stats.all.targetNodeIds).toEqual([
+        "teryt1465",
+        "teryt1261",
+        "company1",
+        "teryt1425011",
+        "woj:14",
+        "woj:12",
+      ]);
+      expect(stats.approved.targetNodeIds).toEqual([
+        "teryt1465",
+        "company1",
+        "teryt1425011",
+        "woj:14",
+      ]);
+      expect(stats.approved.currentlyEmployedTargetNodeIds).toEqual([
+        "company1",
+        "teryt1425011",
+        "woj:14",
+      ]);
+    });
+
     it("should include transitive targets for companies", () => {
       const edges: Edge[] = [
         { target: "company1", type: "employed", published: true } as Edge,

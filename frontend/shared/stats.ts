@@ -1,5 +1,6 @@
 import type { NodeStats, VoteDocument, Note, Edge } from "./model";
 import { pageIsPublic } from "./model";
+import { withWojewodztwa } from "./teryt";
 import { bodyIsPaidPost, namesASupervisorySeat } from "./companyBodies";
 import {
   candidacyElection,
@@ -396,23 +397,27 @@ export function computeEdgeStats(
     unpaidSeatPlaceIds,
   );
 
-  const allTargetNodeIds = [
-    ...new Set(
-      liveEdges.flatMap((e) => [
-        e.target,
-        ...(transitiveTargets[e.target] || []),
-      ]),
-    ),
-  ].filter(Boolean);
+  const allTargetNodeIds = withWojewodztwa(
+    [
+      ...new Set(
+        liveEdges.flatMap((e) => [
+          e.target,
+          ...(transitiveTargets[e.target] || []),
+        ]),
+      ),
+    ].filter(Boolean),
+  );
 
-  const approvedTargetNodeIds = [
-    ...new Set(
-      approvedEdges.flatMap((e) => [
-        e.target,
-        ...(transitiveTargets[e.target] || []),
-      ]),
-    ),
-  ].filter(Boolean);
+  const approvedTargetNodeIds = withWojewodztwa(
+    [
+      ...new Set(
+        approvedEdges.flatMap((e) => [
+          e.target,
+          ...(transitiveTargets[e.target] || []),
+        ]),
+      ),
+    ].filter(Boolean),
+  );
 
   // Which companies this node is the registered seat of, kept apart from
   // `targetNodeIds` because that list is type-blind and now mixes two claims: a
@@ -435,13 +440,18 @@ export function computeEdgeStats(
       targetNodeIds: allTargetNodeIds,
       seatNodeIds: seatTargets(liveEdges),
       currentlyEmployed: calculateCurrentlyEmployed(publicEdges),
-      currentlyEmployedTargetNodeIds: [
-        ...new Set(
-          publicEdges
-            .filter((e) => calculateCurrentlyEmployed([e]))
-            .flatMap((e) => [e.target, ...(transitiveTargets[e.target] || [])]),
-        ),
-      ].filter(Boolean),
+      currentlyEmployedTargetNodeIds: withWojewodztwa(
+        [
+          ...new Set(
+            publicEdges
+              .filter((e) => calculateCurrentlyEmployed([e]))
+              .flatMap((e) => [
+                e.target,
+                ...(transitiveTargets[e.target] || []),
+              ]),
+          ),
+        ].filter(Boolean),
+      ),
       elections: candidacyElections(liveEdges, nodeId),
     },
     approved: {
@@ -451,13 +461,18 @@ export function computeEdgeStats(
       targetNodeIds: approvedTargetNodeIds,
       seatNodeIds: seatTargets(approvedEdges),
       currentlyEmployed: calculateCurrentlyEmployed(publicApprovedEdges),
-      currentlyEmployedTargetNodeIds: [
-        ...new Set(
-          publicApprovedEdges
-            .filter((e) => calculateCurrentlyEmployed([e]))
-            .flatMap((e) => [e.target, ...(transitiveTargets[e.target] || [])]),
-        ),
-      ].filter(Boolean),
+      currentlyEmployedTargetNodeIds: withWojewodztwa(
+        [
+          ...new Set(
+            publicApprovedEdges
+              .filter((e) => calculateCurrentlyEmployed([e]))
+              .flatMap((e) => [
+                e.target,
+                ...(transitiveTargets[e.target] || []),
+              ]),
+          ),
+        ].filter(Boolean),
+      ),
       // Published candidacies only, so a reader who may not see drafts cannot
       // find a person under an election their page does not show.
       elections: candidacyElections(approvedEdges, nodeId),
