@@ -5,6 +5,7 @@ send the crops to the site's readers.
     koryta_bip_declarations cut --out ... --limit 20      # twenty files, to look at
     koryta_bip_declarations upload --dry-run              # what would go; nothing sent
     koryta_bip_declarations upload                        # send what is new or changed
+    koryta_bip_declarations sweep                         # publish from the queue
     koryta_bip_declarations status                        # where the declarations stand
     koryta_bip_declarations status --units-csv units.csv  # and every unit with no file
     koryta_bip_declarations facts-part                    # each candidacy's facts
@@ -29,6 +30,14 @@ of drafts whose page has a birth date, and only the candidacies they serve.
 `upload --public-post` sends only the people the site would publish from a
 declaration: those with a paid post, current or ended, at a public company.
 
+`sweep` publishes from the queue without sending anything. It calls
+`/api/declarations/sweep`, which an upload calls once at its end and not at all
+when it had nothing to send, until the day's limit is used, the site skips the
+pass (the night window, a people import, the limit at 0) or a sweep takes up
+nobody. A sweep takes up 25 pages at most, and each page it publishes takes a
+slot of the day's limit; only „Opublikuj z kolejki” on /admin/oswiadczenia
+goes past the limit.
+
 `status` says where the declarations stand (`stats`): the candidacies found,
 their files downloaded, cut, cropped and sent, by priority, and the units
 (TERYT) where nothing came down for anybody. It only reads, so it runs beside
@@ -52,7 +61,8 @@ by `cut`, `upload`, `status` and `facts-part` each run, so a draft the night
 dated is priority 1 the morning after.
 
 Exit codes: 0 when the work is done; 75 when a run stopped with work left (its
-time ran out, the site did not answer) - the next run carries on - and when
+time ran out, the site did not answer, `sweep` ran out of sweeps or met the
+night window or a people import) - the next run carries on - and when
 `send-facts` has no part it can read yet, cannot read PESEL's tables, or the
 site does not take the facts yet (404); 1 when the site refused a request, or
 failed `send-facts`'s count with an error of its own (500, tried again); 130
@@ -84,11 +94,13 @@ from jobs.bip_declarations.names import Names, read_names
 from jobs.bip_declarations.stats import report, write_units_csv
 from jobs.bip_declarations.upload import (
     DEFAULT_ENDPOINT,
+    MAX_SWEEPS,
     ListTooOld,
     Site,
     SiteError,
     SiteUnavailable,
     plan,
+    sweep,
     upload,
 )
 from scrapers.common.pg import PostgresClient
@@ -328,6 +340,36 @@ def run_upload(
     )
     left = args.max_requests is not None and result.requests >= args.max_requests
     return EXIT_TRY_LATER if left else 0
+
+
+#: Why a `sweep` run stopped with pages it could still have published.
+SWEEP_LEFT = {"max_sweeps", "night", "import"}
+
+
+def cmd_sweep(args: argparse.Namespace) -> int:
+    try:
+        site = Site(args.endpoint, token_source(args.endpoint))
+        run = sweep(site, max_sweeps=args.max_sweeps)
+    except SiteUnavailable as exc:
+        print(f"the site did not answer: {exc}", file=sys.stderr)
+        return EXIT_TRY_LATER
+    except SiteError as exc:
+        print(f"the site refused: {exc}", file=sys.stderr)
+        return 1
+    except TokenError as exc:
+        print(f"no token for the site: {exc}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return EXIT_INTERRUPTED
+    for person_id in run.published:
+        print(f"{site.endpoint.rstrip('/')}/osoba/{person_id}")
+    print(
+        f"{run.sweeps} sweeps: published {len(run.published)}, put back "
+        f"{len(run.restored)}, held {dict(run.held)}, already public "
+        f"{run.confirmed}, failed {run.failed}; compared {run.checked} crops, "
+        f"{run.changed} changed; stopped: {run.stopped}"
+    )
+    return EXIT_TRY_LATER if run.stopped in SWEEP_LEFT else 0
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -571,6 +613,20 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
         "a public company: the ones the site would publish from a declaration",
     )
     send.set_defaults(func=cmd_upload)
+    drain = sub.add_parser(
+        "sweep", help="publish from the queue up to the day's limit; send nothing"
+    )
+    drain.add_argument(
+        "--endpoint", default=os.environ.get("KORYTA_ENDPOINT", DEFAULT_ENDPOINT)
+    )
+    drain.add_argument(
+        "--max-sweeps",
+        type=int,
+        default=MAX_SWEEPS,
+        help=f"stop after this many sweeps, 25 pages each at most (default: "
+        f"{MAX_SWEEPS})",
+    )
+    drain.set_defaults(func=cmd_sweep)
     status = sub.add_parser(
         "status", help="where the declarations stand: found, downloaded, cut, sent"
     )

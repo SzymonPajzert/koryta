@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 import requests
 
+import jobs.bip_declarations as job
 from jobs.bip_declarations.upload import (
     INGEST,
     MAX_EXTRACTS_PER_REQUEST,
@@ -21,6 +22,7 @@ from jobs.bip_declarations.upload import (
     SiteUnavailable,
     batches,
     plan,
+    sweep,
     upload,
 )
 from scrapers.stores import (
@@ -453,3 +455,90 @@ def test_site_stops_on_a_request_it_refuses():
     site = Site("https://a", Tokens(), Session(Response(400, "kids: too small")))
     with pytest.raises(SiteError, match="400 kids: too small"):
         site.post(INGEST, {})
+
+
+def swept(
+    published: tuple[str, ...] = (),
+    held: tuple[tuple[str, str], ...] = (),
+    *,
+    cap: bool = False,
+    skipped: str | None = None,
+) -> dict[str, Any]:
+    """An answer of /api/declarations/sweep (`SweepResult` on the site)."""
+    return {
+        "checked": 50,
+        "changed": 1,
+        "reverted": {"restored": [], "held": []},
+        "drain": {
+            "day": "2026-11-23",
+            "limit": 200,
+            "skipped": skipped,
+            "published": list(published),
+            "held": [{"personId": p, "reason": r} for p, r in held],
+            "confirmed": [],
+            "failed": [],
+            "capReached": cap,
+            "waiting": None,
+        },
+    }
+
+
+class SweepSite:
+    """Answers each sweep with the next of `answers`, and keeps the requests."""
+
+    endpoint = "https://autopush.example"
+
+    def __init__(self, *answers: dict[str, Any]):
+        self.answers = list(answers)
+        self.posts: list[tuple[str, dict[str, Any]]] = []
+
+    def post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        self.posts.append((path, body))
+        return self.answers.pop(0)
+
+
+def test_sweep_goes_on_until_the_days_limit_is_used():
+    site = SweepSite(
+        swept(("a", "b"), (("c", "two_places"),)),
+        swept(("d",), cap=True),
+        swept(("never",)),
+    )
+
+    run = sweep(site, log=lambda _: None)
+
+    assert site.posts == [(SWEEP, {}), (SWEEP, {})]
+    assert run.published == ["a", "b", "d"]
+    assert run.held == {"two_places": 1}
+    assert (run.sweeps, run.checked, run.stopped) == (2, 100, "cap")
+
+
+def test_sweep_stops_at_a_pass_that_takes_up_nobody():
+    site = SweepSite(swept(("a",)), swept(), swept(("never",)))
+    run = sweep(site, log=lambda _: None)
+    assert (run.sweeps, run.published, run.stopped) == (2, ["a"], "empty")
+
+
+def test_sweep_stops_where_the_site_skips_the_pass():
+    run = sweep(SweepSite(swept(skipped="night")), log=lambda _: None)
+    assert (run.sweeps, run.stopped) == (1, "night")
+
+
+def test_sweep_stops_after_its_sweeps():
+    run = sweep(SweepSite(*[swept(("a",))] * 4), max_sweeps=3, log=lambda _: None)
+    assert (run.sweeps, len(run.published), run.stopped) == (3, 3, "max_sweeps")
+
+
+def test_the_sweep_command_says_whether_pages_are_left(monkeypatch, capsys):
+    monkeypatch.setattr(job, "token_source", lambda endpoint: Tokens())
+    monkeypatch.setattr(
+        job, "Site", lambda endpoint, tokens: SweepSite(swept(("a",)), swept(("b",)))
+    )
+    assert job.main(["sweep", "--max-sweeps", "2"]) == job.EXIT_TRY_LATER
+    out = capsys.readouterr().out
+    assert "https://autopush.example/osoba/a\nhttps://autopush.example/osoba/b\n" in out
+    assert out.rstrip().endswith("stopped: max_sweeps")
+
+    monkeypatch.setattr(
+        job, "Site", lambda endpoint, tokens: SweepSite(swept(("c",), cap=True))
+    )
+    assert job.main(["sweep"]) == 0

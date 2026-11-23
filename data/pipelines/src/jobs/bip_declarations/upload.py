@@ -22,7 +22,8 @@ that serve them: the site publishes a page from its declaration only then
 (`frontend/server/utils/publicPosts.ts`), so a crop of anybody else would be
 read for a page that never goes up.
 After the upload the job calls `/api/declarations/sweep`, which compares the
-readings settled since with their pages.
+readings settled since with their pages, and takes up the publication queue.
+An upload that sent nothing calls no sweep; `sweep` calls it on its own.
 """
 
 from __future__ import annotations
@@ -568,3 +569,68 @@ def upload(
     if result.requests:
         result.sweep = site.post(SWEEP, {})
     return result
+
+
+#: Sweeps one `sweep` run makes at most. A sweep takes up 25 pages at most
+#: (`DRAIN_BATCH` in frontend/server/utils/declarationPublish.ts), and a page
+#: held gives its slot back, so the day's 200 takes 8 sweeps or more; 16 has
+#: room for half of them held.
+MAX_SWEEPS = 16
+
+
+@dataclass
+class SweepRun:
+    """What the sweeps of one run did, added up, and why they stopped:
+    `cap` (the day's limit is used), `empty` (a sweep took up nobody),
+    `max_sweeps`, or the site's reason for skipping the pass (`night`,
+    `import`, `off`)."""
+
+    sweeps: int = 0
+    checked: int = 0
+    changed: int = 0
+    published: list[str] = field(default_factory=list)
+    restored: list[str] = field(default_factory=list)
+    held: Counter[str] = field(default_factory=Counter)
+    confirmed: int = 0
+    failed: int = 0
+    stopped: str = "max_sweeps"
+
+
+def sweep(
+    site: Site, *, max_sweeps: int = MAX_SWEEPS, log: Callable[[str], None] = print
+) -> SweepRun:
+    """Call `/api/declarations/sweep` until it stops publishing, sending
+    nothing. Each page a sweep publishes takes a slot of the day's limit, as
+    after an upload, so this never goes past the limit; only an admin's
+    „Opublikuj z kolejki” does."""
+    run = SweepRun()
+    for _ in range(max_sweeps):
+        answer = site.post(SWEEP, {})
+        run.sweeps += 1
+        drain = answer.get("drain") or {}
+        reverted = answer.get("reverted") or {}
+        published = list(drain.get("published") or [])
+        held = [*(drain.get("held") or []), *(reverted.get("held") or [])]
+        confirmed = len(drain.get("confirmed") or [])
+        failed = len(drain.get("failed") or [])
+        run.checked += int(answer.get("checked") or 0)
+        run.changed += int(answer.get("changed") or 0)
+        run.published += published
+        run.restored += list(reverted.get("restored") or [])
+        run.held.update(str(h.get("reason") or "") for h in held)
+        run.confirmed += confirmed
+        run.failed += failed
+        log(
+            f"sweep {run.sweeps}: published {len(published)}, held {len(held)}, "
+            f"already public {confirmed}, failed {failed}"
+        )
+        if drain.get("capReached"):
+            run.stopped = "cap"
+            break
+        if drain.get("skipped"):
+            run.stopped = str(drain["skipped"])
+            break
+        if not (published or drain.get("held") or confirmed or failed):
+            run.stopped = "empty"
+            break
+    return run
