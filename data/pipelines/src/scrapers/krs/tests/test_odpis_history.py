@@ -185,6 +185,22 @@ def test_a_seat_is_dated_fingerprinted_and_carries_no_pesel(monkeypatch):
     assert PRESIDENT not in df.to_csv()
 
 
+def test_a_pesel_typed_into_the_given_names_leaves_the_seat_in(monkeypatch, capsys):
+    """The 2026-11-23 shape: the given names carry the identifier's PESEL. The
+    seat is kept without the number, rather than its odpis left out."""
+    monkeypatch.setattr(odpis_history, "pesel_salt", lambda: SALT)
+    typed = ODPIS.replace("\nJAN\n", f"\nJAN {PRESIDENT}\n")
+    assert typed != ODPIS
+    df = odpis_history.KrsOdpisSeats().process(
+        FakeContext(held(content=typed.encode()))
+    )
+    seat = df.iloc[0]
+    assert (seat.given_names, seat.full_name) == ("JAN", "JAN KOWALSKI")
+    assert seat.pesel_fingerprint == pesel_util.fingerprint(PRESIDENT, SALT)
+    assert PRESIDENT not in df.to_csv()
+    assert "refused" not in capsys.readouterr().out
+
+
 def test_no_key_fails_before_the_bucket_is_listed(monkeypatch):
     monkeypatch.setattr(odpis_history, "pesel_salt", lambda: None)
     ctx = FakeContext(held())
