@@ -4,6 +4,7 @@ import {
   matchedTargets,
   placeNames,
 } from "../../../server/utils/nodeFilters";
+import { withWojewodztwa } from "../../../shared/teryt";
 
 const { mockFetchNodes, mockGet, mockWhere, mockCollection } = vi.hoisted(
   () => {
@@ -130,7 +131,12 @@ describe("buildStructuralFilterOps, teryt filter", () => {
     mockDb();
   });
 
-  it("expands a województwo code to every region inside it", async () => {
+  /** A person whose stats carry the województwo markers, as computeEdgeStats
+   * writes them. */
+  const tied = (id: string, regionIds: string[]) =>
+    person(id, withWojewodztwa(regionIds));
+
+  it("asks for a whole województwo by its marker, without reading the region list", async () => {
     const { ops, empty } = await buildStructuralFilterOps(
       db,
       { teryt: "14" },
@@ -138,13 +144,20 @@ describe("buildStructuralFilterOps, teryt filter", () => {
     );
     expect(empty).toBe(false);
     expect(ops).toHaveLength(1);
+    expect(ops[0]!.wide).toBeUndefined();
+    expect(ops[0]!.applyFs(stubQuery())).toEqual({
+      field: "stats.edges.approved.targetNodeIds",
+      op: "array-contains-any",
+      value: ["woj:14"],
+    });
+    expect(mockFetchNodes).not.toHaveBeenCalled();
 
     const nodes = [
-      person("sejmik", ["teryt14"]),
-      person("radom", ["teryt1425"]),
-      person("srodmiescie", ["teryt1465011"]),
-      person("krakow", ["teryt1261"]),
-      person("nowhere", []),
+      tied("sejmik", ["teryt14"]),
+      tied("radom", ["teryt1425"]),
+      tied("srodmiescie", ["teryt1465011"]),
+      tied("krakow", ["teryt1261"]),
+      tied("nowhere", []),
     ];
     expect(ops[0]!.applyMem(nodes).map((n) => n.id)).toEqual([
       "sejmik",
@@ -167,9 +180,9 @@ describe("buildStructuralFilterOps, teryt filter", () => {
     expect(mockFetchNodes).not.toHaveBeenCalled();
 
     const nodes = [
-      person("radom", ["teryt1425"]),
-      person("sejmik", ["teryt14"]),
-      person("warszawa", ["teryt1465"]),
+      tied("radom", ["teryt1425"]),
+      tied("sejmik", ["teryt14"]),
+      tied("warszawa", ["teryt1465"]),
     ];
     expect(ops[0]!.applyMem(nodes).map((n) => n.id)).toEqual(["radom"]);
   });
@@ -184,62 +197,7 @@ describe("buildStructuralFilterOps, teryt filter", () => {
     expect(empty).toBe(true);
   });
 
-  it("reports an empty result set for a województwo with no regions", async () => {
-    mockFetchNodes.mockResolvedValue({});
-    const { empty } = await buildStructuralFilterOps(
-      db,
-      { teryt: "14" },
-      "approved",
-    );
-    expect(empty).toBe(true);
-  });
-
-  it("hands a region set too big for one array-contains-any to chunked queries", async () => {
-    const { ops } = await buildStructuralFilterOps(
-      db,
-      { teryt: "14" },
-      "approved",
-    );
-    // Four regions sit in województwo 14, which fits one query.
-    expect(ops[0]!.applyFs(stubQuery())).toEqual({
-      field: "stats.edges.approved.targetNodeIds",
-      op: "array-contains-any",
-      value: ["teryt14", "teryt1425", "teryt1465", "teryt1465011"],
-    });
-    expect(ops[0]!.wide).toBeUndefined();
-
-    const region = (i: number) => `14${String(i).padStart(2, "0")}`;
-    const many = (n: number) =>
-      Object.fromEntries(
-        Array.from({ length: n }, (_, i) => [
-          `teryt${region(i)}`,
-          { teryt: region(i), name: `Powiat ${i}` },
-        ]),
-      );
-
-    // Firestore takes 30 values in one array-contains-any.
-    mockFetchNodes.mockResolvedValue(many(30));
-    const fits = await buildStructuralFilterOps(
-      db,
-      { teryt: "14" },
-      "approved",
-    );
-    expect(fits.ops[0]!.wide).toBeUndefined();
-    expect(fits.ops[0]!.applyFs(stubQuery())).toMatchObject({
-      op: "array-contains-any",
-    });
-
-    mockFetchNodes.mockResolvedValue(many(31));
-    const big = await buildStructuralFilterOps(db, { teryt: "14" }, "approved");
-    expect(() => big.ops[0]!.applyFs(stubQuery())).toThrowError(/index/);
-    expect(big.ops[0]!.memoryOnly).toBe(true);
-    expect(big.ops[0]!.wide).toEqual({
-      field: "stats.edges.approved.targetNodeIds",
-      values: Object.keys(many(31)),
-    });
-  });
-
-  it("hands the region set to chunked queries when a party holds the array slot", async () => {
+  it("hands the województwo to chunked queries when a party holds the array slot", async () => {
     const { ops } = await buildStructuralFilterOps(
       db,
       { teryt: "14", parties: "PiS" },
@@ -247,12 +205,7 @@ describe("buildStructuralFilterOps, teryt filter", () => {
     );
     const teryt = ops.find((op) => op.name === "teryt")!;
     expect(teryt.memoryOnly).toBe(true);
-    expect(teryt.wide?.values).toEqual([
-      "teryt14",
-      "teryt1425",
-      "teryt1465",
-      "teryt1465011",
-    ]);
+    expect(teryt.wide?.values).toEqual(["woj:14"]);
   });
 
   it("honours the currentlyEmployed scope when filtering by województwo", async () => {
@@ -268,7 +221,7 @@ describe("buildStructuralFilterOps, teryt filter", () => {
         stats: {
           edges: {
             approved: {
-              targetNodeIds: ["teryt1425"],
+              targetNodeIds: withWojewodztwa(["teryt1425"]),
               currentlyEmployedTargetNodeIds: [],
             },
           },
@@ -279,14 +232,48 @@ describe("buildStructuralFilterOps, teryt filter", () => {
         stats: {
           edges: {
             approved: {
-              targetNodeIds: ["teryt1425"],
-              currentlyEmployedTargetNodeIds: ["teryt1425"],
+              targetNodeIds: withWojewodztwa(["teryt1425"]),
+              currentlyEmployedTargetNodeIds: withWojewodztwa(["teryt1425"]),
             },
           },
         },
       },
     ];
     expect(ops[0]!.applyMem(nodes).map((n) => n.id)).toEqual(["current"]);
+  });
+});
+
+describe("buildStructuralFilterOps, more places than one query takes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDb();
+  });
+
+  const places = (n: number) =>
+    Array.from({ length: n }, (_, i) => `company${i}`);
+
+  it("asks for up to thirty in one query, and more in chunks", async () => {
+    const fits = await buildStructuralFilterOps(
+      db,
+      { place: places(30) },
+      "approved",
+    );
+    expect(fits.ops[0]!.wide).toBeUndefined();
+    expect(fits.ops[0]!.applyFs(stubQuery())).toMatchObject({
+      op: "array-contains-any",
+    });
+
+    const big = await buildStructuralFilterOps(
+      db,
+      { place: places(31) },
+      "approved",
+    );
+    expect(() => big.ops[0]!.applyFs(stubQuery())).toThrowError(/index/);
+    expect(big.ops[0]!.memoryOnly).toBe(true);
+    expect(big.ops[0]!.wide).toEqual({
+      field: "stats.edges.approved.targetNodeIds",
+      values: places(31),
+    });
   });
 });
 
@@ -758,6 +745,37 @@ describe("matchedTargets", () => {
     expect(
       matchedTargets(nodes, ["telesystem", "mesko"], "all", "selected"),
     ).toEqual({ a: ["mesko"] });
+  });
+
+  it("reads a województwo marker as every region inside it", () => {
+    const nodes = [
+      {
+        id: "radom",
+        stats: {
+          edges: {
+            approved: {
+              targetNodeIds: withWojewodztwa(["company1", "teryt1425"]),
+            },
+          },
+        },
+      },
+      {
+        id: "krakow",
+        stats: {
+          edges: {
+            approved: { targetNodeIds: withWojewodztwa(["teryt1261"]) },
+          },
+        },
+      },
+    ];
+    // The region the row is in, never the marker itself or an unasked company.
+    expect(matchedTargets(nodes, ["woj:14"], "approved")).toEqual({
+      radom: ["teryt1425"],
+    });
+    expect(matchedTargets(nodes, ["company1", "woj:12"], "approved")).toEqual({
+      radom: ["company1"],
+      krakow: ["teryt1261"],
+    });
   });
 
   it("copes with a person whose stats hold no arrays", () => {

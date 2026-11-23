@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import handlerModule from "../../../../server/api/nodes/index.get";
 
-/** /api/nodes over a województwo with more regions than one
- * array-contains-any takes: the people tied to it are read in chunks, and the
- * public list is kept so that the next page reads nothing. */
+/** /api/nodes over a whole województwo, asked by its marker and paged by
+ * Firestore, and over more companies than one array-contains-any takes, read
+ * in chunks and kept so that the next page reads nothing. */
 type Clause = { field: string; op: string; value: unknown };
 type Data = Record<string, unknown>;
 
-const { db, personQueries, regions } = vi.hoisted(() => {
+const { db, personQueries, regions, companies } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   globalThis.defineCachedFunction = (fn: any) => fn;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -25,11 +25,15 @@ const { db, personQueries, regions } = vi.hoisted(() => {
       .split(".")
       .reduce<unknown>((o, k) => (o as Data | undefined)?.[k], data);
 
-  // 35 regions in województwo 14: more than one query takes.
+  // 35 regions in województwo 14 and 35 companies: more than one query takes.
   const regions = Array.from(
     { length: 35 },
     (_, i) => `teryt14${String(i).padStart(2, "0")}`,
   );
+  const companies = Array.from({ length: 35 }, (_, i) => `company${i}`);
+  // As computeEdgeStats writes them: the regions, then their województwo.
+  const withMarkers = (ids: string[]) =>
+    ids.some((id) => id.startsWith("teryt14")) ? [...ids, "woj:14"] : ids;
   const person = (id: string, targets: string[], approved: boolean) => ({
     id,
     data: {
@@ -40,8 +44,8 @@ const { db, personQueries, regions } = vi.hoisted(() => {
         isApproved: approved,
         votes: { interesting: id.length },
         edges: {
-          all: { targetNodeIds: targets },
-          approved: { targetNodeIds: approved ? targets : [] },
+          all: { targetNodeIds: withMarkers(targets) },
+          approved: { targetNodeIds: approved ? withMarkers(targets) : [] },
         },
       },
     },
@@ -51,10 +55,10 @@ const { db, personQueries, regions } = vi.hoisted(() => {
       id,
       data: { type: "region", teryt: id.slice(5), name: id },
     })),
-    person("anna", [regions[0]!], true),
-    person("bartosz", [regions[34]!], true),
-    person("celina", [regions[3]!, regions[33]!], true),
-    person("draft", [regions[1]!], false),
+    person("anna", [regions[0]!, companies[0]!], true),
+    person("bartosz", [regions[34]!, companies[34]!], true),
+    person("celina", [regions[3]!, regions[33]!, companies[3]!], true),
+    person("draft", [regions[1]!, companies[1]!], false),
     person("elsewhere", ["teryt0201"], true),
   ];
 
@@ -94,6 +98,7 @@ const { db, personQueries, regions } = vi.hoisted(() => {
       offset: (n: number) => ((skip = n), q),
       limit: (n: number) => ((take = n), q),
       select: () => q,
+      doc: (id: string) => ({ id }),
       count: () => ({
         get: async () => ({ data: () => ({ count: matching().length }) }),
       }),
@@ -112,7 +117,20 @@ const { db, personQueries, regions } = vi.hoisted(() => {
     };
     return q;
   }
-  return { db: { collection: () => query([]) }, personQueries, regions };
+  return {
+    db: {
+      collection: () => query([]),
+      getAll: async (...refs: unknown[]) =>
+        refs
+          .filter((ref): ref is { id: string } =>
+            Boolean((ref as { id?: string } | null)?.id),
+          )
+          .map((ref) => ({ id: ref.id, data: () => undefined })),
+    },
+    personQueries,
+    regions,
+    companies,
+  };
 });
 
 vi.mock("firebase-admin/firestore", () => ({
@@ -153,7 +171,8 @@ async function list(query: Record<string, string>, signedIn = false) {
 }
 
 describe("GET /api/nodes for a whole województwo", () => {
-  it("reads the people tied to it in chunks, and the next page from memory", async () => {
+  it("asks for its marker and lets Firestore page and count", async () => {
+    personQueries.length = 0;
     const first = await list({
       type: "person",
       teryt: "14",
@@ -163,11 +182,61 @@ describe("GET /api/nodes for a whole województwo", () => {
 
     expect(Object.keys(first.nodes)).toEqual(["anna", "bartosz"]);
     expect(first.total).toBe(3);
+    // The row names its region, not the marker.
     expect(first.matched).toEqual({
       anna: [regions[0]],
       bartosz: [regions[34]],
     });
-    // Two chunks of at most thirty regions, published people only.
+    expect(personQueries).toEqual([
+      [
+        { field: "type", op: "==", value: "person" },
+        {
+          field: "stats.edges.approved.targetNodeIds",
+          op: "array-contains-any",
+          value: ["woj:14"],
+        },
+        { field: "stats.isApproved", op: "==", value: true },
+      ],
+    ]);
+
+    const second = await list({
+      type: "person",
+      teryt: "14",
+      limit: "2",
+      page: "2",
+    });
+    expect(Object.keys(second.nodes)).toEqual(["celina"]);
+    expect(second.total).toBe(3);
+  });
+
+  it("finds a signed-in reader's drafts by the marker too", async () => {
+    const listed = await list(
+      { type: "person", teryt: "14", limit: "10", page: "1" },
+      true,
+    );
+    expect(Object.keys(listed.nodes).sort()).toEqual([
+      "anna",
+      "bartosz",
+      "celina",
+      "draft",
+    ]);
+  });
+});
+
+describe("GET /api/nodes for more companies than one query takes", () => {
+  it("reads the people tied to them in chunks, and the next page from memory", async () => {
+    personQueries.length = 0;
+    const place = companies;
+    const first = await list({
+      type: "person",
+      place,
+      limit: "2",
+      page: "1",
+    } as never);
+
+    expect(Object.keys(first.nodes)).toEqual(["anna", "bartosz"]);
+    expect(first.total).toBe(3);
+    // Two chunks of at most thirty companies, published people only.
     expect(personQueries).toHaveLength(2);
     for (const clauses of personQueries) {
       expect(clauses).toContainEqual({
@@ -181,54 +250,36 @@ describe("GET /api/nodes for a whole województwo", () => {
 
     const second = await list({
       type: "person",
-      teryt: "14",
+      place,
       limit: "2",
       page: "2",
-    });
+    } as never);
     expect(Object.keys(second.nodes)).toEqual(["celina"]);
-    expect(second.total).toBe(3);
     expect(personQueries).toHaveLength(2);
 
     // Another order of the same list is still the same list.
     const sorted = await list({
       type: "person",
-      teryt: "14",
+      place,
       limit: "2",
       page: "1",
       sortBy: "votes.interesting",
       sortDesc: "true",
-    });
+    } as never);
     expect(Object.keys(sorted.nodes)).toEqual(["bartosz", "celina"]);
     expect(personQueries).toHaveLength(2);
   });
 
-  it("reads afresh for a signed-in reader, drafts included", async () => {
+  it("reads afresh for a signed-in reader", async () => {
     personQueries.length = 0;
-    const listed = await list(
-      { type: "person", teryt: "14", limit: "10", page: "1" },
+    await list(
+      { type: "person", place: companies, limit: "10" } as never,
       true,
     );
-
-    expect(Object.keys(listed.nodes).sort()).toEqual([
-      "anna",
-      "bartosz",
-      "celina",
-      "draft",
-    ]);
-    expect(personQueries).toHaveLength(2);
-    for (const clauses of personQueries) {
-      expect(clauses.some((c) => c.field === "stats.isApproved")).toBe(false);
-    }
-
-    await list({ type: "person", teryt: "14", limit: "10", page: "1" }, true);
+    await list(
+      { type: "person", place: companies, limit: "10" } as never,
+      true,
+    );
     expect(personQueries).toHaveLength(4);
-  });
-
-  it("still asks Firestore for one page when the regions fit one query", async () => {
-    personQueries.length = 0;
-    const listed = await list({ type: "person", teryt: "1400", limit: "10" });
-
-    expect(Object.keys(listed.nodes)).toEqual(["anna"]);
-    expect(personQueries).toHaveLength(1);
   });
 });

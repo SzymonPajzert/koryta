@@ -4,7 +4,12 @@
 import { applyPartiesFilter, fetchNodes } from "~~/server/utils/fetch";
 import { ARRAY_ANY_LIMIT } from "~~/server/utils/nodeScan";
 import { asArray, pageIsPublic } from "~~/shared/model";
-import { isInWojewodztwo, isWojewodztwoTeryt } from "~~/shared/teryt";
+import {
+  isInWojewodztwo,
+  isWojewodztwoMarker,
+  isWojewodztwoTeryt,
+  WOJEWODZTWO_MARKER,
+} from "~~/shared/teryt";
 import { electionResultKey, type ElectionResult } from "~~/shared/electionDays";
 
 // Still exported from here, which is where every caller and half the comments
@@ -244,7 +249,13 @@ export async function buildStructuralFilterOps(
   }
 
   if (query.teryt) {
-    const regionIds = await resolveRegionIds(db, query.teryt);
+    // A whole województwo by its marker (`withWojewodztwa`): one value, which
+    // Firestore pages and counts, where its 48-144 regions take several
+    // queries, and no region list to read. `matchedTargets` reads the marker
+    // back as the regions inside it, so a row still names its powiat or gmina.
+    const regionIds = isWojewodztwoTeryt(query.teryt)
+      ? [`${WOJEWODZTWO_MARKER}${query.teryt}`]
+      : await resolveRegionIds(db, query.teryt);
     if (regionIds.length === 0) {
       return result(true);
     }
@@ -456,10 +467,17 @@ export function matchedTargets(
   currentlyEmployed?: string,
 ): Record<string, string[]> {
   const wanted = new Set(targetIds);
+  // A województwo marker stands for every region inside it.
+  const regionPrefixes = targetIds
+    .filter(isWojewodztwoMarker)
+    .map((marker) => `teryt${marker.slice(WOJEWODZTWO_MARKER.length)}`);
   const matched: Record<string, string[]> = {};
   for (const node of nodes) {
-    const hits = memTargets(node, edgeScope, currentlyEmployed).filter((id) =>
-      wanted.has(id),
+    const hits = memTargets(node, edgeScope, currentlyEmployed).filter(
+      (id) =>
+        !isWojewodztwoMarker(id) &&
+        (wanted.has(id) ||
+          regionPrefixes.some((prefix) => id.startsWith(prefix))),
     );
     if (hits.length > 0) matched[node.id] = hits;
   }
