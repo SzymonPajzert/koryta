@@ -718,7 +718,7 @@ def test_the_register_reads_the_days_new_registrations_and_no_backlog(world):
 
     argv, _ = world.command("koryta_krs_register_owners")
     assert "--new-registrations" in argv
-    # The backlog's pace is decide-register-sweep-pace's: none until then.
+    # predator reads the backlog at 23:00 (decision on 2026-11-24).
     assert argv[argv.index("--reads") + 1] == "0"
     # Inside the step's 30 minutes, so the job stops itself, writes what it
     # read and reports, rather than be stopped mid-read.

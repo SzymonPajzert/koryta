@@ -29,7 +29,7 @@ The steps, in order (`STEPS`):
                 of every company the bulletin says was registered since the
                 register's log began, for who owns it - so that one a gmina or
                 a powiat sets up reaches the crawl - and --register-backlog
-                reads of the rest (none until decide-register-sweep-pace)
+                reads of the rest (0: predator reads the backlog at 23:00)
     krs_odpis   koryta_krs_odpis for the companies the bulletin named since
                 yesterday, then those the paid queue owes rejestr.io for,
                 then the public companies with no odpis on file -

@@ -7,7 +7,8 @@ appends every answer to `RESPONSE_LOG` in the shared cache as write-once
 parts. Nothing else is written: the ledger is `KRSRegisterEntries`, a fold of
 that log, and the companies found public are `CompaniesPublicByRegister`.
 
-    koryta_krs_register_owners --reads 20000
+    koryta_krs_register_owners --reads 20000 --max-minutes 170 --no-backup
+                                  # the backlog, nightly at 23:00 on predator
     koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25
                                   # the night's step (`jobs.nightly`)
     koryta_krs_register_owners --krs-file companies.txt
@@ -20,9 +21,11 @@ reads all of them, however many there are, and `--reads` then counts the
 backlog behind them: failed reads, answers the register has moved on from,
 and the ~700k numbers never read, oldest first. A working day's bulletin
 names 231-307 new registrations (2026-09-29 to 10-08), a weekend's none -
-two to three minutes a night at the default pace. How much backlog a night
-takes besides is task decide-register-sweep-pace; the night reads none until
-it is decided.
+two to three minutes a night at the default pace. The night's step reads none
+of the backlog. predator reads it, 20k numbers a night from 23:00 (decision
+on 2026-11-24): at ~0.32 s a read that is about two hours, done before the
+VM's night folds the log. Its timer and script live on predator, not here:
+`koryta-register-backlog.timer` and `~/.local/bin/koryta-register-backlog.sh`.
 
 `--krs-file` puts a list ahead of all that, read whatever the queue says: the
 companies some other source says the public owns and nothing has read, which

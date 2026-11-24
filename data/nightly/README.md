@@ -99,14 +99,19 @@ fetches their odpis aktualny, which puts them in the graph (`CompaniesKRS`). The
 night after, `krs_odpis` asks for their odpis pełny as public companies with
 none on file (below), and their boards go up with that night's people.
 
-The rest of the register is the backlog: some 700k numbers the bulletin named
-that nobody has asked about, read oldest number first, and the answers it has
-moved on from since. The night reads `--register-backlog` of them, 0 until
-the pace is decided (task `decide-register-sweep-pace`). About 2,500 reads, the
-new ones included, fit the step's 30 minutes; it stops itself five minutes
-short and leaves the rest to the next night. A company registered before the
-log began on 2026-09-28 - 0001192039 among them - is in the backlog, not among
-the new ones.
+The rest of the register is the backlog: some 712k numbers the bulletin named
+that nobody has asked about (2026-11-24), read oldest number first, and the
+answers it has moved on from since. predator reads it, not the VM: 20k
+numbers a night from 23:00 (decision on 2026-11-24), about two hours, done by
+01:50, so the night's reprocess folds them the same night. Its timer and
+script live on predator (`koryta-register-backlog.timer`,
+`~/.local/bin/koryta-register-backlog.sh`), and its runs report under
+`krs_register_owners` on /admin/procesy with the host `szymon@predator`. The
+night reads `--register-backlog` of them on top, 0 by default. About 2,500
+reads, the new ones included, fit the step's 30 minutes; it stops itself five
+minutes short and leaves the rest to the next night. A company registered
+before the log began on 2026-09-28 - 0001192039 among them - is in the
+backlog, not among the new ones.
 
 ## Odpisy pełne
 

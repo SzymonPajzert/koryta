@@ -528,9 +528,9 @@ export const JOBS: readonly JobDefinition[] = [
     kind: "scheduled",
     title: "Przegląd rejestru KRS (właściciele)",
     summary:
-      "Czyta odpisy aktualne z api-krs, szukając spółek samorządów i Skarbu Państwa, do których nie prowadzi żadne inne wejście crawla: co noc każdą spółkę, którą biuletyn podaje jako nowo zarejestrowaną, a resztę rejestru - od najstarszych numerów - w tempie, które dopiero trzeba ustalić.",
+      "Czyta odpisy aktualne z api-krs, szukając spółek samorządów i Skarbu Państwa, do których nie prowadzi żadne inne wejście crawla: co noc każdą spółkę, którą biuletyn podaje jako nowo zarejestrowaną, a resztę rejestru - od najstarszych numerów - po 20 tys. na noc.",
     runsOn:
-      "Krok nocy na VM koryta-nightly (koryta_nightly), po bezpłatnym KRS; zaległości ręcznie, partiami",
+      "Nowe spółki: krok nocy na VM koryta-nightly (koryta_nightly), po bezpłatnym KRS. Zaległości: predator o 23:00 (timer koryta-register-backlog)",
     command:
       "koryta_krs_register_owners --new-registrations --reads 0 --max-minutes 25",
     schedule: { dailyAt: "02:30", timeZone: WARSAW },
@@ -540,7 +540,8 @@ export const JOBS: readonly JobDefinition[] = [
     tasks: ["decide-register-sweep-pace"],
     notes: [
       "Nowych rejestracji jest 230-310 w dzień roboczy, w weekend żadnej - to dwie, trzy minuty. Noc bez nowych też się zgłasza, z zerem odczytów.",
-      "Zaległości (ok. 700 tys. numerów nigdy nieczytanych) noc czyta dopiero z --register-backlog, którego tempo czeka na decyzję. Po 25 minutach krok sam kończy i resztę zostawia na następną noc (wtedy „niedokończony”).",
+      "Zaległości (712 tys. numerów nigdy nieczytanych, stan z 24 listopada) czyta predator od 23:00: koryta_krs_register_owners --reads 20000, ok. dwie godziny, najpóźniej do 01:50. Jego uruchomienia są w tym wierszu (host szymon@predator); rano wiersz ocenia już krok nocy.",
+      "Krok nocy po 25 minutach sam kończy i resztę zostawia na następną noc (wtedy „niedokończony”).",
     ],
   },
   {
