@@ -80,6 +80,8 @@ IGNORE_FAILURES: list[str] = [
     "Agnieszka Pieńkowska-Opora",
     "Agnieszka Winnik-Kalemba",
     "Aleksander Michał Tarkowski",
+    # Andrzej Jancenty Grabowski to KRS, born the day his article gives.
+    "Andrzej Jacenty Grabowski",
     "Andrzej Radziwinowicz",
     # Andrzej Piotr Szaciłło to KRS, Andrzej Ryszard to his article - his all the
     # same: born 1955-01-30 by both, on Mazowiecka Wspólnota Samorządowa's board
@@ -118,6 +120,8 @@ IGNORE_FAILURES: list[str] = [
     "Jacek Skórski",
     "Jakub Szurski",
     "Jan Szewczak",
+    # Jerzy Marian Nowak to KRS, born the day his article gives.
+    "Jerzy Maria Nowak",
     # Józef Jan Malec (rejestr.io 2246272), as the register misspells him. Since
     # 2026-10-24 his rows come from odpisy, which drop his middle name.
     "Józedf Jan Malec",
@@ -130,6 +134,8 @@ IGNORE_FAILURES: list[str] = [
     "Krzysztof Janicki",
     "Krzysztof Lodziński",
     "Krzysztof Pałka",
+    # Krzysztof Karol Toeplitz to KRS, born the day his article gives.
+    "Krzysztof Teodor Toeplitz",
     "Maciej Żołtkiewicz",
     "Magdalena Derlatka-Miodowska",
     "Marcin Zamaro",
@@ -140,6 +146,8 @@ IGNORE_FAILURES: list[str] = [
     "Małgorzata Zarychta-Surówka",
     "Michał Szymczyk",
     "Mirosław Glaz",
+    # Nikolai Iwanow to KRS, born the day his article gives.
+    "Nikołaj Iwanow (historyk)",
     "Oliwier Kubicki",
     "Piotr Breś",
     "Piotr Niewiadomski",
