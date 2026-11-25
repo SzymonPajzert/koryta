@@ -3,7 +3,13 @@ import { getApp } from "firebase-admin/app";
 import { fetchEdgeEndpointNodes } from "~~/server/utils/edgeNodes";
 import { asArray, pageIsPublic } from "~~/shared/model";
 import { canonicalParty, partyColors, partyMergedLabels } from "~~/shared/misc";
-import { categoryTitle, isSector } from "~~/shared/companyCategories";
+import {
+  categoryTitle,
+  companyCategoryValues,
+  isKnownCategory,
+  isSector,
+  type CompanyCategory,
+} from "~~/shared/companyCategories";
 import { wojewodztwoLabel, wojewodztwoOf } from "~~/shared/teryt";
 import {
   buildTimeline,
@@ -11,6 +17,7 @@ import {
   type HeldPost,
   type Timeline,
 } from "~~/shared/homeTimeline";
+import { buildPartyStack, partyBands } from "~~/shared/partyStack";
 import type { Company, Edge, Person } from "~~/shared/model";
 
 /** The dimensions the chart can be split by.
@@ -41,6 +48,46 @@ export type HomeTimelineResponse = {
   /** The Warsaw month the series end on, `YYYY-MM`. */
   today: string;
 };
+
+/** The „Partie w czasie” chart on /eksploruj/autograf, for every institution
+ * or one category of them: one band per party, stacked, each person counted
+ * once in all (`partyBands`). */
+export type PartyStackResponse = {
+  months: string[];
+  /** Bottom of the stack first. */
+  series: Timeline["series"];
+  /** The posts and people the bands hold: those with a party. */
+  coverage: { posts: number; people: number };
+  /** Every published post the chart is about. */
+  posts: number;
+  today: string;
+};
+
+export type PartyStacks = {
+  all: PartyStackResponse;
+  byCategory: Record<CompanyCategory, PartyStackResponse>;
+};
+
+/** The posts one stack counts: every post, and those whose person has a
+ * party, in the bands they go in. */
+type StackPosts = { posts: number; held: HeldPost[] };
+
+function partyStackOf(
+  { posts, held }: StackPosts,
+  today: string,
+): PartyStackResponse {
+  const stack = buildPartyStack(held, today);
+  return {
+    months: stack.months,
+    series: stack.series,
+    coverage: {
+      posts: held.length,
+      people: new Set(held.map((post) => post.personId)).size,
+    },
+    posts,
+    today: today.slice(0, 7),
+  };
+}
 
 /** How many edges to read per round trip while scanning. */
 const SCAN_PAGE = 500;
@@ -159,9 +206,15 @@ async function seatsByCompany(
  * filter has been applied by hand already. `isPublic` would have dropped a
  * quarter of the posts, most of them companies nobody has classified yet rather
  * than companies known to be private.
+ *
+ * The „Partie w czasie” stacks on /eksploruj/autograf, one for every
+ * category and one for everything, are cut from the same scan, so they cost
+ * no reads of their own.
  */
 export const postTimelines = defineCachedFunction(
-  async (today: string): Promise<{ home: HomeTimelineResponse }> => {
+  async (
+    today: string,
+  ): Promise<{ home: HomeTimelineResponse; stacks: PartyStacks }> => {
     const db = getFirestore(getApp(), "koryta-pl");
 
     const edges: (Edge & { id: string })[] = [];
@@ -213,6 +266,13 @@ export const postTimelines = defineCachedFunction(
     };
     const regionNames = new Map<string, string>();
     let posts = 0;
+    const everything: StackPosts = { posts: 0, held: [] };
+    const inCategory = Object.fromEntries(
+      companyCategoryValues.map((value): [CompanyCategory, StackPosts] => [
+        value,
+        { posts: 0, held: [] },
+      ]),
+    ) as Record<CompanyCategory, StackPosts>;
 
     for (const edge of edges) {
       const person = nodes.get(edge.source);
@@ -226,6 +286,21 @@ export const postTimelines = defineCachedFunction(
         start: edge.start_date!,
         end: effectiveEnd(edge.end_date),
       };
+
+      const bands = partyBands(asArray<string>((person as Person).parties));
+      const stacked = { ...post, groups: bands };
+      for (const into of [
+        everything,
+        ...new Set(
+          asArray<string>((employer as Company).categories).filter(
+            isKnownCategory,
+          ),
+        ),
+      ]) {
+        const tally = typeof into === "string" ? inCategory[into] : into;
+        tally.posts += 1;
+        if (bands.length > 0) tally.held.push(stacked);
+      }
 
       // `asArray`, not `.parties ?? []`: a node written before 2026-07-28 holds
       // `{"0": "PiS"}` where the array belongs, and reading it as an array loses
@@ -302,6 +377,15 @@ export const postTimelines = defineCachedFunction(
 
     return {
       home: { months, groupings, coverage, posts, today: today.slice(0, 7) },
+      stacks: {
+        all: partyStackOf(everything, today),
+        byCategory: Object.fromEntries(
+          companyCategoryValues.map((value) => [
+            value,
+            partyStackOf(inCategory[value], today),
+          ]),
+        ) as Record<CompanyCategory, PartyStackResponse>,
+      },
     };
   },
   {

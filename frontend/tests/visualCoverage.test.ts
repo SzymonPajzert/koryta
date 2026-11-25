@@ -40,7 +40,6 @@ const notYetPhotographed: Record<string, string> = {
   "admin/notatki/kategoryzacja": "admin",
   "cli-login": "signed in, with a `callback` for the CLI",
   "edit/node/[[id]]": "signed in",
-  "eksploruj/autograf/[type]": "charts; needs a check that they draw stably",
   "eksploruj/staz":
     "tenure is counted to today, so the figures move daily unless stubbed",
   "ekstrakcje/index": "signed in; the seed has extractions",
