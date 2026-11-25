@@ -140,14 +140,17 @@ function countsFor(
   people: Map<string, Span[]>,
   firstMonth: number,
   width: number,
+  /** The part of a person this group gets; a whole one without it. */
+  weightOf?: (personId: string) => number,
 ): number[] {
   // One longer than the window, so a span reaching the last month can close
   // itself at `to + 1` without a bounds check.
   const delta = new Array<number>(width + 1).fill(0);
-  for (const spans of people.values()) {
+  for (const [personId, spans] of people) {
+    const weight = weightOf?.(personId) ?? 1;
     for (const span of mergeMonthSpans(spans)) {
-      delta[span.from - firstMonth]! += 1;
-      delta[span.to - firstMonth + 1]! -= 1;
+      delta[span.from - firstMonth]! += weight;
+      delta[span.to - firstMonth + 1]! -= weight;
     }
   }
 
@@ -155,7 +158,9 @@ function countsFor(
   let running = 0;
   for (let i = 0; i < width; i += 1) {
     running += delta[i]!;
-    counts.push(running);
+    // Thirds summed drift (0.1 + 0.2 is not 0.3); three places is finer
+    // than any part of a person handed out.
+    counts.push(weightOf ? Math.round(running * 1000) / 1000 : running);
   }
   return counts;
 }
@@ -193,6 +198,10 @@ export function buildTimeline(
      * moves the lines rather than the years under them. Ignored if it falls
      * after the first month in `posts`, which would cut data off the front. */
     from?: string;
+    /** Count each person once in all, split evenly among the groups their
+     * posts name, rather than once in each. What a stack needs: the lines
+     * then add up to the headcount, in parts of a person. */
+    shareAmongGroups?: boolean;
   } = {},
 ): Timeline {
   const lastMonth = monthIndex(today);
@@ -203,6 +212,8 @@ export function buildTimeline(
 
   // group -> person -> the months they held something
   const byGroup = new Map<string, Map<string, Span[]>>();
+  // person -> every group their posts name, for `shareAmongGroups`
+  const groupsOf = new Map<string, Set<string>>();
   let firstMonth: number | null = null;
 
   for (const post of posts) {
@@ -217,6 +228,12 @@ export function buildTimeline(
     );
 
     firstMonth = firstMonth === null ? from : Math.min(firstMonth, from);
+
+    if (options.shareAmongGroups) {
+      const held = groupsOf.get(post.personId);
+      if (held) for (const group of post.groups) held.add(group);
+      else groupsOf.set(post.personId, new Set(post.groups));
+    }
 
     for (const group of new Set(post.groups)) {
       let people = byGroup.get(group);
@@ -235,10 +252,13 @@ export function buildTimeline(
   const months: string[] = [];
   for (let m = firstMonth; m <= lastMonth; m += 1) months.push(monthKey(m));
   const width = months.length;
+  const weightOf = options.shareAmongGroups
+    ? (personId: string) => 1 / (groupsOf.get(personId)?.size || 1)
+    : undefined;
 
   let ranked: (TimelineSeries & { peak: number })[] = [];
   for (const [key, people] of byGroup) {
-    const counts = countsFor(people, firstMonth, width);
+    const counts = countsFor(people, firstMonth, width, weightOf);
     const peak = Math.max(...counts);
     // A group nobody in the data belongs to would be an empty line across the
     // whole chart. It cannot happen from the loop above - a group only gets a
@@ -270,7 +290,13 @@ export function buildTimeline(
       }
     }
 
-    const counts = countsFor(people, firstMonth, width);
+    // Shared out, a person's parts in the folded groups add up to what the
+    // remainder holds of them, so the sum is the count.
+    const counts = weightOf
+      ? months.map((_, index) =>
+          folded.reduce((sum, line) => sum + (line.counts[index] ?? 0), 0),
+        )
+      : countsFor(people, firstMonth, width);
     ranked = [
       ...kept,
       {

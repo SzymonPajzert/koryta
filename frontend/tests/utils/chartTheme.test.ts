@@ -3,8 +3,10 @@ import {
   dayLabelStep,
   everyNthDayLabel,
   formatDayRange,
+  formatPeople,
   formatShare,
   rankedTooltip,
+  stackTooltip,
 } from "~/utils/chartTheme";
 
 /** The plot of „Co się działo w bazie” at 375px: the page's and the card's
@@ -165,5 +167,54 @@ describe("rankedTooltip", () => {
     const html = tooltip({ series: [[12345], [0], [0]], dataPointIndex: 0 });
 
     expect(read(html).rows[0]).toBe("Województwo mazowieckie: 12 345");
+  });
+});
+
+describe("formatPeople", () => {
+  it("writes a share of a person to one decimal, the Polish way", () => {
+    expect(formatPeople(12.5)).toBe("12,5");
+    expect(formatPeople(0.333)).toBe("0,3");
+  });
+
+  it("writes a whole person as a whole number", () => {
+    expect(formatPeople(242)).toBe("242");
+  });
+});
+
+describe("stackTooltip", () => {
+  const bands = [
+    { name: "Inne partie", color: "grey", value: 28.8 },
+    { name: "Polska 2050", color: "yellow", value: 1 },
+    { name: "PiS", color: "navy", value: 244.7 },
+    { name: "PO", color: "orange", value: 0 },
+  ];
+  let total: number | undefined;
+  const tooltip = stackTooltip(
+    () => bands,
+    (index, sum) => {
+      total = sum;
+      return `month ${index}`;
+    },
+  );
+
+  function rows(html: string) {
+    const box = document.createElement("div");
+    box.innerHTML = html;
+    return [...box.querySelectorAll(".apexcharts-tooltip-series-group")].map(
+      (row) => row.textContent,
+    );
+  }
+
+  it("lists the bands as they stand, with each one's share of the point", () => {
+    expect(rows(tooltip({ dataPointIndex: 3 }))).toEqual([
+      "Inne partie: 28,8 (10%)",
+      "Polska 2050: 1 (<1%)",
+      "PiS: 244,7 (89%)",
+    ]);
+  });
+
+  it("hands the title the point's total, the empty band left out of the rows", () => {
+    tooltip({ dataPointIndex: 3 });
+    expect(total).toBe(274.5);
   });
 });
