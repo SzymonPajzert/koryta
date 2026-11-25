@@ -374,4 +374,66 @@ describe("buildTimeline", () => {
       expect(timeline.series.at(-1)!.label).toBe("Pozostałe województwa");
     });
   });
+
+  describe("sharing a person among groups", () => {
+    it("gives somebody in two groups half to each, so the lines add up", () => {
+      const timeline = buildTimeline(
+        [
+          post({ personId: "a", groups: ["PSL", "Polska 2050"] }),
+          post({ personId: "b", groups: ["PSL"] }),
+        ],
+        TODAY,
+        { shareAmongGroups: true },
+      );
+
+      expect(counts(timeline, "PSL")!.at(-1)).toBe(1.5);
+      expect(counts(timeline, "Polska 2050")!.at(-1)).toBe(0.5);
+    });
+
+    it("shares by every group the person's posts name together", () => {
+      // Two posts, each naming one of the person's groups: still one person.
+      const timeline = buildTimeline(
+        [
+          post({ personId: "a", groups: ["PO"] }),
+          post({ personId: "a", groups: ["PiS"] }),
+        ],
+        TODAY,
+        { shareAmongGroups: true },
+      );
+
+      expect(counts(timeline, "PO")!.at(-1)).toBe(0.5);
+      expect(counts(timeline, "PiS")!.at(-1)).toBe(0.5);
+    });
+
+    it("keeps thirds from drifting off a whole person", () => {
+      const timeline = buildTimeline(
+        [post({ personId: "a", groups: ["PO", "PiS", "PSL"] })],
+        TODAY,
+        { shareAmongGroups: true },
+      );
+
+      const top = timeline.series.reduce(
+        (sum, line) => sum + line.counts.at(-1)!,
+        0,
+      );
+      expect(top).toBeCloseTo(1, 2);
+      expect(counts(timeline, "PO")!.at(-1)).toBe(0.333);
+    });
+
+    it("folds by adding the shares, which counts a person once", () => {
+      const timeline = buildTimeline(
+        [
+          ...Array.from({ length: 4 }, (_, i) =>
+            post({ personId: `big${i}`, groups: ["big"] }),
+          ),
+          post({ personId: "shared", groups: ["tiny-a", "tiny-b"] }),
+        ],
+        TODAY,
+        { shareAmongGroups: true, maxSeries: 2 },
+      );
+
+      const other = timeline.series.find((line) => line.key === OTHER_KEY);
+      expect(other!.counts.at(-1)).toBe(1);
+    });
+  });
 });

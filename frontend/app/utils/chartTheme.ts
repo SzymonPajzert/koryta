@@ -270,8 +270,6 @@ export function rankedTooltip(
   lines: () => TooltipLine[],
   title: (dataPointIndex: number) => string,
 ) {
-  // The font apexcharts sets on the same two elements of its own tooltip.
-  const font = escapeHtml(`font-family: ${FONT_FAMILY}; font-size: 12px`);
   return ({ series, dataPointIndex }: TooltipPoint): string => {
     const rows = lines()
       .map((line, index) => ({
@@ -284,21 +282,69 @@ export function rankedTooltip(
           typeof row.value === "number",
       )
       .sort((a, b) => b.value - a.value || a.index - b.index)
-      .map(
-        ({ line, value }) =>
-          `<div class="apexcharts-tooltip-series-group apexcharts-active" style="display: flex">` +
-          `<span class="apexcharts-tooltip-marker" style="color: ${escapeHtml(line.color)}">${TOOLTIP_MARKER}</span>` +
-          `<div class="apexcharts-tooltip-text" style="${font}">` +
-          `<div class="apexcharts-tooltip-y-group">` +
-          `<span class="apexcharts-tooltip-text-y-label">${escapeHtml(line.name)}: </span>` +
-          `<span class="apexcharts-tooltip-text-y-value">${formatCount(value)}</span>` +
-          `</div></div></div>`,
-      );
+      .map(({ line, value }) => tooltipRow(line, formatCount(value)));
+    return tooltipTitle(title(dataPointIndex)) + rows.join("");
+  };
+}
+
+/** One band of a stacked chart at the hovered point. */
+export type StackTooltipRow = TooltipLine & { value: number };
+
+/** A shared tooltip for a stacked chart: the bands top first, as they stand,
+ * each with its count and its share of the point, and the point's total handed
+ * to the title. A band with nobody in it at the point has no row.
+ *
+ * The rows are asked for each time, as in `rankedTooltip` and for the same
+ * reason: apexcharts goes on calling the first tooltip it was given. */
+export function stackTooltip(
+  rows: (dataPointIndex: number) => StackTooltipRow[],
+  title: (dataPointIndex: number, total: number) => string,
+) {
+  return ({ dataPointIndex }: { dataPointIndex: number }): string => {
+    const bands = rows(dataPointIndex);
+    const total =
+      Math.round(bands.reduce((sum, band) => sum + band.value, 0) * 1000) /
+      1000;
     return (
-      `<div class="apexcharts-tooltip-title" style="${font}">${escapeHtml(title(dataPointIndex))}</div>` +
-      rows.join("")
+      tooltipTitle(title(dataPointIndex, total)) +
+      bands
+        .filter((band) => band.value > 0)
+        .map((band) =>
+          tooltipRow(
+            band,
+            `${formatPeople(band.value)} (${shareLabel(band.value, total)})`,
+          ),
+        )
+        .join("")
     );
   };
+}
+
+/** A whole percent, and „<1%” for a part that would round down to „0%”:
+ * one person in three hundred is not nobody. */
+function shareLabel(part: number, whole: number): string {
+  if (part > 0 && whole > 0 && (part / whole) * 100 < 0.5) return "<1%";
+  return formatPercent(part, whole);
+}
+
+/** The font apexcharts sets on the same elements of its own tooltip. */
+const TOOLTIP_FONT = escapeHtml(`font-family: ${FONT_FAMILY}; font-size: 12px`);
+
+function tooltipTitle(text: string): string {
+  return `<div class="apexcharts-tooltip-title" style="${TOOLTIP_FONT}">${escapeHtml(text)}</div>`;
+}
+
+/** A tooltip row in apexcharts' own markup, so its stylesheet draws it. */
+function tooltipRow(line: TooltipLine, value: string): string {
+  return (
+    `<div class="apexcharts-tooltip-series-group apexcharts-active" style="display: flex">` +
+    `<span class="apexcharts-tooltip-marker" style="color: ${escapeHtml(line.color)}">${TOOLTIP_MARKER}</span>` +
+    `<div class="apexcharts-tooltip-text" style="${TOOLTIP_FONT}">` +
+    `<div class="apexcharts-tooltip-y-group">` +
+    `<span class="apexcharts-tooltip-text-y-label">${escapeHtml(line.name)}: </span>` +
+    `<span class="apexcharts-tooltip-text-y-value">${escapeHtml(value)}</span>` +
+    `</div></div></div>`
+  );
 }
 
 /** Bar geometry the method fixes: capped thickness, a 4px rounded data end, and
@@ -323,6 +369,15 @@ export function barPlotOptions(options: { horizontal?: boolean } = {}) {
 export function formatCount(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   return new Intl.NumberFormat("pl-PL").format(value);
+}
+
+/** A count of people that can hold parts of a person, as a stack shared out
+ * between parties does: one decimal at most, „12,5”. */
+export function formatPeople(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 1 }).format(
+    value,
+  );
 }
 
 /** Compact form for a stat tile that would otherwise wrap. */
