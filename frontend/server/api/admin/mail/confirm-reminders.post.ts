@@ -5,13 +5,13 @@ import { requireOwner } from "~~/server/utils/auth";
 import {
   confirmReminderRecipients,
   queueConfirmReminders,
-} from "~~/server/utils/confirmReminders";
+} from "~~/server/utils/confirmAddress";
 import { loadAudience } from "~~/server/utils/mailAudience";
-import { renderConfirmReminder } from "~~/shared/confirmReminder";
+import { renderConfirmReminder } from "~~/shared/confirmAddress";
 
 const bodySchema = z.object({ send: z.boolean().default(false) });
 
-/** The one reminder to confirm an address (shared/confirmReminder.ts), for the
+/** The one reminder to confirm an address (shared/confirmAddress.ts), for the
  * owner, who runs it from the browser console: no page calls it.
  *
  * Without `send` it only says who would get it and what each version says.

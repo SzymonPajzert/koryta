@@ -2,16 +2,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Firestore } from "firebase-admin/firestore";
 import {
   CONFIRM_REMINDER_BATCH,
+  CONFIRMATION_GAP_MS,
   confirmReminderRecipients,
+  queueAddressConfirmation,
   queueConfirmReminders,
   type ConfirmReminderRecipient,
-} from "../../../server/utils/confirmReminders";
+} from "../../../server/utils/confirmAddress";
 import { emptyActivityCounts } from "../../../shared/activity";
 import type { AudienceMember } from "../../../shared/campaigns";
 
 const { store, mockLink, Timestamp } = vi.hoisted(() => {
+  const stamp = (millis: number) => ({ toMillis: () => millis });
   return {
-    Timestamp: { now: () => ({ seconds: 0 }) },
+    Timestamp: {
+      now: () => stamp(0),
+      fromDate: (date: Date) => stamp(date.getTime()),
+    },
     /** Every `mail` document, by id. */
     store: new Map<string, Record<string, unknown>>(),
     mockLink: vi.fn(),
@@ -34,7 +40,11 @@ const docRef = (id: string) => ({
 const db = {
   collection: () => ({ doc: docRef }),
   getAll: async (...refs: { id: string }[]) =>
-    refs.map((ref) => ({ id: ref.id, exists: store.has(ref.id) })),
+    refs.map((ref) => ({
+      id: ref.id,
+      exists: store.has(ref.id),
+      get: (field: string) => store.get(ref.id)?.[field],
+    })),
 } as unknown as Firestore;
 
 function member(uid: string, overrides: Partial<AudienceMember> = {}) {
@@ -188,5 +198,63 @@ describe("queueConfirmReminders", () => {
       }),
     ).toEqual({ a: "failed", b: "queued" });
     expect(store.has("confirmReminder_a")).toBe(false);
+  });
+});
+
+describe("queueAddressConfirmation", () => {
+  const NOW = new Date("2026-11-25T12:00:00Z");
+  const account = { uid: "a", email: "a@example.com", emailVerified: false };
+  const ask = (now = NOW, who = account) =>
+    queueAddressConfirmation(db, who, { siteUrl: SITE, now });
+
+  it("queues the confirmation in the day's first slot", async () => {
+    expect(await ask()).toBe("queued");
+    const doc = store.get("confirmAddress_a_2026-11-25_1")!;
+    expect(doc).toMatchObject({
+      to: ["a@example.com"],
+      kind: "confirmAddress",
+      uid: "a",
+    });
+    const message = doc.message as { subject: string; text: string };
+    expect(message.subject).toBe("Potwierdź adres e-mail na koryta.pl");
+    expect(message.text).toContain("Potwierdź adres e-mail swojego konta");
+    expect(message.text).toContain("lang=pl");
+    expect(message.text).not.toContain("To jedyne przypomnienie");
+    expect(mockLink).toHaveBeenCalledWith("a@example.com", {
+      url: "https://koryta.pl/profil",
+    });
+  });
+
+  it("sends nothing to a confirmed account or one without an address", async () => {
+    expect(await ask(NOW, { ...account, emailVerified: true })).toBe(
+      "confirmed",
+    );
+    expect(await ask(NOW, { ...account, email: null })).toBe("noAddress");
+    expect(store.size).toBe(0);
+    expect(mockLink).not.toHaveBeenCalled();
+  });
+
+  it("waits a minute between two, and stops at three a day", async () => {
+    expect(await ask()).toBe("queued");
+    expect(await ask(new Date(NOW.getTime() + 1_000))).toBe("tooSoon");
+
+    const later = (minutes: number) =>
+      new Date(NOW.getTime() + minutes * CONFIRMATION_GAP_MS);
+    expect(await ask(later(1))).toBe("queued");
+    expect(await ask(later(2))).toBe("queued");
+    expect(await ask(later(3))).toBe("dailyLimit");
+    expect(store.has("confirmAddress_a_2026-11-25_3")).toBe(true);
+
+    // A new UTC day starts the count again.
+    expect(await ask(new Date("2026-11-26T00:00:30Z"))).toBe("queued");
+    expect(store.has("confirmAddress_a_2026-11-26_1")).toBe(true);
+  });
+
+  it("counts a slot another request took in the meantime as too soon", async () => {
+    mockLink.mockImplementationOnce(async (email: string) => {
+      store.set("confirmAddress_a_2026-11-25_1", { uid: "a" });
+      return `https://koryta-pl.firebaseapp.com/__/auth/action?oobCode=${email}`;
+    });
+    expect(await ask()).toBe("tooSoon");
   });
 });

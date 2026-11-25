@@ -90,6 +90,20 @@ test.describe("Newsletter question", () => {
       expect(doc?.newsletterUpdated?.via).toBe("signup");
     }).toPass({ timeout: 30_000 });
 
+    // The link to confirm the address goes out through the site's own mail,
+    // once: the yes right after the sign-up does not send a second one.
+    await expect(async () => {
+      const sent = await adminDb()
+        .collection("mail")
+        .where("uid", "==", uid)
+        .where("kind", "==", "confirmAddress")
+        .get();
+      expect(sent.docs).toHaveLength(1);
+      const data = sent.docs[0]!.data();
+      expect(data.to).toEqual([email]);
+      expect(data.message.subject).toBe("Potwierdź adres e-mail na koryta.pl");
+    }).toPass({ timeout: 30_000 });
+
     await page.goto("/profil", { waitUntil: "domcontentloaded" });
     const status = page.locator("[data-newsletter-status]");
     await expect(status).toContainText(email, { timeout: 30_000 });

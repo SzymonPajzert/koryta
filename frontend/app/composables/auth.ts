@@ -138,11 +138,45 @@ export function useAuthState() {
   };
 }
 
-/** Firebase's mail with the link that confirms `user`'s address. The page the
- * link opens offers a way back to /profil; where Firebase does not know this
- * site's address (a preview deployment), the mail goes without it. Its
- * language is set once, in plugins/auth-language.client.ts. */
+/** Mails `user` the link that confirms their address. The site sends it
+ * through its own mail, from its own address (server/api/mail/confirm-address),
+ * since Firebase's comes from firebaseapp.com and often lands in spam.
+ *
+ * A request the site turns down as too frequent throws with Firebase's code
+ * for that, `auth/too-many-requests`, and the site's words. When the site
+ * cannot send it at all, Firebase's own mail goes instead. */
 export async function sendConfirmationMail(user: User): Promise<void> {
+  try {
+    await $fetch("/api/mail/confirm-address", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+    });
+    return;
+  } catch (error) {
+    const refusal = error as {
+      statusCode?: number;
+      data?: { message?: string };
+    } | null;
+    const status = refusal?.statusCode;
+    if (status === 429) {
+      throw Object.assign(
+        new Error(
+          refusal?.data?.message ??
+            "Link już wysłaliśmy. Sprawdź skrzynkę, także folder ze spamem.",
+        ),
+        { code: "auth/too-many-requests" },
+      );
+    }
+    if (status !== undefined && status < 500) throw error;
+    console.warn("The site could not send the confirmation mail", error);
+  }
+  await sendFirebaseConfirmationMail(user);
+}
+
+/** Firebase's own mail with the link, in the language plugins/auth-language
+ * sets. Its page offers a way back to /profil; where Firebase does not know
+ * this site's address (a preview deployment), it goes without one. */
+async function sendFirebaseConfirmationMail(user: User): Promise<void> {
   try {
     await sendEmailVerification(user, {
       url: `${window.location.origin}/profil`,

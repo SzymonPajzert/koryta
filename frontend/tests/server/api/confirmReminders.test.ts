@@ -4,7 +4,7 @@ import { requireOwner } from "../../../server/utils/auth";
 import {
   confirmReminderRecipients,
   queueConfirmReminders,
-} from "../../../server/utils/confirmReminders";
+} from "../../../server/utils/confirmAddress";
 import { loadAudience } from "../../../server/utils/mailAudience";
 
 vi.mock("h3", async (importOriginal) => {
@@ -22,7 +22,7 @@ vi.mock("h3", async (importOriginal) => {
 vi.mock("firebase-admin/firestore", () => ({ getFirestore: () => ({}) }));
 vi.mock("~~/server/utils/auth", () => ({ requireOwner: vi.fn() }));
 vi.mock("~~/server/utils/mailAudience", () => ({ loadAudience: vi.fn() }));
-vi.mock("~~/server/utils/confirmReminders", () => ({
+vi.mock("~~/server/utils/confirmAddress", () => ({
   confirmReminderRecipients: vi.fn(),
   queueConfirmReminders: vi.fn(),
 }));

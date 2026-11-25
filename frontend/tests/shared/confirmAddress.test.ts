@@ -2,10 +2,13 @@ import { describe, it, expect } from "vitest";
 import { emptyActivityCounts } from "../../shared/activity";
 import type { AudienceMember } from "../../shared/campaigns";
 import {
+  CONFIRMATIONS_PER_DAY,
+  confirmationIds,
   confirmReasonsFor,
   confirmReminderId,
+  renderAddressConfirmation,
   renderConfirmReminder,
-} from "../../shared/confirmReminder";
+} from "../../shared/confirmAddress";
 
 function member(overrides: Partial<AudienceMember> = {}): AudienceMember {
   return {
@@ -121,5 +124,32 @@ describe("renderConfirmReminder", () => {
     expect(team).toBeGreaterThanOrEqual(0);
     expect(readings).toBeGreaterThan(team);
     expect(mail.text).not.toContain("newsletter");
+  });
+});
+
+describe("confirmationIds", () => {
+  it("gives an account one slot per confirmation mail of the day", () => {
+    expect(confirmationIds("abc", "2026-11-25")).toEqual(
+      Array.from(
+        { length: CONFIRMATIONS_PER_DAY },
+        (_, i) => `confirmAddress_abc_2026-11-25_${i + 1}`,
+      ),
+    );
+  });
+});
+
+describe("renderAddressConfirmation", () => {
+  it("asks to confirm, in the reminder's look, without calling itself a reminder", () => {
+    const url = "https://koryta-pl.firebaseapp.com/__/auth/action?oobCode=x";
+    const mail = renderAddressConfirmation({ url });
+    expect(mail.subject).toBe("Potwierdź adres e-mail na koryta.pl");
+    expect(mail.text).toBe(
+      [
+        "Potwierdź adres e-mail swojego konta na koryta.pl.",
+        `Potwierdź adres: ${url}`,
+        "Jeśli to nie Twoje konto, zignoruj tę wiadomość.",
+      ].join("\n\n"),
+    );
+    expect(mail.html).toContain(`href="${url}"`);
   });
 });

@@ -561,6 +561,11 @@ const sendVerification = async () => {
     await sendConfirmationMail(user.value);
     notify("Wysłano email weryfikacyjny. Sprawdź swoją skrzynkę.");
   } catch (err) {
+    // Asked again too soon: the site says so in its own words.
+    if ((err as { code?: string }).code === "auth/too-many-requests") {
+      notify((err as Error).message, "error");
+      return;
+    }
     console.error("Failed to send verification email:", err);
     notify("Nie udało się wysłać emaila weryfikacyjnego.", "error");
   } finally {

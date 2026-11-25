@@ -409,18 +409,24 @@ accounts: the pilot first, then everybody else. The rules are in
 
 ### Confirming an address
 
-Firebase mails the confirmation link itself, at sign-up, on a yes to the
-newsletter while unconfirmed, and from the buttons on `/login` and `/profil`
-(`sendConfirmationMail` in `composables/auth.ts`). `plugins/auth-language.client.ts`
-makes it Polish, and the link's page leads back to `/profil`.
+The link that confirms an address goes out through `mail`, from the site's own
+address like campaigns, at sign-up, on a yes to the newsletter while
+unconfirmed, and from the buttons on `/login` and `/profil`
+(`sendConfirmationMail` in `composables/auth.ts` calls
+`POST /api/mail/confirm-address`). Firebase's own mail came from
+firebaseapp.com and often landed in spam; it is now only the fallback when the
+site cannot send, in Polish (`plugins/auth-language.client.ts`). The link is
+made by the Admin SDK, opens Firebase's page in Polish and leads back to
+`/profil`. An account gets 3 a UTC day, a minute apart: the slots are the
+message ids, `mail/confirmAddress_<uid>_<YYYY-MM-DD>_<1..3>`, so the limit
+needs no collection or index of its own (`shared/confirmAddress.ts`).
 
-Nothing asks again after that, so the owner can send one reminder through
-`mail` (`shared/confirmReminder.ts`): to an unconfirmed account that said yes to
-a topic, is an administrator with team mail on, or has read declarations, whose
-readings vote only once it is confirmed. Each account gets it once
-(`mail/confirmReminder_<uid>`, made with `create`), 20 per call. No page sends it;
-the owner calls the endpoint from the browser console on any page of the site,
-signed in:
+Nothing asks again after that, so the owner can send one reminder: to an
+unconfirmed account that said yes to a topic, is an administrator with team mail
+on, or has read declarations, whose readings vote only once it is confirmed.
+Each account gets it once (`mail/confirmReminder_<uid>`, made with `create`), 20
+per call. No page sends it; the owner calls the endpoint from the browser
+console on any page of the site, signed in:
 
 ```js
 (async (send) => {

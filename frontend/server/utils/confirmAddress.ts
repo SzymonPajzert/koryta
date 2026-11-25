@@ -4,18 +4,87 @@ import type { Firestore } from "firebase-admin/firestore";
 import { isAlreadyExists } from "~~/server/utils/mailTokens";
 import type { AudienceMember } from "~~/shared/campaigns";
 import {
+  confirmationIds,
   confirmReasonsFor,
   confirmReminderId,
+  renderAddressConfirmation,
   renderConfirmReminder,
   type ConfirmReason,
-} from "~~/shared/confirmReminder";
+} from "~~/shared/confirmAddress";
+
+/** The shortest wait between two confirmation mails of one account. */
+export const CONFIRMATION_GAP_MS = 60_000;
+
+/** What came of a request for the confirmation mail. */
+export type ConfirmationOutcome =
+  | "queued"
+  /** Confirmed already: nothing to send. */
+  | "confirmed"
+  | "noAddress"
+  /** Asked again within `CONFIRMATION_GAP_MS`. */
+  | "tooSoon"
+  /** Had `CONFIRMATIONS_PER_DAY` today. */
+  | "dailyLimit";
+
+/** Queues the mail with the link that confirms `account`'s address
+ * (shared/confirmAddress.ts), unless it is confirmed or has asked too often.
+ *
+ * The limit keeps one account from spending the site's 100 messages a day on
+ * Mailgun, or from writing to one address over and over: anybody can register
+ * with anybody's address. It lives in the ids of the messages themselves, one
+ * slot per message of the day, so it needs no collection or index of its own.
+ */
+export async function queueAddressConfirmation(
+  db: Firestore,
+  account: { uid: string; email: string | null; emailVerified: boolean },
+  options: { siteUrl: string; now: Date },
+): Promise<ConfirmationOutcome> {
+  if (!account.email) return "noAddress";
+  if (account.emailVerified) return "confirmed";
+
+  const day = options.now.toISOString().slice(0, 10);
+  const ids = confirmationIds(account.uid, day);
+  const snapshots = await db.getAll(
+    ...ids.map((id) => db.collection("mail").doc(id)),
+  );
+  const free = ids.find((_, i) => !snapshots[i]?.exists);
+  if (!free) return "dailyLimit";
+  const last = Math.max(
+    0,
+    ...snapshots.map((snapshot) => millis(snapshot.get("created_at"))),
+  );
+  if (options.now.getTime() - last < CONFIRMATION_GAP_MS) return "tooSoon";
+
+  const url = await confirmationLink(account.email, options.siteUrl);
+  try {
+    await db
+      .collection("mail")
+      .doc(free)
+      .create({
+        to: [account.email],
+        message: renderAddressConfirmation({ url }),
+        kind: "confirmAddress",
+        uid: account.uid,
+        created_at: Timestamp.fromDate(options.now),
+      });
+  } catch (error) {
+    // Two requests at once took the same slot, and the other one sent it.
+    if (isAlreadyExists(error)) return "tooSoon";
+    throw error;
+  }
+  return "queued";
+}
+
+function millis(value: unknown): number {
+  return (value as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
+}
 
 /** The most reminders queued by one call. The pilot lost 11 of the 40
  * messages queued at once to Mailgun's burst limit; a second call sends the
  * rest. */
 export const CONFIRM_REMINDER_BATCH = 20;
 
-/** An account the reminder is for (shared/confirmReminder.ts). */
+/** An account the reminder is for (shared/confirmAddress.ts). */
 export type ConfirmReminderRecipient = {
   uid: string;
   email: string;
@@ -70,14 +139,18 @@ export async function queueConfirmReminders(
     .slice(0, options.limit ?? CONFIRM_REMINDER_BATCH);
   const outcomes: Record<string, ConfirmReminderOutcome> = {};
   for (const recipient of due) {
-    outcomes[recipient.uid] = await queueOne(db, recipient, options.siteUrl);
+    outcomes[recipient.uid] = await queueReminder(
+      db,
+      recipient,
+      options.siteUrl,
+    );
   }
   const queued = Object.values(outcomes).filter((o) => o === "queued").length;
   console.info(`confirmReminders: queued ${queued} of ${due.length}`);
   return outcomes;
 }
 
-async function queueOne(
+async function queueReminder(
   db: Firestore,
   recipient: ConfirmReminderRecipient,
   siteUrl: string,

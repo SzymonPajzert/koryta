@@ -293,6 +293,8 @@ const getErrorMessage = (errorCode: string) => {
       return "Ten email jest już w użyciu.";
     case "auth/weak-password":
       return "Hasło jest zbyt słabe. Powinno mieć co najmniej 6 znaków.";
+    case "auth/too-many-requests":
+      return "Link już wysłaliśmy. Sprawdź skrzynkę, także folder ze spamem, albo spróbuj później.";
     default:
       return "An unexpected error occurred. Please try again.";
   }

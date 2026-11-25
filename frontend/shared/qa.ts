@@ -60,11 +60,12 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
 export const QA_ITEMS: QaItem[] = [
   {
     id: "mail-potwierdzajacy-adres-po-polsku",
-    title: "Mail z linkiem potwierdzającym adres jest po polsku",
+    title: "Mail z linkiem potwierdzającym adres przychodzi od koryta.pl",
     description:
-      "Mail wysyłany po założeniu konta, po „tak” na pytanie o newsletter i przyciskiem na /profil jest po polsku. Strona, którą otwiera link, ma przycisk powrotu na /profil.",
+      "Mail wysyłany po założeniu konta, po „tak” na pytanie o newsletter i przyciskami na /login i /profil przychodzi od koryta.pl, jak newsletter, a nie od Firebase, więc rzadziej trafia do spamu. Jest po polsku, a strona, którą otwiera link, ma przycisk powrotu na /profil.",
     steps: [
-      "Załóż konto na /login na nowy adres: przychodzi mail po polsku.",
+      "Załóż konto na /login na nowy adres: przychodzi mail „Potwierdź adres e-mail na koryta.pl” od koryta.pl.",
+      "Zaraz potem kliknij na /profil „Wyślij email weryfikacyjny”: strona mówi, że link już wysłaliśmy.",
       "Kliknij link w mailu: adres jest potwierdzony, a przycisk na tej stronie prowadzi na /profil.",
     ],
     link: "/login",
