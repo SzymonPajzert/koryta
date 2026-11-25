@@ -59,6 +59,18 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "mail-potwierdzajacy-adres-po-polsku",
+    title: "Mail z linkiem potwierdzającym adres jest po polsku",
+    description:
+      "Mail wysyłany po założeniu konta, po „tak” na pytanie o newsletter i przyciskiem na /profil jest po polsku. Strona, którą otwiera link, ma przycisk powrotu na /profil.",
+    steps: [
+      "Załóż konto na /login na nowy adres: przychodzi mail po polsku.",
+      "Kliknij link w mailu: adres jest potwierdzony, a przycisk na tej stronie prowadzi na /profil.",
+    ],
+    link: "/login",
+    area: "contributor",
+  },
+  {
     id: "eksploruj-bez-karty-grafu",
     title: "Na /eksploruj nie ma już karty „Graf połączeń”",
     description:

@@ -108,12 +108,9 @@
 <script setup lang="ts">
 import { watch } from "vue";
 import { useCountdown } from "@vueuse/core";
-import {
-  type User,
-  onAuthStateChanged,
-  sendEmailVerification,
-} from "firebase/auth";
+import { type User, onAuthStateChanged } from "firebase/auth";
 import { mdiCheckCircle } from "@mdi/js";
+import { sendConfirmationMail } from "~/composables/auth";
 import { useNewsletterQuestion } from "~/composables/newsletter";
 import { signedInAs, useSignInMethod } from "~/composables/signInMethod";
 
@@ -268,7 +265,7 @@ const sendVerification = async () => {
   if (!user.value) return;
   loading.value = true;
   try {
-    await sendEmailVerification(user.value);
+    await sendConfirmationMail(user.value);
     alert("Wysłano email weryfikacyjny.");
   } catch (err: unknown) {
     const errorObj = err as { code: string; message: string };

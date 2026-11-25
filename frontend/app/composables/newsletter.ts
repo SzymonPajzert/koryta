@@ -1,7 +1,6 @@
-import { sendEmailVerification } from "firebase/auth";
 import { doc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
 import { useFirebaseApp } from "vuefire";
-import { useAuthState } from "@/composables/auth";
+import { sendConfirmationMail, useAuthState } from "@/composables/auth";
 import { trackGoal } from "~/composables/analytics";
 import {
   newsletterQuestionDue,
@@ -115,7 +114,7 @@ export function useNewsletterQuestion() {
     const awaitingConfirmation = yes && !current.emailVerified;
     if (awaitingConfirmation && !options.verificationSent) {
       try {
-        await sendEmailVerification(current);
+        await sendConfirmationMail(current);
       } catch (error) {
         // The answer is saved either way, and both /profil and /login offer
         // to send the link again.

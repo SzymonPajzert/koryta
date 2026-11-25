@@ -2,6 +2,7 @@ import {
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   sendPasswordResetEmail,
   type User,
 } from "firebase/auth";
@@ -135,6 +136,27 @@ export function useAuthState() {
     register,
     resetPassword,
   };
+}
+
+/** Firebase's mail with the link that confirms `user`'s address. The page the
+ * link opens offers a way back to /profil; where Firebase does not know this
+ * site's address (a preview deployment), the mail goes without it. Its
+ * language is set once, in plugins/auth-language.client.ts. */
+export async function sendConfirmationMail(user: User): Promise<void> {
+  try {
+    await sendEmailVerification(user, {
+      url: `${window.location.origin}/profil`,
+    });
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code;
+    if (
+      code !== "auth/unauthorized-continue-uri" &&
+      code !== "auth/invalid-continue-uri"
+    ) {
+      throw error;
+    }
+    await sendEmailVerification(user);
+  }
 }
 
 /** Resolves once firebase has restored (or ruled out) the signed in user. */

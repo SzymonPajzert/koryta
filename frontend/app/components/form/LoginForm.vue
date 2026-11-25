@@ -62,11 +62,8 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { mdiGoogle, mdiEye, mdiEyeOff } from "@mdi/js";
-import {
-  GoogleAuthProvider,
-  signInWithPopup,
-  sendEmailVerification,
-} from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { sendConfirmationMail } from "~/composables/auth";
 import { useSignInMethod } from "~/composables/signInMethod";
 
 defineProps<{
@@ -159,7 +156,7 @@ const register = async () => {
   signInMethod.value = "email-signup";
   try {
     const userCredential = await authRegister(email.value, password.value);
-    await sendEmailVerification(userCredential.user);
+    await sendConfirmationMail(userCredential.user);
     // No alert about the confirmation link: the page or dialog this form sits
     // in says it next, beside the newsletter question or the greeting.
     emit("success");
