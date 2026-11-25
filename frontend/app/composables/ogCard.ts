@@ -355,7 +355,7 @@ export function companyCardProps(input: CompanyCardInput): NodeCardProps {
       .slice(0, 2)
       .map(
         ([organ, seats]) =>
-          `${organ} — ${polishCounting(seats.size, "osoba", "osoby", "osób")}`,
+          `${organ} - ${polishCounting(seats.size, "osoba", "osoby", "osób")}`,
       );
     // „Obecny skład” is the page's own heading, so the card and the page it
     // links to use the same words for the same thing.

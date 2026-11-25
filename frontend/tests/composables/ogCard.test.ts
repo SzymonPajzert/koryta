@@ -299,7 +299,7 @@ describe("companyCardProps", () => {
     expect(props.eyebrow).toBe("ENERGETYKA");
     expect(props.chipLabel).toBe("Instytucja publiczna");
     expect(props.fact).toBe(
-      "Obecny skład: Zarząd — 2 osoby · Rada Nadzorcza — 1 osoba",
+      "Obecny skład: Zarząd - 2 osoby · Rada Nadzorcza - 1 osoba",
     );
     expect(props.foot).toBe(
       "KRS 0000012483 · siedziba: Poznań · stan bazy: wrzesień 2026",
@@ -341,7 +341,7 @@ describe("companyCardProps", () => {
       company: company({ isPublic: true }),
       sources: board,
     });
-    expect(props.fact).toBe("Obecny skład: Zarząd — 1 osoba");
+    expect(props.fact).toBe("Obecny skład: Zarząd - 1 osoba");
     expect(props.stat1Value).toBe("1");
   });
 

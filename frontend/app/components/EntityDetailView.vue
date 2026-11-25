@@ -817,7 +817,7 @@ if (ogCardEligible.value) {
     {
       width: 1200,
       height: 630,
-      alt: `${(entity.value as Person).name} — koryta.pl`,
+      alt: `${(entity.value as Person).name} - koryta.pl`,
     },
   );
 }
