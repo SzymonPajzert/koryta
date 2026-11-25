@@ -1,10 +1,7 @@
 <template>
   <ClientOnly>
     <div class="pa-4">
-      <h1 class="text-h4 mb-4">
-        Wizualizacje dla
-        {{ region?.[1] || company?.[1] || "danej lokalizacji" }}
-      </h1>
+      <h1 class="text-h4 mb-4">{{ heading }}</h1>
 
       <v-alert
         v-if="region && !company"
@@ -37,9 +34,16 @@
         </div>
       </v-alert>
 
-      <ExploreLoginBanner v-if="!user" :hidden-count="hiddenCount" />
+      <ExploreLoginBanner
+        v-if="!user && !isPartyStack"
+        :hidden-count="hiddenCount"
+      />
 
+      <!-- „Partie w czasie” counts every published post on the site and
+           takes only the category, from its own select; filters over people
+           have nothing to narrow there. -->
       <FormEksplorujTabelaFilters
+        v-if="!isPartyStack"
         v-model:visibility="filterVisibility"
         v-model:party="filterParty"
         v-model:election="filterElection"
@@ -60,23 +64,27 @@
         @clear="clearFilters"
       />
 
-      <div class="d-flex align-center mb-4 mt-6">
-        <span class="mr-4 text-subtitle-1 font-weight-bold"
+      <div class="d-flex flex-wrap align-center ga-2 mb-4 mt-6">
+        <span class="mr-2 text-subtitle-1 font-weight-bold"
           >Wybierz wizualizację:</span
         >
+        <!-- Stacked below md: the two labels side by side need about 830 px.
+             `ink-sage`, not `primary`, which is a fill and 1.85:1 as text. -->
         <v-btn-toggle
           v-model="activeVisualisation"
-          color="primary"
+          color="ink-sage"
+          :direction="smAndDown ? 'vertical' : 'horizontal'"
           mandatory
           variant="outlined"
           density="comfortable"
         >
           <v-btn value="spolki-partie">Firmy wg powiązań politycznych</v-btn>
+          <v-btn value="partie-w-czasie">Partie w czasie</v-btn>
         </v-btn-toggle>
       </div>
 
       <v-alert
-        v-if="totalItems > DATA_LIMIT"
+        v-if="!isPartyStack && totalItems > DATA_LIMIT"
         type="info"
         variant="tonal"
         class="mb-6"
@@ -87,7 +95,7 @@
       </v-alert>
 
       <v-progress-linear
-        v-if="pending"
+        v-if="pending && !isPartyStack"
         indeterminate
         color="primary"
         class="mb-4"
@@ -99,6 +107,10 @@
           :allowed-companies="allowedCompanyNames"
         />
       </div>
+      <ExploreVisualisationPartyStack
+        v-else-if="isPartyStack"
+        v-model:category="filterCategory"
+      />
     </div>
   </ClientOnly>
 </template>
@@ -115,6 +127,7 @@ import { parties } from "~~/shared/misc";
 import { regionFilterOptions } from "~~/shared/teryt";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
+import { useDisplay } from "vuetify";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
 useHead({
@@ -136,6 +149,11 @@ const activeVisualisation = computed({
 });
 
 const user = useCurrentUser();
+const { smAndDown } = useDisplay();
+
+const isPartyStack = computed(
+  () => activeVisualisation.value === "partie-w-czasie",
+);
 
 const { entities: places } = useEntities("place");
 const { entities: regions } = useEntities("region");
@@ -157,6 +175,13 @@ const company = computed<[string, string] | undefined>(() => {
   const place = id ? places.value?.[id] : undefined;
   return id && place ? [id, place.name] : undefined;
 });
+
+/** „Partie w czasie” is national: no place to name. */
+const heading = computed(() =>
+  isPartyStack.value
+    ? "Wizualizacje"
+    : `Wizualizacje dla ${region.value?.[1] || company.value?.[1] || "danej lokalizacji"}`,
+);
 
 const filterVisibility = choiceFilter<"all" | "public" | "private">(
   "visibility",
@@ -305,8 +330,11 @@ const apiQuery = computed(
     }) as Query,
 );
 
+// „Partie w czasie” draws from its own endpoint: the 200 people and their
+// graph would be two requests and their reads for nothing on screen.
 const { tableItems, totalItems, pending } = await useListWithStats(
   apiQuery,
   "wizualizacje-data",
+  { enabled: () => !isPartyStack.value },
 );
 </script>

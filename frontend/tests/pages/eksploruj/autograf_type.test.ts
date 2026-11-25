@@ -15,9 +15,11 @@ const vuetify = createVuetify({
 // Live boxes, the way tests/pages/eksploruj/tabela.test.ts keeps them: `vi.mock`
 // is hoisted above every declaration in this file, so a factory can only reach
 // something hoisted with it.
-const { routeQuery, lastQuery } = vi.hoisted(() => ({
+const { routeQuery, routeType, lastQuery, lastOptions } = vi.hoisted(() => ({
   routeQuery: { value: {} as Record<string, string> },
+  routeType: { value: "spolki-partie" },
   lastQuery: { value: null as { value: Query } | null },
+  lastOptions: { value: null as { enabled?: () => boolean } | null },
 }));
 
 // Mock vue-router explicitly since it's imported
@@ -28,8 +30,8 @@ vi.mock("vue-router", async (importOriginal) => {
     useRoute: () => ({
       query: routeQuery.value,
       name: "eksploruj-autograf-type",
-      path: "/eksploruj/autograf/spolki-partie",
-      params: { type: "spolki-partie" },
+      path: `/eksploruj/autograf/${routeType.value}`,
+      params: { type: routeType.value },
     }),
     useRouter: () => ({ push: vi.fn(), replace: vi.fn(), afterEach: vi.fn() }),
   };
@@ -41,25 +43,31 @@ vi.stubGlobal("useHead", vi.fn());
 
 // Mock Composables
 vi.mock("~~/app/composables/entity/listWithStats", () => ({
-  useListWithStats: vi.fn((apiQuery: { value: Query }) => {
-    lastQuery.value = apiQuery;
-    return Promise.resolve({
-      tableItems: ref([]),
-      totalItems: ref(0),
-      pending: ref(false),
-    });
-  }),
+  useListWithStats: vi.fn(
+    (apiQuery: { value: Query }, _key: string, options = {}) => {
+      lastQuery.value = apiQuery;
+      lastOptions.value = options;
+      return Promise.resolve({
+        tableItems: ref([]),
+        totalItems: ref(0),
+        pending: ref(false),
+      });
+    },
+  ),
 }));
 // Nuxt aliases it to ~ as well
 vi.mock("~/composables/entity/listWithStats", () => ({
-  useListWithStats: vi.fn((apiQuery: { value: Query }) => {
-    lastQuery.value = apiQuery;
-    return Promise.resolve({
-      tableItems: ref([]),
-      totalItems: ref(0),
-      pending: ref(false),
-    });
-  }),
+  useListWithStats: vi.fn(
+    (apiQuery: { value: Query }, _key: string, options = {}) => {
+      lastQuery.value = apiQuery;
+      lastOptions.value = options;
+      return Promise.resolve({
+        tableItems: ref([]),
+        totalItems: ref(0),
+        pending: ref(false),
+      });
+    },
+  ),
 }));
 
 vi.mock("vuefire", () => ({
@@ -93,9 +101,14 @@ const NuxtLinkStub = {
   template: "<a><slot /></a>",
 };
 
-async function mountPage(query: Record<string, string> = {}) {
+async function mountPage(
+  query: Record<string, string> = {},
+  type = "spolki-partie",
+) {
   routeQuery.value = query;
+  routeType.value = type;
   lastQuery.value = null;
+  lastOptions.value = null;
 
   const wrapper = mount(
     {
@@ -109,6 +122,7 @@ async function mountPage(query: Record<string, string> = {}) {
           ClientOnly: { template: "<div><slot></slot></div>" },
           FormEksplorujTabelaFilters: true,
           ExploreVisualisationCompanies: true,
+          ExploreVisualisationPartyStack: true,
           ExploreLoginBanner: true,
           NuxtLink: NuxtLinkStub,
         },
@@ -168,5 +182,30 @@ describe("AutografPage", () => {
     expect(bar.attributes("category")).toBe("szpitale");
     expect(bar.attributes("minemploymentdate")).toBe("2020-01-01");
     expect(bar.attributes("minvotes")).toBe("5");
+  });
+
+  /** „Partie w czasie” reads its own endpoint and takes the category alone:
+   * the people query would be two requests and their reads for nothing on
+   * screen, and the bar's other filters would narrow nothing. */
+  it("hands „Partie w czasie” the category and skips the people query", async () => {
+    const wrapper = await mountPage(
+      { category: "szpitale" },
+      "partie-w-czasie",
+    );
+
+    expect(wrapper.find("h1").text()).toBe("Wizualizacje");
+    expect(wrapper.find("form-eksploruj-tabela-filters-stub").exists()).toBe(
+      false,
+    );
+    const chart = wrapper.find("explore-visualisation-party-stack-stub");
+    expect(chart.exists()).toBe(true);
+    expect(chart.attributes("category")).toBe("szpitale");
+    expect(lastOptions.value?.enabled?.()).toBe(false);
+  });
+
+  it("fetches the people on the companies view", async () => {
+    await mountPage();
+
+    expect(lastOptions.value?.enabled?.()).toBe(true);
   });
 });
