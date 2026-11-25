@@ -407,6 +407,51 @@ accounts: the pilot first, then everybody else. The rules are in
   `utm_source=newsletter&utm_medium=email&utm_campaign=<id>`, so Plausible
   splits visits by campaign.
 
+### Confirming an address
+
+Firebase mails the confirmation link itself, at sign-up, on a yes to the
+newsletter while unconfirmed, and from the buttons on `/login` and `/profil`
+(`sendConfirmationMail` in `composables/auth.ts`). `plugins/auth-language.client.ts`
+makes it Polish, and the link's page leads back to `/profil`.
+
+Nothing asks again after that, so the owner can send one reminder through
+`mail` (`shared/confirmReminder.ts`): to an unconfirmed account that said yes to
+a topic, is an administrator with team mail on, or has read declarations, whose
+readings vote only once it is confirmed. Each account gets it once
+(`mail/confirmReminder_<uid>`, made with `create`), 20 per call. No page sends it;
+the owner calls the endpoint from the browser console on any page of the site,
+signed in:
+
+```js
+(async (send) => {
+  const req = (r) =>
+    new Promise((ok, no) => {
+      r.onsuccess = () => ok(r.result);
+      r.onerror = () => no(r.error);
+    });
+  const idb = await req(indexedDB.open("firebaseLocalStorageDb"));
+  const stored = await req(
+    idb
+      .transaction("firebaseLocalStorage")
+      .objectStore("firebaseLocalStorage")
+      .getAll(),
+  );
+  const token = stored.find((e) => e.fbase_key.startsWith("firebase:authUser:"))
+    .value.stsTokenManager.accessToken;
+  const res = await fetch("/api/admin/mail/confirm-reminders", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ send }),
+  });
+  const answer = await res.json();
+  console.table(answer.recipients);
+  console.log(answer.previews, answer.outcomes, answer.left);
+})(false); // true queues it; run again until `left` is 0
+```
+
 ## Agent tools
 
 Claude sessions in this repo can read production data through an MCP server,
