@@ -422,7 +422,7 @@ if (ogCardEligible.value) {
     {
       width: 1200,
       height: 630,
-      alt: `${(company.value as Company).name} — koryta.pl`,
+      alt: `${(company.value as Company).name} - koryta.pl`,
     },
   );
 }
