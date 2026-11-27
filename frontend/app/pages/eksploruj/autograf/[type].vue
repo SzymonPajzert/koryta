@@ -125,15 +125,18 @@ import { hiddenTargetCount } from "~/utils/hiddenTargets";
 import { useQueryFilters } from "~/composables/queryFilters";
 import { external } from "~~/shared/colors";
 import { parties } from "~~/shared/misc";
+import { isKnownCategory } from "~~/shared/companyCategories";
+import {
+  partyStackCardProps,
+  partyStackHeading,
+} from "~~/shared/partyStackCard";
+import type { PartyStackResponse } from "~~/server/api/stats/partyStack.get";
 import { regionFilterOptions } from "~~/shared/teryt";
 import type { Query } from "~~/server/api/nodes/index.get";
 import { useCurrentUser } from "vuefire";
 import { useDisplay } from "vuetify";
 
 definePageMeta({ fullWidth: true, affineLink: "BYOEeL1iG0mvIR3yz2pOs" });
-useHead({
-  title: "Eksploruj - Wizualizacje",
-});
 
 const route = useRoute();
 const router = useRouter();
@@ -254,6 +257,19 @@ const partyStackYears = computed<[number, number] | null>({
 });
 const filterMinVotes = numberFilter("minVotes");
 
+/** A shared link to „Partie w czasie” is named after the chart it shows. */
+useSeoMeta({
+  title: () =>
+    isPartyStack.value
+      ? partyStackHeading(partyStackCategory.value)
+      : "Eksploruj - Wizualizacje",
+  description: () =>
+    isPartyStack.value
+      ? "Ile osób z każdej partii było w danym miesiącu na stanowisku."
+      : undefined,
+  twitterCard: "summary_large_image",
+});
+
 /** The bar's „Wyczyść” asks the page to do this rather than doing it itself:
  * each filter above is a writable computed over `route.query` and each write
  * starts from the query as it is now, so clearing them one by one would end
@@ -361,4 +377,43 @@ const { tableItems, totalItems, pending } = await useListWithStats(
   "wizualizacje-data",
   { enabled: () => !isPartyStack.value },
 );
+
+/** How long the server render waits for the stack before it gives up on the
+ * card. The count is cached for the day, but a cold instance scans every post
+ * first, and a platform that waits too long on the page shows no preview at
+ * all, where without the chart it still shows the site's card. */
+const CARD_WAIT_MS = 2500;
+
+function within<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+  return Promise.race([promise.catch(() => null), timeout]).finally(() =>
+    clearTimeout(timer),
+  );
+}
+
+// The picture a link to „Partie w czasie” unfurls into: the stack, cut to the
+// link's category and years. Server only, after every other await here, and
+// read once: a crawler takes the head of the first response and nothing else.
+if (import.meta.server && isPartyStack.value) {
+  const category = partyStackCategory.value;
+  const known = category && isKnownCategory(category) ? category : null;
+  const stack = await within(
+    $fetch<PartyStackResponse>("/api/stats/partyStack", {
+      query: known ? { category: known } : {},
+    }),
+    CARD_WAIT_MS,
+  );
+  const card =
+    stack && partyStackCardProps(stack, partyStackYears.value, known);
+  if (card) {
+    defineOgImageComponent("PartyStackCard", card, {
+      width: 1200,
+      height: 630,
+      alt: `${card.heading}, ${card.years} - koryta.pl`,
+    });
+  }
+}
 </script>

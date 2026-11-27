@@ -116,7 +116,8 @@ import {
   polishCountingGenitive,
   polishCountingGrouped,
 } from "~/composables/polish";
-import { categoryTitle, companyCategories } from "~~/shared/companyCategories";
+import { companyCategories } from "~~/shared/companyCategories";
+import { partyStackHeading } from "~~/shared/partyStackCard";
 import { OTHER_PARTY, partyColors } from "~~/shared/misc";
 import { categoryIcon } from "~/utils/categoryIcons";
 import {
@@ -171,9 +172,7 @@ const picked = computed({
 /** The card names its category too: a screenshot of the card alone, which is
  * how a chart like this gets shared, keeps it. */
 const title = computed(() =>
-  picked.value === ALL
-    ? "Stanowiska wg partii"
-    : `Stanowiska wg partii: ${categoryTitle(picked.value)}`,
+  partyStackHeading(picked.value === ALL ? null : picked.value),
 );
 
 /** A key per category, so going back to one already seen draws at once. */
