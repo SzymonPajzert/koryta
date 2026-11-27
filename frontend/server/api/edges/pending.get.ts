@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getRevisionsForNodes } from "~~/server/utils/revisions";
 import { defineEventHandler, setResponseHeader } from "h3";
 import { getUser } from "~~/server/utils/auth";
+import { withoutPrivateFields } from "~~/shared/declaredPosts";
 
 /** The relations still waiting for their first review, with their revisions.
  *
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
     .limit(50);
   const edges = await query.get();
   const edgesData = edges.docs.map((doc) => {
-    return { id: doc.id, ...doc.data() } as Edge & {
+    return { id: doc.id, ...withoutPrivateFields(doc.data()) } as Edge & {
       id: string;
     };
   });

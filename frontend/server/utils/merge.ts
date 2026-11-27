@@ -13,6 +13,11 @@ import {
 } from "./edges";
 import { createRevisionTransaction, withoutInternalFields } from "./revisions";
 import { recordAudit } from "./audit";
+import {
+  foldDeclared,
+  type DeclaredMove,
+  type DeclaredUnion,
+} from "../../shared/declaredPosts";
 // Imported explicitly rather than left to Nuxt's auto-import: this module is
 // also loaded by scripts/migrate/merge-duplicate-people.ts under plain tsx,
 // where there is no auto-import and a missing one is a ReferenceError at
@@ -487,6 +492,22 @@ export function mergeRefusal(
   return undefined;
 }
 
+/** The relations `applyNodeMerge` reads before it writes: every one the plan
+ * names, and for each it retires the survivor's copy, which takes in what the
+ * retired one knew - a candidacy's fuller fields, a post's declared entries. */
+export function edgesToRead(plan: { edges: MergeEdgePlan[] }): string[] {
+  return [
+    ...new Set(
+      plan.edges.flatMap((edge) =>
+        (edge.disposition === "enriched" || edge.disposition === "collapsed") &&
+        edge.duplicate_of
+          ? [edge.edge_id, edge.duplicate_of]
+          : [edge.edge_id],
+      ),
+    ),
+  ];
+}
+
 /** Carry out the plan: move the relations, then put the duplicate to rest.
  *
  * A moved relation is updated in place rather than rewritten at the document id
@@ -499,6 +520,11 @@ export function mergeRefusal(
  * A collapsed relation is soft-deleted with a revision, exactly as
  * `/api/edges/delete` removes one - the reason it went is worth keeping, and it
  * is the half of the merge most likely to have been wrong.
+ *
+ * What declarations said about a retired relation goes onto the survivor's
+ * copy too (`foldDeclared`), which no revision would carry; the retired one
+ * keeps its own. Returns those moves, for the reading items whose lists of
+ * edges name a retired relation (`rewriteAppliedEdges`).
  */
 export function applyNodeMerge(
   db: Firestore,
@@ -513,10 +539,43 @@ export function applyNodeMerge(
   storedSurvivor?: Record<string, unknown>,
   /** The duplicate's vote documents by id, for the human ones being re-filed. */
   storedVotes?: Map<string, Record<string, unknown>>,
-): void {
+): DeclaredMove[] {
   const moved: string[] = [];
   const collapsed: string[] = [];
   const enriched: string[] = [];
+
+  // Every retired relation by the survivor's copy that takes it in, so a copy
+  // two of them fold onto is written once, with both.
+  const retiredInto = new Map<
+    string,
+    { id: string; data: Record<string, unknown> }[]
+  >();
+  for (const edge of plan.edges) {
+    const stored = storedEdges.get(edge.edge_id);
+    if (
+      (edge.disposition !== "collapsed" && edge.disposition !== "enriched") ||
+      !edge.duplicate_of ||
+      !stored
+    ) {
+      continue;
+    }
+    retiredInto.set(edge.duplicate_of, [
+      ...(retiredInto.get(edge.duplicate_of) ?? []),
+      { id: edge.edge_id, data: stored },
+    ]);
+  }
+  const unions = new Map<string, DeclaredUnion>();
+  const declaredMoves: DeclaredMove[] = [];
+  for (const [survivorId, retired] of retiredInto) {
+    const survivor = storedEdges.get(survivorId);
+    if (!survivor) continue;
+    const { union, moves } = foldDeclared(
+      { id: survivorId, data: survivor },
+      retired,
+    );
+    if (union) unions.set(survivorId, union);
+    declaredMoves.push(...moves);
+  }
 
   for (const edge of plan.edges) {
     const edgeRef = db.collection("edges").doc(edge.edge_id);
@@ -539,13 +598,17 @@ export function applyNodeMerge(
     if (edge.disposition === "enriched" && edge.enriches_into) {
       const target = storedEdges.get(edge.duplicate_of ?? "");
       if (target) {
+        // The declared entries ride on what the document owns, which the
+        // revision write carries across.
+        const union = unions.get(edge.duplicate_of!);
+        unions.delete(edge.duplicate_of!);
         createRevisionTransaction(
           db,
           batch,
           user,
           db.collection("edges").doc(edge.duplicate_of!),
           edge.enriches_into,
-          { stored: target, approve: true },
+          { stored: { ...target, ...union }, approve: true },
         );
         enriched.push(edge.duplicate_of!);
       }
@@ -578,6 +641,12 @@ export function applyNodeMerge(
       { stored: carried, approve: true, published: false },
     );
     collapsed.push(edge.edge_id);
+  }
+
+  // The survivor's copies no revision rewrote take the entries as a field
+  // update, the way the declarations automation writes them.
+  for (const [survivorId, union] of unions) {
+    batch.update(db.collection("edges").doc(survivorId), union);
   }
 
   // What the duplicate knew and the survivor did not, written onto the survivor
@@ -635,4 +704,6 @@ export function applyNodeMerge(
     },
     batch,
   );
+
+  return declaredMoves;
 }

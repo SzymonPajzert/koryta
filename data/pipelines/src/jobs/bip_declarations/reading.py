@@ -105,10 +105,16 @@ DIGITS_FOR = str.maketrans(
 MISREAD_DIGIT = re.compile(r"(?<=[\d.\-/ ])[olizgsbq|]|[olizgsbq|](?=[\d.\-/])")
 #: Who sits on a council was born in these years; anything else is another date.
 OLDEST, YOUNGEST = 1920, 2008
+BIRTH_YEARS = (OLDEST, YOUNGEST)
+#: The years a declaration's own dates fall in: the day it was signed, the day
+#: it is for.
+DECLARED_YEARS = (1990, 2049)
 
 
-def _valid(year: int, month: int | None, day: int) -> date | None:
-    if month is None or not OLDEST <= year <= YOUNGEST:
+def _valid(
+    year: int, month: int | None, day: int, years: tuple[int, int] = BIRTH_YEARS
+) -> date | None:
+    if month is None or not years[0] <= year <= years[1]:
         return None
     try:
         return date(year, month, day)
@@ -116,46 +122,48 @@ def _valid(year: int, month: int | None, day: int) -> date | None:
         return None
 
 
-def parse_date(window: str) -> date | None:
-    """The first birth date in the folded window, written any way people write one."""
+def parse_date(window: str, years: tuple[int, int] = BIRTH_YEARS) -> date | None:
+    """The first date in the folded window, written any way people write one:
+    a birth date unless `years` says otherwise."""
     for match in NUMERIC.finditer(window):
         a, b, c = match.groups()
-        found = _valid(int(c), int(b), int(a))
+        found = _valid(int(c), int(b), int(a), years)
         if found and found not in LAW_DATES:
             return found
     for match in ISO.finditer(window):
         a, b, c = match.groups()
-        found = _valid(int(a), int(b), int(c))
+        found = _valid(int(a), int(b), int(c), years)
         if found and found not in LAW_DATES:
             return found
     for match in NAMED.finditer(window):
         a, b, c = match.groups()
         month = next((v for k, v in MONTHS.items() if b.startswith(k)), None)
-        found = _valid(int(c), month, int(a))
+        found = _valid(int(c), month, int(a), years)
         if found and found not in LAW_DATES:
             return found
     for match in ROMAN_DATE.finditer(window):
         a, b, c = match.groups()
-        found = _valid(int(c), ROMAN[b], int(a))
+        found = _valid(int(c), ROMAN[b], int(a), years)
         if found and found not in LAW_DATES:
             return found
     return None
 
 
-def date_in(text: str) -> date | None:
-    """A birth date in a piece of OCR, the label's own letters left out, with a
-    space for a dot and letters misread for digits forgiven."""
+def date_in(text: str, years: tuple[int, int] = BIRTH_YEARS) -> date | None:
+    """A birth date (or one of `years`) in a piece of OCR, the label's own
+    letters left out, with a space for a dot and letters misread for digits
+    forgiven."""
     folded = LABEL.sub(" ", fold(text))
-    found = parse_date(folded)
+    found = parse_date(folded, years)
     if found:
         return found
     for match in SPACED.finditer(folded):
         day, month, year = (int(g) for g in match.groups())
-        found = _valid(year, month, day)
+        found = _valid(year, month, day, years)
         if found:
             return found
     return parse_date(
-        MISREAD_DIGIT.sub(lambda m: m.group().translate(DIGITS_FOR), folded)
+        MISREAD_DIGIT.sub(lambda m: m.group().translate(DIGITS_FOR), folded), years
     )
 
 
@@ -297,4 +305,39 @@ def declaration_year(text: str) -> int | None:
         year = DECLARATION_YEAR.search(folded[match.end() : match.end() + 40])
         if year:
             return int(year.group(1))
+    return None
+
+
+#: As `AS_OF`, but its words never take the date's digits ("dzien31.12.2023"),
+#: and "dzień" may be left out ("STAN NA 31.12.2020 r.").
+STAN_NA = re.compile(r"(?<![a-z])stanu?\s*na(?:\s*dzie[a-z]*)?\s*:?")
+#: A title's "... na dzień 29.02.2024 r.", without "stanu".
+NA_DZIEN = re.compile(r"(?<![a-z])na\s*dzie[a-z]*\s*:?")
+#: "dnia" or "dn." in front of the day a declaration was signed, not inside a
+#: word ("zgodnie", "Brodnica").
+DNIA = re.compile(r"(?<![a-z])dn(?:ia)?\.?")
+
+
+def stan_na_in(text: str, title: bool = False) -> date | None:
+    """The day a declaration is for, from its "według stanu na dzień ..." line;
+    from a `title`'s plain "na dzień ..." too."""
+    folded = fold(text)
+    for pattern in (STAN_NA, NA_DZIEN) if title else (STAN_NA,):
+        for match in pattern.finditer(folded):
+            found = date_in(text[match.end() : match.end() + 40], DECLARED_YEARS)
+            if found:
+                return found
+    return None
+
+
+def dnia_in(text: str) -> date | None:
+    """The day a declaration was signed, from its "Testowo, dnia ..." line;
+    not an act's "z dnia 26 lutego 2003 r." that a form's heading quotes."""
+    folded = fold(text)
+    for match in DNIA.finditer(folded):
+        if re.search(r"(?:^|\W)z\s*$", folded[: match.start()]):
+            continue
+        found = date_in(text[match.end() : match.end() + 30], DECLARED_YEARS)
+        if found:
+            return found
     return None

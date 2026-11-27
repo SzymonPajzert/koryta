@@ -6,9 +6,13 @@ on:
       - main
     paths:
       - "frontend/**"
+      # What the declarations job uploads, which the site's tests parse and
+      # store; test_bip_declarations_ci.py in the job's tests lists why.
+      - "data/pipelines/src/jobs/bip_declarations/tests/employment_upload.json"
   pull_request:
     paths:
       - "frontend/**"
+      - "data/pipelines/src/jobs/bip_declarations/tests/employment_upload.json"
 
 permissions:
   contents: read

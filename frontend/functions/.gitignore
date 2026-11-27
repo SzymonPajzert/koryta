@@ -1,6 +1,7 @@
-# Compiled JavaScript files
+# Compiled output, with the JSON files the code imports
 lib/**/*.js
 lib/**/*.js.map
+lib/**/*.json
 
 !.env
 

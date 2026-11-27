@@ -11,8 +11,15 @@ import pytest
 
 import jobs.bip_declarations as job
 from jobs.bip_declarations.cutter import FileCut, PageCrop
-from scrapers.stores import DeclarationFile, DeclarationLink, PersonRow
-from stores.bip_declarations import MemoryBipDeclarationStore
+from jobs.bip_declarations.employment import BANDS, BandCut, FileBands, Strip
+from scrapers.stores import (
+    DeclarationCropRow,
+    DeclarationCutRow,
+    DeclarationFile,
+    DeclarationLink,
+    PersonRow,
+)
+from stores.bip_declarations import MemoryBipDeclarationStore, png_hash
 
 
 def bundle(path: Path, members: list[tuple[str, bytes]]) -> None:
@@ -113,3 +120,254 @@ def test_cut_stops_when_its_time_is_up(store, tmp_path):
 
     assert code == job.EXIT_TRY_LATER
     assert len(store.cuts()) == 1
+
+
+# -- cut-employment ----------------------------------------------------------------
+
+#: Each file's cut as asked: its due pages, how far each band runs, and every
+#: date page of the file.
+asked: list[
+    tuple[tuple[tuple[int, int], ...], dict[tuple[int, str], int], tuple[int, ...]]
+] = []
+#: Each file's date pages' declarants' names, as handed to the cut.
+named: list[dict[int, tuple[str, ...]]] = []
+
+
+def fake_bands(data: bytes, pages, ocr, widen=None, starts=(), names=None) -> FileBands:
+    asked.append((tuple(pages), dict(widen or {}), tuple(starts)))
+    named.append(dict(names or {}))
+    result = FileBands("cut", "pdf", 5, 3)
+    for page, _ in pages:
+        result.bands[page] = [
+            BandCut(
+                band,
+                widen=(widen or {}).get((page, band), 0),
+                dpi=200,
+                width=1654,
+                strips=[Strip(page, 100, 300, b"\x89PNG " + band.encode())],
+                lines=[(0, 10, 60)],
+                text="Urzad Gminy Testowo",
+                score=0.97,
+                typed=True,
+                source="ocr",
+                notes=["a note"],
+            )
+            for band in BANDS
+        ]
+    return result
+
+
+@pytest.fixture
+def banded(store, monkeypatch) -> MemoryBipDeclarationStore:
+    """The `store` with a date page in each file, two in the one on disk."""
+    monkeypatch.setattr(job, "cut_bands", fake_bands)
+    asked.clear()
+    named.clear()
+    on_disk, later = store.files.values()
+    store.record_cut(
+        DeclarationCutRow(on_disk.sha256, job.CUT_VERSION, "cut"),
+        [
+            DeclarationCropRow(on_disk.sha256, 0),
+            DeclarationCropRow(on_disk.sha256, 4, rotation=180),
+        ],
+    )
+    store.record_cut(
+        DeclarationCutRow(later.sha256, job.CUT_VERSION, "cut"),
+        [DeclarationCropRow(later.sha256, 0)],
+    )
+    return store
+
+
+def run(store, root, max_minutes=None, **kw) -> int:
+    return job.run_cut_employment(
+        store, root, workers=1, threads=1, limit=None, max_minutes=max_minutes, **kw
+    )
+
+
+def test_cut_employment_keeps_each_date_page_s_bands(banded, tmp_path, capsys):
+    code = run(banded, tmp_path)
+
+    assert code == 0
+    on_disk = next(iter(banded.files))
+    assert asked == [(((0, 0), (4, 180)), {}, (0, 4))]
+    # Whose names no band may show: the one person the file was found for.
+    assert named == [{0: (("Jan", "Testowy"),), 4: (("Jan", "Testowy"),)}]
+    rows = banded.bands(job.EMPLOYMENT_CUT_VERSION, with_images=True)
+    assert [(r.page, r.band) for r in rows] == [
+        (page, band) for page in (0, 4) for band in sorted(BANDS)
+    ]
+    row = rows[0]
+    assert (row.sha256, row.status, row.dpi, row.typed, row.notes) == (
+        on_disk,
+        "cut",
+        200,
+        True,
+        "a note",
+    )
+    assert row.strips[0].png_hash == png_hash(row.strips[0].png)
+    assert row.lines == ((0, 10, 60),)
+    # The file whose bundle is not on disk yet is tried again next time.
+    assert "1 files' bundles are not on disk" in capsys.readouterr().out
+    assert [d.file.sha256 for d in banded.pages_to_band(1, None)] == ["9" * 64]
+
+
+def test_a_council_page_keeps_out_its_declarant_s_names_or_everybody_s():
+    sha = "c" * 64
+    url = "https://h/rada.pdf"
+    people = [
+        PersonRow("a" * 16, "021704", 0, 2024, "Jan", "Testowy", {"koryta_ids": ["p"]}),
+        PersonRow("b" * 16, "021704", 0, 2024, "Ewa", "Druga", {"koryta_ids": ["q"]}),
+    ]
+    # A council's file: its links name two people.
+    store = MemoryBipDeclarationStore(
+        people,
+        [DeclarationFile(sha, "h", url, "b.tar.gz", "rada.pdf")],
+        [DeclarationLink("a" * 16, sha, url), DeclarationLink("b" * 16, sha, url)],
+    )
+    store.record_cut(
+        DeclarationCutRow(sha, job.CUT_VERSION, "cut"),
+        [
+            DeclarationCropRow(sha, 0, name="Ewa Druga"),
+            DeclarationCropRow(sha, 3, name="nieczytelne"),
+        ],
+    )
+
+    names = job.declarants(store, store.pages_to_band(job.EMPLOYMENT_CUT_VERSION, None))
+
+    # The name read on page 0 is Ewa's; page 3's tells nobody.
+    assert names[(sha, 0)] == (("Ewa", "Druga"),)
+    assert set(names[(sha, 3)]) == {("Jan", "Testowy"), ("Ewa", "Druga")}
+
+
+def test_cut_employment_takes_only_the_pages_named(banded, tmp_path):
+    on_disk = next(iter(banded.files))
+    names = tmp_path / "pages.txt"
+    names.write_text(f"# slice 1\n{on_disk}-p4\n")
+
+    run(banded, tmp_path, items=job.read_items(names))
+
+    assert asked == [(((4, 180),), {}, (0, 4))]
+    with pytest.raises(ValueError):
+        names.write_text("not-a-page\n")
+        job.read_items(names)
+
+
+def test_a_page_cut_alone_ends_where_its_file_s_next_date_page_starts(banded, tmp_path):
+    on_disk = next(iter(banded.files))
+    names = tmp_path / "pages.txt"
+    names.write_text(f"{on_disk}-p0\n")
+
+    run(banded, tmp_path, items=job.read_items(names))
+
+    # Page 4 is not due, but it starts the declaration after page 0's.
+    assert asked == [(((0, 0),), {}, (0, 4))]
+
+
+def test_a_recut_runs_the_band_readers_flagged_one_caption_further(banded, tmp_path):
+    on_disk = next(iter(banded.files))
+    run(banded, tmp_path)
+    asked.clear()
+
+    recut = [job.recut_bands(f"{on_disk}-p0:employer")]
+    run(banded, tmp_path, recut=recut)
+    run(banded, tmp_path, recut=recut)
+
+    assert asked == [
+        (
+            ((0, 0),),
+            {(0, "employer"): 1, (0, "header"): 0, (0, "vii"): 0, (0, "viii"): 0},
+            (0, 4),
+        ),
+        (
+            ((0, 0),),
+            {(0, "employer"): 2, (0, "header"): 0, (0, "vii"): 0, (0, "viii"): 0},
+            (0, 4),
+        ),
+    ]
+    widths = {
+        (r.page, r.band): r.widen for r in banded.bands(job.EMPLOYMENT_CUT_VERSION)
+    }
+    assert widths[(0, "employer")] == 2
+    assert widths[(4, "employer")] == widths[(0, "vii")] == 0
+
+
+def test_a_recut_alone_cuts_only_the_pages_asked_for(banded, tmp_path):
+    on_disk = next(iter(banded.files))
+
+    # Before any run: every other date page has no bands yet.
+    run(banded, tmp_path, recut=[job.recut_bands(f"{on_disk}-p4:employer")])
+
+    assert asked == [(((4, 180),), {(4, "employer"): 1}, (0, 4))]
+
+
+def test_a_recut_goes_first_so_a_limit_reaches_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(job, "cut_bands", fake_bands)
+    asked.clear()
+    one, two = b"%PDF one declaration", b"%PDF another declaration"
+    bundle(tmp_path / "b.tar.gz", [("h/one.pdf", one), ("h/two.pdf", two)])
+    files = [
+        DeclarationFile(sha(data), "h", f"https://h/{n}.pdf", "b.tar.gz", f"{n}.pdf")
+        for n, data in (("one", one), ("two", two))
+    ]
+    people = [
+        PersonRow("1" * 16, "021704", 0, 2024, "Jan", "Testowy", {"koryta_ids": ["p"]}),
+        PersonRow("2" * 16, "021704", 2, 2024, "Ewa", "Druga", {"koryta_ids": []}),
+    ]
+    links = [
+        DeclarationLink(person.key, file.sha256, file.url)
+        for person, file in zip(people, files)
+    ]
+    store = MemoryBipDeclarationStore(people, files, links)
+    for file in files:
+        store.record_cut(
+            DeclarationCutRow(file.sha256, job.CUT_VERSION, "cut"),
+            [DeclarationCropRow(file.sha256, 0)],
+        )
+
+    job.run_cut_employment(
+        store,
+        tmp_path,
+        workers=1,
+        threads=1,
+        limit=1,
+        max_minutes=None,
+        items={f"{file.sha256}-p0" for file in files},
+        recut=[job.recut_bands(f"{files[1].sha256}-p0:employer")],
+    )
+
+    # Ewa's page is asked for again: it goes before Jan's, who is on the site.
+    assert asked == [(((0, 0),), {(0, "employer"): 1}, (0,))]
+
+
+def test_recut_names_a_page_and_a_band():
+    with pytest.raises(Exception, match="<sha256>-p<page>:<band>"):
+        job.recut_bands(f"{'a' * 64}-p0:name")
+    assert job.recut_bands(f"{'a' * 64}-p2:viii") == (f"{'a' * 64}-p2", "viii")
+
+
+def test_cut_employment_stops_when_its_time_is_up(banded, tmp_path):
+    code = run(banded, tmp_path, max_minutes=-1)
+
+    assert code == job.EXIT_TRY_LATER
+    assert len(asked) == 1
+
+
+def test_cut_employment_is_a_command_of_the_job():
+    args = job._args(
+        [
+            "cut-employment",
+            "--limit",
+            "20",
+            "--max-minutes",
+            "30",
+            "--recut",
+            f"{'a' * 64}-p0:vii",
+        ]
+    )
+
+    assert args.func is job.cmd_cut_employment
+    assert (args.limit, args.max_minutes, args.recut) == (
+        20,
+        30.0,
+        [(f"{'a' * 64}-p0", "vii")],
+    )

@@ -2,9 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import type { Event } from "@sentry/nuxt";
 import { withoutPrivateHeaders } from "../../sentry.server.config";
 
-const { init } = vi.hoisted(() => ({ init: vi.fn() }));
+const { init, httpIntegration } = vi.hoisted(() => ({
+  init: vi.fn(),
+  httpIntegration: vi.fn(() => ({})),
+}));
 // Hoisted above the import, so the config initialises against this.
-vi.mock("@sentry/nuxt", () => ({ init, httpIntegration: vi.fn(() => ({})) }));
+vi.mock("@sentry/nuxt", () => ({ init, httpIntegration }));
 
 const READER = "0f8fad5b-d9cb-469f-a165-70867728950e";
 
@@ -54,6 +57,25 @@ describe("sentry.server.config", () => {
     expect(event.contexts?.trace?.data).toEqual({
       "http.request.header.user_agent": "Firefox",
     });
+  });
+
+  it("keeps the bodies of the declaration uploads and readings out of an error", () => {
+    const { ignoreIncomingRequestBody } = (
+      httpIntegration.mock.calls as unknown as [
+        { ignoreIncomingRequestBody: (url: string) => boolean },
+      ][]
+    )[0]![0];
+
+    for (const path of [
+      "/api/ingest/declarations",
+      "/api/ingest/declarations/employment",
+      "/api/declarations/c1/answer",
+    ]) {
+      expect(ignoreIncomingRequestBody(`https://koryta.pl${path}`)).toBe(true);
+    }
+    expect(
+      ignoreIncomingRequestBody("https://koryta.pl/api/ingest/person"),
+    ).toBe(false);
   });
 
   it("leaves an event with no request alone", () => {

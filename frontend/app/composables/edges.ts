@@ -1,12 +1,13 @@
 import type {
   Node,
   Company,
-  Edge,
   EdgeType,
   ElectionPosition,
   Person,
 } from "~~/shared/model";
-import type { TraversePolicy } from "~~/shared/graph/model";
+// The local graph's edges, as `getEdges` hands them out.
+import type { Edge, TraversePolicy } from "~~/shared/graph/model";
+import type { PublicDeclaredPost } from "~~/shared/declaredPosts";
 import type { RoleSpell } from "~~/shared/rolelessSpells";
 
 export type EdgeNode = {
@@ -51,6 +52,10 @@ export type EdgeNode = {
   member_parties?: string[];
   supported_by?: string;
   backing_parties?: string[];
+  /** What declarations say about a post, as `getEdges` passes it on: see
+   * `Edge.as_of` and `Edge.declared`. */
+  as_of?: string;
+  declared?: Record<string, PublicDeclaredPost>;
 };
 
 /** The row's other end, where that end is a company at all.

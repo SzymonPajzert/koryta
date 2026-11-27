@@ -38,7 +38,7 @@ import {
  * Firestore does - a document without an ordered field is left out - and a
  * batch or a transaction applies all of its writes or none.
  */
-const { FakeTimestamp, DELETE, importRunning } = vi.hoisted(() => {
+const { FakeTimestamp, DELETE, Increment, importRunning } = vi.hoisted(() => {
   class FakeTimestamp {
     constructor(readonly millis: number) {}
     static now() {
@@ -57,19 +57,26 @@ const { FakeTimestamp, DELETE, importRunning } = vi.hoisted(() => {
       return other instanceof FakeTimestamp && other.millis === this.millis;
     }
   }
+  class Increment {
+    constructor(readonly by: number) {}
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   globalThis.createError = (err: any) =>
     Object.assign(new Error(err.message), err);
   return {
     FakeTimestamp,
     DELETE: Symbol("delete"),
+    Increment,
     importRunning: vi.fn(async (_now: Date) => false),
   };
 });
 
 vi.mock("firebase-admin/firestore", () => ({
   Timestamp: FakeTimestamp,
-  FieldValue: { delete: () => DELETE },
+  FieldValue: {
+    delete: () => DELETE,
+    increment: (by: number) => new Increment(by),
+  },
 }));
 
 // Whether a people import is running is read off the ops database's runs;
@@ -176,6 +183,9 @@ type Write = [string, "set" | "merge" | "update" | "create", Data];
 
 function merged(before: unknown, after: unknown): unknown {
   if (after === DELETE) return undefined;
+  if (after instanceof Increment) {
+    return (typeof before === "number" ? before : 0) + after.by;
+  }
   if (isPlain(before) && isPlain(after)) {
     const out: Data = { ...before };
     for (const [key, value] of Object.entries(after)) {
@@ -721,6 +731,202 @@ describe("matchPages", () => {
     expect(
       JSON.stringify(read("declarationPublications/kowalska")),
     ).not.toMatch(/1979/);
+  });
+});
+
+// The reading of a declaration's employer line waits for its date crop to
+// name one page (server/utils/declarationEmployment.ts); the comparison is
+// what opens it, and closes it again.
+describe("matchPages and the declaration's employer line", () => {
+  /** Her crop's employer line, as the upload stored it before her date was
+   * compared with her page. */
+  function employerLine(fields: Data = {}) {
+    put("declarationExtracts/kowalska-crop", {
+      ...read("declarationExtracts/kowalska-crop")!,
+      employment: {
+        status: "waiting",
+        personId: null,
+        priority: 3,
+        rand: 0.5,
+        answerCount: 0,
+        applyState: null,
+        imageHash: "c".repeat(64),
+        ...fields,
+      },
+    });
+    put("stats/declaration_employment", {
+      employer: { [String(fields.status ?? "waiting")]: 1 },
+    });
+  }
+  const line = () =>
+    read("declarationExtracts/kowalska-crop")!.employment as Data;
+
+  it("opens it once the crop is matched to her page, and only once", async () => {
+    kowalska();
+    // No paid post on her draft: a declared one is what may publish her.
+    stored.delete("edges/kowalska-job");
+    employerLine();
+
+    await matchPages(firestore, "kowalska-crop", NOON);
+
+    expect(line()).toMatchObject({
+      status: "open",
+      personId: "kowalska",
+      priority: 1,
+      updatedAt: FakeTimestamp.fromDate(NOON),
+    });
+    expect(read("stats/declaration_employment")).toMatchObject({
+      employer: { waiting: 0, open: 1 },
+    });
+
+    const before = state();
+    await matchPages(firestore, "kowalska-crop", LATER);
+    expect(state()).toBe(before);
+  });
+
+  it("leaves it waiting when two pages were born that day", async () => {
+    kowalska();
+    person("kowalska-2");
+    extract("kowalska-crop", { personIds: ["kowalska", "kowalska-2"] });
+    employerLine();
+
+    await matchPages(firestore, "kowalska-crop", NOON);
+
+    expect(line()).toMatchObject({ status: "waiting", personId: null });
+  });
+
+  it("closes it when her page turns out to be born another day", async () => {
+    kowalska();
+    employerLine();
+    await matchPages(firestore, "kowalska-crop", NOON);
+    expect(line()).toMatchObject({ status: "open" });
+
+    // A reviewer corrects her birth date, and the crop is compared again.
+    put("nodes/kowalska", {
+      ...read("nodes/kowalska")!,
+      birthDate: "1980-01-02",
+    });
+    await matchPages(firestore, "kowalska-crop", LATER);
+
+    // Nobody had voted on it: it waits, for a crop that names her again.
+    expect(line()).toMatchObject({ status: "waiting", personId: null });
+    expect(read("stats/declaration_employment")).toMatchObject({
+      employer: { waiting: 1, open: 0 },
+    });
+  });
+
+  it("closes an answered one while her birth date reads another day, and opens it again once it does not", async () => {
+    kowalska();
+    employerLine();
+    await matchPages(firestore, "kowalska-crop", NOON);
+    put("declarationExtracts/kowalska-crop", {
+      ...read("declarationExtracts/kowalska-crop")!,
+      employment: { ...line(), answerCount: 2 },
+    });
+    const birthDate = (value: string) =>
+      put("nodes/kowalska", { ...read("nodes/kowalska")!, birthDate: value });
+
+    birthDate("1980-01-02");
+    await matchPages(firestore, "kowalska-crop", LATER);
+    // The readings are of the declaration's own lines: they are kept.
+    expect(line()).toMatchObject({
+      status: "closed",
+      closedFrom: "open",
+      answerCount: 2,
+      personId: "kowalska",
+    });
+
+    // A reviewer puts her date back.
+    birthDate(BORN);
+    await matchPages(
+      firestore,
+      "kowalska-crop",
+      new Date("2026-10-29T12:20:00Z"),
+    );
+    expect(line()).toMatchObject({
+      status: "open",
+      closedFrom: null,
+      answerCount: 2,
+      personId: "kowalska",
+    });
+    expect(read("stats/declaration_employment")).toMatchObject({
+      employer: { waiting: 0, open: 1, closed: 0 },
+    });
+  });
+
+  it("writes nothing to a crop without one", async () => {
+    kowalska();
+    await matchPages(firestore, "kowalska-crop", NOON);
+    const before = state();
+
+    await matchPages(firestore, "kowalska-crop", LATER);
+
+    expect(state()).toBe(before);
+    expect(read("stats/declaration_employment")).toBeUndefined();
+  });
+
+  describe("the sweep", () => {
+    /** Her crop compared and matched to her page, and its employer line
+     * still waiting: the placing after the comparison failed. */
+    async function missed() {
+      kowalska();
+      stored.delete("edges/kowalska-job");
+      await matchPages(firestore, "kowalska-crop", NOON);
+      employerLine({ rand: 0.5 });
+    }
+
+    it("places again a band the comparison's placing missed", async () => {
+      await missed();
+
+      // From past it in `rand`, round to it.
+      const result = await sweepDeclarations(firestore, LATER, 0, {
+        random: () => 0.9,
+      });
+
+      expect(result.placed).toBe(1);
+      expect(line()).toMatchObject({
+        status: "open",
+        personId: "kowalska",
+        priority: 1,
+      });
+      expect(read("stats/declaration_employment")).toMatchObject({
+        employer: { waiting: 0, open: 1 },
+      });
+      const before = state();
+      expect(
+        (await sweepDeclarations(firestore, LATER, 0, { random: () => 0 }))
+          .placed,
+      ).toBe(0);
+      expect(state()).toBe(before);
+    });
+
+    it("takes the bands from a new place each time, past those still shut", async () => {
+      await missed();
+      // Another declaration of hers, compared when a second page born that
+      // day held both: its band stays shut whatever the sweep does.
+      put("declarationExtracts/shut-crop", {
+        ...read("declarationExtracts/kowalska-crop")!,
+        pageOutcomes: { kowalska: "held", "kowalska-2": "held" },
+        employment: { ...line(), rand: 0.1 },
+      });
+
+      const first = await sweepDeclarations(firestore, LATER, 0, {
+        batch: 1,
+        random: () => 0,
+      });
+      expect(first.placed).toBe(0);
+      expect(line()).toMatchObject({ status: "waiting" });
+
+      const next = await sweepDeclarations(firestore, LATER, 0, {
+        batch: 1,
+        random: () => 0.3,
+      });
+      expect(next.placed).toBe(1);
+      expect(line()).toMatchObject({ status: "open" });
+      expect(read("declarationExtracts/shut-crop")!.employment).toMatchObject({
+        status: "waiting",
+      });
+    });
   });
 });
 
