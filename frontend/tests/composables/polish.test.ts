@@ -9,7 +9,7 @@ import {
 /** The separator `Intl` groups thousands with in Polish. Spelled out so a
  * failing expectation shows „1 284” against „1284” rather than two strings
  * that look identical in the diff. */
-const NBSP = "";
+const NBSP = "\u00a0";
 
 describe("polishCountingGenitive", () => {
   it("uses the genitive plural after a preposition", () => {
@@ -59,7 +59,7 @@ describe("polishNumber", () => {
     // `Intl.NumberFormat("pl-PL")` on its own answers „1284”: CLDR only starts
     // grouping at five digits, and the table's totals live below that.
     expect(polishNumber(1284)).toBe(`1${NBSP}284`);
-    // expect(polishNumber(12345)).toBe(`12${NBSP}345`);
+    expect(polishNumber(12345)).toBe(`12${NBSP}345`);
     expect(polishNumber(645)).toBe("645");
   });
 });
