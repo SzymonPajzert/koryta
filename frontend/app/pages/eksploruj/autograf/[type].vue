@@ -109,7 +109,8 @@
       </div>
       <ExploreVisualisationPartyStack
         v-else-if="isPartyStack"
-        v-model:category="filterCategory"
+        v-model:category="partyStackCategory"
+        v-model:years="partyStackYears"
       />
     </div>
   </ClientOnly>
@@ -228,6 +229,29 @@ const filterHideVoted = choiceFilter<"all" | "no_votes" | "has_votes">(
   "all",
 );
 const filterMinEmploymentDate = stringFilter("minEmploymentDate");
+
+/** „Partie w czasie” names its parameters in Polish (decision on 2026-11-27):
+ * `kategoria`, and the years `od` and `do`. The companies view keeps the
+ * `category` every other /eksploruj filter reads. */
+const partyStackCategory = stringFilter("kategoria");
+const yearFrom = numberFilter("od");
+const yearTo = numberFilter("do");
+/** Both ends in one write: two writes in one tick both start from the url as
+ * it was, and the second would put the first's end back. */
+const partyStackYears = computed<[number, number] | null>({
+  get: (): [number, number] | null =>
+    yearFrom.value == null && yearTo.value == null
+      ? null
+      : [yearFrom.value ?? 0, yearTo.value ?? 9999],
+  set: (value: [number, number] | null) =>
+    void setQuery(
+      {
+        od: value ? String(value[0]) : undefined,
+        do: value ? String(value[1]) : undefined,
+      },
+      { replace: true },
+    ),
+});
 const filterMinVotes = numberFilter("minVotes");
 
 /** The bar's „Wyczyść” asks the page to do this rather than doing it itself:

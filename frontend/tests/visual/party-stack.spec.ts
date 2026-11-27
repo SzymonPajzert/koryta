@@ -4,8 +4,9 @@ import { readyForElementShot } from "./elementShot";
 import { pageTag } from "./pageTags";
 import { partyStackFixture } from "./fixtures/partyStack";
 
-/** „Partie w czasie” on /eksploruj/autograf, cut to hospitals: the category
- * picker and the stack of party bands under it (fixtures/partyStack.ts).
+/** „Partie w czasie” on /eksploruj/autograf, cut to hospitals and narrowed to
+ * 2018-2026: the category picker and the year slider in one row, and the
+ * stack of party bands under them (fixtures/partyStack.ts).
  *
  * A plain `goto` is enough: the page draws behind `<ClientOnly>`, so the
  * browser asks for the data and the route below answers. */
@@ -16,12 +17,17 @@ async function openHospitals(page: Page) {
   await page.route("**/api/stats/partyStack**", (route) =>
     route.fulfill({ json: partyStackFixture() }),
   );
-  await page.goto("/eksploruj/autograf/partie-w-czasie?category=szpitale");
+  await page.goto(
+    "/eksploruj/autograf/partie-w-czasie?kategoria=szpitale&od=2018&do=2026",
+  );
   const panel = page.getByTestId("party-stack-panel");
   await expect(
     panel.getByText("Stanowiska wg partii: Szpitale", { exact: true }),
   ).toBeVisible({ timeout: 30_000 });
   await expect(panel.locator(".apexcharts-svg")).toHaveCount(1);
+  await expect(panel.getByTestId("party-stack-years-shown")).toHaveText(
+    "2018 - 2026",
+  );
   return panel;
 }
 

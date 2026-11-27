@@ -3,7 +3,7 @@ import { mountSuspended, registerEndpoint } from "@nuxt/test-utils/runtime";
 import { flushPromises } from "@vue/test-utils";
 import { createError, getQuery } from "h3";
 import { defineComponent, h } from "vue";
-import { VSelect } from "vuetify/components";
+import { VRangeSlider, VSelect } from "vuetify/components";
 import { clearNuxtData } from "#app";
 import PartyStack from "../../../app/components/explore/VisualisationPartyStack.vue";
 import type { PartyStackResponse } from "../../../server/api/stats/partyStack.get";
@@ -175,5 +175,91 @@ describe("ExploreVisualisationPartyStack", () => {
         (label) => label.textContent,
       ),
     ).toEqual(["Inne partie: ", "PiS: ", "PO: "]);
+  });
+
+  describe("narrowing the years", () => {
+    /** Three years of months, 2024-01 to 2026-11, one person each month. */
+    function years(): PartyStackResponse {
+      const months = Array.from({ length: 35 }, (_, i) => {
+        const index = 2024 * 12 + i;
+        return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+      });
+      return stack({
+        months,
+        series: [{ key: "PO", label: "PO", counts: months.map(() => 1) }],
+      });
+    }
+
+    async function mountYears(picked: [number, number] | null) {
+      answers[""] = years();
+      const updates: ([number, number] | null | undefined)[] = [];
+      const wrapper = await mountSuspended(PartyStack, {
+        props: {
+          category: null,
+          years: picked,
+          "onUpdate:years": (value: [number, number] | null | undefined) =>
+            void updates.push(value),
+        },
+        global: { stubs: { apexchart: true } },
+      });
+      await vi.waitUntil(
+        () => wrapper.find('[data-testid="party-stack"]').exists(),
+        { timeout: 2000 },
+      );
+      await wrapper
+        .find('button[aria-label="Tabela z liczbami"]')
+        .trigger("click");
+      await flushPromises();
+      return { wrapper, updates };
+    }
+
+    const rows = (wrapper: Awaited<ReturnType<typeof mountYears>>["wrapper"]) =>
+      wrapper.findAll("tbody tr").map((row) => row.find("td").text());
+
+    it("spans the years there is data for, all of them when none are picked", async () => {
+      const { wrapper } = await mountYears(null);
+      const slider = wrapper.findComponent(VRangeSlider);
+
+      expect(slider.props("min")).toBe(2024);
+      expect(slider.props("max")).toBe(2026);
+      expect(
+        wrapper.find('[data-testid="party-stack-years-shown"]').text(),
+      ).toBe("2024 - 2026");
+      expect(rows(wrapper)).toEqual(["2024", "2025", "Listopad 2026"]);
+    });
+
+    it("draws only the years picked, the table too", async () => {
+      const { wrapper } = await mountYears([2025, 2026]);
+
+      expect(rows(wrapper)).toEqual(["2025", "Listopad 2026"]);
+    });
+
+    it("follows the slider at once and writes the years a moment after it stops", async () => {
+      const { wrapper, updates } = await mountYears(null);
+      const slider = wrapper.findComponent(VRangeSlider);
+
+      slider.vm.$emit("update:modelValue", [2024, 2024]);
+      slider.vm.$emit("update:modelValue", [2024, 2025]);
+      await flushPromises();
+      // On screen before the url has anything: a key pressed before the
+      // router caught up used to start from the old year again.
+      expect(rows(wrapper)).toEqual(["2024", "2025"]);
+      expect(updates).toEqual([]);
+
+      // One write for the whole run of moves, the last of them.
+      await vi.waitUntil(() => updates.length > 0, { timeout: 2000 });
+      expect(updates).toEqual([[2024, 2025]]);
+    });
+
+    it("writes no years at all for every year, so the url stays clean", async () => {
+      const { wrapper, updates } = await mountYears([2025, 2026]);
+
+      wrapper
+        .findComponent(VRangeSlider)
+        .vm.$emit("update:modelValue", [2024, 2026]);
+      await vi.waitUntil(() => updates.length > 0, { timeout: 2000 });
+
+      expect(updates).toEqual([null]);
+    });
   });
 });

@@ -15,12 +15,14 @@ const vuetify = createVuetify({
 // Live boxes, the way tests/pages/eksploruj/tabela.test.ts keeps them: `vi.mock`
 // is hoisted above every declaration in this file, so a factory can only reach
 // something hoisted with it.
-const { routeQuery, routeType, lastQuery, lastOptions } = vi.hoisted(() => ({
-  routeQuery: { value: {} as Record<string, string> },
-  routeType: { value: "spolki-partie" },
-  lastQuery: { value: null as { value: Query } | null },
-  lastOptions: { value: null as { enabled?: () => boolean } | null },
-}));
+const { routeQuery, routeType, lastQuery, lastOptions, routerReplace } =
+  vi.hoisted(() => ({
+    routerReplace: vi.fn(),
+    routeQuery: { value: {} as Record<string, string> },
+    routeType: { value: "spolki-partie" },
+    lastQuery: { value: null as { value: Query } | null },
+    lastOptions: { value: null as { enabled?: () => boolean } | null },
+  }));
 
 // Mock vue-router explicitly since it's imported
 vi.mock("vue-router", async (importOriginal) => {
@@ -33,7 +35,11 @@ vi.mock("vue-router", async (importOriginal) => {
       path: `/eksploruj/autograf/${routeType.value}`,
       params: { type: routeType.value },
     }),
-    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), afterEach: vi.fn() }),
+    useRouter: () => ({
+      push: vi.fn(),
+      replace: routerReplace,
+      afterEach: vi.fn(),
+    }),
   };
 });
 
@@ -184,12 +190,13 @@ describe("AutografPage", () => {
     expect(bar.attributes("minvotes")).toBe("5");
   });
 
-  /** „Partie w czasie” reads its own endpoint and takes the category alone:
-   * the people query would be two requests and their reads for nothing on
-   * screen, and the bar's other filters would narrow nothing. */
-  it("hands „Partie w czasie” the category and skips the people query", async () => {
+  /** „Partie w czasie” reads its own endpoint and takes only its own
+   * parameters, Polish ones (decision on 2026-11-27): the people query would be
+   * two requests and their reads for nothing on screen, and the bar's filters
+   * would narrow nothing. */
+  it("hands „Partie w czasie” its Polish parameters and skips the people query", async () => {
     const wrapper = await mountPage(
-      { category: "szpitale" },
+      { kategoria: "szpitale", od: "2016", do: "2026", category: "koleje" },
       "partie-w-czasie",
     );
 
@@ -199,8 +206,26 @@ describe("AutografPage", () => {
     );
     const chart = wrapper.find("explore-visualisation-party-stack-stub");
     expect(chart.exists()).toBe(true);
+    // Its own `kategoria`, not the companies view's `category`.
     expect(chart.attributes("category")).toBe("szpitale");
+    expect(chart.attributes("years")).toBe("2016,2026");
     expect(lastOptions.value?.enabled?.()).toBe(false);
+  });
+
+  it("writes both years at once, replacing the history entry", async () => {
+    const wrapper = await mountPage(
+      { kategoria: "szpitale" },
+      "partie-w-czasie",
+    );
+
+    wrapper
+      .findComponent({ name: "ExploreVisualisationPartyStack" })
+      .vm.$emit("update:years", [2018, 2026]);
+    await flushPromises();
+
+    expect(routerReplace).toHaveBeenCalledWith({
+      query: { kategoria: "szpitale", od: "2018", do: "2026" },
+    });
   });
 
   it("fetches the people on the companies view", async () => {
