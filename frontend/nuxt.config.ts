@@ -199,7 +199,28 @@ export default defineNuxtConfig({
       // on the page they belong to, which is how a link preview is meant to
       // find one; crawling them as documents in their own right spends budget
       // on images that say nothing the page does not, and each miss is a render.
+      // The link-preview bots are let in by `groups` below.
       "/_og",
+    ],
+    // The bots that draw a link preview, and only fetch what somebody shared.
+    // X reads robots.txt for the image too, and a blocked one is a link with
+    // no picture; LinkedIn's bot reads it the same way (decision on
+    // 2026-11-27). A bot with a group of its own skips the `*` rules above,
+    // so these may fetch every page, which is all a shared link asks of them.
+    groups: [
+      {
+        userAgent: [
+          "Twitterbot",
+          "LinkedInBot",
+          "facebookexternalhit",
+          "Slackbot",
+          "Slackbot-LinkExpanding",
+          "Discordbot",
+          "TelegramBot",
+          "WhatsApp",
+        ],
+        allow: ["/_og"],
+      },
     ],
     // A Disallow keeps a crawler from reading a url, not Google from listing
     // it: a blocked url that enough pages link to is indexed anyway, as a bare

@@ -59,6 +59,17 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "miniatury-dla-botow-podgladu",
+    title: "Miniatury linków także na X i LinkedInie",
+    description:
+      "Boty, które rysują podgląd linku, mogą pobrać jego miniaturę. Pozostałe dalej jej nie pobierają.",
+    steps: [
+      "Otwórz /robots.txt: grupa z Twitterbot i LinkedInBot ma „Allow: /_og”, a grupa „*” dalej „Disallow: /_og”.",
+      "Wklej na X (bez wysyłania) link do osoby albo do „Partie w czasie”: podgląd ma obrazek, a nie sam tytuł.",
+    ],
+    area: "public",
+  },
+  {
     id: "partie-w-czasie-karta",
     title: "Link do „Partie w czasie” ma w podglądzie sam wykres",
     description:
