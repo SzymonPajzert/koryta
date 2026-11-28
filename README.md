@@ -2,6 +2,12 @@
 
 This documentation outlines the project's structure and the technologies used. Refer to the README files in each directory for more thorough overview of each part.
 
+## Kontakt i współpraca
+
+- Jak pomóc w projekcie: [koryta.pl/pomoc](https://koryta.pl/pomoc)
+- Zespół na Slacku: [zaproszenie](https://join.slack.com/t/korytapl/shared_invite/zt-3mx37782c-X2tRnWIYdMkSJm5oqK6yqQ)
+- E-mail: [kontakt@koryta.pl](mailto:kontakt@koryta.pl)
+
 ## Technologies
 
 This project uses the following technologies:

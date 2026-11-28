@@ -66,7 +66,14 @@
 </template>
 
 <script lang="ts" setup>
-import { mdiFacebook, mdiGithub, mdiInstagram, mdiTwitter } from "@mdi/js";
+import {
+  mdiFacebook,
+  mdiGithub,
+  mdiInstagram,
+  mdiSlack,
+  mdiTwitter,
+} from "@mdi/js";
+import { SLACK_INVITE_URL } from "~~/shared/contact";
 type Section = { title: string; items: { title: string; link: string }[] };
 
 // Two columns: what is on the site, then the project and the legal pages
@@ -104,6 +111,9 @@ const columns: Section[][] = [
         // home page's do (decision on 2026-11-17); /oswiadczenia links /pomoc
         // at its foot.
         { title: "Działaj z nami", link: "/oswiadczenia" },
+        // Everything else there is to do, the Slack invite among it, under
+        // the page's own title (decision on 2026-11-28).
+        { title: "Jak możesz pomóc", link: "/pomoc" },
       ],
     },
     {
@@ -131,5 +141,6 @@ const icons = [
     "Grupa na Facebooku",
   ],
   [mdiInstagram, "https://www.instagram.com/szymon.pajzert", "Instagram"],
+  [mdiSlack, SLACK_INVITE_URL, "Slack zespołu"],
 ];
 </script>

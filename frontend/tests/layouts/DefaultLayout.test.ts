@@ -1,3 +1,4 @@
+import type { Ref } from "vue";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ref } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
@@ -11,11 +12,18 @@ import { createVuetify } from "vuetify";
 // Mock dependencies
 vi.mock("../../app/composables/auth");
 
+/** A desktop unless a test says otherwise. A ref, so the template
+ * unwraps it as it does useDisplay's own. */
+const display = vi.hoisted(() => ({
+  mdAndUp: undefined as unknown as Ref<boolean>,
+}));
 vi.mock("vuetify", async () => {
   const actual = await vi.importActual("vuetify");
+  const { ref } = await vi.importActual<typeof import("vue")>("vue");
+  display.mdAndUp = ref(true);
   return {
     ...actual,
-    useDisplay: () => ({ mdAndUp: { value: true } }),
+    useDisplay: () => display,
   };
 });
 const vuetify = createVuetify();
@@ -104,6 +112,35 @@ describe("DefaultLayout", () => {
     vi.clearAllMocks();
     route.path = "/";
     route.meta = {};
+    display.mdAndUp.value = true;
+  });
+
+  // Below md the app bar's links do not fit, and the logo was the only way
+  // anywhere: they sit in a menu there, with /pomoc.
+  it("puts the app bar's links and /pomoc in a menu on a phone", async () => {
+    display.mdAndUp.value = false;
+    const wrapper = mountLayout();
+    await flushPromises();
+
+    const entries = wrapper
+      .findAll('[data-testid="app-bar-menu-list"] a')
+      .map((entry) => [entry.text(), entry.attributes("data-to")]);
+    expect(entries).toEqual([
+      ["Tematy", "/tematy"],
+      ["Blog", "/blog"],
+      ["O nas", "/o-nas"],
+      ["Działaj z nami", "/oswiadczenia"],
+      ["Jak możesz pomóc", "/pomoc"],
+    ]);
+  });
+
+  it("has no such menu on a desktop, where the links are in the bar", async () => {
+    const wrapper = mountLayout();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="app-bar-menu-list"]').exists()).toBe(
+      false,
+    );
   });
 
   it("mounts successfully", async () => {

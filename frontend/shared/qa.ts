@@ -59,6 +59,20 @@ export const qaAreaConfig: Record<QaArea, { title: string; color: string }> = {
  * before the list could be read at all. */
 export const QA_ITEMS: QaItem[] = [
   {
+    id: "pomoc-i-slack-w-stopce-i-menu",
+    title: "„Jak możesz pomóc” i Slack w stopce, menu na telefonie",
+    description:
+      "Strona /pomoc, gdzie jest zaproszenie na Slacka, była linkowana tylko ze strony głównej, z kart zachęty i z dołu /oswiadczenia. Teraz stopka ma link „Jak możesz pomóc” w kolumnie „O projekcie” i ikonę Slacka obok pozostałych serwisów, a na telefonie pasek u góry ma menu z linkami Tematy, Blog, O nas, Działaj z nami i Jak możesz pomóc.",
+    steps: [
+      "Na dowolnej stronie przewiń do stopki: w kolumnie „O projekcie” jest „Jak możesz pomóc”, kliknięcie otwiera /pomoc.",
+      "W stopce, obok ikon Facebooka i X, kliknij ikonę Slacka: w nowej karcie otwiera się zaproszenie do zespołu koryta.pl na Slacku, to samo co przycisk „Dołącz na Slacku” na /pomoc.",
+      "Na telefonie (albo w oknie węższym niż 960 px) kliknij ikonę menu w pasku u góry: lista zawiera Tematy, Blog, O nas, Działaj z nami i Jak możesz pomóc, a każdy link prowadzi na swoją stronę.",
+      "Na komputerze pasek u góry wygląda jak dotąd, bez ikony menu.",
+    ],
+    link: "/pomoc",
+    area: "public",
+  },
+  {
     id: "wyszukiwarka-kategorie",
     title: "Wyszukiwarka znajduje kategorie, np. „skarbu państwa”",
     description:
