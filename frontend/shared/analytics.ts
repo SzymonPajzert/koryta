@@ -353,15 +353,16 @@ export type HelpTask = (typeof HELP_TASKS)[number];
 
 /** What a search result can be, for `search:pick`'s `kind`.
  *
- * Wider than the node types the endpoint returns: „Lista wszystkich osób” and
- * the parties are entries OmniSearch builds itself and never asks the server
- * about. */
+ * Wider than the node types the endpoint returns: „Lista wszystkich osób”, the
+ * parties and the company categories are entries OmniSearch builds itself and
+ * never asks the server about. */
 export const SEARCH_PICK_KINDS = [
   "person",
   "place",
   "region",
   "party",
   "list",
+  "category",
 ] as const;
 export type SearchPickKind = (typeof SEARCH_PICK_KINDS)[number];
 

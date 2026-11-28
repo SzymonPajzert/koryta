@@ -112,6 +112,11 @@ import {
 } from "@mdi/js";
 import { parties } from "~~/shared/misc";
 import {
+  categoryMatchesQuery,
+  companyCategories,
+} from "~~/shared/companyCategories";
+import { categoryIcon } from "~/utils/categoryIcons";
+import {
   krsNumberQuery,
   nameMatchesTokens,
   searchTokens,
@@ -261,6 +266,9 @@ const resetBox = () => {
  *
  * A company the server found by the KRS number typed is kept by that number,
  * since its name holds no digits for the words to match.
+ *
+ * A category goes by its own rule (`categoryMatchesQuery`), which knows the
+ * cases a reader puts it in: „skarbu państwa” is no part of „Skarb Państwa”.
  */
 const matchesTypedWords = (
   title: string,
@@ -269,6 +277,8 @@ const matchesTypedWords = (
 ) => {
   const typed = query.trim();
   if (!typed) return true;
+  const category = item?.raw?.category;
+  if (category !== undefined) return categoryMatchesQuery(category, typed);
   if (title.toLowerCase().includes(typed.toLowerCase())) return true;
   const krs = item?.raw?.krsNumber;
   if (krs !== undefined && krs === krsNumberQuery(typed)) return true;
@@ -297,6 +307,8 @@ type ListItem = {
   krsNumber?: string;
   /** Under a person: who they are, where and as what (`shared/searchLine.ts`). */
   line?: string;
+  /** On a category's entry: its value, which the filter matches by. */
+  category?: string;
   path?: string;
   query?: Record<string, string>;
 };
@@ -475,6 +487,23 @@ const items = computed<ListItem[]>(() => {
         party: item,
       },
       analyticsKind: "party",
+    });
+  });
+
+  // Every category the table filters by, owner and statuses included: what a
+  // reader typing „skarbu państwa” wants is the people of those companies.
+  // On the menu of an empty box too, after the parties (decision on
+  // 2026-11-28).
+  companyCategories.forEach((item) => {
+    result.push({
+      id: `category-${item.value}`,
+      title: item.title,
+      icon: categoryIcon(item.value),
+      subtitle: "Kategoria",
+      path: "/eksploruj/tabela",
+      query: { category: item.value },
+      category: item.value,
+      analyticsKind: "category",
     });
   });
 

@@ -33,6 +33,26 @@ test.describe("OmniSearch", () => {
     );
   });
 
+  test("allows searching for a category by the case it is typed in", async ({
+    page,
+  }) => {
+    const item = page
+      .locator(".v-list-item", { hasText: "Skarb Państwa" })
+      .filter({ hasText: "Kategoria" })
+      .first();
+    await omniSearchFor(page, "skarbu państwa", item);
+
+    await item.click();
+    await expect(page).toHaveURL(
+      /\/eksploruj\/tabela\?.*category=skarb-panstwa/,
+    );
+    await expect(
+      page.locator(".tabela-query-bar__rail .v-chip", {
+        hasText: "Skarb Państwa",
+      }),
+    ).toBeVisible();
+  });
+
   test("allows searching for regions", async ({ page }) => {
     // Click Opole entry
     const opoleItem = page
