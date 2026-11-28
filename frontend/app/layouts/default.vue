@@ -34,6 +34,27 @@
            anybody can start on the spot, without an account, and /pomoc is
            linked from the bottom of it for everything else. -->
       <v-btn v-if="mdAndUp" text to="/oswiadczenia">Działaj z nami</v-btn>
+      <!-- Below md the links above do not fit, and the logo was the only
+           way anywhere: the same pages, and /pomoc, in one menu
+           (decision on 2026-11-28). -->
+      <v-menu v-if="!mdAndUp" location="bottom end">
+        <template #activator="{ props: menu }">
+          <v-btn
+            v-bind="menu"
+            :icon="mdiMenu"
+            aria-label="Menu"
+            data-testid="app-bar-menu"
+          />
+        </template>
+        <v-list density="compact" data-testid="app-bar-menu-list">
+          <v-list-item
+            v-for="item in phoneMenu"
+            :key="item.to"
+            :to="item.to"
+            :title="item.title"
+          />
+        </v-list>
+      </v-menu>
       <ClientOnly>
         <v-btn v-if="user && pictureURL" icon to="/profil" size="32">
           <v-avatar :image="pictureURL" size="32" />
@@ -251,6 +272,7 @@ import {
   mdiGithub,
   mdiInboxArrowDown,
   mdiMagnify,
+  mdiMenu,
   mdiOpenInNew,
   mdiShieldAccount,
   mdiTimelineClockOutline,
@@ -269,6 +291,15 @@ import { APP_BAR_HEIGHT, useSsrLayoutTop } from "~/composables/appBar";
 
 const ssrLayoutTop = useSsrLayoutTop();
 const { mdAndUp } = useDisplay();
+
+/** The app bar's links on a phone, where they sit in a menu. */
+const phoneMenu = [
+  { title: "Tematy", to: "/tematy" },
+  { title: "Blog", to: "/blog" },
+  { title: "O nas", to: "/o-nas" },
+  { title: "Działaj z nami", to: "/oswiadczenia" },
+  { title: "Jak możesz pomóc", to: "/pomoc" },
+];
 const { user, userConfig, logout, isAdmin, isOwner, isDatascience } =
   useAuthState();
 const route = useRoute();

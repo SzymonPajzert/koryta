@@ -273,7 +273,7 @@
         <v-col cols="12" sm="6" md="4">
           <CardAction
             :icon="mdiSlack"
-            href="https://join.slack.com/t/korytapl/shared_invite/zt-3mx37782c-X2tRnWIYdMkSJm5oqK6yqQ"
+            :href="SLACK_INVITE_URL"
             title="Dołącz na Slacku"
             desc="Tam umawiamy się, kto co robi. Możesz wejść i na początku tylko poczytać."
             ink="ink-sage"
@@ -455,6 +455,7 @@
 </template>
 
 <script lang="ts" setup>
+import { SLACK_INVITE_URL } from "~~/shared/contact";
 import { ref } from "vue";
 import {
   mdiAccountPlusOutline,
