@@ -46,7 +46,8 @@
             data-testid="app-bar-menu"
           />
         </template>
-        <v-list density="compact" data-testid="app-bar-menu-list">
+        <!-- Default density: compact rows are 40 px, short of a 44 px tap target. -->
+        <v-list data-testid="app-bar-menu-list">
           <v-list-item
             v-for="item in phoneMenu"
             :key="item.to"
