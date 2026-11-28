@@ -1,5 +1,7 @@
-/** What goes on the picture a platform draws when somebody shares a person or
- * an institution.
+/** What goes on the picture a platform draws when somebody shares an
+ * institution. A person's card is `personCard.ts` and
+ * `OgImage/PersonCard.satori.vue`, laid out as the person page (decision on
+ * 2026-11-28).
  *
  * Every page used to point `og:image` at `/social-card.png`, so a link to
  * Rafał Trzaskowski and a link to the front page unfurled as the same banner.
@@ -11,29 +13,28 @@
  * nitro route that no test mounts. A pluralisation rule that lives in a `.vue`
  * file nobody can call is how „2 powiązań” ships. Everything below is pure -
  * `now` is an argument - so `tests/composables/ogCard.test.ts` can walk every
- * rung of both ladders against plain objects.
+ * rung of the ladder against plain objects.
  *
- * Two rules hold across both cards:
+ * Two rules hold on the card:
  *
  * - **Nothing is read from `node.stats`.** `stats` is in `INTERNAL_FIELDS`
  *   (server/utils/revisions.ts), so a signed-in editor's `latest=true` response
  *   does not carry it and their card would disagree with the crawler's. Every
  *   figure here is recomputed from the edges the visitor can recount on the
  *   page they land on.
- * - **Nothing states a verdict.** No finite verb appears on either card, which
+ * - **Nothing states a verdict.** No finite verb appears on the card, which
  *   is also why no gender ever has to be generated for a name the site holds no
  *   gender for. A board seat is a fact; the card reports it and stops.
  */
-import type { Company, Person } from "~~/shared/model";
+import type { Company } from "~~/shared/model";
 import { asArray, publicSectorKnown } from "~~/shared/model";
 import { displayRole } from "~~/shared/companyBodies";
 import { categoryTitle } from "~~/shared/companyCategories";
 import { companyIdentifiers } from "~~/shared/identifiers";
-import { partyColors } from "~~/shared/misc";
-import { brand, card, ink, readableInkOn } from "~~/shared/colors";
+import { brand, card, ink } from "~~/shared/colors";
 import { truncateDescription } from "~/composables/entitySeo";
 import { polishCounting, nominativeNoun } from "~/composables/polish";
-import { edgeCompany, edgePerson, type EdgeNode } from "~/composables/edges";
+import { edgePerson, type EdgeNode } from "~/composables/edges";
 
 /** The flat prop bag `NodeCard.satori.vue` takes.
  *
@@ -47,7 +48,7 @@ import { edgeCompany, edgePerson, type EdgeNode } from "~/composables/edges";
  */
 export interface NodeCardProps {
   name: string;
-  /** Already uppercased - „OSOBA”, „SZPITALE”, „INSTYTUCJA”. */
+  /** Already uppercased - „SZPITALE”, „INSTYTUCJA”. */
   eyebrow: string;
   chipLabel: string;
   /** `""` means the chip is drawn as an outline: no `background-color` at all. */
@@ -67,15 +68,6 @@ export interface NodeCardProps {
   stat2Label: string;
   stat3Value: string;
   stat3Label: string;
-}
-
-export interface PersonCardInput {
-  person: Person;
-  /** Edges pointing away from this person: employment, candidacies. */
-  targets: EdgeNode[];
-  /** Both directions, for the relations a person is on the receiving end of. */
-  edges: EdgeNode[];
-  now?: Date;
 }
 
 export interface CompanyCardInput {
@@ -121,14 +113,6 @@ function nameSizeFor(name: string): number {
   return 32;
 }
 
-/** Sorts by a date string, newest first, with a missing date sorting last.
- * The dates are ISO-ish and compared as text, which is what the rest of the
- * site does with them. */
-function byDateDesc(key: "start_date" | "end_date") {
-  return (a: EdgeNode, b: EdgeNode) =>
-    String(b[key] ?? "").localeCompare(String(a[key] ?? ""));
-}
-
 /** An employment spell counts as current only when it has no end date at all.
  *
  * Strictly `!end_date`, matching `card/Employment.vue`. The crawl stamps an
@@ -161,142 +145,6 @@ function statProps(
     stat2Label: at(1)?.label ?? "",
     stat3Value: at(2) ? String(at(2)!.value) : "",
     stat3Label: at(2)?.label ?? "",
-  };
-}
-
-/** „Rada Społeczna · SPZOZ w Mińsku Mazowieckim”, or just the institution.
- *
- * `edge.name` and never `edge.label`: `useEdges` falls `label` back to the edge
- * type's phrase, so a post with no title of its own would print „Zatrudniony/a
- * w” where a job title goes. `displayRole` is what rewrites a stored „Rada
- * Nadzorcza” to „Rada Społeczna” on an SPZOZ, which is the difference between
- * reporting a statutory advisory council and asserting a paid supervisory
- * board. */
-function postPhrase(edge: EdgeNode): string {
-  const role = displayRole(edge.name, edgeCompany(edge));
-  const institution = truncateDescription(edge.richNode.name, 46);
-  return role ? `${role} · ${institution}` : institution;
-}
-
-export function personCardProps(input: PersonCardInput): NodeCardProps {
-  const { person, targets, edges } = input;
-
-  const employed = targets.filter((e) => e.type === "employed");
-  const employedPlace = employed.filter((e) => !!edgeCompany(e));
-  const employedPublic = employedPlace.filter(
-    (e) => edgeCompany(e)!.isPublic === true,
-  );
-  const current = employed.filter(isCurrent);
-  const currentPublic = employedPublic.filter(isCurrent);
-  const elections = edges.filter(
-    (e) => e.type === "election" && !!e.richNode.name,
-  );
-  const publicEmployers = new Set(employedPublic.map((e) => e.target)).size;
-  const parties = asArray(person.parties).filter(Boolean);
-
-  // A party the site holds is a party *in the database*, which is a weaker
-  // claim than membership and is hedged in the label rather than left to be
-  // read off a bare „PO”. Two parties get no fill: one colour cannot honestly
-  // stand for both.
-  let chipLabel: string;
-  let chipFill = "";
-  let chipInk: string = ink.strong;
-  let chipRule: string = ink.strong;
-  if (parties.length === 0) {
-    chipLabel = "bez partii w bazie";
-    chipRule = card.rule;
-  } else if (parties.length === 1) {
-    const fill = partyColors[parties[0]!] ?? "";
-    chipLabel = `partia w bazie: ${parties[0]}`;
-    chipFill = fill;
-    // The 2px rule in the label's own ink is what stops the pale fills - Polska
-    // 2050 at 1.44:1 on this background, PSL 1.83, PO 1.92 - dissolving into
-    // the card.
-    chipInk = fill ? readableInkOn(fill) : ink.strong;
-    chipRule = fill ? chipInk : ink.strong;
-  } else {
-    chipLabel = truncateDescription(
-      `partie w bazie: ${parties.join(", ")}`,
-      48,
-    );
-  }
-
-  // First rung that has anything wins, and they are mutually exclusive: the
-  // card makes one claim, the strongest true one.
-  let fact = "";
-  if (currentPublic.length > 0) {
-    const p = [...currentPublic].sort(byDateDesc("start_date"))[0]!;
-    const more =
-      currentPublic.length > 1 ? ` +${currentPublic.length - 1}` : "";
-    fact = `Obecnie: ${postPhrase(p)}${more}`;
-  } else if (current.length > 0) {
-    // Keeps a mayoralty or a ministry visible: the far end is a region, or a
-    // company nobody has confirmed as public sector yet.
-    const c = [...current].sort(byDateDesc("start_date"))[0]!;
-    const more = current.length > 1 ? ` +${current.length - 1}` : "";
-    fact = `Obecnie: ${postPhrase(c)}${more}`;
-  } else if (employed.length > 0) {
-    const l = [...employed].sort(byDateDesc("end_date"))[0]!;
-    const endYear = /^\d{4}/.exec(String(l.end_date ?? ""))?.[0];
-    fact = `Ostatnia funkcja: ${postPhrase(l)}${endYear ? `, do ${endYear}` : ""}`;
-  } else if (elections.length > 0) {
-    const towns = [...new Set(elections.map((e) => e.richNode.name))].slice(
-      0,
-      3,
-    );
-    fact = `Starty w wyborach: ${truncateDescription(towns.join(", "), 58)}`;
-  }
-
-  // A page with no employment edge has no register provenance behind it, so
-  // the footer must not claim any.
-  const asOf = baseAsOfLabel(input.now);
-  const foot =
-    employed.length > 0
-      ? `Dane z KRS i źródeł jawnych, stan bazy: ${asOf}.`
-      : `Społeczna baza powiązań w instytucjach publicznych. Stan bazy: ${asOf}.`;
-
-  return {
-    name: truncateDescription(person.name.trim(), NAME_LIMIT),
-    eyebrow: "OSOBA",
-    chipLabel,
-    chipFill,
-    chipInk,
-    chipRule,
-    nameSize: nameSizeFor(truncateDescription(person.name.trim(), NAME_LIMIT)),
-    fact,
-    foot,
-    // The relation count is deliberately not a cell: `entityDescription`
-    // already prints it in the line directly under the image, and a card that
-    // repeats its own alt text has spent a band saying nothing new.
-    ...statProps([
-      {
-        value: currentPublic.length,
-        label: nominativeNoun(
-          currentPublic.length,
-          "obecna posada",
-          "obecne posady",
-          "obecnych posad",
-        ),
-      },
-      {
-        value: publicEmployers,
-        label: nominativeNoun(
-          publicEmployers,
-          "instytucja publiczna",
-          "instytucje publiczne",
-          "instytucji publicznych",
-        ),
-      },
-      {
-        value: elections.length,
-        label: nominativeNoun(
-          elections.length,
-          "kandydatura",
-          "kandydatury",
-          "kandydatur",
-        ),
-      },
-    ]),
   };
 }
 
