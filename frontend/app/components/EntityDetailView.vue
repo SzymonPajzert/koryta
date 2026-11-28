@@ -496,7 +496,7 @@ import type {
   Revision,
 } from "~~/shared/model";
 import { withoutRedundantRoleless } from "~~/shared/rolelessSpells";
-import { personCardProps } from "~/composables/ogCard";
+import { personPageCardProps } from "~/composables/personCard";
 import { predecessorsByEdge } from "~/utils/succession";
 import { employmentTowns } from "~/utils/companyLocation";
 import { backingYears, partiesOnlyBacked } from "~/utils/partyStatements";
@@ -808,10 +808,9 @@ const ogCardEligible = computed(() => {
 // by id, so moving between two people re-runs setup rather than mutating this.
 if (ogCardEligible.value) {
   defineOgImageComponent(
-    "NodeCard",
-    personCardProps({
+    "PersonCard",
+    personPageCardProps({
       person: entity.value as Person,
-      targets: targets.value,
       edges: edges.value,
     }),
     {

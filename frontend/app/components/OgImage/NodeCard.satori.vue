@@ -1,10 +1,9 @@
 <!--
-  The picture a platform draws when somebody shares a person or an institution.
+  The picture a platform draws when somebody shares an institution. A person
+  has a card of their own, laid out as the person page: PersonCard.satori.vue.
 
-  One template for both: the bands, the geometry and every colour are identical,
-  and only the strings differ. `app/composables/ogCard.ts` decides all of them -
-  nothing here computes anything about the entity, which is what lets the Polish
-  be unit-tested.
+  `app/composables/ogCard.ts` decides every string - nothing here computes
+  anything about the entity, which is what lets the Polish be unit-tested.
 
   Satori, not a browser. That constrains the markup more than it looks:
 
