@@ -3,6 +3,7 @@ import {
   companyCategories,
   companyCategoryValues,
   categoryFilterUrl,
+  categoryMatchesQuery,
   categoryTitle,
   isKnownCategory,
   isOwner,
@@ -100,6 +101,49 @@ describe("categoryFilterUrl", () => {
       expect(url.pathname).toBe("/eksploruj/tabela");
       expect(url.searchParams.get("category")).toBe(category.value);
     }
+  });
+});
+
+describe("categoryMatchesQuery", () => {
+  /** The categories `query` names, by title. */
+  const named = (query: string) =>
+    companyCategories
+      .filter((c) => categoryMatchesQuery(c.value, query))
+      .map((c) => c.title);
+
+  it("takes the cases a reader writes a category in", () => {
+    expect(named("skarbu państwa")).toEqual(["Skarb Państwa"]);
+    expect(named("spółki skarbu państwa")).toEqual(["Skarb Państwa"]);
+    expect(named("szpitali")).toEqual(["Szpitale"]);
+    expect(named("kolejowe")).toEqual(["Koleje"]);
+    expect(named("energetyki")).toEqual(["Energetyka"]);
+    expect(named("komunikacji miejskiej")).toEqual([
+      "Komunikacja miejska i autobusowa",
+    ]);
+    expect(named("upadłość")).toEqual(["W upadłości"]);
+  });
+
+  it("takes them without Polish letters", () => {
+    // As typed into the box in November 2026.
+    expect(named("spolkach skarbu panstwa")).toEqual(["Skarb Państwa"]);
+    expect(named("wodociagi")).toEqual(["Wodociągi i kanalizacja"]);
+  });
+
+  it("matches the start of each word, as the box does while it is typed into", () => {
+    expect(named("spółki s")).toEqual(["Skarb Państwa"]);
+    expect(named("w likw")).toEqual(["W likwidacji"]);
+  });
+
+  it("leaves a company's name to the companies", () => {
+    // A word the category has no form of takes it off the menu.
+    expect(named("szpital górno")).toEqual([]);
+    expect(named("energa")).toEqual([]);
+    expect(named("skarbek")).toEqual([]);
+    expect(named("")).toEqual([]);
+  });
+
+  it("is false for a category the site does not know", () => {
+    expect(categoryMatchesQuery("tramwaje", "tramwaje")).toBe(false);
   });
 });
 

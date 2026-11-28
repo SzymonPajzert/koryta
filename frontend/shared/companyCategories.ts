@@ -29,6 +29,9 @@
  * `withRegisterFactsFrom`).
  */
 
+import { withoutDiacritics } from "./names";
+import { nameMatchesTokens, searchTokens } from "./search";
+
 export const companyCategories = [
   { value: "szpitale", title: "Szpitale" },
   { value: "przychodnie", title: "Przychodnie i opieka ambulatoryjna" },
@@ -52,6 +55,49 @@ export const companyCategories = [
 ] as const satisfies readonly { value: string; title: string }[];
 
 export type CompanyCategory = (typeof companyCategories)[number]["value"];
+
+/** How else a reader writes a category into the search box, besides its
+ * title: the cases Polish puts it in. „Skarbu Państwa” is no prefix of „Skarb
+ * Państwa”, and „spółki skarbu państwa” is how the phrase is usually said. Each
+ * entry is matched like the title (`categoryMatchesQuery`), so a form only needs
+ * listing where it is not a prefix of one already here. A record over every
+ * category, so a new one does not compile without its forms. */
+const CATEGORY_SEARCH_FORMS: Record<CompanyCategory, readonly string[]> = {
+  szpitale: ["szpitali", "szpitalach"],
+  przychodnie: ["przychodnia", "przychodniach", "opieki ambulatoryjnej"],
+  wodociagi: ["wodociągów i kanalizacji", "wodociągach"],
+  cieplownictwo: ["ciepłownie", "ciepłownia", "ciepłownictwa"],
+  energetyka: ["energetyki", "energetyczne", "energetyczna", "energetycznych"],
+  odpady: ["odpadów i recyklingu", "odpadach"],
+  koleje: ["kolei", "kolejowe", "kolejowych"],
+  "komunikacja-miejska": ["komunikacji miejskiej i autobusowej"],
+  sport: ["sportu i rekreacji", "sportowe"],
+  obronnosc: ["obronności", "obronne"],
+  "skarb-panstwa": [
+    "skarbu państwa",
+    "spółki skarbu państwa",
+    "spółka skarbu państwa",
+    "spółek skarbu państwa",
+    "spółkach skarbu państwa",
+  ],
+  "w-likwidacji": ["likwidacja"],
+  "w-upadlosci": ["upadłość"],
+};
+
+/** Whether `query`, as typed into the search box, names the category `value`:
+ * every word typed is the start of a different word of its title, or of one of
+ * its forms (`CATEGORY_SEARCH_FORMS`), the rule `nameMatchesTokens` searches
+ * names by. With or without Polish letters, as readers type both
+ * („spolkach skarbu panstwa” in the search log of 2026-11). */
+export function categoryMatchesQuery(value: string, query: string): boolean {
+  const tokens = searchTokens(withoutDiacritics(query));
+  if (tokens.length === 0) return false;
+  const category = companyCategories.find((c) => c.value === value);
+  if (!category) return false;
+  return [category.title, ...CATEGORY_SEARCH_FORMS[category.value]].some(
+    (phrase) => nameMatchesTokens(withoutDiacritics(phrase), tokens),
+  );
+}
 
 /** The category values, as a tuple, for `z.enum` and for anything that has to
  * check a stored value is still one the site knows about. */

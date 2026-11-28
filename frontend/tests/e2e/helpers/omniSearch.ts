@@ -14,7 +14,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
  * for unfocused. Such a field searches as it is typed into and leaves its menu
  * alone: a shut menu stays shut and an open one stays unfiltered, which on the
  * dev server, where the first click comes too early, left a query that found
- * nobody listing all twelve fixed rows. Blurred first, every click here is a
+ * nobody listing every fixed row. Blurred first, every click here is a
  * reader's first click.
  *
  * Retyping also re-issues the query, which is what a caller waiting on

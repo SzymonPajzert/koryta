@@ -10,6 +10,7 @@ import { createRouter, createMemoryHistory } from "vue-router";
 import { getQuery, readBody } from "h3";
 import { trackGoal } from "~/composables/analytics";
 import { noteSearchPick } from "~/composables/teaserJourney";
+import { companyCategories } from "~~/shared/companyCategories";
 
 vi.mock("~/composables/analytics", () => ({ trackGoal: vi.fn() }));
 vi.mock("~/composables/teaserJourney", async (importOriginal) => ({
@@ -316,7 +317,8 @@ describe("OmniSearch", () => {
     searched = [{ id: "szpital-1", name: LONG_NAME, type: "place" }];
     const wrapper = mountSearch();
     await flushPromises();
-    await searchFor(wrapper, "szpital");
+    // Not „szpital”, which the „Szpitale” category answers in the first row.
+    await searchFor(wrapper, "rybnik");
 
     const title = document.querySelector(".v-list-item-title");
     expect(title?.textContent.trim()).toBe(LONG_NAME);
@@ -360,6 +362,50 @@ describe("OmniSearch", () => {
         [],
     ).map((el) => el.textContent.trim());
     expect(lines).toEqual(["PO", "Partia"]);
+
+    wrapper.unmount();
+  });
+
+  /** The title and subtitle of the row titled `title`, top to bottom. */
+  const rowLines = (title: string) => {
+    const row = rows().find(
+      (el) =>
+        el.querySelector(".v-list-item-title")?.textContent.trim() === title,
+    );
+    return Array.from(
+      row?.querySelectorAll(".v-list-item-title, .v-list-item-subtitle") ?? [],
+    ).map((el) => el.textContent.trim());
+  };
+
+  it("offers a category by the case it is typed in", async () => {
+    // „Skarbu Państwa” is no part of „Skarb Państwa”, and is how the phrase
+    // is said: „spółki skarbu państwa”.
+    searched = [];
+    const wrapper = mountSearch();
+    await flushPromises();
+    await searchFor(wrapper, "skarbu państwa");
+
+    expect(rowLines("Skarb Państwa")).toEqual(["Skarb Państwa", "Kategoria"]);
+    expect(hasRow("Szpitale")).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it("lists the categories after the parties on the menu of an empty box", async () => {
+    const wrapper = mountSearch();
+    await flushPromises();
+    // A press on the field is what opens the menu with nothing typed.
+    await wrapper.find("input").trigger("focus");
+    await wrapper.find(".v-field").trigger("mousedown");
+    await flushPromises();
+
+    const titles = rows().map((el) =>
+      el.querySelector(".v-list-item-title")?.textContent.trim(),
+    );
+    expect(titles.slice(0, 2)).toEqual(["Lista wszystkich osób", "PO"]);
+    expect(titles.slice(-companyCategories.length)).toEqual(
+      companyCategories.map((c) => c.title),
+    );
 
     wrapper.unmount();
   });
@@ -683,6 +729,16 @@ describe("OmniSearch", () => {
         title: "Opole",
         kind: "region",
         target: { path: "/eksploruj/tabela", query: { teryt: "1661" } },
+      },
+      {
+        entry: "a category",
+        typed: "skarbu państwa",
+        title: "Skarb Państwa",
+        kind: "category",
+        target: {
+          path: "/eksploruj/tabela",
+          query: { category: "skarb-panstwa" },
+        },
       },
     ])(
       "empties the box after $entry, and does each thing a pick does once",
